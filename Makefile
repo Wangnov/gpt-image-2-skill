@@ -1,16 +1,23 @@
 install-local:
-	python3 -m pip install --user .
-	mkdir -p "$$HOME/.local/bin"
-	printf '%s\n' '#!/bin/sh' 'exec python3 -m codex_auth_imagegen "$$@"' > "$$HOME/.local/bin/gpt-image-2-skill"
-	chmod +x "$$HOME/.local/bin/gpt-image-2-skill"
+	cargo install --path crates/gpt-image-2-skill --locked --force
 
 sync-skill:
-	python3 scripts/sync_skill_bundle.py
-	chmod +x skills/gpt-image-2-skill/scripts/gpt_image_2_skill.py
-	chmod +x skills/gpt-image-2-skill/scripts/selftest.py
+	node scripts/sync_skill_bundle.cjs
 
 smoke-skill-install:
-	python3 scripts/smoke_skill_install.py
+	node scripts/smoke_skill_install.cjs
 
 test:
-	python3 -m unittest discover -s tests -p 'test_*.py'
+	cargo test -p gpt-image-2-skill
+
+build:
+	cargo build -p gpt-image-2-skill
+
+build-release:
+	cargo build --release -p gpt-image-2-skill
+
+npm-matrix:
+	node scripts/npm/build-matrix.mjs
+
+release-prepare:
+	scripts/release/prepare.sh

@@ -1,0 +1,77 @@
+name: Post Release Verify
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Version without leading v
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  cargo-binstall:
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: ubuntu-24.04
+            binary: gpt-image-2-skill
+          - runner: macos-15
+            binary: gpt-image-2-skill
+          - runner: windows-2025
+            binary: gpt-image-2-skill.exe
+    env:
+      VERSION: ${{ github.event_name == 'release' && github.event.release.tag_name || format('v{0}', inputs.version) }}
+    steps:
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Install cargo-binstall
+        run: cargo install cargo-binstall --locked
+      - name: Install CLI with cargo-binstall
+        shell: bash
+        run: cargo binstall gpt-image-2-skill --version "${VERSION#v}" --no-confirm
+      - name: Smoke test
+        shell: bash
+        run: |
+          gpt-image-2-skill --json doctor >/tmp/gpt-image-2-skill-doctor.json
+
+  npm-install:
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: ubuntu-24.04
+          - runner: macos-15
+          - runner: windows-2025
+    env:
+      VERSION: ${{ github.event_name == 'release' && github.event.release.tag_name || format('v{0}', inputs.version) }}
+    steps:
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          registry-url: https://registry.npmjs.org
+      - name: Install from npm
+        shell: bash
+        run: npm install --global "gpt-image-2-skill@${VERSION#v}"
+      - name: Smoke test
+        shell: bash
+        run: gpt-image-2-skill --json doctor >/tmp/gpt-image-2-skill-npm-doctor.json
+
+  homebrew:
+    runs-on: macos-15
+    env:
+      VERSION: ${{ github.event_name == 'release' && github.event.release.tag_name || format('v{0}', inputs.version) }}
+    steps:
+      - name: Install formula
+        run: brew install wangnov/tap/gpt-image-2-skill
+      - name: Smoke test
+        run: gpt-image-2-skill --json doctor >/tmp/gpt-image-2-skill-brew-doctor.json

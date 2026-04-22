@@ -1,6 +1,6 @@
 ---
 name: gpt-image-2-skill
-description: Generate or edit images through one bundled skill runtime that supports the official OpenAI Images API with OPENAI_API_KEY and the ChatGPT/Codex backend with ~/.codex/auth.json or $CODEX_HOME/auth.json. Use when an AI agent needs a machine-readable image tool with provider selection, prompt-to-image generation, reference-image edits, masks, structured JSON output, structured progress events, retries, and a raw request escape hatch.
+description: Generate or edit images through one installable skill runtime that resolves the local gpt-image-2-skill binary, falls back to a repo-local cargo run during development, and bootstraps a cached GitHub Release binary when needed. Use when an AI agent needs a machine-readable image tool with provider selection, prompt-to-image generation, reference-image edits, masks, structured JSON output, structured progress events, retries, and a raw request escape hatch.
 ---
 
 Use this skill when:
@@ -12,14 +12,15 @@ Use this skill when:
 
 Environment:
 
-- requires `python3`
+- the skill entrypoint is `node {baseDir}/scripts/gpt_image_2_skill.cjs`
+- the wrapper prefers `GPT_IMAGE_2_SKILL_BIN`, then an installed `gpt-image-2-skill`, then a repo-local `cargo run`, then a cached GitHub Release binary
 - `openai` reads `OPENAI_API_KEY` or `--api-key`
 - `codex` reads `~/.codex/auth.json` or `$CODEX_HOME/auth.json`
 
 Behavior:
 
 - JSON-first by default
-- `--provider auto` prefers `OPENAI_API_KEY`, then falls back to Codex auth
+- `--provider auto` prefers `OPENAI_API_KEY`, then falls back to Codex auth.json
 - transient failures retry up to 3 times with exponential backoff
 - Codex `401` responses trigger one access-token refresh
 - `--json-events` writes provider-agnostic progress events to stderr
@@ -27,13 +28,13 @@ Behavior:
 
 Run:
 
-- `python3 {baseDir}/scripts/gpt_image_2_skill.py --json doctor`
-- `python3 {baseDir}/scripts/gpt_image_2_skill.py --json auth inspect`
-- `python3 {baseDir}/scripts/gpt_image_2_skill.py --json models list`
-- `python3 {baseDir}/scripts/gpt_image_2_skill.py --json --json-events images generate --prompt "..." --out /tmp/image.png`
-- `python3 {baseDir}/scripts/gpt_image_2_skill.py --json --json-events images edit --prompt "..." --ref-image /tmp/input.png --out /tmp/edit.png`
-- `python3 {baseDir}/scripts/gpt_image_2_skill.py --json request create --request-operation generate --body-file /tmp/body.json --out-image /tmp/result.png --expect-image`
-- `python3 {baseDir}/scripts/selftest.py`
+- `node {baseDir}/scripts/gpt_image_2_skill.cjs --json doctor`
+- `node {baseDir}/scripts/gpt_image_2_skill.cjs --json auth inspect`
+- `node {baseDir}/scripts/gpt_image_2_skill.cjs --json models list`
+- `node {baseDir}/scripts/gpt_image_2_skill.cjs --json --json-events images generate --prompt "..." --out /tmp/image.png`
+- `node {baseDir}/scripts/gpt_image_2_skill.cjs --json --json-events images edit --prompt "..." --ref-image /tmp/input.png --out /tmp/edit.png`
+- `node {baseDir}/scripts/gpt_image_2_skill.cjs --json request create --request-operation generate --body-file /tmp/body.json --out-image /tmp/result.png --expect-image`
+- `node {baseDir}/scripts/selftest.cjs`
 
 Notes:
 
@@ -43,7 +44,7 @@ Notes:
 - `--size 2K` resolves to `2048x2048`
 - `--size 4K` resolves to `3840x2160`
 - portrait 4K uses `2160x3840`
-- the current official square high-resolution ceiling is `2880x2880`
-- custom `WIDTHxHEIGHT` values follow the current OpenAI image constraints: both edges are multiples of 16, max edge `3840`, max total pixels `8294400`, max aspect ratio `3:1`
+- the current square high-resolution ceiling is `2880x2880`
+- custom `WIDTHxHEIGHT` values follow the current image constraints: both edges are multiples of 16, max edge `3840`, max total pixels `8294400`, max aspect ratio `3:1`
 - `openai` adds `--n`, `--moderation`, `--mask`, and `--input-fidelity`
 - `request create --request-operation edit` uses multipart upload for image edits

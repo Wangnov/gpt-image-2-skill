@@ -1,183 +1,261 @@
 # gpt-image-2-skill
 
-One repo with two delivery surfaces:
+<p align="center">
+  <img src="assets/logo.png" width="160" alt="gpt-image-2-skill logo">
+</p>
 
-- a local CLI for direct use
-- a bundled skill repo shape for `npx skills add`
+[![GitHub Release](https://img.shields.io/github/v/release/Wangnov/gpt-image-2-skill)](https://github.com/Wangnov/gpt-image-2-skill/releases)
+[![CI](https://img.shields.io/github/actions/workflow/status/Wangnov/gpt-image-2-skill/release-candidate.yml?branch=main&label=release-candidate)](https://github.com/Wangnov/gpt-image-2-skill/actions/workflows/release-candidate.yml)
+[![License](https://img.shields.io/github/license/Wangnov/gpt-image-2-skill)](https://github.com/Wangnov/gpt-image-2-skill/blob/main/LICENSE)
+[![Rust](https://img.shields.io/badge/Rust-1.88%2B-orange?logo=rust)](https://www.rust-lang.org/)
+[![npm](https://img.shields.io/badge/npm-package-CB3837?logo=npm&logoColor=white)](https://www.npmjs.com/package/gpt-image-2-skill)
+[![Homebrew](https://img.shields.io/badge/Homebrew-tap-FBB040?logo=homebrew&logoColor=black)](https://github.com/Wangnov/homebrew-tap)
 
-## Skill Install
+**Language: 中文 | [English](#english)**
 
-After pushing this repo to GitHub, install the skill with:
+面向 AI Agent 的 GPT Image 2 CLI 与 Skill。一个命令面同时支持 `OPENAI_API_KEY`、OpenAI-compatible `--openai-api-base`，以及 Codex `~/.codex/auth.json` 图片链路。
+
+## 功能特性
+
+- `images generate`、`images edit`、`request create`
+- OpenAI `gpt-image-2` 与兼容服务端，支持自定义 `--openai-api-base`
+- Codex `auth.json` 图片链路，默认模型 `gpt-5.4`
+- `-m/--model`、`--ref-image`、`--mask`、`--background transparent`
+- `--format png|jpeg|webp`、`--quality`、`--compression`、`--input-fidelity`
+- `--json` stdout 结果与 `--json-events` stderr JSONL 进度事件
+- 默认 3 次 retry，Codex `401` 自动 refresh 后重试
+- `2K`、`4K` 尺寸别名与自定义 `WIDTHxHEIGHT`
+
+## 安装
+
+```bash
+cargo install gpt-image-2-skill --locked
+cargo binstall gpt-image-2-skill --no-confirm
+brew install wangnov/tap/gpt-image-2-skill
+npm install --global gpt-image-2-skill
+```
+
+本地开发安装：
+
+```bash
+make install-local
+```
+
+## 快速开始
+
+OpenAI API Key 直连：
+
+```bash
+OPENAI_API_KEY=sk-... gpt-image-2-skill --json \
+  images generate \
+  --prompt "A studio product photo of a red apple on transparent background" \
+  --out ./apple.png \
+  --background transparent \
+  --format png \
+  --quality high \
+  --size 1024x1024
+```
+
+OpenAI-compatible Base URL：
+
+```bash
+OPENAI_API_KEY=sk-... gpt-image-2-skill --json \
+  --provider openai \
+  --openai-api-base https://api.duckcoding.ai/v1 \
+  images generate \
+  --prompt "A polished geometric app logo on transparent background" \
+  --out ./logo.png \
+  --background transparent \
+  --format png \
+  --size 2K
+```
+
+Codex `auth.json` 生图：
+
+```bash
+gpt-image-2-skill --json --json-events \
+  --provider codex \
+  images generate \
+  --prompt "A glossy red apple sticker on transparent background" \
+  --out ./apple.png
+```
+
+参考图编辑：
+
+```bash
+gpt-image-2-skill --json --json-events \
+  images edit \
+  --prompt "Refine this logo, keep transparency, and improve visibility on dark backgrounds" \
+  --ref-image ./logo.png \
+  --out ./logo-edit.png \
+  --background transparent \
+  --format png \
+  --size 1024x1024
+```
+
+## Skill 安装
 
 ```bash
 npx skills add https://github.com/Wangnov/gpt-image-2-skill --skill gpt-image-2-skill
 ```
 
-The distributable skill lives in `skills/gpt-image-2-skill/` and includes its own runnable Python scripts.
+Skill 入口是 `node skills/gpt-image-2-skill/scripts/gpt_image_2_skill.cjs`。包装器按这个顺序解析运行时：
 
-## CLI Install
+1. `GPT_IMAGE_2_SKILL_BIN`
+2. 已安装的 `gpt-image-2-skill`
+3. 仓库内 `cargo run -p gpt-image-2-skill --`
+4. 当前版本 GitHub Release 资产下载到本地缓存
+
+## 尺寸与输出
+
+- `--size 2K` 解析为 `2048x2048`
+- `--size 4K` 解析为 `3840x2160`
+- 竖版 4K 使用 `2160x3840`
+- 当前方图高分辨率上限是 `2880x2880`
+- 自定义尺寸遵循当前约束：宽高都是 16 的倍数，最大边长 `3840`，最大总像素 `8294400`，最大长宽比 `3:1`
+
+## 分发与发布
+
+- crates.io：`cargo install gpt-image-2-skill --locked`
+- cargo-binstall：预编译二进制安装
+- GitHub Releases：归档、shell installer、PowerShell installer、Windows MSI
+- Homebrew：`wangnov/tap/gpt-image-2-skill`
+- npm：根包 + 平台子包矩阵
+- Skill：`npx skills add`
+
+## 文档
+
+- 设计与分发：`docs/rust-release-distribution-design.md`
+- Skill 说明：`skills/gpt-image-2-skill/SKILL.md`
+- Release 流程：`scripts/release/prepare.sh`、`scripts/release/publish.sh`、`scripts/release/verify.sh`
+- Skill 冒烟验证：`scripts/smoke_skill_install.cjs`
+
+## 许可证
+
+MIT。详见 `LICENSE`。
+
+---
+
+<a id="english"></a>
+
+**Language: [中文](#gpt-image-2-skill) | English**
+
+Agent-first GPT Image 2 CLI and Skill. One command surface supports `OPENAI_API_KEY`, OpenAI-compatible `--openai-api-base`, and the Codex image path driven by `~/.codex/auth.json`.
+
+## Features
+
+- `images generate`, `images edit`, and `request create`
+- OpenAI `gpt-image-2` plus OpenAI-compatible backends through `--openai-api-base`
+- Codex `auth.json` image flow with default model `gpt-5.4`
+- `-m/--model`, `--ref-image`, `--mask`, transparent backgrounds, and PNG/JPEG/WebP output
+- machine-readable stdout JSON plus stderr JSONL progress events
+- default three-attempt retry behavior with Codex `401` refresh
+- `2K` and `4K` size aliases plus custom `WIDTHxHEIGHT`
+
+## Installation
 
 ```bash
-cd /path/to/gpt-image-2-skill
+cargo install gpt-image-2-skill --locked
+cargo binstall gpt-image-2-skill --no-confirm
+brew install wangnov/tap/gpt-image-2-skill
+npm install --global gpt-image-2-skill
+```
+
+Local development install:
+
+```bash
 make install-local
 ```
 
-`make install-local` installs the package with `pip --user` and writes a stable wrapper to `~/.local/bin/gpt-image-2-skill`.
+## Quickstart
 
-## Repo Layout
-
-```text
-skills/gpt-image-2-skill/
-  SKILL.md
-  agents/openai.yaml
-  scripts/gpt_image_2_skill.py
-  scripts/selftest.py
-
-src/codex_auth_imagegen/
-  cli.py
-```
-
-`scripts/sync_skill_bundle.py` vendors the current CLI implementation into the skill bundle so the installed skill stays self-contained.
-
-## Command surface
-
-CLI form:
+OpenAI API key:
 
 ```bash
-gpt-image-2-skill --json doctor
-gpt-image-2-skill --json auth inspect
-gpt-image-2-skill --json models list
-gpt-image-2-skill --json images generate --prompt "..." --out ./image.png
-gpt-image-2-skill --json images edit --prompt "..." --ref-image ./input.png --out ./edited.png
-gpt-image-2-skill --json request create --request-operation responses --body-file ./body.json
-gpt-image-2-skill --json --provider openai request create --request-operation generate --body-file ./body.json
-```
-
-Bundled skill form:
-
-```bash
-python3 skills/gpt-image-2-skill/scripts/gpt_image_2_skill.py --json doctor
-python3 skills/gpt-image-2-skill/scripts/gpt_image_2_skill.py --json images generate --prompt "..." --out ./image.png
-python3 skills/gpt-image-2-skill/scripts/selftest.py
-```
-
-## Auth policy
-
-- `openai` reads `OPENAI_API_KEY` by default. `--api-key` exists for explicit one-off tests.
-- `codex` reads `~/.codex/auth.json` by default or `$CODEX_HOME/auth.json` when `CODEX_HOME` is set.
-- the Codex provider refreshes the access token automatically on one `401`
-- both providers retry transient failures up to 3 times with exponential backoff
-
-## Provider model policy
-
-- `openai` defaults to `gpt-image-2`
-- `codex` defaults to `gpt-5.4` and delegates image generation to the `image_generation` tool
-- `-m/--model` is provider-native
-
-## Common image options
-
-- `--background auto|opaque|transparent`
-- `--size auto|2K|4K|WIDTHxHEIGHT`
-- `2K` resolves to `2048x2048`
-- `4K` resolves to `3840x2160`
-- portrait 4K uses `2160x3840`
-- square high-resolution requests top out at `2880x2880`
-- custom `WIDTHxHEIGHT` values follow the current OpenAI image constraints: both edges are multiples of 16, max edge `3840`, max total pixels `8294400`, max aspect ratio `3:1`
-- `--quality auto|low|medium|high`
-- `--format png|jpeg|webp`
-- `--compression 0-100`
-
-## Provider-specific image options
-
-- `openai`: `--n`, `--moderation`, `--mask`, `--input-fidelity`
-- `codex`: `--instructions`, `--json-events`, automatic auth refresh, SSE event logging
-
-## JSON policy
-
-- JSON is the primary output surface and is emitted to stdout.
-- progress events, retry notices, and raw Codex SSE events are emitted to stderr only.
-- success responses use a top-level `{ "ok": true, ... }` envelope.
-- failures use `{ "ok": false, "error": { "code", "message", "detail?" } }`.
-- tokens and API keys are never printed.
-
-## Progress events
-
-- `--json-events` emits JSON Lines to `stderr`.
-- `kind: "progress"` is the stable cross-provider surface for scripts.
-- `kind: "sse"` carries raw Codex server events for live Codex-specific consumers.
-- `openai` emits coarse phases such as `request_started`, `multipart_prepared`, `request_completed`, and `output_saved`.
-- `codex` emits the same stable progress phases plus raw SSE events such as `response.created`, `response.output_item.done`, and `response.completed`.
-
-Example:
-
-```bash
-gpt-image-2-skill --json --json-events images generate \
-  --prompt "A glossy red apple sticker" \
-  --out /tmp/apple.png \
-  2>/tmp/progress.jsonl
-```
-
-## Examples
-
-Generate with provider auto:
-
-```bash
-gpt-image-2-skill --json images generate \
-  --prompt "A glossy red apple sticker" \
-  --out /tmp/apple.png
-```
-
-Generate through the official Images API:
-
-```bash
-OPENAI_API_KEY=... gpt-image-2-skill --json \
-  --provider openai \
+OPENAI_API_KEY=sk-... gpt-image-2-skill --json \
   images generate \
-  --prompt "A studio photo of a red apple on transparent background" \
-  --out /tmp/apple.png \
+  --prompt "A studio product photo of a red apple on transparent background" \
+  --out ./apple.png \
+  --background transparent \
   --format png \
   --quality high \
+  --size 1024x1024
+```
+
+OpenAI-compatible base URL:
+
+```bash
+OPENAI_API_KEY=sk-... gpt-image-2-skill --json \
+  --provider openai \
+  --openai-api-base https://api.duckcoding.ai/v1 \
+  images generate \
+  --prompt "A polished geometric app logo on transparent background" \
+  --out ./logo.png \
+  --background transparent \
+  --format png \
   --size 2K
 ```
 
-Edit through the Codex backend:
+Codex `auth.json`:
 
 ```bash
-gpt-image-2-skill --json \
+gpt-image-2-skill --json --json-events \
   --provider codex \
-  --json-events \
+  images generate \
+  --prompt "A glossy red apple sticker on transparent background" \
+  --out ./apple.png
+```
+
+Reference image edit:
+
+```bash
+gpt-image-2-skill --json --json-events \
   images edit \
-  --prompt "Turn this apple into a glossy product shot" \
-  --ref-image /tmp/apple.png \
-  --out /tmp/apple-edit.png \
-  --background auto
+  --prompt "Refine this logo, keep transparency, and improve visibility on dark backgrounds" \
+  --ref-image ./logo.png \
+  --out ./logo-edit.png \
+  --background transparent \
+  --format png \
+  --size 1024x1024
 ```
 
-Landscape 4K and portrait 4K examples:
+## Skill Install
 
 ```bash
-gpt-image-2-skill --json images generate \
-  --prompt "A cinematic city skyline at sunset" \
-  --out /tmp/skyline.png \
-  --size 4K
-
-gpt-image-2-skill --json images generate \
-  --prompt "A full-length fashion editorial portrait" \
-  --out /tmp/portrait.png \
-  --size 2160x3840
+npx skills add https://github.com/Wangnov/gpt-image-2-skill --skill gpt-image-2-skill
 ```
 
-## Validation
+The bundled wrapper resolves the runtime in this order:
 
-```bash
-python3 scripts/sync_skill_bundle.py
-python3 scripts/smoke_skill_install.py
-python3 -m unittest discover -s tests -p 'test_*.py'
-python3 skills/gpt-image-2-skill/scripts/selftest.py
-```
+1. `GPT_IMAGE_2_SKILL_BIN`
+2. an installed `gpt-image-2-skill`
+3. repo-local `cargo run -p gpt-image-2-skill --`
+4. a cached GitHub Release binary for the current version
 
-For a direct local install dry run:
+## Size Rules
 
-```bash
-npx skills add "$(pwd)" --skill gpt-image-2-skill -y
-```
+- `--size 2K` resolves to `2048x2048`
+- `--size 4K` resolves to `3840x2160`
+- portrait 4K uses `2160x3840`
+- the current square high-resolution ceiling is `2880x2880`
+- custom sizes follow the current constraints: both edges must be multiples of 16, max edge `3840`, max total pixels `8294400`, max aspect ratio `3:1`
+
+## Distribution
+
+- crates.io
+- cargo-binstall
+- GitHub Releases with archives and installers
+- Homebrew tap
+- npm root package plus platform subpackages
+- installable Skill bundle through `npx skills add`
+
+## Docs
+
+- Design and distribution: `docs/rust-release-distribution-design.md`
+- Skill spec: `skills/gpt-image-2-skill/SKILL.md`
+- Release flow: `scripts/release/prepare.sh`, `scripts/release/publish.sh`, `scripts/release/verify.sh`
+- Skill smoke test: `scripts/smoke_skill_install.cjs`
+
+## License
+
+MIT. See `LICENSE`.

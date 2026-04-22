@@ -1,0 +1,36 @@
+[package]
+name = "gpt-image-2-skill"
+version = "0.2.0"
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+documentation.workspace = true
+authors.workspace = true
+description = "Agent-first GPT Image 2 CLI and installable skill runtime."
+readme = "../../README.md"
+
+[dependencies]
+anyhow = "1.0.100"
+base64 = "0.22.1"
+clap = { version = "4.5.51", features = ["derive"] }
+dirs = "6.0.0"
+mime_guess = "2.0.5"
+reqwest = { version = "0.12.24", default-features = false, features = ["blocking", "charset", "http2", "json", "multipart", "rustls-tls"] }
+serde = { version = "1.0.228", features = ["derive"] }
+serde_json = "1.0.145"
+url = "2.5.7"
+
+[dev-dependencies]
+tempfile = "3.23.0"
+
+[package.metadata.binstall]
+pkg-url = "{ repo }/releases/download/v{ version }/{ name }-{ target }{ archive-suffix }"
+bin-dir = "{ bin }{ binary-ext }"
+pkg-fmt = "auto"
+
+[package.metadata.wix]
+upgrade-guid = "B3C143C7-8E3F-4268-B986-0C948A6142D5"
+path-guid = "1A4B5434-6487-464F-B703-DA39450EFA34"
+license = false
+eula = false

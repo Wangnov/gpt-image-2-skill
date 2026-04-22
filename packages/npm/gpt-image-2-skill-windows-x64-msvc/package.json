@@ -1,0 +1,24 @@
+{
+  "name": "gpt-image-2-skill-windows-x64-msvc",
+  "version": "0.2.0",
+  "description": "Platform binary for gpt-image-2-skill (x86_64-pc-windows-msvc).",
+  "license": "MIT",
+  "homepage": "https://github.com/Wangnov/gpt-image-2-skill",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Wangnov/gpt-image-2-skill.git"
+  },
+  "files": [
+    "bin",
+    "README.md"
+  ],
+  "os": [
+    "win32"
+  ],
+  "cpu": [
+    "x64"
+  ],
+  "bin": {
+    "gpt-image-2-skill": "bin/gpt-image-2-skill.exe"
+  }
+}

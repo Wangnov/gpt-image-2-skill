@@ -1,0 +1,20 @@
+name: Release Candidate
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  candidate:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install cargo-dist
+        run: cargo install cargo-dist --locked --version 0.31.0
+      - name: Prepare release candidate
+        run: scripts/release/prepare.sh

@@ -1,0 +1,53 @@
+name: Publish npm Packages
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Release tag such as v0.2.0
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  publish-npm:
+    runs-on: ubuntu-24.04
+    env:
+      TAG_NAME: ${{ github.event_name == 'release' && github.event.release.tag_name || inputs.tag }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.TAG_NAME }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          registry-url: https://registry.npmjs.org
+      - name: Download release assets
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          mkdir -p .release-assets
+          gh release download "$TAG_NAME" --dir .release-assets
+      - name: Build npm matrix
+        run: |
+          node scripts/npm/build-matrix.mjs --release-dir .release-assets --version "${TAG_NAME#v}"
+      - name: Publish platform packages
+        run: |
+          for package_dir in \
+            packages/npm/gpt-image-2-skill-darwin-arm64 \
+            packages/npm/gpt-image-2-skill-darwin-x64 \
+            packages/npm/gpt-image-2-skill-linux-arm64-gnu \
+            packages/npm/gpt-image-2-skill-linux-x64-gnu \
+            packages/npm/gpt-image-2-skill-linux-x64-musl \
+            packages/npm/gpt-image-2-skill-windows-arm64-msvc \
+            packages/npm/gpt-image-2-skill-windows-x64-msvc
+          do
+            npm publish "$package_dir" --access public --provenance
+          done
+      - name: Publish root package
+        run: npm publish packages/npm/gpt-image-2-skill --access public --provenance

@@ -1,0 +1,23 @@
+[workspace]
+members = ["crates/gpt-image-2-skill"]
+resolver = "2"
+
+[workspace.package]
+edition = "2024"
+license = "MIT"
+repository = "https://github.com/Wangnov/gpt-image-2-skill"
+homepage = "https://github.com/Wangnov/gpt-image-2-skill"
+documentation = "https://github.com/Wangnov/gpt-image-2-skill#readme"
+authors = ["Wangnov <48670012+Wangnov@users.noreply.github.com>"]
+
+[workspace.metadata.release]
+shared-version = true
+tag-name = "v{{version}}"
+push = false
+pre-release-commit-message = "release: {{version}}"
+tag-message = "release: {{version}}"
+
+# The profile that 'dist' will build with
+[profile.dist]
+inherits = "release"
+lto = "thin"
