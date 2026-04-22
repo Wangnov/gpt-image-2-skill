@@ -54,5 +54,7 @@ jobs:
       - name: Publish root package
         run: npm publish packages/npm/gpt-image-2-skill --access public --provenance
       - name: Dispatch post release verify
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         shell: bash
         run: gh workflow run "Post Release Verify" --repo "${{ github.repository }}" -f version="${TAG_NAME#v}"
