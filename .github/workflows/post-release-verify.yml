@@ -32,7 +32,9 @@ jobs:
           node-version: 22
       - uses: dtolnay/rust-toolchain@stable
       - name: Install cargo-binstall
-        run: cargo install cargo-binstall --locked
+        uses: cargo-bins/cargo-binstall@v1.18.1
+        with:
+          version: 1.18.1
       - name: Install CLI with cargo-binstall
         shell: bash
         run: cargo binstall gpt-image-2-skill --version "${VERSION#v}" --no-confirm
