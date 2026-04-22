@@ -1,6 +1,17 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+if ! command -v npm >/dev/null 2>&1; then
+  echo "npm is required to configure trusted publishing"
+  exit 1
+fi
+
+if ! npm whoami >/dev/null 2>&1; then
+  echo "npm trust needs an interactive npm account session with account-level 2FA enabled."
+  echo "Run npm login, approve the first trust action in the browser, enable the 5-minute skip window, then rerun this script."
+  exit 1
+fi
+
 PACKAGES=(
   gpt-image-2-skill
   gpt-image-2-skill-darwin-arm64
