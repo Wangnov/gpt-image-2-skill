@@ -1,7 +1,8 @@
 .DS_Store
 build/
 dist/
-assets/
+assets/*
+!assets/logo.png
 target/
 node_modules/
 .npm/

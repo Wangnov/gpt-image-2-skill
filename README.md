@@ -1,7 +1,7 @@
 # gpt-image-2-skill
 
 <p align="center">
-  <img src="assets/logo.png" width="160" alt="gpt-image-2-skill logo">
+  <img src="https://raw.githubusercontent.com/Wangnov/gpt-image-2-skill/main/assets/logo.png" width="160" alt="gpt-image-2-skill logo">
 </p>
 
 [![GitHub Release](https://img.shields.io/github/v/release/Wangnov/gpt-image-2-skill)](https://github.com/Wangnov/gpt-image-2-skill/releases)
