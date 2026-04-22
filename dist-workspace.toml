@@ -24,6 +24,9 @@ publish-jobs = ["homebrew"]
 # Homebrew tap repository
 tap = "Wangnov/homebrew-tap"
 
+[dist.dependencies.chocolatey]
+wixtoolset = { version = "*", targets = ["aarch64-pc-windows-msvc"] }
+
 [dist.github-custom-runners]
 x86_64-unknown-linux-gnu = "ubuntu-24.04"
 x86_64-unknown-linux-musl = "ubuntu-24.04"

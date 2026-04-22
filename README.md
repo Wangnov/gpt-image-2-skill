@@ -123,6 +123,8 @@ Skill 入口是 `node skills/gpt-image-2-skill/scripts/gpt_image_2_skill.cjs`。
 - npm：根包 + 平台子包矩阵
 - Skill：`npx skills add`
 
+npm 首发通过 GitHub Actions 中的 `NPM_TOKEN` 完成，并保留 `--provenance`。包首次上线后，可运行 `scripts/release/configure-npm-trust.sh` 绑定 trusted publisher。
+
 ## 文档
 
 - 设计与分发：`docs/rust-release-distribution-design.md`
@@ -248,6 +250,8 @@ The bundled wrapper resolves the runtime in this order:
 - Homebrew tap
 - npm root package plus platform subpackages
 - installable Skill bundle through `npx skills add`
+
+The first npm publish uses `NPM_TOKEN` in GitHub Actions and keeps `--provenance` enabled. Once the packages exist on npm, run `scripts/release/configure-npm-trust.sh` to bind trusted publishers.
 
 ## Docs
 

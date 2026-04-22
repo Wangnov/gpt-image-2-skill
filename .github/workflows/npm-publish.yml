@@ -19,6 +19,7 @@ jobs:
     runs-on: ubuntu-24.04
     env:
       TAG_NAME: ${{ github.event_name == 'release' && github.event.release.tag_name || inputs.tag }}
+      NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
     steps:
       - uses: actions/checkout@v4
         with:

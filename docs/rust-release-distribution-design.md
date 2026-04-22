@@ -278,6 +278,13 @@ Configure trusted publishing for every npm package:
 - one record for the root package
 - one record per platform package
 
+Bootstrap flow:
+
+- first publish uses `NPM_TOKEN` from GitHub Actions secrets together with `npm publish --provenance`
+- after all packages exist on npm, run `scripts/release/configure-npm-trust.sh`
+- the trust step uses the workflow file name `npm-publish.yml`
+- npm trust setup needs an npm account session with account-level 2FA enabled
+
 ## Release Scripts
 
 Use a two-phase release flow.
