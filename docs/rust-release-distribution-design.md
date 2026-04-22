@@ -284,6 +284,7 @@ Bootstrap flow:
 - after all packages exist on npm, run `scripts/release/configure-npm-trust.sh`
 - the trust step uses the workflow file name `npm-publish.yml`
 - npm trust setup needs an npm account session with account-level 2FA enabled
+- Windows ARM release runners need one extra CI patch step after Chocolatey installs WiX so `WIX` and `PATH` are refreshed for the current job
 
 ## Release Scripts
 

@@ -139,6 +139,25 @@ jobs:
       - name: Install dependencies
         run: |
           ${{ matrix.packages_install }}
+      - name: Refresh WiX path
+        if: ${{ contains(join(matrix.targets, ','), 'aarch64-pc-windows-msvc') }}
+        shell: pwsh
+        run: |
+          $wixRoot = [Environment]::GetEnvironmentVariable("WIX", "Machine")
+          if (-not $wixRoot) {
+            $candidates = @(
+              Get-ChildItem "${env:ProgramFiles(x86)}" -Directory -Filter "WiX Toolset v*" -ErrorAction SilentlyContinue
+              Get-ChildItem "${env:ProgramFiles}" -Directory -Filter "WiX Toolset v*" -ErrorAction SilentlyContinue
+            ) | Sort-Object FullName -Descending
+            if ($candidates.Count -eq 0) {
+              throw "WiX installation root not found after Chocolatey install"
+            }
+            $wixRoot = $candidates[0].FullName
+          }
+
+          Add-Content -Path $env:GITHUB_ENV -Value "WIX=$wixRoot"
+          Add-Content -Path $env:GITHUB_PATH -Value (Join-Path $wixRoot "bin")
+          Write-Host "Using WiX root $wixRoot"
       - name: Build artifacts
         run: |
           # Actually do builds and make zips and whatnot

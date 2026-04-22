@@ -17,5 +17,6 @@ cargo test -p "$CRATE_NAME"
 cargo run -q -p "$CRATE_NAME" -- --json doctor >/tmp/gpt-image-2-skill-doctor.json
 node scripts/smoke_skill_install.cjs >/tmp/gpt-image-2-skill-skill-smoke.json
 dist generate --mode ci >/tmp/gpt-image-2-skill-dist-generate.log
+node scripts/release/patch-release-workflow.mjs
 
 echo "prepared $CRATE_NAME $(project_version)"
