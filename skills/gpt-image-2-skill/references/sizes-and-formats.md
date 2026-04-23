@@ -22,7 +22,7 @@ Custom `WIDTHxHEIGHT` must satisfy ALL of:
 - max aspect ratio: `3:1` (longest / shortest ≤ 3.0)
 - square high-resolution ceiling in practice: `2880x2880`
 
-Violations return `code: "invalid_argument"` with the failing constraint in `error.message`.
+Violations return `code: "invalid_command"` (clap layer, e.g. non-multiple-of-16 caught at parse time) or `code: "invalid_argument"` (runtime layer, e.g. total-pixel cap caught after parsing) with the failing constraint in `error.message`.
 
 ## Format and quality
 
@@ -31,23 +31,23 @@ Violations return `code: "invalid_argument"` with the failing constraint in `err
 | `--format` | `png`, `jpeg`, `webp` | output container |
 | `--quality` | `low`, `medium`, `high`, `auto` | provider-side rendering quality |
 | `--compression` | `0`–`100` | JPEG/WebP compression level |
-| `--background` | `auto` (default), `transparent`, `opaque` | request transparent PNG/WebP via `transparent` |
+| `--background` | `auto` (default), `transparent`, `opaque` | **OpenAI only.** `transparent` requests an alpha channel, `opaque` forces a solid background, `auto` lets the model choose. The prompt cannot reliably override the model's default background — **always pass this flag** if a specific background matters. |
 
 ## Shared vs OpenAI-only
 
-| Flag | Shared | OpenAI-only |
+| Flag | Honored by both | OpenAI only |
 |---|---|---|
-| `--background` | yes | |
 | `--size` | yes | |
 | `--quality` | yes | |
 | `--format` | yes | |
 | `--compression` | yes | |
+| `--background` | | yes (Codex accepts the flag but the upstream `image_generation` tool does not honor it) |
 | `--n` | | yes (request multiple images) |
 | `--moderation` | | yes |
 | `--mask` | | yes (PNG mask for `images edit`) |
 | `--input-fidelity` | | yes |
 
-Codex requests ignore `--n`, `--moderation`, `--mask`, and `--input-fidelity`; the runtime returns `code: "unsupported_option"` if any are passed with `--provider codex`.
+Codex requests effectively ignore `--background`, `--n`, `--moderation`, `--mask`, and `--input-fidelity`. The runtime returns `code: "unsupported_option"` if `--n`, `--moderation`, `--mask`, or `--input-fidelity` is passed with `--provider codex`; `--background` is silently dropped by the upstream tool. To control output background under Codex, describe it in the prompt (less reliable) or post-process the image yourself.
 
 ## Reference image inputs
 

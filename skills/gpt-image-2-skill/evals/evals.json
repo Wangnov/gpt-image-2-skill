@@ -77,6 +77,22 @@
         "payload.error.message mentions 3840 OR 8294400 OR 'aspect ratio' OR 'multiple of 16'"
       ],
       "files": []
+    },
+    {
+      "id": 6,
+      "name": "edit-replace-background-with-flag",
+      "prompt": "I have a transparent PNG at /tmp/source-logo.png. Replace its background with a solid white background and save to /tmp/edit-white.png. Return JSON.",
+      "expected_output": "Calling the skill MUST set output background through --background opaque, NOT through the prompt alone. 'Replace background with white' is a flag-controlled property under OpenAI; describing it only in the prompt is unreliable and provider-dependent. Under Codex this case is skipped (upstream image_generation does not honor --background).",
+      "assertions": [
+        "command line includes 'images edit'",
+        "command line includes --ref-image /tmp/source-logo.png",
+        "command line includes --out /tmp/edit-white.png",
+        "command line includes --background opaque",
+        "command line includes --json",
+        "if --provider codex was used then this case is skipped (Codex ignores --background)",
+        "if payload.ok === true and resolved provider is openai then /tmp/edit-white.png exists, is > 1024 bytes, and is visually opaque (alpha channel uniformly 255 in a non-edge sample)"
+      ],
+      "files": ["/tmp/source-logo.png (caller-provided fixture, transparent PNG)"]
     }
   ]
 }

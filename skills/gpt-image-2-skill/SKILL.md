@@ -41,11 +41,29 @@ node scripts/selftest.cjs
 
 Force a provider with `--provider openai`, `--provider codex`, or leave the default `--provider auto`. Override the OpenAI base URL with `--openai-api-base https://...`.
 
+## Flags vs prompt — what each controls
+
+Output **properties** (not "what to draw") are flag-controlled. Putting them in the prompt is unreliable and provider-dependent.
+
+| Property | Use this flag, not the prompt |
+|---|---|
+| Output background (transparent / opaque / auto) | `--background auto\|transparent\|opaque` |
+| Output dimensions | `--size 2K`, `--size 4K`, or `--size WIDTHxHEIGHT` |
+| Output container | `--format png\|jpeg\|webp` |
+| Compression level | `--compression 0..100` |
+| Render quality | `--quality low\|medium\|high\|auto` |
+| Number of images | `--n <count>` (OpenAI only) |
+| Edit mask region | `--mask <png>` (OpenAI only) |
+
+The prompt is for "what is in the picture"; background, size, format, count, and mask are not. For example, to turn a transparent PNG into a white-background PNG, pass `--background opaque` — describing "white background" only in the prompt is **not reliable**.
+
+**Provider asymmetry**: `--background`, `--n`, `--moderation`, `--mask`, and `--input-fidelity` are honored only by OpenAI (and OpenAI-compatible bases that proxy them). Codex `image_generation` does not honor `--background`; the runtime accepts the flag but the upstream tool drops it. The other four return `code: "unsupported_option"` if passed with `--provider codex`.
+
 ## Notes
 
 - `openai` defaults to `gpt-image-2`; `codex` defaults to `gpt-5.4` and delegates to `image_generation`.
-- Shared options: `--background`, `--size`, `--quality`, `--format`, `--compression`.
-- OpenAI-only options: `--n`, `--moderation`, `--mask`, `--input-fidelity`.
+- Shared options actually honored everywhere: `--size`, `--quality`, `--format`, `--compression`.
+- OpenAI-only options: `--background`, `--n`, `--moderation`, `--mask`, `--input-fidelity`.
 - Retries: up to 3 with exponential backoff (1s → 2s → 4s). Codex `401` triggers one token refresh + one retry.
 - Size aliases: `2K` → `2048x2048`, `4K` → `3840x2160`. Custom `WxH` requires both edges multiples of 16, max edge 3840, max 8,294,400 pixels, max aspect ratio 3:1.
 
