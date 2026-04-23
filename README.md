@@ -13,7 +13,7 @@
 
 **Language: 中文 | [English](#english)**
 
-面向 AI Agent 的 GPT Image 2 CLI 与 Skill。一个命令面同时支持 `OPENAI_API_KEY`、OpenAI-compatible `--openai-api-base`，以及 Codex `~/.codex/auth.json` 图片链路。
+面向 AI Agent 的 GPT Image 2 CLI 与 Skill。一个命令面同时支持 `OPENAI_API_KEY`、OpenAI-compatible `--openai-api-base`，以及 Codex `~/.codex/auth.json` 图片链路。CLI、Tauri App 与 Skill 共用 `$CODEX_HOME/gpt-image-2-skill/config.json`。
 
 ## 功能特性
 
@@ -25,6 +25,8 @@
 - `--json` stdout 结果与 `--json-events` stderr JSONL 进度事件
 - 默认 3 次 retry，Codex `401` 自动 refresh 后重试
 - `2K`、`4K` 尺寸别名与自定义 `WIDTHxHEIGHT`
+- `config`、`secret`、`history` 命令，覆盖共享配置、文件/env/Keychain 密钥来源和本地 SQLite 历史
+- Tauri App scaffold 位于 `apps/gpt-image-2-app`，前端可直接消费 `runtime-contract.ts` 与 `contracts/mock-data.json`
 
 ## 安装
 
@@ -70,6 +72,22 @@ OPENAI_API_KEY=sk-... gpt-image-2-skill --json \
   --size 2K
 ```
 
+共享配置固定 provider：
+
+```bash
+gpt-image-2-skill --json config add-provider \
+  --name my-image-api \
+  --type openai-compatible \
+  --api-base https://example.com/v1 \
+  --api-key sk-... \
+  --set-default
+
+gpt-image-2-skill --json config inspect
+gpt-image-2-skill --json images generate \
+  --prompt "A polished geometric app logo on transparent background" \
+  --out ./logo.png
+```
+
 Codex `auth.json` 生图：
 
 ```bash
@@ -112,8 +130,9 @@ Skill 入口是 `node skills/gpt-image-2-skill/scripts/gpt_image_2_skill.cjs`。
 
 1. `GPT_IMAGE_2_SKILL_BIN`
 2. 已安装的 `gpt-image-2-skill`
-3. 仓库内 `cargo run -p gpt-image-2-skill --`
-4. 当前版本 GitHub Release 资产下载到本地缓存
+3. Tauri App bundled CLI
+4. 仓库内 `cargo run -p gpt-image-2-skill --`
+5. 当前版本 GitHub Release 资产下载到本地缓存
 
 ## 尺寸与输出
 
@@ -150,7 +169,7 @@ MIT。详见 `LICENSE`。
 
 **Language: [中文](#gpt-image-2-skill) | English**
 
-Agent-first GPT Image 2 CLI and Skill. One command surface supports `OPENAI_API_KEY`, OpenAI-compatible `--openai-api-base`, and the Codex image path driven by `~/.codex/auth.json`.
+Agent-first GPT Image 2 CLI and Skill. One command surface supports `OPENAI_API_KEY`, OpenAI-compatible `--openai-api-base`, and the Codex image path driven by `~/.codex/auth.json`. The CLI, Tauri App, and Skill share `$CODEX_HOME/gpt-image-2-skill/config.json`.
 
 ## Features
 
@@ -161,6 +180,8 @@ Agent-first GPT Image 2 CLI and Skill. One command surface supports `OPENAI_API_
 - machine-readable stdout JSON plus stderr JSONL progress events
 - default three-attempt retry behavior with Codex `401` refresh
 - `2K` and `4K` size aliases plus custom `WIDTHxHEIGHT`
+- `config`, `secret`, and `history` commands for shared config, file/env/Keychain credential sources, and local SQLite history
+- Tauri App scaffold under `apps/gpt-image-2-app`; frontend-ready contracts live in `runtime-contract.ts` and `contracts/mock-data.json`
 
 ## Installation
 
@@ -206,6 +227,22 @@ OPENAI_API_KEY=sk-... gpt-image-2-skill --json \
   --size 2K
 ```
 
+Pinned provider through shared config:
+
+```bash
+gpt-image-2-skill --json config add-provider \
+  --name my-image-api \
+  --type openai-compatible \
+  --api-base https://example.com/v1 \
+  --api-key sk-... \
+  --set-default
+
+gpt-image-2-skill --json config inspect
+gpt-image-2-skill --json images generate \
+  --prompt "A polished geometric app logo on transparent background" \
+  --out ./logo.png
+```
+
 Codex `auth.json`:
 
 ```bash
@@ -248,8 +285,9 @@ The bundled wrapper resolves the runtime in this order:
 
 1. `GPT_IMAGE_2_SKILL_BIN`
 2. an installed `gpt-image-2-skill`
-3. repo-local `cargo run -p gpt-image-2-skill --`
-4. a cached GitHub Release binary for the current version
+3. Tauri App bundled CLI
+4. repo-local `cargo run -p gpt-image-2-skill --`
+5. a cached GitHub Release binary for the current version
 
 ## Size Rules
 

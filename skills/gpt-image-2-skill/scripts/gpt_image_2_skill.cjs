@@ -16,6 +16,7 @@ const CACHE_ROOT = path.join(
   VERSION
 );
 const BIN_ENV = "GPT_IMAGE_2_SKILL_BIN";
+const APP_BIN_ENV = "GPT_IMAGE_2_SKILL_APP_BIN";
 const REPO_ENV = "GPT_IMAGE_2_SKILL_REPO_ROOT";
 const SKIP_BOOTSTRAP_ENV = "GPT_IMAGE_2_SKILL_SKIP_BOOTSTRAP";
 
@@ -104,7 +105,7 @@ function resolveFromEnvBinary() {
   if (!isExecutableFile(candidate)) {
     return null;
   }
-  return { argvPrefix: [candidate], cwd: null };
+  return { argvPrefix: [candidate], cwd: null, source: "env" };
 }
 
 function resolveFromPath() {
@@ -112,7 +113,43 @@ function resolveFromPath() {
   if (!binary) {
     return null;
   }
-  return { argvPrefix: [binary], cwd: null };
+  return { argvPrefix: [binary], cwd: null, source: "path" };
+}
+
+function appBundleCandidates() {
+  const binaryName = process.platform === "win32" ? `${CLI_NAME}.exe` : CLI_NAME;
+  const candidates = [];
+  const configured = (process.env[APP_BIN_ENV] || "").trim();
+  if (configured) {
+    candidates.push(path.resolve(configured));
+  }
+  if (process.platform === "darwin") {
+    candidates.push(
+      `/Applications/GPT Image 2.app/Contents/Resources/bin/${binaryName}`,
+      path.join(os.homedir(), "Applications", `GPT Image 2.app/Contents/Resources/bin/${binaryName}`)
+    );
+  } else if (process.platform === "win32") {
+    for (const root of [process.env.LOCALAPPDATA, process.env.PROGRAMFILES]) {
+      if (root) {
+        candidates.push(path.join(root, "GPT Image 2", "resources", "bin", binaryName));
+      }
+    }
+  } else {
+    candidates.push(
+      `/opt/gpt-image-2/resources/bin/${binaryName}`,
+      path.join(os.homedir(), ".local", "share", "gpt-image-2", "bin", binaryName)
+    );
+  }
+  return candidates;
+}
+
+function resolveFromAppBundle() {
+  for (const candidate of appBundleCandidates()) {
+    if (isExecutableFile(candidate)) {
+      return { argvPrefix: [candidate], cwd: null, source: "app" };
+    }
+  }
+  return null;
 }
 
 function isRepoRoot(candidate) {
@@ -144,6 +181,7 @@ function resolveFromRepo() {
   return {
     argvPrefix: ["cargo", "run", "-q", "-p", CLI_NAME, "--"],
     cwd: repoRoot,
+    source: "repo",
   };
 }
 
@@ -197,7 +235,7 @@ function resolveFromCache() {
   if (!isExecutableFile(candidate)) {
     return null;
   }
-  return { argvPrefix: [candidate], cwd: null };
+  return { argvPrefix: [candidate], cwd: null, source: "cache" };
 }
 
 function assetName(target) {
@@ -257,7 +295,7 @@ async function bootstrapReleaseBinary() {
   const { triple, extension } = detectTarget();
   const destination = cacheBinaryPath(triple, extension);
   if (isExecutableFile(destination)) {
-    return { argvPrefix: [destination], cwd: null };
+    return { argvPrefix: [destination], cwd: null, source: "cache" };
   }
 
   const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), `${CLI_NAME}-bootstrap-`));
@@ -279,21 +317,42 @@ async function bootstrapReleaseBinary() {
     if (process.platform !== "win32") {
       fs.chmodSync(destination, 0o755);
     }
-    return { argvPrefix: [destination], cwd: null };
+    return { argvPrefix: [destination], cwd: null, source: "bootstrap" };
   } finally {
     fs.rmSync(tempRoot, { recursive: true, force: true });
   }
 }
 
+function runtimeSupportsSharedConfig(runtime) {
+  if (runtime.source === "repo") {
+    return true;
+  }
+  const [command, ...prefixArgs] = runtime.argvPrefix;
+  const result = childProcess.spawnSync(command, [...prefixArgs, "--json", "config", "path"], {
+    cwd: runtime.cwd || undefined,
+    encoding: "utf8",
+    stdio: ["ignore", "pipe", "pipe"],
+  });
+  if (result.error || result.status !== 0) {
+    return false;
+  }
+  try {
+    const payload = JSON.parse(result.stdout);
+    return payload && payload.ok === true && payload.command === "config path";
+  } catch {
+    return false;
+  }
+}
+
 async function resolveRuntime() {
-  for (const resolver of [resolveFromEnvBinary, resolveFromPath, resolveFromRepo, resolveFromCache]) {
+  for (const resolver of [resolveFromEnvBinary, resolveFromPath, resolveFromAppBundle, resolveFromRepo, resolveFromCache]) {
     const runtime = resolver();
-    if (runtime) {
+    if (runtime && runtimeSupportsSharedConfig(runtime)) {
       return runtime;
     }
   }
   const runtime = await bootstrapReleaseBinary();
-  if (runtime) {
+  if (runtime && runtimeSupportsSharedConfig(runtime)) {
     return runtime;
   }
   throw new Error(

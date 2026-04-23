@@ -3,12 +3,13 @@ name: gpt-image-2-skill
 description: This skill should be used when the user asks to "generate an image", "create a logo", "draw an icon", "edit this photo", "change background to transparent", "remove background", "use GPT image", "use Codex to draw", "用 GPT image 生成图片", "用 Codex 画图", "帮我生成一张图", "改成透明背景", "把这张图编辑一下", or any prompt-to-image or reference-image-edit task that benefits from a structured CLI returning JSON results and JSONL progress events. Supports OpenAI `gpt-image-2` (via `OPENAI_API_KEY` or OpenAI-compatible base URL) and Codex `image_generation` (via `~/.codex/auth.json`) under one command surface, with masks, custom sizes up to 4K, transparent backgrounds, and a raw request escape hatch.
 ---
 
-Run image generation and editing through one CLI surface that hides provider differences. The Node wrapper at `scripts/gpt_image_2_skill.cjs` resolves an underlying Rust binary (env override → installed binary → repo `cargo run` → cached release → bootstrap download) and forwards every flag.
+Run image generation and editing through one CLI surface that hides provider differences. The Node wrapper at `scripts/gpt_image_2_skill.cjs` resolves an underlying Rust binary (env override → installed binary → Tauri App bundled CLI → repo `cargo run` → cached release → bootstrap download) and forwards every flag.
 
 ## When to use this skill
 
 - Generate or edit an image and capture a structured result an agent can parse.
 - Switch between `OPENAI_API_KEY`, an OpenAI-compatible base URL, and Codex `auth.json` without changing command shape.
+- Respect shared provider config at `$CODEX_HOME/gpt-image-2-skill/config.json` so CLI, App, and Skill use the same default provider.
 - Need transparent backgrounds, masks, custom sizes up to 4K, or raw request bodies.
 - Want live progress events (retries, multipart prep, Codex SSE) on stderr while the final JSON lands on stdout.
 
@@ -18,6 +19,7 @@ Always pass `--json` so the result is machine-readable. Add `--json-events` when
 
 ```bash
 # 1. Confirm runtime + provider readiness
+node scripts/gpt_image_2_skill.cjs --json config inspect
 node scripts/gpt_image_2_skill.cjs --json doctor
 node scripts/gpt_image_2_skill.cjs --json auth inspect
 
@@ -39,7 +41,24 @@ node scripts/gpt_image_2_skill.cjs --json \
 node scripts/selftest.cjs
 ```
 
-Force a provider with `--provider openai`, `--provider codex`, or leave the default `--provider auto`. Override the OpenAI base URL with `--openai-api-base https://...`.
+Force a provider with `--provider openai`, `--provider codex`, or any named provider from `config inspect`; leave the default `--provider auto` to use `default_provider` first. Override the legacy OpenAI base URL with `--openai-api-base https://...`.
+
+## Shared config
+
+Use the CLI config surface when the user asks to add or pin a provider:
+
+```bash
+node scripts/gpt_image_2_skill.cjs --json config path
+node scripts/gpt_image_2_skill.cjs --json config add-provider \
+  --name my-image-api \
+  --type openai-compatible \
+  --api-base https://example.com/v1 \
+  --api-key sk-... \
+  --set-default
+node scripts/gpt_image_2_skill.cjs --json config test-provider my-image-api
+```
+
+Credential sources supported by CLI, App, and Skill: `file`, `env`, and `keychain`. File credentials are stored in the shared config file; JSON output redacts them.
 
 ## Flags vs prompt — what each controls
 

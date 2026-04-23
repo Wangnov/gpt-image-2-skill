@@ -22,6 +22,7 @@ function runJson(args) {
 }
 
 function main() {
+  const config = runJson(["--json", "config", "inspect"]);
   const doctor = runJson(["--json", "doctor"]);
   const auth = runJson(["--json", "auth", "inspect"]);
   console.log(
@@ -29,6 +30,8 @@ function main() {
       {
         ok: true,
         doctor_ok: doctor.ok === true,
+        config_file: config.config_file ?? null,
+        default_provider: config.config?.default_provider ?? null,
         resolved_provider: doctor.provider_selection?.resolved ?? null,
         auth_openai_ready: auth.providers?.openai?.ready ?? null,
         auth_codex_ready: auth.providers?.codex?.ready ?? null,
