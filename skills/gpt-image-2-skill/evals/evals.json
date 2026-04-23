@@ -1,0 +1,81 @@
+{
+  "skill_name": "gpt-image-2-skill",
+  "evals": [
+    {
+      "id": 1,
+      "name": "doctor-smoke",
+      "prompt": "Use gpt-image-2-skill to check whether OpenAI or Codex is currently usable, and return the result as JSON.",
+      "expected_output": "Invokes `node scripts/gpt_image_2_skill.cjs --json doctor`. Stdout is valid JSON with `ok: true`, `provider_selection.resolved` set, and `retry_policy.max_retries === 3`.",
+      "assertions": [
+        "command line includes --json doctor",
+        "stdout parses as JSON",
+        "payload.ok === true",
+        "payload.provider_selection is an object containing key 'resolved'",
+        "payload.retry_policy.max_retries === 3"
+      ],
+      "files": []
+    },
+    {
+      "id": 2,
+      "name": "generate-transparent-png",
+      "prompt": "Generate a 1024x1024 PNG of a glossy red apple on a transparent background. Save it to /tmp/apple-eval.png. Return JSON and stream progress events to stderr.",
+      "expected_output": "Invokes `images generate` with --background transparent, --size 1024x1024, --format png, --out /tmp/apple-eval.png, --json, --json-events. Final file exists at /tmp/apple-eval.png and is > 1KB.",
+      "assertions": [
+        "command line includes --background transparent",
+        "command line includes --size 1024x1024",
+        "command line includes --format png",
+        "command line includes --out /tmp/apple-eval.png",
+        "command line includes --json",
+        "command line includes --json-events",
+        "stderr contains at least one line with '\"phase\":\"request_started\"'",
+        "payload.ok === true",
+        "/tmp/apple-eval.png exists and is > 1024 bytes"
+      ],
+      "files": []
+    },
+    {
+      "id": 3,
+      "name": "force-codex-provider",
+      "prompt": "Use the Codex auth.json image flow specifically (do not use OpenAI even if OPENAI_API_KEY is set) to draw a simple flat icon of a notepad. Save the output to /tmp/codex-icon.png and return JSON.",
+      "expected_output": "Invokes the skill with --provider codex --json images generate ... --out /tmp/codex-icon.png. If Codex auth is ready: payload.ok === true and the file exists. Otherwise payload.error.code in {auth_missing, auth_parse_failed, refresh_failed} is acceptable.",
+      "assertions": [
+        "command line includes --provider codex",
+        "command line includes 'images generate'",
+        "command line includes --out /tmp/codex-icon.png",
+        "command line includes --json",
+        "if payload.ok === true then /tmp/codex-icon.png exists and is > 1024 bytes",
+        "if payload.ok === false then payload.error.code is one of [auth_missing, auth_parse_failed, refresh_failed]"
+      ],
+      "files": []
+    },
+    {
+      "id": 4,
+      "name": "edit-with-reference-image",
+      "prompt": "I have a logo at /tmp/source-logo.png. Replace its background with pure white and save the result to /tmp/edit-out.png. Return JSON.",
+      "expected_output": "Invokes `images edit` with --ref-image /tmp/source-logo.png, --out /tmp/edit-out.png, --json. Internally uses the OpenAI multipart edit endpoint or the Codex image_generation tool depending on resolved provider.",
+      "assertions": [
+        "command line includes 'images edit'",
+        "command line includes --ref-image /tmp/source-logo.png",
+        "command line includes --out /tmp/edit-out.png",
+        "command line includes --json",
+        "if payload.ok === true and resolved provider is openai then payload.request.transport === 'multipart'",
+        "if payload.ok === true then /tmp/edit-out.png exists and is > 1024 bytes"
+      ],
+      "files": ["/tmp/source-logo.png (caller-provided fixture)"]
+    },
+    {
+      "id": 5,
+      "name": "size-rejection",
+      "prompt": "Generate an image at 5000x5000 pixels and save to /tmp/too-big.png. Return JSON.",
+      "expected_output": "The skill rejects the size before sending the request. payload.ok === false with payload.error.code === 'invalid_argument' and the message references the max edge constraint (3840) or total pixel cap (8294400).",
+      "assertions": [
+        "command line includes --size 5000x5000",
+        "command line includes --json",
+        "payload.ok === false",
+        "payload.error.code === 'invalid_argument'",
+        "payload.error.message mentions 3840 OR 8294400 OR 'aspect ratio' OR 'multiple of 16'"
+      ],
+      "files": []
+    }
+  ]
+}

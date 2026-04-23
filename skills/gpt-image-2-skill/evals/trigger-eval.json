@@ -1,0 +1,82 @@
+[
+  {
+    "query": "帮我生成一张苹果的产品图,2K 分辨率,透明背景,保存到 ./apple.png",
+    "should_trigger": true
+  },
+  {
+    "query": "draw an app icon for my morning routine app, 1024x1024 png with no background, saved to ~/Desktop/icon.png",
+    "should_trigger": true
+  },
+  {
+    "query": "ok i have a logo at ~/Pictures/logo.png, can you tone down the highlight on the top-left corner so it reads better on dark mode? keep the transparency please",
+    "should_trigger": true
+  },
+  {
+    "query": "用 Codex 给我画一个 AI 助手的卡通头像,正方形,透明 PNG",
+    "should_trigger": true
+  },
+  {
+    "query": "I just got an OPENAI_API_KEY from openai, generate me a hero banner for the homepage of my SaaS, 4K, png",
+    "should_trigger": true
+  },
+  {
+    "query": "把 ./assets/banner.png 的背景换成纯白,导出 png 到 ./assets/banner-white.png",
+    "should_trigger": true
+  },
+  {
+    "query": "I need a 2880x2880 product render of a glossy red apple, no shadow, transparent bg, save to /tmp/apple.png",
+    "should_trigger": true
+  },
+  {
+    "query": "我们 npm 包的 logo 想重画一版极简风格,正方形 2K,透明背景,saved 到 ./assets/logo-v2.png",
+    "should_trigger": true
+  },
+  {
+    "query": "create a flat illustration of a cat coding on a laptop, 1024x1024 png",
+    "should_trigger": true
+  },
+  {
+    "query": "use the codex auth.json image flow to render a sticker pack: cat, dog, hamster, three separate pngs in /tmp/stickers/",
+    "should_trigger": true
+  },
+  {
+    "query": "我的 OPENAI_API_KEY 调 chat completions 一直报 401,你帮我看看是不是 key 过期了",
+    "should_trigger": false
+  },
+  {
+    "query": "summarize what's in this image for me, just describe the contents in 2 sentences",
+    "should_trigger": false
+  },
+  {
+    "query": "extract the text from this product photo at ~/Downloads/receipt.jpg using OCR",
+    "should_trigger": false
+  },
+  {
+    "query": "compress every PNG in ./out/ to be under 100KB each, use pngquant or oxipng",
+    "should_trigger": false
+  },
+  {
+    "query": "the gpt-5.4 model crashes when I send it a 200k token context, can you help me figure out what's wrong with my chat code?",
+    "should_trigger": false
+  },
+  {
+    "query": "convert this svg logo to a png at 2K resolution using imagemagick or rsvg",
+    "should_trigger": false
+  },
+  {
+    "query": "rename all the .jpg files in ./photos/ to follow YYYY-MM-DD-HHmmss pattern based on EXIF date",
+    "should_trigger": false
+  },
+  {
+    "query": "deploy my image-resize lambda function to AWS, the handler is at src/handler.ts",
+    "should_trigger": false
+  },
+  {
+    "query": "write a Python function that downloads images from a list of urls in a csv and stores them in S3",
+    "should_trigger": false
+  },
+  {
+    "query": "explain how diffusion models work, especially the difference between DDPM and DDIM scheduling",
+    "should_trigger": false
+  }
+]
