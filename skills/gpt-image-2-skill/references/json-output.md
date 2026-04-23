@@ -19,17 +19,18 @@ Every failure looks like this. The `detail` field is optional and provider-speci
 
 Common `code` values:
 
-| Code | Meaning |
-|---|---|
-| `runtime_unavailable` | wrapper could not resolve a binary |
-| `invalid_argument` | flag parsing or size constraint failure |
-| `unsupported_option` | flag passed to a provider that does not accept it |
-| `auth_missing` | provider auth not present |
-| `auth_parse_failed` | `auth.json` exists but cannot be parsed |
-| `refresh_failed` | Codex token refresh failed |
-| `network_error` | transport-level failure |
-| `http_error` | upstream returned non-2xx |
-| `invalid_body_json` | `request create` body file or stdin not valid JSON |
+| Code | Layer | Meaning |
+|---|---|---|
+| `runtime_unavailable` | wrapper | Node wrapper could not resolve a Rust binary |
+| `invalid_command` | clap | unknown flag, missing required arg, or `--size` value rejected by clap-level parsing (e.g. `5000x5000` is not a multiple of 16) |
+| `invalid_argument` | runtime | business-layer validation failure after clap accepted the input |
+| `unsupported_option` | runtime | flag passed to a provider that does not accept it (e.g. `--mask` with `--provider codex`) |
+| `auth_missing` | runtime | provider auth not present |
+| `auth_parse_failed` | runtime | `auth.json` exists but cannot be parsed |
+| `refresh_failed` | runtime | Codex token refresh failed |
+| `network_error` | runtime | transport-level failure |
+| `http_error` | runtime | upstream returned non-2xx |
+| `invalid_body_json` | runtime | `request create` body file or stdin not valid JSON |
 
 ## Success envelopes by command
 
@@ -82,7 +83,7 @@ Common `code` values:
 
 ### `images edit` (OpenAI multipart)
 
-Same shape as generate, plus `"transport": "multipart"` inside `request`.
+Same envelope as `images generate`. The `request` object includes `operation: "edit"` and `ref_image_count: <N>` instead of size hints. Multipart transport is reported in **stderr** as the `multipart_prepared` progress event (`type: "multipart_prepared"`), not on stdout. Token usage in `response.usage` splits into `input_tokens_details.image_tokens` and `text_tokens` for edits.
 
 ### `request create`
 

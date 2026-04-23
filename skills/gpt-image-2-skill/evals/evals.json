@@ -58,7 +58,8 @@
         "command line includes --ref-image /tmp/source-logo.png",
         "command line includes --out /tmp/edit-out.png",
         "command line includes --json",
-        "if payload.ok === true and resolved provider is openai then payload.request.transport === 'multipart'",
+        "payload.request.operation === 'edit' and payload.request.ref_image_count >= 1",
+        "if --json-events was passed and resolved provider is openai then stderr contains a line with '\"type\":\"multipart_prepared\"'",
         "if payload.ok === true then /tmp/edit-out.png exists and is > 1024 bytes"
       ],
       "files": ["/tmp/source-logo.png (caller-provided fixture)"]
@@ -72,7 +73,7 @@
         "command line includes --size 5000x5000",
         "command line includes --json",
         "payload.ok === false",
-        "payload.error.code === 'invalid_argument'",
+        "payload.error.code is one of [invalid_command, invalid_argument] (clap rejects multiples-of-16 violations before business validation)",
         "payload.error.message mentions 3840 OR 8294400 OR 'aspect ratio' OR 'multiple of 16'"
       ],
       "files": []
