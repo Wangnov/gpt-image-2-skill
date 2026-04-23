@@ -1,6 +1,6 @@
 {
   "name": "gpt-image-2-skill",
-  "version": "0.2.3",
+  "version": "0.2.4",
   "description": "Agent-first GPT Image 2 CLI for OpenAI API keys and Codex auth.",
   "license": "MIT",
   "homepage": "https://github.com/Wangnov/gpt-image-2-skill",
@@ -20,12 +20,12 @@
     "gpt-image-2-skill": "bin/gpt-image-2-skill.js"
   },
   "optionalDependencies": {
-    "gpt-image-2-skill-darwin-arm64": "0.2.3",
-    "gpt-image-2-skill-darwin-x64": "0.2.3",
-    "gpt-image-2-skill-linux-arm64-gnu": "0.2.3",
-    "gpt-image-2-skill-linux-x64-gnu": "0.2.3",
-    "gpt-image-2-skill-linux-x64-musl": "0.2.3",
-    "gpt-image-2-skill-windows-arm64-msvc": "0.2.3",
-    "gpt-image-2-skill-windows-x64-msvc": "0.2.3"
+    "gpt-image-2-skill-darwin-arm64": "0.2.4",
+    "gpt-image-2-skill-darwin-x64": "0.2.4",
+    "gpt-image-2-skill-linux-arm64-gnu": "0.2.4",
+    "gpt-image-2-skill-linux-x64-gnu": "0.2.4",
+    "gpt-image-2-skill-linux-x64-musl": "0.2.4",
+    "gpt-image-2-skill-windows-arm64-msvc": "0.2.4",
+    "gpt-image-2-skill-windows-x64-msvc": "0.2.4"
   }
 }
