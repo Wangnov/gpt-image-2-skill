@@ -1,6 +1,6 @@
 ---
 name: gpt-image-2-skill
-description: Generate or edit images through one installable skill runtime that resolves the local gpt-image-2-skill binary, falls back to a repo-local cargo run during development, and bootstraps a cached GitHub Release binary when needed. Use when an AI agent needs a machine-readable image tool with provider selection, prompt-to-image generation, reference-image edits, masks, structured JSON output, structured progress events, retries, and a raw request escape hatch.
+description: This skill should be used when the user asks to "generate an image", "create a logo", "draw an icon", "edit this photo", "change background to transparent", "remove background", "use GPT image", "use Codex to draw", "用 GPT image 生成图片", "用 Codex 画图", "帮我生成一张图", "改成透明背景", "把这张图编辑一下", or any prompt-to-image or reference-image-edit task that benefits from a structured CLI returning JSON results and JSONL progress events. Supports OpenAI `gpt-image-2` (via `OPENAI_API_KEY` or OpenAI-compatible base URL) and Codex `image_generation` (via `~/.codex/auth.json`) under one command surface, with masks, custom sizes up to 4K, transparent backgrounds, and a raw request escape hatch.
 ---
 
 Use this skill when:
@@ -12,7 +12,7 @@ Use this skill when:
 
 Environment:
 
-- the skill entrypoint is `node {baseDir}/scripts/gpt_image_2_skill.cjs`
+- the skill entrypoint is `node scripts/gpt_image_2_skill.cjs`
 - the wrapper prefers `GPT_IMAGE_2_SKILL_BIN`, then an installed `gpt-image-2-skill`, then a repo-local `cargo run`, then a cached GitHub Release binary
 - `openai` reads `OPENAI_API_KEY` or `--api-key`
 - `codex` reads `~/.codex/auth.json` or `$CODEX_HOME/auth.json`
@@ -28,13 +28,13 @@ Behavior:
 
 Run:
 
-- `node {baseDir}/scripts/gpt_image_2_skill.cjs --json doctor`
-- `node {baseDir}/scripts/gpt_image_2_skill.cjs --json auth inspect`
-- `node {baseDir}/scripts/gpt_image_2_skill.cjs --json models list`
-- `node {baseDir}/scripts/gpt_image_2_skill.cjs --json --json-events images generate --prompt "..." --out /tmp/image.png`
-- `node {baseDir}/scripts/gpt_image_2_skill.cjs --json --json-events images edit --prompt "..." --ref-image /tmp/input.png --out /tmp/edit.png`
-- `node {baseDir}/scripts/gpt_image_2_skill.cjs --json request create --request-operation generate --body-file /tmp/body.json --out-image /tmp/result.png --expect-image`
-- `node {baseDir}/scripts/selftest.cjs`
+- `node scripts/gpt_image_2_skill.cjs --json doctor`
+- `node scripts/gpt_image_2_skill.cjs --json auth inspect`
+- `node scripts/gpt_image_2_skill.cjs --json models list`
+- `node scripts/gpt_image_2_skill.cjs --json --json-events images generate --prompt "..." --out /tmp/image.png`
+- `node scripts/gpt_image_2_skill.cjs --json --json-events images edit --prompt "..." --ref-image /tmp/input.png --out /tmp/edit.png`
+- `node scripts/gpt_image_2_skill.cjs --json request create --request-operation generate --body-file /tmp/body.json --out-image /tmp/result.png --expect-image`
+- `node scripts/selftest.cjs`
 
 Notes:
 
