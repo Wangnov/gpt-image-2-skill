@@ -95,8 +95,17 @@ gpt-image-2-skill --json --json-events \
 
 ## Skill 安装
 
+Codex / Anthropic skills CLI：
+
 ```bash
 npx skills add https://github.com/Wangnov/gpt-image-2-skill --skill gpt-image-2-skill
+```
+
+Claude Code（直接复制到本地 skills 目录）：
+
+```bash
+git clone https://github.com/Wangnov/gpt-image-2-skill /tmp/gpt-image-2-skill
+cp -r /tmp/gpt-image-2-skill/skills/gpt-image-2-skill ~/.claude/skills/
 ```
 
 Skill 入口是 `node skills/gpt-image-2-skill/scripts/gpt_image_2_skill.cjs`。包装器按这个顺序解析运行时：
@@ -222,8 +231,17 @@ gpt-image-2-skill --json --json-events \
 
 ## Skill Install
 
+Codex / Anthropic skills CLI:
+
 ```bash
 npx skills add https://github.com/Wangnov/gpt-image-2-skill --skill gpt-image-2-skill
+```
+
+Claude Code (drop the skill into your local skills directory):
+
+```bash
+git clone https://github.com/Wangnov/gpt-image-2-skill /tmp/gpt-image-2-skill
+cp -r /tmp/gpt-image-2-skill/skills/gpt-image-2-skill ~/.claude/skills/
 ```
 
 The bundled wrapper resolves the runtime in this order:
