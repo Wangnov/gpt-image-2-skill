@@ -1,0 +1,22 @@
+{
+  "name": "gpt-image-2-skill",
+  "version": "0.2.3",
+  "description": "GPT Image 2 CLI as a Claude Code skill: OpenAI gpt-image-2 + Codex image_generation under one command surface, with masks, transparent backgrounds, custom sizes up to 4K, and structured JSON / JSONL progress output.",
+  "author": {
+    "name": "wangnov",
+    "url": "https://github.com/Wangnov"
+  },
+  "homepage": "https://github.com/Wangnov/gpt-image-2-skill",
+  "repository": "https://github.com/Wangnov/gpt-image-2-skill",
+  "license": "MIT",
+  "keywords": [
+    "image-generation",
+    "openai",
+    "codex",
+    "gpt-image-2",
+    "skill"
+  ],
+  "skills": [
+    "./skills/gpt-image-2-skill"
+  ]
+}
