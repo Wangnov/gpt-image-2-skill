@@ -37,14 +37,14 @@
       "id": 3,
       "name": "force-codex-provider",
       "prompt": "Use the Codex auth.json image flow specifically (do not use OpenAI even if OPENAI_API_KEY is set) to draw a simple flat icon of a notepad. Save the output to /tmp/codex-icon.png and return JSON.",
-      "expected_output": "Invokes the skill with --provider codex --json images generate ... --out /tmp/codex-icon.png. If Codex auth is ready: payload.ok === true and the file exists. Otherwise payload.error.code in {auth_missing, auth_parse_failed, refresh_failed} is acceptable.",
+      "expected_output": "Invokes the skill with --provider codex --json images generate ... --out /tmp/codex-icon.png. If Codex auth is ready: payload.ok === true and the file exists. If Codex auth is unavailable or token refresh fails, payload.error.code in {access_token_missing, refresh_token_missing, refresh_failed} is acceptable.",
       "assertions": [
         "command line includes --provider codex",
         "command line includes 'images generate'",
         "command line includes --out /tmp/codex-icon.png",
         "command line includes --json",
         "if payload.ok === true then /tmp/codex-icon.png exists and is > 1024 bytes",
-        "if payload.ok === false then payload.error.code is one of [auth_missing, auth_parse_failed, refresh_failed]"
+        "if payload.ok === false then payload.error.code is one of [access_token_missing, refresh_token_missing, refresh_failed]"
       ],
       "files": []
     },
