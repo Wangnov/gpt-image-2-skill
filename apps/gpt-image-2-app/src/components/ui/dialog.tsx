@@ -27,7 +27,7 @@ export function Dialog({ open, onOpenChange, title, width = 520, maxHeight = 720
           className={cn(
             "fixed left-1/2 top-1/2 z-50 grid -translate-x-1/2 -translate-y-1/2 overflow-hidden",
             "grid-rows-[auto_minmax(0,1fr)_auto]",
-            "bg-raised border border-border rounded-xl shadow-lg animate-fade-up"
+            "bg-raised border border-border rounded-xl shadow-lg animate-fade-in"
           )}
         >
           {title && (
