@@ -236,6 +236,35 @@ fn output_extension(format: Option<&str>) -> &str {
     }
 }
 
+fn provider_accepts_multiple_outputs(provider: Option<&str>) -> bool {
+    let config = load_config().ok();
+    let selected = provider
+        .and_then(|name| {
+            let name = name.trim();
+            if name.is_empty() || name == "auto" {
+                None
+            } else {
+                Some(name)
+            }
+        })
+        .or_else(|| {
+            config
+                .as_ref()
+                .and_then(|config| config.default_provider.as_deref())
+                .filter(|name| !name.is_empty() && *name != "auto")
+        });
+
+    match selected {
+        Some("codex") => false,
+        Some(name) => config
+            .as_ref()
+            .and_then(|config| config.providers.get(name))
+            .map(|provider| provider.provider_type != "codex")
+            .unwrap_or(true),
+        None => true,
+    }
+}
+
 fn job_from_payload(payload: &Value, fallback_id: &str, command: &str, request: Value) -> Value {
     let job_id = payload
         .get("history")
@@ -430,7 +459,9 @@ async fn generate_image(request: GenerateRequest) -> Result<Value, String> {
         push_optional(&mut args, "--quality", request.quality.as_deref());
         push_optional(&mut args, "--background", request.background.as_deref());
         push_optional(&mut args, "--moderation", request.moderation.as_deref());
-        if let Some(n) = request.n {
+        if provider_accepts_multiple_outputs(request.provider.as_deref())
+            && let Some(n) = request.n
+        {
             args.push("--n".to_string());
             args.push(n.to_string());
         }
@@ -521,7 +552,9 @@ async fn edit_image(request: EditRequest) -> Result<Value, String> {
             request.input_fidelity.as_deref(),
         );
         push_optional(&mut args, "--moderation", request.moderation.as_deref());
-        if let Some(n) = request.n {
+        if provider_accepts_multiple_outputs(request.provider.as_deref())
+            && let Some(n) = request.n
+        {
             args.push("--n".to_string());
             args.push(n.to_string());
         }

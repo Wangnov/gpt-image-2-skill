@@ -20,6 +20,7 @@ import { useJobEvents } from "@/hooks/use-job-events";
 import { useTweaks } from "@/hooks/use-tweaks";
 import { api } from "@/lib/api";
 import { completedEvent, errorMessage, failedEvent, responseOutputCount, submittedEvent } from "@/lib/job-feedback";
+import { effectiveOutputCount, providerSupportsMultipleOutputs, requestOutputCount } from "@/lib/provider-capabilities";
 import { effectiveDefaultProvider, providerNames as readProviderNames } from "@/lib/providers";
 import type { JobEvent, ServerConfig } from "@/lib/types";
 
@@ -60,6 +61,10 @@ export function EditScreen({ config }: { config?: ServerConfig }) {
 
   const { events, running } = useJobEvents(jobId);
   const mutate = useCreateEdit();
+  const isWorking = exportKey != null || mutate.isPending || running;
+  const providerCfg = provider ? config?.providers[provider] : undefined;
+  const supportsMultipleOutputs = providerSupportsMultipleOutputs(config, provider);
+  const actualN = effectiveOutputCount(config, provider, n);
 
   const addRef = (files: FileList | null) => {
     if (!files) return;
@@ -74,7 +79,7 @@ export function EditScreen({ config }: { config?: ServerConfig }) {
   const selectedRefObj = refs.find((r) => r.id === selectedRef);
 
   const handleRun = () => {
-    if (!provider || refs.length === 0 || mutate.isPending || running || exportKey != null) return;
+    if (!provider || refs.length === 0 || isWorking) return;
     setRunError(null);
     setJobId(null);
     setOutputCount(0);
@@ -86,7 +91,8 @@ export function EditScreen({ config }: { config?: ServerConfig }) {
   // Kick off submission once the mask blob is ready.
   const submit = async (maskBlob: Blob | null) => {
     const form = new FormData();
-    const meta = { prompt, provider, size, format, quality, background, n };
+    const requestedN = requestOutputCount(config, provider, n);
+    const meta = { prompt, provider, size, format, quality, background, n: requestedN };
     form.append("meta", JSON.stringify(meta));
     refs.forEach((r, i) => form.append(`ref_${String(i).padStart(2, "0")}`, r.file, r.name));
     if (maskBlob) form.append("mask", maskBlob, "mask.png");
@@ -121,11 +127,8 @@ export function EditScreen({ config }: { config?: ServerConfig }) {
       selected: index === 0,
     }));
   }, [jobId, outputCount]);
-  const isWorking = exportKey != null || mutate.isPending || running;
   const timelineEvents = events.length > 0 ? events : localEvents;
   const hasOutputs = outputs.some((output) => output.url) || events.some((e) => e.type === "job.completed" || e.type === "output_saved");
-
-  const providerCfg = provider ? config?.providers[provider] : undefined;
 
   return (
     <div
@@ -260,7 +263,7 @@ export function EditScreen({ config }: { config?: ServerConfig }) {
         </div>
 
         <div className="px-6 pt-5 pb-2 flex items-center gap-2.5">
-          <div className="t-h3">输出 · {isWorking ? `${n} 个候选生成中` : hasOutputs ? `${outputs.length} 个候选` : "尚未生成"}</div>
+          <div className="t-h3">输出 · {isWorking ? `${actualN} 个候选生成中` : hasOutputs ? `${outputs.length} 个候选` : "尚未生成"}</div>
           <div className="flex-1" />
           {hasOutputs && (
             <>
@@ -287,7 +290,7 @@ export function EditScreen({ config }: { config?: ServerConfig }) {
           ) : (
             <div className="grid grid-cols-2 gap-3">
               {isWorking && !hasOutputs &&
-                Array.from({ length: n }).map((_, i) => (
+                Array.from({ length: actualN }).map((_, i) => (
                   <div
                     key={i}
                     className="aspect-square rounded-lg border border-border flex items-center justify-center text-faint font-mono text-[11px] animate-shimmer"
@@ -344,8 +347,15 @@ export function EditScreen({ config }: { config?: ServerConfig }) {
             </Field>
           </div>
 
-          <Field label="候选数量">
-            <Segmented value={String(n)} onChange={(v) => setN(Number(v))} options={["1", "2", "4", "6"]} />
+          <Field label="输出数量">
+            {supportsMultipleOutputs ? (
+              <Segmented value={String(n)} onChange={(v) => setN(Number(v))} options={["1", "2", "4", "6"]} />
+            ) : (
+              <div className="flex h-9 items-center justify-between rounded-md border border-border bg-sunken px-2.5 text-[12px]">
+                <span className="font-semibold">1</span>
+                <span className="text-faint">Codex 单张输出</span>
+              </div>
+            )}
           </Field>
         </div>
 
@@ -363,7 +373,7 @@ export function EditScreen({ config }: { config?: ServerConfig }) {
           </Button>
           <div className="flex justify-between mt-2 text-[11px] text-faint">
             <span>{refs.length} 张参考图</span>
-            <span className="t-mono">{n}×{size.split("x")[0]}px</span>
+            <span className="t-mono">{actualN}×{size.split("x")[0]}px</span>
           </div>
         </div>
 

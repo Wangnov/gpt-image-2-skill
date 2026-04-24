@@ -17,6 +17,7 @@ import { useJobEvents } from "@/hooks/use-job-events";
 import { useTweaks } from "@/hooks/use-tweaks";
 import { api } from "@/lib/api";
 import { completedEvent, errorMessage, failedEvent, responseOutputCount, submittedEvent } from "@/lib/job-feedback";
+import { effectiveOutputCount, providerSupportsMultipleOutputs, requestOutputCount } from "@/lib/provider-capabilities";
 import { effectiveDefaultProvider, providerNames as readProviderNames } from "@/lib/providers";
 import type { JobEvent, ServerConfig } from "@/lib/types";
 
@@ -47,6 +48,10 @@ export function GenerateScreen({ config }: { config?: ServerConfig }) {
 
   const { events, running } = useJobEvents(jobId);
   const mutate = useCreateGenerate();
+  const isWorking = mutate.isPending || running;
+  const providerCfg = provider ? config?.providers[provider] : undefined;
+  const supportsMultipleOutputs = providerSupportsMultipleOutputs(config, provider);
+  const actualN = effectiveOutputCount(config, provider, n);
 
   useEffect(() => {
     if (providerNames.length > 0 && (!provider || !config?.providers[provider])) {
@@ -55,14 +60,15 @@ export function GenerateScreen({ config }: { config?: ServerConfig }) {
   }, [config?.providers, defaultProvider, provider, providerNames]);
 
   const handleRun = async () => {
-    if (!provider || mutate.isPending || running) return;
+    if (!provider || isWorking) return;
+    const requestedN = requestOutputCount(config, provider, n);
     const toastId = toast.loading("正在生成图像", {
       description: `${provider} · ${size} · ${quality}`,
     });
     setRunError(null);
     setJobId(null);
     setOutputCount(0);
-    setLocalEvents([submittedEvent("已提交到 Tauri core，正在等待 provider 返回。")]);
+    setLocalEvents([submittedEvent(`已提交到 Tauri core，正在等待 ${actualN} 个输出。`)]);
     try {
       const res = await mutate.mutateAsync({
         prompt,
@@ -71,8 +77,8 @@ export function GenerateScreen({ config }: { config?: ServerConfig }) {
         format,
         quality,
         background,
-        n,
-        metadata: { size, format, quality, background, n },
+        n: requestedN,
+        metadata: { size, format, quality, background, n: actualN },
       });
       const count = responseOutputCount(res);
       setOutputCount(count);
@@ -99,10 +105,8 @@ export function GenerateScreen({ config }: { config?: ServerConfig }) {
     }));
   }, [jobId, outputCount]);
 
-  const isWorking = mutate.isPending || running;
   const timelineEvents = events.length > 0 ? events : localEvents;
   const hasOutputs = outputs.some((output) => output.url) || events.some(e => e.type === "output_saved" || e.type === "job.completed");
-  const providerCfg = provider ? config?.providers[provider] : undefined;
 
   return (
     <div className="grid h-full grid-cols-[minmax(0,1fr)_300px] overflow-hidden xl:grid-cols-[minmax(0,1fr)_340px]">
@@ -147,7 +151,7 @@ export function GenerateScreen({ config }: { config?: ServerConfig }) {
         <div className="px-7 pb-6 pt-3 max-w-[820px] mx-auto w-full flex-1">
           <div className="flex items-center gap-2.5 mb-3">
             <div className="t-h3">
-              {isWorking ? `生成中 · ${n} 个候选` : hasOutputs ? `候选 · ${outputs.length}` : "候选"}
+              {isWorking ? `生成中 · ${actualN} 个候选` : hasOutputs ? `候选 · ${outputs.length}` : "候选"}
             </div>
             {hasOutputs && outputs[0]?.selected && <Badge tone="accent" icon="check">已选 A</Badge>}
             <div className="flex-1" />
@@ -177,9 +181,9 @@ export function GenerateScreen({ config }: { config?: ServerConfig }) {
               />
             </Card>
           ) : (
-            <div className="grid gap-3" style={{ gridTemplateColumns: n <= 2 ? "1fr 1fr" : `repeat(${Math.min(n, 4)}, 1fr)` }}>
+            <div className="grid gap-3" style={{ gridTemplateColumns: actualN <= 2 ? "1fr 1fr" : `repeat(${Math.min(actualN, 4)}, 1fr)` }}>
               {isWorking && !hasOutputs &&
-                Array.from({ length: n }).map((_, i) => (
+                Array.from({ length: actualN }).map((_, i) => (
                   <div
                     key={i}
                     className="aspect-square rounded-lg border border-border flex items-center justify-center text-faint font-mono text-[11px] animate-shimmer"
@@ -250,14 +254,21 @@ export function GenerateScreen({ config }: { config?: ServerConfig }) {
               <Select value={background} onChange={(e) => setBackground(e.target.value)} options={[{ value: "auto", label: "自动" }, { value: "transparent", label: "透明" }, { value: "opaque", label: "不透明" }]} />
             </Field>
           </div>
-          <Field label="候选数量">
-            <Segmented value={String(n)} onChange={(v) => setN(Number(v))} options={["1", "2", "4", "6"]} />
+          <Field label="输出数量">
+            {supportsMultipleOutputs ? (
+              <Segmented value={String(n)} onChange={(v) => setN(Number(v))} options={["1", "2", "4", "6"]} />
+            ) : (
+              <div className="flex h-9 items-center justify-between rounded-md border border-border bg-sunken px-2.5 text-[12px]">
+                <span className="font-semibold">1</span>
+                <span className="text-faint">Codex 单张输出</span>
+              </div>
+            )}
           </Field>
         </div>
 
         <div className="px-4 py-3.5 flex-1 overflow-auto flex flex-col">
-            <div className="flex items-center gap-2 mb-2.5">
-              <div className="t-h3">事件时间线</div>
+          <div className="flex items-center gap-2 mb-2.5">
+            <div className="t-h3">事件时间线</div>
             {isWorking && <Spinner size={12} />}
             <div className="flex-1" />
             {timelineEvents.length > 0 && <span className="t-tiny font-mono">{timelineEvents.length} 条</span>}
