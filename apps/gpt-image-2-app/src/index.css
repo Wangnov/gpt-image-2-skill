@@ -180,18 +180,11 @@
 
 .desktop {
   position: fixed; inset: 0;
-  display: flex; align-items: center; justify-content: center;
-  overflow: auto;
-  background:
-    radial-gradient(1200px 800px at 30% 20%, rgba(255,255,255,0.5), transparent),
-    radial-gradient(1000px 700px at 70% 80%, rgba(0,0,0,0.04), transparent),
-    linear-gradient(180deg, #d8d8d4 0%, #c5c5c0 100%);
+  overflow: hidden;
+  background: var(--bg);
 }
 [data-theme="dark"] .desktop {
-  background:
-    radial-gradient(1200px 800px at 30% 20%, rgba(60,60,55,0.6), transparent),
-    radial-gradient(1000px 700px at 70% 80%, rgba(0,0,0,0.5), transparent),
-    linear-gradient(180deg, #1a1a17 0%, #0a0a09 100%);
+  background: var(--bg);
 }
 
 .gridpaper {

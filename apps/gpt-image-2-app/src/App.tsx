@@ -1,10 +1,8 @@
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { CommandPalette } from "@/components/command-palette";
-import { Icon } from "@/components/icon";
 import { AppToolbar } from "@/components/shell/toolbar";
 import { Sidebar, type ScreenId } from "@/components/shell/sidebar";
-import { TrafficLights } from "@/components/shell/traffic-lights";
 import { TweaksPanel } from "@/components/tweaks-panel";
 import { WindowChrome } from "@/components/shell/window-chrome";
 import { GenerateScreen } from "@/components/screens/generate";
@@ -59,9 +57,6 @@ export default function App() {
       <WindowChrome>
         <div className="relative flex h-full w-full">
           <Sidebar screen={screen} setScreen={setScreen} config={config} running={running} />
-          <div className="absolute top-0 left-3.5 z-10 h-11 flex items-center">
-            <TrafficLights />
-          </div>
           <div className="flex-1 min-w-0 flex flex-col relative overflow-hidden">
             <AppToolbar
               title={meta.title}
@@ -95,7 +90,7 @@ export default function App() {
           {!config && (
             <div className="absolute inset-0 flex items-center justify-center bg-background/80 z-20 text-faint text-[13px] pointer-events-none">
               <div className="flex items-center gap-2">
-                <Icon name="sparkle" size={14} />
+                <span className="inline-block h-3 w-3 rounded-full bg-accent" />
                 加载配置中…
               </div>
             </div>

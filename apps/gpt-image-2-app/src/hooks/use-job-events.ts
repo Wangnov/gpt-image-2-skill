@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { subscribeEvents } from "@/lib/sse";
+import { subscribeEvents } from "@/lib/events";
 import type { JobEvent } from "@/lib/types";
 
 /**

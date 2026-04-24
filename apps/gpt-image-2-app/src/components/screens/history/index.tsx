@@ -45,11 +45,14 @@ export function HistoryScreen() {
 
   return (
     <div
-      className="grid h-full overflow-hidden"
-      style={{ gridTemplateColumns: drawerOpen ? "minmax(0, 1fr) minmax(380px, 420px)" : "1fr" }}
+      className={
+        drawerOpen
+          ? "grid h-full grid-cols-[minmax(0,1fr)_300px] overflow-hidden xl:grid-cols-[minmax(0,1fr)_380px]"
+          : "grid h-full grid-cols-[1fr] overflow-hidden"
+      }
     >
       <div className="flex flex-col overflow-hidden bg-raised">
-        <div className="px-4 py-3 border-b border-border-faint flex items-center gap-2.5">
+        <div className="px-4 py-3 border-b border-border-faint flex items-center gap-2.5 overflow-x-auto">
           <Input
             value={query}
             onChange={(e) => setQuery(e.target.value)}

@@ -22,7 +22,7 @@ export function EventTimeline({ events, mode = "card" }: { events: JobEvent[]; m
   }, [events.length]);
 
   if (events.length === 0) {
-    return <Empty icon="sparkle" title="等待运行" subtitle="请求、SSE 与本地进度事件会在此依次出现。" />;
+    return <Empty icon="sparkle" title="等待运行" subtitle="请求、服务端事件与本地进度会在此依次出现。" />;
   }
 
   if (mode === "log") {

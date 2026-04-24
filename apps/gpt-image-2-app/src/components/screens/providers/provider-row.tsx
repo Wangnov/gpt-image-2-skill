@@ -34,7 +34,7 @@ export function ProviderRow({
         "grid items-center gap-3 px-3.5 py-3 border-b border-border-faint cursor-pointer transition-colors",
         selected ? "bg-pressed" : hover ? "bg-hover" : "bg-transparent"
       )}
-      style={{ gridTemplateColumns: "32px 1fr auto auto" }}
+      style={{ gridTemplateColumns: "32px minmax(0, 1fr) auto" }}
     >
       <div
         className="w-[30px] h-[30px] rounded-md bg-sunken border border-border flex items-center justify-center"
@@ -43,25 +43,30 @@ export function ProviderRow({
         <Icon name="cpu" size={15} />
       </div>
       <div className="min-w-0">
-        <div className="flex items-center gap-1.5">
-          <span className="text-[13.5px] font-semibold">{name}</span>
+        <div className="flex min-w-0 items-center gap-1.5">
+          <span className="truncate text-[13.5px] font-semibold">{name}</span>
           {isDefault && <Badge tone="accent" size="sm" icon="check">默认</Badge>}
         </div>
-        <div className="flex items-center gap-1.5 mt-0.5 text-[11px] text-muted">
-          <span>{providerKindLabel(prov.type)}</span>
+        <div className="mt-0.5 flex min-w-0 items-center gap-1.5 overflow-hidden whitespace-nowrap text-[11px] text-muted">
+          <span className="shrink-0">{providerKindLabel(prov.type)}</span>
           <span>·</span>
-          <span className="t-mono">{prov.model ?? "—"}</span>
-          {prov.api_base && (<><span>·</span><span className="t-mono text-faint truncate max-w-[180px]">{prov.api_base}</span></>)}
+          <span className="t-mono shrink-0">{prov.model ?? "—"}</span>
+          {prov.api_base && (
+            <>
+              <span>·</span>
+              <span className="t-mono min-w-0 truncate text-faint">{prov.api_base}</span>
+            </>
+          )}
         </div>
       </div>
-      <div className="flex gap-1">
-        {Object.entries(prov.credentials).map(([k, c]) => (
-          <Tooltip key={k} text={`${k} · ${c.source}`}>
-            <span><SourceChip source={c.source} /></span>
-          </Tooltip>
-        ))}
-      </div>
-      <div className="flex items-center gap-1.5">
+      <div className="flex shrink-0 items-center gap-1.5">
+        <div className="hidden gap-1 xl:flex">
+          {Object.entries(prov.credentials).slice(0, 2).map(([k, c]) => (
+            <Tooltip key={k} text={`${k} · ${c.source}`}>
+              <span><SourceChip source={c.source} /></span>
+            </Tooltip>
+          ))}
+        </div>
         {testStatus === "ok" && <Badge tone="ok" size="sm" icon="check">就绪</Badge>}
         {testStatus === "err" && <Badge tone="err" size="sm" icon="warn">失败</Badge>}
         {testStatus === "running" && (

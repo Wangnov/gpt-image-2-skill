@@ -18,16 +18,18 @@ import { useCancelJob, useCreateEdit } from "@/hooks/use-jobs";
 import { useJobEvents } from "@/hooks/use-job-events";
 import { useTweaks } from "@/hooks/use-tweaks";
 import { api } from "@/lib/api";
+import { effectiveDefaultProvider, providerNames as readProviderNames } from "@/lib/providers";
 import type { ServerConfig } from "@/lib/types";
 
 export function EditScreen({ config }: { config?: ServerConfig }) {
   const { tweaks } = useTweaks();
-  const providerNames = Object.keys(config?.providers ?? {});
+  const providerNames = useMemo(() => readProviderNames(config), [config]);
+  const defaultProvider = effectiveDefaultProvider(config);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [prompt, setPrompt] = useState(
     "把背景换成黄昏海边，保留主体人物的面部和衣着细节。"
   );
-  const [provider, setProvider] = useState<string>(config?.default_provider ?? providerNames[0] ?? "");
+  const [provider, setProvider] = useState<string>("");
   const [size, setSize] = useState("1024x1024");
   const [format, setFormat] = useState("png");
   const [quality, setQuality] = useState("high");
@@ -46,10 +48,10 @@ export function EditScreen({ config }: { config?: ServerConfig }) {
   }, [refs, selectedRef]);
 
   useEffect(() => {
-    if (!provider && providerNames.length > 0) {
-      setProvider(config?.default_provider ?? providerNames[0]);
+    if (providerNames.length > 0 && (!provider || !config?.providers[provider])) {
+      setProvider(defaultProvider || providerNames[0]);
     }
-  }, [config?.default_provider, provider, providerNames]);
+  }, [config?.providers, defaultProvider, provider, providerNames]);
 
   const { events, running } = useJobEvents(jobId);
   const mutate = useCreateEdit();
@@ -102,8 +104,7 @@ export function EditScreen({ config }: { config?: ServerConfig }) {
 
   return (
     <div
-      className="grid h-full overflow-hidden"
-      style={{ gridTemplateColumns: "minmax(260px, 300px) minmax(0, 1fr) minmax(320px, 360px)" }}
+      className="grid h-full grid-cols-[220px_minmax(260px,1fr)_260px] overflow-hidden xl:grid-cols-[248px_minmax(320px,1fr)_300px]"
     >
       <div className="flex flex-col border-r border-border bg-raised overflow-auto">
         <div className="p-4 border-b border-border-faint">
@@ -213,22 +214,24 @@ export function EditScreen({ config }: { config?: ServerConfig }) {
           <span className="t-mono t-small">{selectedRefObj?.name ?? "—"}</span>
         </div>
 
-        <div className="px-6 max-w-[620px] mx-auto w-full">
-          {selectedRefObj ? (
-            <MaskCanvas
-              imageUrl={selectedRefObj.url}
-              seed={0}
-              brushSize={brushSize}
-              mode={maskMode}
-              clearKey={clearKey}
-              exportKey={exportKey ?? undefined}
-              onExport={(blob) => { submit(blob); }}
-            />
-          ) : (
-            <div className="aspect-square rounded-[10px] border border-border bg-sunken flex items-center justify-center text-faint text-[12px]">
-              请上传至少一张参考图
-            </div>
-          )}
+        <div className="px-6 flex justify-center">
+          <div style={{ width: "min(100%, clamp(280px, calc(100vh - 340px), 520px))" }}>
+            {selectedRefObj ? (
+              <MaskCanvas
+                imageUrl={selectedRefObj.url}
+                seed={0}
+                brushSize={brushSize}
+                mode={maskMode}
+                clearKey={clearKey}
+                exportKey={exportKey ?? undefined}
+                onExport={(blob) => { submit(blob); }}
+              />
+            ) : (
+              <div className="aspect-square rounded-[10px] border border-border bg-sunken flex items-center justify-center text-faint text-[12px]">
+                请上传至少一张参考图
+              </div>
+            )}
+          </div>
         </div>
 
         <div className="px-6 pt-5 pb-2 flex items-center gap-2.5">
@@ -283,7 +286,7 @@ export function EditScreen({ config }: { config?: ServerConfig }) {
                   <option key={p} value={p}>{p}</option>
                 ))}
               </select>
-              {provider === config?.default_provider && <Badge tone="neutral" size="sm">默认</Badge>}
+              {provider === defaultProvider && <Badge tone="neutral" size="sm">默认</Badge>}
             </div>
             <div className="mt-1.5 flex items-center gap-1.5 text-[11px] text-muted">
               <span className="t-mono">{providerCfg?.model ?? "—"}</span>

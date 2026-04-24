@@ -7,13 +7,15 @@ import { ProviderDetail } from "./provider-detail";
 import { ProviderRow } from "./provider-row";
 import { useDeleteProvider, useSetDefaultProvider, useTestProvider } from "@/hooks/use-config";
 import type { ServerConfig } from "@/lib/types";
+import { effectiveDefaultProvider } from "@/lib/providers";
 
 type TestStatus = "idle" | "running" | "ok" | "err";
 
 export function ProvidersScreen({ config }: { config?: ServerConfig }) {
   const providers = config?.providers ?? {};
   const names = Object.keys(providers);
-  const [selected, setSelected] = useState<string | undefined>(config?.default_provider ?? names[0]);
+  const effectiveDefault = effectiveDefaultProvider(config);
+  const [selected, setSelected] = useState<string | undefined>(effectiveDefault || names[0]);
   const [testMap, setTestMap] = useState<Record<string, { status: TestStatus; message?: string }>>({});
   const [query, setQuery] = useState("");
   const [showAdd, setShowAdd] = useState(false);
@@ -23,8 +25,8 @@ export function ProvidersScreen({ config }: { config?: ServerConfig }) {
 
   useEffect(() => {
     // Switch selection when config changes.
-    if (!selected && names.length > 0) setSelected(names[0]);
-  }, [names, selected]);
+    if (!selected && names.length > 0) setSelected(effectiveDefault || names[0]);
+  }, [effectiveDefault, names, selected]);
 
   const filteredNames = names.filter((n) => !query || n.toLowerCase().includes(query.toLowerCase()));
 
@@ -41,10 +43,7 @@ export function ProvidersScreen({ config }: { config?: ServerConfig }) {
   const currentTest = selected ? testMap[selected] : undefined;
 
   return (
-    <div
-      className="grid h-full overflow-hidden"
-      style={{ gridTemplateColumns: "minmax(360px, 400px) minmax(0, 1fr)" }}
-    >
+    <div className="grid h-full grid-cols-[minmax(300px,340px)_minmax(0,1fr)] overflow-hidden xl:grid-cols-[minmax(340px,380px)_minmax(0,1fr)]">
       <div className="border-r border-border bg-raised flex flex-col overflow-hidden">
         <div className="px-3.5 py-3 border-b border-border-faint flex items-center gap-2">
           <Input
@@ -68,7 +67,7 @@ export function ProvidersScreen({ config }: { config?: ServerConfig }) {
                 key={name}
                 name={name}
                 prov={providers[name]}
-                isDefault={name === config?.default_provider}
+                isDefault={name === effectiveDefault}
                 selected={name === selected}
                 onSelect={() => setSelected(name)}
                 testStatus={testMap[name]?.status}
@@ -86,7 +85,7 @@ export function ProvidersScreen({ config }: { config?: ServerConfig }) {
         <ProviderDetail
           name={selected}
           prov={selected ? providers[selected] : undefined}
-          isDefault={selected === config?.default_provider}
+          isDefault={selected === effectiveDefault}
           testStatus={currentTest?.status}
           testMessage={currentTest?.message}
           onSetDefault={() => selected && setDefault.mutate(selected)}

@@ -15,6 +15,7 @@ import { useCreateGenerate, useCancelJob } from "@/hooks/use-jobs";
 import { useJobEvents } from "@/hooks/use-job-events";
 import { useTweaks } from "@/hooks/use-tweaks";
 import { api } from "@/lib/api";
+import { effectiveDefaultProvider, providerNames as readProviderNames } from "@/lib/providers";
 import type { ServerConfig } from "@/lib/types";
 
 const PRESETS = [
@@ -26,11 +27,12 @@ const PRESETS = [
 
 export function GenerateScreen({ config }: { config?: ServerConfig }) {
   const { tweaks } = useTweaks();
-  const providerNames = Object.keys(config?.providers ?? {});
+  const providerNames = useMemo(() => readProviderNames(config), [config]);
+  const defaultProvider = effectiveDefaultProvider(config);
   const [prompt, setPrompt] = useState(
     "极简线条风格的日本庭院，俯视视角，晨雾中的石灯笼与枯山水，高细节"
   );
-  const [provider, setProvider] = useState<string>(config?.default_provider ?? providerNames[0] ?? "");
+  const [provider, setProvider] = useState<string>("");
   const [size, setSize] = useState("1024x1024");
   const [format, setFormat] = useState("png");
   const [quality, setQuality] = useState("high");
@@ -43,10 +45,10 @@ export function GenerateScreen({ config }: { config?: ServerConfig }) {
   const cancel = useCancelJob();
 
   useEffect(() => {
-    if (!provider && providerNames.length > 0) {
-      setProvider(config?.default_provider ?? providerNames[0]);
+    if (providerNames.length > 0 && (!provider || !config?.providers[provider])) {
+      setProvider(defaultProvider || providerNames[0]);
     }
-  }, [config?.default_provider, provider, providerNames]);
+  }, [config?.providers, defaultProvider, provider, providerNames]);
 
   const handleRun = async () => {
     if (!provider) return;
@@ -76,7 +78,7 @@ export function GenerateScreen({ config }: { config?: ServerConfig }) {
   const providerCfg = provider ? config?.providers[provider] : undefined;
 
   return (
-    <div className="grid h-full overflow-hidden" style={{ gridTemplateColumns: "minmax(0, 1fr) minmax(320px, 360px)" }}>
+    <div className="grid h-full grid-cols-[minmax(0,1fr)_300px] overflow-hidden xl:grid-cols-[minmax(0,1fr)_340px]">
       <div className="flex flex-col overflow-auto bg-background gridpaper">
         <div className="p-6 pb-4 max-w-[820px] mx-auto w-full">
           <div className="flex items-baseline gap-2 mb-2.5">
@@ -139,7 +141,7 @@ export function GenerateScreen({ config }: { config?: ServerConfig }) {
               <Empty
                 icon="image"
                 title="从一句话开始"
-                subtitle="写下你想象的画面，点「生成」会并行返回 N 个候选。系统会实时转发请求、SSE、本地保存事件至右侧时间线。"
+                subtitle="写下画面，点「生成」会并行返回候选。请求、服务端事件和本地保存进度会进入右侧时间线。"
               />
             </Card>
           ) : (
@@ -193,7 +195,7 @@ export function GenerateScreen({ config }: { config?: ServerConfig }) {
                   <option key={p} value={p}>{p}</option>
                 ))}
               </select>
-              {provider === config?.default_provider && <Badge tone="neutral" size="sm">默认</Badge>}
+              {provider === defaultProvider && <Badge tone="neutral" size="sm">默认</Badge>}
             </div>
             <div className="mt-1.5 flex gap-1.5 text-[11px] text-muted">
               <span className="t-mono">{providerCfg?.model ?? "—"}</span>
