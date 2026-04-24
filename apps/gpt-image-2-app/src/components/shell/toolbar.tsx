@@ -1,0 +1,28 @@
+import { type ReactNode } from "react";
+import { Button } from "@/components/ui/button";
+
+export function AppToolbar({
+  title,
+  subtitle,
+  actions,
+  onOpenCommand,
+}: {
+  title: string;
+  subtitle?: string;
+  actions?: ReactNode;
+  onOpenCommand?: () => void;
+}) {
+  return (
+    <div className="h-14 shrink-0 flex items-center gap-3 px-5 border-b border-border bg-raised">
+      <div className="flex-1 min-w-0">
+        <div className="t-h2 text-foreground">{title}</div>
+        {subtitle && <div className="t-small mt-px">{subtitle}</div>}
+      </div>
+      <Button variant="ghost" size="md" icon="search" onClick={onOpenCommand}>
+        <span className="text-muted">跳转到…</span>
+        <span className="kbd">⌘K</span>
+      </Button>
+      {actions}
+    </div>
+  );
+}

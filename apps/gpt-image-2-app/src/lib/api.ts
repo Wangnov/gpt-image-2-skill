@@ -1,0 +1,158 @@
+import { convertFileSrc, invoke } from "@tauri-apps/api/core";
+import type {
+  GenerateRequest,
+  Job,
+  JobEvent,
+  OutputRef,
+  ProviderConfig,
+  ServerConfig,
+  TestProviderResult,
+} from "./types";
+
+type TauriJobResponse = {
+  job_id: string;
+  job?: Job;
+  events?: JobEvent[];
+  payload?: {
+    output?: {
+      path?: string | null;
+      files?: OutputRef[];
+    };
+  };
+};
+
+const outputPaths = new Map<string, string>();
+
+function rememberJobOutputs(job?: Partial<Job> | null, payload?: TauriJobResponse["payload"]) {
+  if (!job?.id) return;
+  if (job.output_path) outputPaths.set(`${job.id}:0`, job.output_path);
+  for (const output of job.outputs ?? []) {
+    outputPaths.set(`${job.id}:${output.index}`, output.path);
+  }
+  const files = payload?.output?.files ?? [];
+  for (const output of files) {
+    outputPaths.set(`${job.id}:${output.index}`, output.path);
+  }
+  const primary = payload?.output?.path;
+  if (primary) outputPaths.set(`${job.id}:0`, primary);
+}
+
+function normalizeJob(raw: Record<string, unknown>): Job {
+  const metadata = (raw.metadata && typeof raw.metadata === "object" ? raw.metadata : {}) as Record<string, unknown>;
+  const output = (metadata.output && typeof metadata.output === "object" ? metadata.output : {}) as {
+    files?: OutputRef[];
+    path?: string | null;
+  };
+  const outputs = Array.isArray(raw.outputs)
+    ? (raw.outputs as OutputRef[])
+    : Array.isArray(output.files)
+      ? output.files
+      : [];
+  const outputPath = typeof raw.output_path === "string"
+    ? raw.output_path
+    : typeof output.path === "string"
+      ? output.path
+      : outputs[0]?.path;
+  const job: Job = {
+    id: String(raw.id ?? ""),
+    command: (raw.command as Job["command"]) ?? "images generate",
+    provider: String(raw.provider ?? "auto"),
+    status: (raw.status as Job["status"]) ?? "completed",
+    created_at: String(raw.created_at ?? ""),
+    updated_at: String(raw.updated_at ?? raw.created_at ?? ""),
+    metadata,
+    outputs,
+    output_path: outputPath,
+    error: (raw.error as Job["error"]) ?? null,
+  };
+  rememberJobOutputs(job);
+  return job;
+}
+
+function normalizeConfig(config: ServerConfig): ServerConfig {
+  return {
+    version: config.version,
+    default_provider: config.default_provider,
+    providers: Object.fromEntries(
+      Object.entries(config.providers ?? {}).map(([name, provider]) => [
+        name,
+        {
+          ...provider,
+          credentials: provider.credentials ?? {},
+        },
+      ]),
+    ),
+  };
+}
+
+async function fileToUpload(file: File) {
+  return {
+    name: file.name,
+    bytes: Array.from(new Uint8Array(await file.arrayBuffer())),
+  };
+}
+
+export const api = {
+  async getConfig() {
+    return normalizeConfig(await invoke<ServerConfig>("get_config"));
+  },
+  async setDefault(name: string) {
+    return normalizeConfig(await invoke<ServerConfig>("set_default_provider", { name }));
+  },
+  async upsertProvider(name: string, cfg: ProviderConfig & { set_default?: boolean }) {
+    return normalizeConfig(await invoke<ServerConfig>("upsert_provider", { name, cfg }));
+  },
+  async deleteProvider(name: string) {
+    return normalizeConfig(await invoke<ServerConfig>("delete_provider", { name }));
+  },
+  async testProvider(name: string) {
+    return invoke<TestProviderResult>("provider_test", { name });
+  },
+  async listJobs() {
+    const payload = await invoke<{ jobs: Record<string, unknown>[] }>("history_list");
+    return (payload.jobs ?? []).map(normalizeJob);
+  },
+  async getJob(id: string) {
+    const payload = await invoke<{ job: Record<string, unknown>; events?: JobEvent[] }>("history_show", { jobId: id });
+    const job = normalizeJob(payload.job ?? {});
+    return { job, events: payload.events ?? [] };
+  },
+  async deleteJob(id: string) {
+    await invoke("history_delete", { jobId: id });
+  },
+  async cancelJob(_id: string) {
+    return undefined;
+  },
+  async createGenerate(body: GenerateRequest) {
+    const result = await invoke<TauriJobResponse>("generate_image", { request: body });
+    rememberJobOutputs(result.job, result.payload);
+    return result;
+  },
+  async createEdit(form: FormData) {
+    const metaRaw = form.get("meta");
+    const meta = typeof metaRaw === "string" ? JSON.parse(metaRaw) : {};
+    const refs: Awaited<ReturnType<typeof fileToUpload>>[] = [];
+    let mask: Awaited<ReturnType<typeof fileToUpload>> | undefined;
+    for (const [key, value] of form.entries()) {
+      if (key.startsWith("ref_") && value instanceof File) {
+        refs.push(await fileToUpload(value));
+      }
+      if (key === "mask" && value instanceof File) {
+        mask = await fileToUpload(value);
+      }
+    }
+    const result = await invoke<TauriJobResponse>("edit_image", {
+      request: {
+        ...meta,
+        refs,
+        mask,
+      },
+    });
+    rememberJobOutputs(result.job, result.payload);
+    return result;
+  },
+  outputUrl(jobId: string, index = 0) {
+    const path = outputPaths.get(`${jobId}:${index}`) ?? outputPaths.get(`${jobId}:0`);
+    return path ? convertFileSrc(path) : "";
+  },
+};
