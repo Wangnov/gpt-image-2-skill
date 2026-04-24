@@ -13,7 +13,7 @@
 
 **Language: 中文 | [English](#english)**
 
-面向 AI Agent 的 GPT Image 2 CLI 与 Skill。一个命令面同时支持 `OPENAI_API_KEY`、OpenAI-compatible `--openai-api-base`，以及 Codex `~/.codex/auth.json` 图片链路。CLI、Tauri App 与 Skill 共用 `$CODEX_HOME/gpt-image-2-skill/config.json`。
+面向 AI Agent 和桌面用户的 GPT Image 2 CLI、Tauri App 与 Skill。一个运行核心同时支持 `OPENAI_API_KEY`、OpenAI-compatible `--openai-api-base`，以及 Codex `~/.codex/auth.json` 图片链路。CLI、Tauri App 与 Skill 共用 `$CODEX_HOME/gpt-image-2-skill/config.json`。
 
 ## 功能特性
 
@@ -26,9 +26,22 @@
 - 默认 3 次 retry，Codex `401` 自动 refresh 后重试
 - `2K`、`4K` 尺寸别名与自定义 `WIDTHxHEIGHT`
 - `config`、`secret`、`history` 命令，覆盖共享配置、文件/env/Keychain 密钥来源和本地 SQLite 历史
-- Tauri App scaffold 位于 `apps/gpt-image-2-app`，前端可直接消费 `runtime-contract.ts` 与 `contracts/mock-data.json`
+- Tauri App 桌面端位于 `apps/gpt-image-2-app`，内置同版本 CLI sidecar，并复用同一套配置、Keychain/env/file 密钥解析与历史记录
 
 ## 安装
+
+### 桌面 App
+
+从 [GitHub Releases](https://github.com/Wangnov/gpt-image-2-skill/releases/latest) 下载对应平台安装包：
+
+- macOS Apple Silicon：`GPT.Image.2_*_aarch64.dmg`
+- macOS Intel：`GPT.Image.2_*_x64.dmg`
+- Windows：`GPT.Image.2_*_x64-setup.exe`
+- Linux：`GPT.Image.2_*_amd64.AppImage`、`*.deb` 或 `*.rpm`
+
+macOS DMG 通过 Developer ID 签名并完成 Apple notarization。桌面 App 会把输出图片、任务元数据和历史记录保存到 `$CODEX_HOME/gpt-image-2-skill/`，默认是 `~/.codex/gpt-image-2-skill/`。
+
+### CLI
 
 ```bash
 cargo install gpt-image-2-skill --locked
@@ -146,10 +159,17 @@ Skill 入口是 `node skills/gpt-image-2-skill/scripts/gpt_image_2_skill.cjs`。
 
 - crates.io：`cargo install gpt-image-2-skill --locked`
 - cargo-binstall：预编译二进制安装
-- GitHub Releases：归档、shell installer、PowerShell installer、Windows MSI
+- GitHub Releases：CLI 归档、shell installer、PowerShell installer、Windows MSI、Tauri App 桌面安装包
 - Homebrew：`wangnov/tap/gpt-image-2-skill`
 - npm：根包 + 平台子包矩阵
 - Skill：`npx skills add`
+
+当前发布链路是：
+
+1. `Release`：cargo-dist 构建 CLI 资产、安装脚本、MSI，并发布 Homebrew formula。
+2. `Publish npm Packages`：下载同一个 GitHub Release 的 CLI 资产，发布 npm 根包与平台子包。
+3. `Post Release Verify`：验证 cargo-binstall、npm、Homebrew 安装路径。
+4. `Tauri App Release`：在同一个 tag 上构建并上传 macOS DMG、Windows NSIS、Linux AppImage/deb/rpm。macOS 构建会导入 Developer ID 证书并执行 notarization/staple 验证。
 
 npm 首发通过 GitHub Actions 中的 `NPM_TOKEN` 完成，并保留 `--provenance`。包首次上线后，可运行 `scripts/release/configure-npm-trust.sh` 绑定 trusted publisher；脚本会先读取现有配置，重复执行也安全。手动验收可通过 `npm-publish.yml` 的 `dry_run` 输入完成整条 npm 打包链路校验。
 
@@ -169,7 +189,7 @@ MIT。详见 `LICENSE`。
 
 **Language: [中文](#gpt-image-2-skill) | English**
 
-Agent-first GPT Image 2 CLI and Skill. One command surface supports `OPENAI_API_KEY`, OpenAI-compatible `--openai-api-base`, and the Codex image path driven by `~/.codex/auth.json`. The CLI, Tauri App, and Skill share `$CODEX_HOME/gpt-image-2-skill/config.json`.
+Agent-first and desktop-friendly GPT Image 2 CLI, Tauri App, and Skill. One shared runtime supports `OPENAI_API_KEY`, OpenAI-compatible `--openai-api-base`, and the Codex image path driven by `~/.codex/auth.json`. The CLI, Tauri App, and Skill share `$CODEX_HOME/gpt-image-2-skill/config.json`.
 
 ## Features
 
@@ -181,9 +201,22 @@ Agent-first GPT Image 2 CLI and Skill. One command surface supports `OPENAI_API_
 - default three-attempt retry behavior with Codex `401` refresh
 - `2K` and `4K` size aliases plus custom `WIDTHxHEIGHT`
 - `config`, `secret`, and `history` commands for shared config, file/env/Keychain credential sources, and local SQLite history
-- Tauri App scaffold under `apps/gpt-image-2-app`; frontend-ready contracts live in `runtime-contract.ts` and `contracts/mock-data.json`
+- Tauri desktop app under `apps/gpt-image-2-app`; it bundles the matching CLI sidecar and reuses the same config, Keychain/env/file credential resolution, and local history
 
 ## Installation
+
+### Desktop App
+
+Download the right installer from [GitHub Releases](https://github.com/Wangnov/gpt-image-2-skill/releases/latest):
+
+- macOS Apple Silicon: `GPT.Image.2_*_aarch64.dmg`
+- macOS Intel: `GPT.Image.2_*_x64.dmg`
+- Windows: `GPT.Image.2_*_x64-setup.exe`
+- Linux: `GPT.Image.2_*_amd64.AppImage`, `*.deb`, or `*.rpm`
+
+macOS DMGs are signed with Developer ID and notarized by Apple. The desktop app stores generated images, task metadata, and history under `$CODEX_HOME/gpt-image-2-skill/`, which defaults to `~/.codex/gpt-image-2-skill/`.
+
+### CLI
 
 ```bash
 cargo install gpt-image-2-skill --locked
@@ -299,12 +332,19 @@ The bundled wrapper resolves the runtime in this order:
 
 ## Distribution
 
-- crates.io
-- cargo-binstall
-- GitHub Releases with archives and installers
-- Homebrew tap
-- npm root package plus platform subpackages
-- installable Skill bundle through `npx skills add`
+- crates.io: `cargo install gpt-image-2-skill --locked`
+- cargo-binstall: prebuilt CLI binaries
+- GitHub Releases: CLI archives, shell installer, PowerShell installer, Windows MSI, and Tauri desktop installers
+- Homebrew: `wangnov/tap/gpt-image-2-skill`
+- npm: root package plus platform subpackages
+- Skill: installable bundle through `npx skills add`
+
+The current release chain is:
+
+1. `Release`: cargo-dist builds CLI assets, installer scripts, MSI packages, and publishes the Homebrew formula.
+2. `Publish npm Packages`: downloads CLI assets from the same GitHub Release and publishes the npm root package plus platform packages.
+3. `Post Release Verify`: verifies cargo-binstall, npm, and Homebrew install paths.
+4. `Tauri App Release`: builds and uploads macOS DMGs, Windows NSIS, and Linux AppImage/deb/rpm on the same tag. macOS jobs import the Developer ID certificate and run notarization plus stapling validation.
 
 The first npm publish uses `NPM_TOKEN` in GitHub Actions and keeps `--provenance` enabled. Once the packages exist on npm, run `scripts/release/configure-npm-trust.sh` to bind trusted publishers; the script reads the current state first, so reruns are safe. Manual acceptance can use the `dry_run` input on `npm-publish.yml` to validate the full npm packaging path.
 
