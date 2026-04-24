@@ -74,7 +74,9 @@ export function GenerateScreen({
 
   const { events, running } = useJobEvents(jobId);
   const mutate = useCreateGenerate();
-  const isWorking = mutate.isPending || running;
+  const isSubmitting = mutate.isPending;
+  const isTracking = running;
+  const isWorking = isSubmitting || isTracking;
   const providerCfg = provider ? config?.providers[provider] : undefined;
   const supportsMultipleOutputs = providerSupportsMultipleOutputs(
     config,
@@ -106,7 +108,7 @@ export function GenerateScreen({
   }, [n, supportsMultipleOutputs]);
 
   const handleRun = async () => {
-    if (!provider || isWorking) return;
+    if (!provider || isSubmitting) return;
     if (parameterError) {
       toast.error("参数无效", { description: parameterError });
       return;
@@ -146,12 +148,21 @@ export function GenerateScreen({
       setOutputCount(count);
       setJobId(res.job_id);
       setRunNotice(queued ? null : outputCountMismatchMessage(count, plannedN));
-      toast.success(queued ? "任务已加入队列" : "生成完成", {
-        id: toastId,
-        description: queued
-          ? `可以继续修改提示词并提交下一批；完成后会通知你。`
-          : outputCountDescription(count, plannedN),
-      });
+      if (queued) {
+        toast.success(
+          plannedN > 1 ? `已开始生成 ${plannedN} 张` : "已开始生成",
+          {
+            id: toastId,
+            description: `${provider} · ${normalizedSize} · 完成后通知你`,
+            duration: 4_000,
+          },
+        );
+      } else {
+        toast.success("生成完成", {
+          id: toastId,
+          description: outputCountDescription(count, plannedN),
+        });
+      }
     } catch (error) {
       const message = errorMessage(error);
       setRunError(message);
@@ -161,6 +172,7 @@ export function GenerateScreen({
     }
   };
 
+  const outputRefreshKey = events.length;
   const outputs = useMemo(() => {
     if (!jobId || outputCount < 1) return [];
     return Array.from({ length: outputCount }).map((_, index) => ({
@@ -168,14 +180,14 @@ export function GenerateScreen({
       url: api.outputUrl(jobId, index),
       selected: index === selectedOutput,
     }));
-  }, [jobId, outputCount, selectedOutput]);
+  }, [jobId, outputCount, selectedOutput, outputRefreshKey]);
 
   const outputPaths = useMemo(() => {
     if (!jobId || outputCount < 1) return [];
     return Array.from({ length: outputCount })
       .map((_, index) => api.outputPath(jobId, index))
       .filter((path): path is string => Boolean(path));
-  }, [jobId, outputCount]);
+  }, [jobId, outputCount, outputRefreshKey]);
   const selectedPath = jobId
     ? (api.outputPath(jobId, selectedOutput) ?? outputPaths[0])
     : undefined;
@@ -183,9 +195,7 @@ export function GenerateScreen({
   const saveSelected = () => saveImages([selectedPath], "图片");
   const saveAll = () => saveImages(outputPaths, "图片");
 
-  const hasOutputs =
-    outputs.some((output) => output.url) ||
-    events.some((e) => e.type === "output_saved" || e.type === "job.completed");
+  const hasOutputs = outputs.some((output) => output.url) || outputPaths.length > 0;
 
   return (
     <div className="generate-layout">
@@ -232,9 +242,13 @@ export function GenerateScreen({
                 icon="sparkle"
                 onClick={handleRun}
                 kbd="⌘↵"
-                disabled={isWorking || !provider || Boolean(parameterError)}
+                disabled={isSubmitting || !provider || Boolean(parameterError)}
               >
-                {isWorking ? "生成中…" : "生成"}
+                {isSubmitting
+                  ? "提交中…"
+                  : isTracking
+                    ? "再生成一批"
+                    : "生成"}
               </Button>
             </div>
           </div>
@@ -263,7 +277,7 @@ export function GenerateScreen({
           <div className="flex flex-wrap items-center gap-2.5 mb-3">
             <div className="t-h3">
               {isWorking
-                ? `生成中 · 请求 ${displayN} 张`
+                ? `后台生成中 · 请求 ${displayN} 张`
                 : hasOutputs
                   ? `候选 · ${outputs.length} 张`
                   : "候选"}

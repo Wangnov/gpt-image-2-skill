@@ -20,6 +20,7 @@ import { useConfig } from "@/hooks/use-config";
 import { useJobNotifications } from "@/hooks/use-job-notifications";
 import { useJobs } from "@/hooks/use-jobs";
 import { useGlobalShortcuts } from "@/hooks/use-shortcuts";
+import { useTweaks } from "@/hooks/use-tweaks";
 import { OPEN_JOB_EVENT } from "@/lib/job-navigation";
 
 class ScreenErrorBoundary extends Component<
@@ -98,6 +99,7 @@ export default function App() {
     refetch: refetchConfig,
   } = useConfig();
   const { data: jobs } = useJobs();
+  const { tweaks } = useTweaks();
 
   const setScreen = useCallback((s: ScreenId) => {
     setScreenState(s);
@@ -247,15 +249,9 @@ export default function App() {
           )}
           <Toaster
             position="top-right"
+            theme={tweaks.theme}
             closeButton
             richColors
-            toastOptions={{
-              style: {
-                background: "var(--bg-raised)",
-                border: "1px solid var(--border)",
-                color: "var(--text)",
-              },
-            }}
           />
         </div>
       </WindowChrome>

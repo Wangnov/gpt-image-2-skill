@@ -126,7 +126,9 @@ export function EditScreen({ config }: { config?: ServerConfig }) {
 
   const { events, running } = useJobEvents(jobId);
   const mutate = useCreateEdit();
-  const isWorking = exportKey != null || mutate.isPending || running;
+  const isSubmitting = exportKey != null || mutate.isPending;
+  const isTracking = running;
+  const isWorking = isSubmitting || isTracking;
   const providerCfg = provider ? config?.providers[provider] : undefined;
   const supportsMultipleOutputs = providerSupportsMultipleOutputs(
     config,
@@ -226,7 +228,7 @@ export function EditScreen({ config }: { config?: ServerConfig }) {
   };
 
   const handleRun = () => {
-    if (!provider || refs.length === 0 || isWorking) return;
+    if (!provider || refs.length === 0 || isSubmitting) return;
     if (parameterError) {
       toast.error("参数无效", { description: parameterError });
       return;
@@ -340,12 +342,21 @@ export function EditScreen({ config }: { config?: ServerConfig }) {
       setOutputCount(count);
       setJobId(res.job_id);
       setRunNotice(queued ? null : outputCountMismatchMessage(count, plannedN));
-      toast.success(queued ? "任务已加入队列" : "编辑完成", {
-        id: toastId,
-        description: queued
-          ? "可以继续调整提示词或参考图并提交下一批；完成后会通知你。"
-          : outputCountDescription(count, plannedN),
-      });
+      if (queued) {
+        toast.success(
+          plannedN > 1 ? `已开始编辑 ${plannedN} 张` : "已开始编辑",
+          {
+            id: toastId,
+            description: `${modeText} · ${provider} · 完成后通知你`,
+            duration: 4_000,
+          },
+        );
+      } else {
+        toast.success("编辑完成", {
+          id: toastId,
+          description: outputCountDescription(count, plannedN),
+        });
+      }
     } catch (error) {
       const message = errorMessage(error);
       setRunError(message);
@@ -356,6 +367,7 @@ export function EditScreen({ config }: { config?: ServerConfig }) {
     }
   };
 
+  const outputRefreshKey = events.length;
   const outputs = useMemo(() => {
     if (!jobId || outputCount < 1) return [];
     return Array.from({ length: outputCount }).map((_, index) => ({
@@ -363,24 +375,19 @@ export function EditScreen({ config }: { config?: ServerConfig }) {
       url: api.outputUrl(jobId, index),
       selected: index === selectedOutput,
     }));
-  }, [jobId, outputCount, selectedOutput]);
+  }, [jobId, outputCount, selectedOutput, outputRefreshKey]);
   const outputPaths = useMemo(() => {
     if (!jobId || outputCount < 1) return [];
     return Array.from({ length: outputCount })
       .map((_, index) => api.outputPath(jobId, index))
       .filter((path): path is string => Boolean(path));
-  }, [jobId, outputCount]);
+  }, [jobId, outputCount, outputRefreshKey]);
   const selectedPath = jobId
     ? (api.outputPath(jobId, selectedOutput) ?? outputPaths[0])
     : undefined;
   const saveSelected = () => saveImages([selectedPath], "图片");
   const saveAll = () => saveImages(outputPaths, "图片");
-  const hasOutputs =
-    outputs.some((output) => output.url) ||
-    events.some(
-      (event) =>
-        event.type === "job.completed" || event.type === "output_saved",
-    );
+  const hasOutputs = outputs.some((output) => output.url) || outputPaths.length > 0;
   const outputSubtitle = usesRegion
     ? "设为目标图并涂抹要修改的区域，再点击右侧开始。"
     : "上传一张或多张参考图，写清楚希望如何融合或改动。";
@@ -845,7 +852,7 @@ export function EditScreen({ config }: { config?: ServerConfig }) {
             icon="sparkle"
             onClick={handleRun}
             disabled={
-              isWorking ||
+              isSubmitting ||
               refs.length === 0 ||
               !provider ||
               Boolean(parameterError) ||
@@ -854,8 +861,12 @@ export function EditScreen({ config }: { config?: ServerConfig }) {
             kbd="⌘↵"
             className="w-full justify-center"
           >
-            {isWorking
-              ? "编辑中..."
+            {isSubmitting
+              ? "提交中..."
+              : isTracking
+                ? usesRegion
+                  ? "再提交局部编辑"
+                  : "再提交参考编辑"
               : usesRegion
                 ? "开始局部编辑"
                 : "开始参考编辑"}
