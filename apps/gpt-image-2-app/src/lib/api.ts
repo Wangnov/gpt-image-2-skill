@@ -155,4 +155,13 @@ export const api = {
     const path = outputPaths.get(`${jobId}:${index}`) ?? (index === 0 ? outputPaths.get(`${jobId}:0`) : undefined);
     return path ? convertFileSrc(path) : "";
   },
+  fileUrl(path?: string | null) {
+    return path ? convertFileSrc(path) : "";
+  },
+  jobOutputUrl(job: Job, index = 0) {
+    const outputPath = job.outputs.find((output) => output.index === index)?.path;
+    const path = outputPath ?? (index === 0 ? job.output_path : undefined);
+    const rememberedPath = outputPaths.get(`${job.id}:${index}`) ?? (index === 0 ? outputPaths.get(`${job.id}:0`) : undefined);
+    return path ? convertFileSrc(path) : rememberedPath ? convertFileSrc(rememberedPath) : "";
+  },
 };

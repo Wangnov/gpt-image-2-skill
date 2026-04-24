@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { cn } from "@/lib/cn";
 import { Icon, type IconName } from "@/components/icon";
 import { Badge } from "@/components/ui/badge";
@@ -34,10 +34,15 @@ export function JobRow({
   onDelete?: () => void;
 }) {
   const [hover, setHover] = useState(false);
+  const [imageFailed, setImageFailed] = useState(false);
   const prompt = (job.metadata as Record<string, unknown>)?.prompt as string | undefined;
   const size = (job.metadata as Record<string, unknown>)?.size as string | undefined;
   const format = (job.metadata as Record<string, unknown>)?.format as string | undefined;
-  const thumbSrc = job.status === "completed" ? api.outputUrl(job.id, 0) : null;
+  const thumbSrc = job.status === "completed" ? api.jobOutputUrl(job, 0) : null;
+
+  useEffect(() => {
+    setImageFailed(false);
+  }, [thumbSrc]);
 
   return (
     <div
@@ -51,8 +56,8 @@ export function JobRow({
       style={{ gridTemplateColumns: "44px 1fr 130px 120px 100px 80px" }}
     >
       <div className="w-9 h-9 rounded-[5px] overflow-hidden bg-sunken border border-border shrink-0">
-        {thumbSrc ? (
-          <img src={thumbSrc} alt="" className="w-full h-full object-cover" onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = "none"; }} />
+        {thumbSrc && !imageFailed ? (
+          <img src={thumbSrc} alt="" className="w-full h-full object-cover" onError={() => setImageFailed(true)} />
         ) : job.status === "completed" ? (
           <PlaceholderImage seed={parseInt(job.id.replace(/\D/g, ""), 10) || 0} />
         ) : (

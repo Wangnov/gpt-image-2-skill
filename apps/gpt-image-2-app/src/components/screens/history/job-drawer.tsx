@@ -1,3 +1,4 @@
+import { useEffect, useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Empty } from "@/components/ui/empty";
@@ -24,6 +25,13 @@ export function JobMetadataDrawer({
   onClose: () => void;
   onDelete?: (id: string) => void;
 }) {
+  const [imageFailed, setImageFailed] = useState(false);
+  const previewSrc = job ? api.jobOutputUrl(job, 0) : "";
+
+  useEffect(() => {
+    setImageFailed(false);
+  }, [job?.id, previewSrc]);
+
   if (!job) return <Empty icon="history" title="选择任务" subtitle="点击任意一行查看元数据和输出。" />;
   const meta = job.metadata as Record<string, unknown>;
   const seed = parseInt(job.id.replace(/\D/g, ""), 10) || 0;
@@ -48,20 +56,16 @@ export function JobMetadataDrawer({
       <div className="flex-1 overflow-auto p-[18px]">
         {job.status === "completed" && (
           <div className="aspect-square rounded-[10px] overflow-hidden border border-border mb-3.5 bg-sunken">
-            <img
-              src={api.outputUrl(job.id, 0)}
-              alt=""
-              className="w-full h-full object-cover"
-              onError={(e) => {
-                const parent = e.currentTarget.parentElement!;
-                e.currentTarget.remove();
-                parent.innerHTML = "";
-                const svgEl = document.createElement("div");
-                svgEl.style.width = "100%";
-                svgEl.style.height = "100%";
-                parent.appendChild(svgEl);
-              }}
-            />
+            {previewSrc && !imageFailed ? (
+              <img
+                src={previewSrc}
+                alt=""
+                className="w-full h-full object-cover"
+                onError={() => setImageFailed(true)}
+              />
+            ) : (
+              <PlaceholderImage seed={seed} />
+            )}
           </div>
         )}
         {job.status !== "completed" && (

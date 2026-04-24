@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Icon } from "@/components/icon";
 import { PlaceholderImage } from "./placeholder-image";
 
@@ -16,7 +16,14 @@ export function OutputTile({
   onOpen?: () => void;
 }) {
   const [hover, setHover] = useState(false);
+  const [imageFailed, setImageFailed] = useState(false);
   const letter = String.fromCharCode(97 + output.index);
+  const showImage = output.url && !imageFailed;
+
+  useEffect(() => {
+    setImageFailed(false);
+  }, [output.url]);
+
   return (
     <div
       onMouseEnter={() => setHover(true)}
@@ -29,8 +36,13 @@ export function OutputTile({
       ].join(" ")}
       style={{ background: "var(--bg-sunken)" }}
     >
-      {output.url ? (
-        <img src={output.url} alt={`output-${output.index}`} className="w-full h-full object-cover" />
+      {showImage ? (
+        <img
+          src={output.url}
+          alt={`output-${output.index}`}
+          className="w-full h-full object-cover"
+          onError={() => setImageFailed(true)}
+        />
       ) : (
         <PlaceholderImage seed={output.seed ?? output.index * 11 + 7} variant={letter} />
       )}

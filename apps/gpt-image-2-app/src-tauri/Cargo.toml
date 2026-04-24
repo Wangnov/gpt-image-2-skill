@@ -21,4 +21,4 @@ tauri-build = { version = "2.0.0", features = [] }
 gpt-image-2-core = { path = "../../../crates/gpt-image-2-core", version = "0.2.4" }
 serde = { version = "1.0.228", features = ["derive"] }
 serde_json = "1.0.145"
-tauri = { version = "2.0.0", features = [] }
+tauri = { version = "2.0.0", features = ["protocol-asset"] }
