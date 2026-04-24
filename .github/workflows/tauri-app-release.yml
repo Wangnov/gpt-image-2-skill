@@ -179,13 +179,17 @@ jobs:
           RELEASE_TAG: ${{ inputs.release_tag }}
         shell: bash
         run: |
-          shopt -s globstar nullglob
-          artifacts=(
-            target/**/release/bundle/dmg/*.dmg
-            target/**/release/bundle/nsis/*.exe
-            target/**/release/bundle/appimage/*.AppImage
-            target/**/release/bundle/deb/*.deb
-            target/**/release/bundle/rpm/*.rpm
+          artifacts=()
+          while IFS= read -r artifact; do
+            artifacts+=("$artifact")
+          done < <(
+            find target -type f \( \
+              -path '*/release/bundle/dmg/*.dmg' -o \
+              -path '*/release/bundle/nsis/*.exe' -o \
+              -path '*/release/bundle/appimage/*.AppImage' -o \
+              -path '*/release/bundle/deb/*.deb' -o \
+              -path '*/release/bundle/rpm/*.rpm' \
+            \)
           )
 
           if [ "${#artifacts[@]}" -eq 0 ]; then
