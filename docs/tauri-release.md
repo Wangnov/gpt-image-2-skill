@@ -23,7 +23,7 @@ npm --prefix apps/gpt-image-2-app ci
 npm --prefix apps/gpt-image-2-app run prepare:sidecar
 npm --prefix apps/gpt-image-2-app run tauri -- build --bundles app,dmg
 
-DMG="target/release/bundle/dmg/GPT Image 2_0.2.4_aarch64.dmg"
+DMG="target/release/bundle/dmg/GPT Image 2_0.2.5_aarch64.dmg"
 xcrun notarytool submit "$DMG" \
   --key "$APPLE_API_KEY_PATH" \
   --key-id "$APPLE_API_KEY" \
@@ -39,7 +39,7 @@ The SHA-1 identity avoids ambiguity when multiple `Developer ID Application: Don
 
 ## CI Release
 
-Run `Tauri App Release` manually with the same tag as the CLI release, for example `v0.2.4`. The workflow builds and uploads:
+Run `Tauri App Release` manually with the same tag as the CLI release, for example `v0.2.5`. The workflow builds and uploads:
 
 - macOS: signed and notarized `.app` / `.dmg` for Apple Silicon and Intel.
 - Windows: NSIS `.exe`.

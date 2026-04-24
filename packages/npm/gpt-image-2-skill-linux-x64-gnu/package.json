@@ -1,6 +1,6 @@
 {
   "name": "gpt-image-2-skill-linux-x64-gnu",
-  "version": "0.2.4",
+  "version": "0.2.5",
   "description": "Platform binary for gpt-image-2-skill (x86_64-unknown-linux-gnu).",
   "license": "MIT",
   "homepage": "https://github.com/Wangnov/gpt-image-2-skill",

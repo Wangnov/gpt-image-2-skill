@@ -43,7 +43,7 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: Release tag such as v0.2.4
+        description: Release tag such as v0.2.5
         required: true
   pull_request:
   push:

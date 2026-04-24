@@ -809,15 +809,14 @@ fn run_generate_request(
         let partials = Arc::new(Mutex::new(Vec::<Value>::new()));
         let partials_for_cb = partials.clone();
         let stream_for_cb = stream.clone();
-        let payloads =
-            run_payloads_concurrently_streaming(arg_sets, move |index, payload| {
-                if let Some(ctx) = &stream_for_cb {
-                    let mut list = partials_for_cb
-                        .lock()
-                        .unwrap_or_else(|poisoned| poisoned.into_inner());
-                    apply_partial_output(ctx, &mut list, index, payload);
-                }
-            })?;
+        let payloads = run_payloads_concurrently_streaming(arg_sets, move |index, payload| {
+            if let Some(ctx) = &stream_for_cb {
+                let mut list = partials_for_cb
+                    .lock()
+                    .unwrap_or_else(|poisoned| poisoned.into_inner());
+                apply_partial_output(ctx, &mut list, index, payload);
+            }
+        })?;
         merge_batch_payloads("images generate", payloads)
     };
     let request_meta = serde_json::to_value(&request).unwrap_or_else(|_| json!({}));
@@ -956,15 +955,14 @@ fn run_edit_request(
         let partials = Arc::new(Mutex::new(Vec::<Value>::new()));
         let partials_for_cb = partials.clone();
         let stream_for_cb = stream.clone();
-        let payloads =
-            run_payloads_concurrently_streaming(arg_sets, move |index, payload| {
-                if let Some(ctx) = &stream_for_cb {
-                    let mut list = partials_for_cb
-                        .lock()
-                        .unwrap_or_else(|poisoned| poisoned.into_inner());
-                    apply_partial_output(ctx, &mut list, index, payload);
-                }
-            })?;
+        let payloads = run_payloads_concurrently_streaming(arg_sets, move |index, payload| {
+            if let Some(ctx) = &stream_for_cb {
+                let mut list = partials_for_cb
+                    .lock()
+                    .unwrap_or_else(|poisoned| poisoned.into_inner());
+                apply_partial_output(ctx, &mut list, index, payload);
+            }
+        })?;
         merge_batch_payloads("images edit", payloads)
     };
     let request_meta = edit_request_metadata(&request);
@@ -1414,12 +1412,9 @@ fn start_queued_jobs(app: tauri::AppHandle, state: JobQueueState) {
                     queued.dir.clone(),
                     Some(stream),
                 ),
-                QueuedTask::Edit(request) => run_edit_request(
-                    request,
-                    queued.id.clone(),
-                    queued.dir.clone(),
-                    Some(stream),
-                ),
+                QueuedTask::Edit(request) => {
+                    run_edit_request(request, queued.id.clone(), queued.dir.clone(), Some(stream))
+                }
             };
             finish_queued_job(worker_app, worker_state, queued, result);
         });

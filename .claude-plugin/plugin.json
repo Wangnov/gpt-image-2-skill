@@ -1,6 +1,6 @@
 {
   "name": "gpt-image-2-skill",
-  "version": "0.2.4",
+  "version": "0.2.5",
   "description": "GPT Image 2 CLI as a Claude Code skill: OpenAI gpt-image-2 + Codex image_generation under one command surface, with masks, transparent backgrounds, custom sizes up to 4K, and structured JSON / JSONL progress output.",
   "author": {
     "name": "wangnov",

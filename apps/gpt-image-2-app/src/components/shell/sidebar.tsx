@@ -82,7 +82,7 @@ export function Sidebar({
           />
           <div className="leading-tight">
             <div className="text-[13px] font-semibold">GPT Image 2</div>
-            <div className="text-[10.5px] text-faint">v0.2.4</div>
+            <div className="text-[10.5px] text-faint">v0.2.5</div>
           </div>
         </div>
       </div>

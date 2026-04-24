@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       release_tag:
-        description: Existing or new GitHub Release tag, for example v0.2.4
+        description: Existing or new GitHub Release tag, for example v0.2.5
         required: true
       release_draft:
         description: Create or update a draft release
