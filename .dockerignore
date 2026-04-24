@@ -1,0 +1,11 @@
+.git
+.github
+.claude-plugin
+target
+**/target
+**/node_modules
+**/dist
+**/.DS_Store
+**/*.log
+docs/eval-screenshots
+packages/npm/*/node_modules

@@ -12,7 +12,13 @@ declare global {
 
 function detectRuntime(): RuntimeKind {
   if (typeof window === "undefined") return "browser";
-  return window.__TAURI_INTERNALS__ || window.__TAURI__ ? "tauri" : "browser";
+  if (window.__TAURI_INTERNALS__ || window.__TAURI__) return "tauri";
+  const configuredHttpApi =
+    window.__GPT_IMAGE_2_API_BASE__?.trim() ||
+    import.meta.env.VITE_GPT_IMAGE_2_API_BASE?.trim();
+  return window.__GPT_IMAGE_2_RUNTIME__ === "http" || configuredHttpApi
+    ? "http"
+    : "browser";
 }
 
 const runtime = detectRuntime();
@@ -22,8 +28,12 @@ let clientPromise: Promise<ApiClient> | null = null;
 function loadClient() {
   if (runtime === "browser") return Promise.resolve(browserApi);
   if (!clientPromise) {
-    clientPromise = import("./tauri-transport").then((mod) => {
-      activeClient = mod.tauriApi;
+    const loader =
+      runtime === "http"
+        ? import("./http-transport").then((mod) => mod.httpApi)
+        : import("./tauri-transport").then((mod) => mod.tauriApi);
+    clientPromise = loader.then((client) => {
+      activeClient = client;
       return activeClient;
     });
   }

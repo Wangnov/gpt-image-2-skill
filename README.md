@@ -27,6 +27,7 @@
 - `2K`、`4K` 尺寸别名与自定义 `WIDTHxHEIGHT`
 - `config`、`secret`、`history` 命令，覆盖共享配置、文件/env/Keychain 密钥来源和本地 SQLite 历史
 - Tauri App 桌面端位于 `apps/gpt-image-2-app`，内置同版本 CLI sidecar，并复用同一套配置、Keychain/env/file 密钥解析与历史记录
+- Docker Web 自托管运行时可从同一套 React UI 通过 `/api` 调用 Rust 后端，见 `docs/docker-web.md`
 
 ## 安装
 
@@ -227,6 +228,7 @@ npm 首发通过 GitHub Actions 中的 `NPM_TOKEN` 完成，并保留 `--provena
 ## 文档
 
 - Skill 说明：`skills/gpt-image-2-skill/SKILL.md`
+- Docker Web：`docs/docker-web.md`
 - Release 流程：`scripts/release/prepare.sh`、`scripts/release/publish.sh`、`scripts/release/verify.sh`
 - Skill 冒烟验证：`scripts/smoke_skill_install.cjs`
 
@@ -253,6 +255,7 @@ Agent-first and desktop-friendly GPT Image 2 CLI, Tauri App, and Skill. One shar
 - `2K` and `4K` size aliases plus custom `WIDTHxHEIGHT`
 - `config`, `secret`, and `history` commands for shared config, file/env/Keychain credential sources, and local SQLite history
 - Tauri desktop app under `apps/gpt-image-2-app`; it bundles the matching CLI sidecar and reuses the same config, Keychain/env/file credential resolution, and local history
+- Docker Web self-hosted runtime serves the same React UI through a Rust `/api` backend; see `docs/docker-web.md`
 
 ## Installation
 

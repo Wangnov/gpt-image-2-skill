@@ -9,7 +9,7 @@ import type {
   TestProviderResult,
 } from "../types";
 
-export type RuntimeKind = "tauri" | "browser";
+export type RuntimeKind = "tauri" | "browser" | "http";
 
 export type RuntimeCapabilities = {
   kind: RuntimeKind;
