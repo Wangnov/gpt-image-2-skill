@@ -23,7 +23,6 @@ PACKAGES=(
   gpt-image-2-skill-darwin-x64
   gpt-image-2-skill-linux-arm64-gnu
   gpt-image-2-skill-linux-x64-gnu
-  gpt-image-2-skill-linux-x64-musl
   gpt-image-2-skill-windows-arm64-msvc
   gpt-image-2-skill-windows-x64-msvc
 )

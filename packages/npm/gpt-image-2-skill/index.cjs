@@ -7,7 +7,6 @@ const TARGETS = [
   { platform: "darwin", arch: "x64", packageName: "gpt-image-2-skill-darwin-x64" },
   { platform: "linux", arch: "arm64", packageName: "gpt-image-2-skill-linux-arm64-gnu", libc: "glibc" },
   { platform: "linux", arch: "x64", packageName: "gpt-image-2-skill-linux-x64-gnu", libc: "glibc" },
-  { platform: "linux", arch: "x64", packageName: "gpt-image-2-skill-linux-x64-musl", libc: "musl" },
   { platform: "win32", arch: "arm64", packageName: "gpt-image-2-skill-windows-arm64-msvc" },
   { platform: "win32", arch: "x64", packageName: "gpt-image-2-skill-windows-x64-msvc" }
 ];

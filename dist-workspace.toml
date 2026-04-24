@@ -15,7 +15,7 @@ packages = ["gpt-image-2-skill"]
 # The installers to generate for each app
 installers = ["shell", "powershell", "homebrew", "msi"]
 # Target platforms to build apps for (Rust target-triple syntax)
-targets = ["aarch64-apple-darwin", "aarch64-unknown-linux-gnu", "aarch64-pc-windows-msvc", "x86_64-apple-darwin", "x86_64-unknown-linux-gnu", "x86_64-unknown-linux-musl", "x86_64-pc-windows-msvc"]
+targets = ["aarch64-apple-darwin", "aarch64-unknown-linux-gnu", "aarch64-pc-windows-msvc", "x86_64-apple-darwin", "x86_64-unknown-linux-gnu", "x86_64-pc-windows-msvc"]
 # Path that installers should place binaries in
 install-path = "CARGO_HOME"
 # Where to host releases
@@ -32,9 +32,12 @@ tap = "Wangnov/homebrew-tap"
 [dist.dependencies.chocolatey]
 wixtoolset = { version = "3.14.1.20250415", targets = ["aarch64-pc-windows-msvc"] }
 
+[dist.dependencies.apt]
+pkg-config = { targets = ["aarch64-unknown-linux-gnu", "x86_64-unknown-linux-gnu"] }
+"libglib2.0-dev" = { targets = ["aarch64-unknown-linux-gnu", "x86_64-unknown-linux-gnu"] }
+
 [dist.github-custom-runners]
 x86_64-unknown-linux-gnu = "ubuntu-24.04"
-x86_64-unknown-linux-musl = "ubuntu-24.04"
 aarch64-unknown-linux-gnu = "ubuntu-24.04-arm"
 x86_64-apple-darwin = "macos-15-intel"
 aarch64-apple-darwin = "macos-15"

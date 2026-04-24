@@ -53,16 +53,6 @@ const TARGETS = [
     binaryName: "gpt-image-2-skill",
   },
   {
-    target: "x86_64-unknown-linux-musl",
-    packageName: "gpt-image-2-skill-linux-x64-musl",
-    directory: "gpt-image-2-skill-linux-x64-musl",
-    os: ["linux"],
-    cpu: ["x64"],
-    libc: ["musl"],
-    archiveExtension: ".tar.xz",
-    binaryName: "gpt-image-2-skill",
-  },
-  {
     target: "aarch64-pc-windows-msvc",
     packageName: "gpt-image-2-skill-windows-arm64-msvc",
     directory: "gpt-image-2-skill-windows-arm64-msvc",

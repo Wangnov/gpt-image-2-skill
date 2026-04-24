@@ -13,6 +13,7 @@ const insertAfter = `      - name: Install dependencies
 `;
 
 const buildMarker = "      - name: Build artifacts";
+const linuxKeyringDepsStepName = "      - name: Install Linux keyring build dependencies";
 const wixStepName = "      - name: Refresh WiX path";
 const announceSectionMarker = "  announce:\n";
 const announceCheckoutMarker = `      - uses: actions/checkout@v6
@@ -52,6 +53,13 @@ const wixStep = `      - name: Refresh WiX path
           Write-Host "Using WiX root $wixRoot"
 `;
 
+const linuxKeyringDepsStep = `      - name: Install Linux keyring build dependencies
+        if: \${{ runner.os == 'Linux' }}
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes pkg-config libglib2.0-dev
+`;
+
 const dispatchSteps = `      - name: Dispatch npm publish workflow
         run: gh workflow run "Publish npm Packages" --repo "\${{ github.repository }}" -f tag="\${{ needs.plan.outputs.tag }}"
 `;
@@ -71,6 +79,10 @@ if (!source.includes(wixStepName)) {
     `${insertAfter}${buildMarker}`,
     `${insertAfter}${wixStep}${buildMarker}`,
   );
+}
+
+if (!source.includes(linuxKeyringDepsStepName)) {
+  source = source.replace(insertAfter, `${linuxKeyringDepsStep}${insertAfter}`);
 }
 
 source = source.replace(dispatchStepPattern, "");

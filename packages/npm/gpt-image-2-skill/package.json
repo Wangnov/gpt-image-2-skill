@@ -24,7 +24,6 @@
     "gpt-image-2-skill-darwin-x64": "0.2.5",
     "gpt-image-2-skill-linux-arm64-gnu": "0.2.5",
     "gpt-image-2-skill-linux-x64-gnu": "0.2.5",
-    "gpt-image-2-skill-linux-x64-musl": "0.2.5",
     "gpt-image-2-skill-windows-arm64-msvc": "0.2.5",
     "gpt-image-2-skill-windows-x64-msvc": "0.2.5"
   }

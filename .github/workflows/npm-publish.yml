@@ -52,7 +52,6 @@ jobs:
             packages/npm/gpt-image-2-skill-darwin-x64 \
             packages/npm/gpt-image-2-skill-linux-arm64-gnu \
             packages/npm/gpt-image-2-skill-linux-x64-gnu \
-            packages/npm/gpt-image-2-skill-linux-x64-musl \
             packages/npm/gpt-image-2-skill-windows-arm64-msvc \
             packages/npm/gpt-image-2-skill-windows-x64-msvc
           do
@@ -67,7 +66,6 @@ jobs:
             packages/npm/gpt-image-2-skill-darwin-x64 \
             packages/npm/gpt-image-2-skill-linux-arm64-gnu \
             packages/npm/gpt-image-2-skill-linux-x64-gnu \
-            packages/npm/gpt-image-2-skill-linux-x64-musl \
             packages/npm/gpt-image-2-skill-windows-arm64-msvc \
             packages/npm/gpt-image-2-skill-windows-x64-msvc
           do

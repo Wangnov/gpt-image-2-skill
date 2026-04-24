@@ -148,6 +148,11 @@ jobs:
           pattern: artifacts-*
           path: target/distrib/
           merge-multiple: true
+      - name: Install Linux keyring build dependencies
+        if: ${{ runner.os == 'Linux' }}
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes pkg-config libglib2.0-dev
       - name: Install dependencies
         run: |
           ${{ matrix.packages_install }}
