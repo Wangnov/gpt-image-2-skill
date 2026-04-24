@@ -22,10 +22,12 @@ export function JobMetadataDrawer({
   job,
   onClose,
   onDelete,
+  onCancel,
 }: {
   job?: Job;
   onClose: () => void;
   onDelete?: (id: string) => void;
+  onCancel?: (id: string) => void;
 }) {
   const [imageFailed, setImageFailed] = useState(false);
   const [selectedOutput, setSelectedOutput] = useState(0);
@@ -44,6 +46,7 @@ export function JobMetadataDrawer({
   const outputCount = Math.max(outputPaths.length, job.status === "completed" ? 1 : 0);
   const selectedPath = api.jobOutputPath(job, selectedOutput) ?? outputPaths[0] ?? job.output_path;
   const canSave = job.status === "completed" && Boolean(selectedPath);
+  const canCancel = job.status === "queued";
 
   return (
     <div className="h-full flex flex-col overflow-hidden">
@@ -145,9 +148,20 @@ export function JobMetadataDrawer({
       </div>
 
       <div className="px-[18px] py-3 border-t border-border-faint flex gap-2">
-        <Button variant="secondary" icon="download" className="flex-1 justify-center" onClick={() => saveImages([selectedPath], "图片")} disabled={!canSave}>
+        {canCancel ? (
+          <Button
+            variant="secondary"
+            icon="x"
+            className="flex-1 justify-center"
+            onClick={() => onCancel?.(job.id)}
+          >
+            取消任务
+          </Button>
+        ) : (
+          <Button variant="secondary" icon="download" className="flex-1 justify-center" onClick={() => saveImages([selectedPath], "图片")} disabled={!canSave}>
           保存选中
-        </Button>
+          </Button>
+        )}
         {outputPaths.length > 1 && (
           <Button variant="secondary" icon="download" onClick={() => saveImages(outputPaths, "图片")}>
             保存全部

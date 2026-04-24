@@ -3,7 +3,7 @@ import type { JobEvent } from "./types";
 
 export type EventHandler = (ev: JobEvent) => void;
 
-const terminal = new Set(["completed", "failed", "cancelled"]);
+const terminal = new Set(["completed", "failed", "cancelled", "canceled"]);
 
 export function subscribeEvents(
   jobId: string,
@@ -21,6 +21,7 @@ export function subscribeEvents(
       for (const event of payload.events ?? []) {
         if (seen.has(event.seq)) continue;
         seen.add(event.seq);
+        seq = Math.max(seq, event.seq);
         onEvent(event);
       }
       if (terminal.has(payload.job.status)) {

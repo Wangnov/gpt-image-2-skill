@@ -14,7 +14,10 @@ export function useJobEvents(jobId: string | null) {
 
   useEffect(() => {
     setEvents([]);
-    if (!jobId) { setRunning(false); return; }
+    if (!jobId) {
+      setRunning(false);
+      return;
+    }
     setRunning(true);
     const unsubscribe = subscribeEvents(
       jobId,
@@ -24,14 +27,20 @@ export function useJobEvents(jobId: string | null) {
           if (prev.some((p) => p.seq === ev.seq)) return prev;
           return [...prev, ev];
         });
-        if (ev.kind === "local" && (ev.type === "job.completed" || ev.type === "job.failed" || ev.type === "job.cancelled")) {
+        if (
+          ev.kind === "local" &&
+          (ev.type === "job.completed" ||
+            ev.type === "job.failed" ||
+            ev.type === "job.cancelled" ||
+            ev.type === "job.canceled")
+        ) {
           setRunning(false);
           qc.invalidateQueries({ queryKey: ["jobs"] });
         }
       },
       () => {
         setRunning(false);
-      }
+      },
     );
     closeRef.current = unsubscribe;
     return () => {

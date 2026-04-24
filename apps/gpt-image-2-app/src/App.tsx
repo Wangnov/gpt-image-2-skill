@@ -1,4 +1,10 @@
-import { Component, type ErrorInfo, type ReactNode, useState } from "react";
+import {
+  Component,
+  type ErrorInfo,
+  type ReactNode,
+  useCallback,
+  useState,
+} from "react";
 import { Toaster } from "sonner";
 import { Button } from "@/components/ui/button";
 import { CommandPalette } from "@/components/command-palette";
@@ -11,8 +17,10 @@ import { EditScreen } from "@/components/screens/edit";
 import { HistoryScreen } from "@/components/screens/history";
 import { ProvidersScreen } from "@/components/screens/providers";
 import { useConfig } from "@/hooks/use-config";
+import { useJobNotifications } from "@/hooks/use-job-notifications";
 import { useJobs } from "@/hooks/use-jobs";
 import { useGlobalShortcuts } from "@/hooks/use-shortcuts";
+import { OPEN_JOB_EVENT } from "@/lib/job-navigation";
 
 class ScreenErrorBoundary extends Component<
   { children: ReactNode; onReset: () => void },
@@ -91,24 +99,42 @@ export default function App() {
   } = useConfig();
   const { data: jobs } = useJobs();
 
-  const setScreen = (s: ScreenId) => {
+  const setScreen = useCallback((s: ScreenId) => {
     setScreenState(s);
     try {
       localStorage.setItem("gpt2.screen", s);
     } catch {
       /* ignore */
     }
-  };
+  }, []);
+
+  const openJob = useCallback(
+    (jobId: string) => {
+      setScreen("history");
+      window.setTimeout(() => {
+        window.dispatchEvent(
+          new CustomEvent(OPEN_JOB_EVENT, { detail: { jobId } }),
+        );
+      }, 0);
+    },
+    [setScreen],
+  );
 
   useGlobalShortcuts({
     onCommand: () => setPaletteOpen(true),
     onScreen: (s) => setScreen(s as ScreenId),
   });
+  useJobNotifications(jobs, openJob);
 
-  const activeJob = jobs?.find((j) => j.status === "running");
+  const active = (job: { status: string }) =>
+    job.status === "running" || job.status === "queued";
   const running = {
-    generate: activeJob?.command === "images generate",
-    edit: activeJob?.command === "images edit",
+    generate:
+      jobs?.some((job) => active(job) && job.command === "images generate") ??
+      false,
+    edit:
+      jobs?.some((job) => active(job) && job.command === "images edit") ??
+      false,
   };
   const meta = TITLES[screen];
 

@@ -114,7 +114,7 @@ export function GenerateScreen({
     const normalizedSize = sizeValidation.normalized ?? size;
     const plannedN = effectiveOutputCount(config, provider, safeN);
     const requestedN = requestOutputCount(config, provider, safeN);
-    const toastId = toast.loading("正在生成图像", {
+    const toastId = toast.loading("正在提交任务", {
       description: `${provider} · ${normalizedSize} · ${quality}`,
     });
     setRunError(null);
@@ -138,13 +138,19 @@ export function GenerateScreen({
           n: plannedN,
         },
       });
-      const count = responseOutputCount(res);
+      const queued =
+        res.queued ||
+        res.job?.status === "queued" ||
+        res.job?.status === "running";
+      const count = queued ? plannedN : responseOutputCount(res);
       setOutputCount(count);
       setJobId(res.job_id);
-      setRunNotice(outputCountMismatchMessage(count, plannedN));
-      toast.success("生成完成", {
+      setRunNotice(queued ? null : outputCountMismatchMessage(count, plannedN));
+      toast.success(queued ? "任务已加入队列" : "生成完成", {
         id: toastId,
-        description: outputCountDescription(count, plannedN),
+        description: queued
+          ? `可以继续修改提示词并提交下一批；完成后会通知你。`
+          : outputCountDescription(count, plannedN),
       });
     } catch (error) {
       const message = errorMessage(error);

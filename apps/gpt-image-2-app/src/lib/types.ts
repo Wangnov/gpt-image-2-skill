@@ -34,6 +34,13 @@ export type JobStatus =
   | "failed"
   | "cancelled";
 
+export interface QueueStatus {
+  max_parallel: number;
+  running: number;
+  queued: number;
+  queued_job_ids: string[];
+}
+
 export interface OutputRef {
   index: number;
   path: string;

@@ -3,7 +3,18 @@ import { api } from "@/lib/api";
 import type { GenerateRequest, Job } from "@/lib/types";
 
 export function useJobs() {
-  return useQuery<Job[]>({ queryKey: ["jobs"], queryFn: api.listJobs, refetchInterval: 15_000 });
+  return useQuery<Job[]>({
+    queryKey: ["jobs"],
+    queryFn: api.listJobs,
+    refetchInterval: (query) => {
+      const jobs = query.state.data as Job[] | undefined;
+      return jobs?.some(
+        (job) => job.status === "queued" || job.status === "running",
+      )
+        ? 1_500
+        : 8_000;
+    },
+  });
 }
 
 export function useJob(id?: string) {

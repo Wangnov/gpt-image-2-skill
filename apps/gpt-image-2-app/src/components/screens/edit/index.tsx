@@ -326,19 +326,25 @@ export function EditScreen({ config }: { config?: ServerConfig }) {
 
     form.append("meta", JSON.stringify(meta));
     const modeText = usesRegion ? regionModeLabel(editRegionMode) : "多图参考";
-    const toastId = toast.loading("正在编辑图像", {
+    const toastId = toast.loading("正在提交任务", {
       description: `${modeText} · ${refs.length} 张图片 · ${provider}`,
     });
     setPendingOutputCount(plannedN);
     try {
       const res = await mutate.mutateAsync(form);
-      const count = responseOutputCount(res);
+      const queued =
+        res.queued ||
+        res.job?.status === "queued" ||
+        res.job?.status === "running";
+      const count = queued ? plannedN : responseOutputCount(res);
       setOutputCount(count);
       setJobId(res.job_id);
-      setRunNotice(outputCountMismatchMessage(count, plannedN));
-      toast.success("编辑完成", {
+      setRunNotice(queued ? null : outputCountMismatchMessage(count, plannedN));
+      toast.success(queued ? "任务已加入队列" : "编辑完成", {
         id: toastId,
-        description: outputCountDescription(count, plannedN),
+        description: queued
+          ? "可以继续调整提示词或参考图并提交下一批；完成后会通知你。"
+          : outputCountDescription(count, plannedN),
       });
     } catch (error) {
       const message = errorMessage(error);

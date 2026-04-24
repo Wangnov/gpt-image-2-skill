@@ -22,11 +22,12 @@ export function formatDuration(ms?: number): string {
 
 export function statusLabel(status: string): string {
   const map: Record<string, string> = {
-    running: "生成中",
+    running: "运行中",
     completed: "已完成",
     failed: "失败",
     queued: "排队中",
     cancelled: "已取消",
+    canceled: "已取消",
   };
   return map[status] ?? status;
 }
@@ -37,5 +38,5 @@ export function providerKindLabel(kind?: string): string {
     openai: "OpenAI 官方",
     codex: "Codex",
   };
-  return kind ? map[kind] ?? kind : "—";
+  return kind ? (map[kind] ?? kind) : "—";
 }

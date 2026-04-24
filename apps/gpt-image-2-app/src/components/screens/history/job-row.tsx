@@ -134,7 +134,10 @@ export function JobRow({
       </div>
       <div>
         <Badge tone={badgeTone(job.status)}>
-          <StatusDot status={job.status} pulse={job.status === "running"} />
+          <StatusDot
+            status={job.status}
+            pulse={job.status === "running" || job.status === "queued"}
+          />
           {statusLabel(job.status)}
         </Badge>
       </div>

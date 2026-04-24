@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Input } from "@/components/ui/input";
 import { Segmented } from "@/components/ui/segmented";
 import { Empty } from "@/components/ui/empty";
@@ -6,7 +6,8 @@ import { Button } from "@/components/ui/button";
 import { Icon } from "@/components/icon";
 import { JobRow } from "./job-row";
 import { JobMetadataDrawer } from "./job-drawer";
-import { useDeleteJob, useJobs } from "@/hooks/use-jobs";
+import { useCancelJob, useDeleteJob, useJobs } from "@/hooks/use-jobs";
+import { OPEN_JOB_EVENT } from "@/lib/job-navigation";
 
 type FilterValue =
   | "all"
@@ -28,6 +29,7 @@ const FILTERS: { value: FilterValue; label: string }[] = [
 export function HistoryScreen() {
   const { data: jobs = [], isLoading } = useJobs();
   const deleteJob = useDeleteJob();
+  const cancelJob = useCancelJob();
   const [filter, setFilter] = useState<FilterValue>("all");
   const [query, setQuery] = useState("");
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -60,6 +62,17 @@ export function HistoryScreen() {
     [filter, jobs, query],
   );
   const selectedJob = jobs.find((j) => j.id === selectedId);
+
+  useEffect(() => {
+    const onOpenJob = (event: Event) => {
+      const detail = (event as CustomEvent<{ jobId?: string }>).detail;
+      if (!detail?.jobId) return;
+      setSelectedId(detail.jobId);
+      setDrawerOpen(true);
+    };
+    window.addEventListener(OPEN_JOB_EVENT, onOpenJob);
+    return () => window.removeEventListener(OPEN_JOB_EVENT, onOpenJob);
+  }, []);
 
   return (
     <div
@@ -157,6 +170,7 @@ export function HistoryScreen() {
               deleteJob.mutate(id);
               setSelectedId(null);
             }}
+            onCancel={(id) => cancelJob.mutate(id)}
           />
         </div>
       )}

@@ -5,6 +5,7 @@ import type {
   JobEvent,
   OutputRef,
   ProviderConfig,
+  QueueStatus,
   ServerConfig,
   TestProviderResult,
 } from "./types";
@@ -13,6 +14,8 @@ export type TauriJobResponse = {
   job_id: string;
   job?: Job;
   events?: JobEvent[];
+  queue?: QueueStatus;
+  queued?: boolean;
   payload?: {
     output?: {
       path?: string | null;
@@ -53,11 +56,13 @@ function normalizeJob(raw: Record<string, unknown>): Job {
     : typeof output.path === "string"
       ? output.path
       : outputs[0]?.path;
+  const rawStatus = String(raw.status ?? "completed");
+  const status = rawStatus === "canceled" ? "cancelled" : rawStatus;
   const job: Job = {
     id: String(raw.id ?? ""),
     command: (raw.command as Job["command"]) ?? "images generate",
     provider: String(raw.provider ?? "auto"),
-    status: (raw.status as Job["status"]) ?? "completed",
+    status: (status as Job["status"]) ?? "completed",
     created_at: String(raw.created_at ?? ""),
     updated_at: String(raw.updated_at ?? raw.created_at ?? ""),
     metadata,
@@ -67,6 +72,14 @@ function normalizeJob(raw: Record<string, unknown>): Job {
   };
   rememberJobOutputs(job);
   return job;
+}
+
+function normalizeJobResponse(raw: TauriJobResponse): TauriJobResponse {
+  const job = raw.job
+    ? normalizeJob(raw.job as unknown as Record<string, unknown>)
+    : undefined;
+  rememberJobOutputs(job, raw.payload);
+  return { ...raw, job };
 }
 
 function normalizeConfig(config: ServerConfig): ServerConfig {
@@ -120,8 +133,12 @@ export const api = {
   async deleteJob(id: string) {
     await invoke("history_delete", { jobId: id });
   },
-  async cancelJob(_id: string) {
-    return undefined;
+  async cancelJob(id: string) {
+    const result = await invoke<TauriJobResponse>("cancel_job", { jobId: id });
+    return normalizeJobResponse(result);
+  },
+  async queueStatus() {
+    return invoke<QueueStatus>("queue_status");
   },
   async openPath(path: string) {
     await invoke("open_path", { path });
@@ -133,9 +150,8 @@ export const api = {
     return invoke<string[]>("export_files_to_downloads", { paths });
   },
   async createGenerate(body: GenerateRequest) {
-    const result = await invoke<TauriJobResponse>("generate_image", { request: body });
-    rememberJobOutputs(result.job, result.payload);
-    return result;
+    const result = await invoke<TauriJobResponse>("enqueue_generate_image", { request: body });
+    return normalizeJobResponse(result);
   },
   async createEdit(form: FormData) {
     const metaRaw = form.get("meta");
@@ -152,7 +168,7 @@ export const api = {
     }
     const selectionHintRaw = form.get("selection_hint");
     const selection_hint = selectionHintRaw instanceof File ? await fileToUpload(selectionHintRaw) : undefined;
-    const result = await invoke<TauriJobResponse>("edit_image", {
+    const result = await invoke<TauriJobResponse>("enqueue_edit_image", {
       request: {
         ...meta,
         refs,
@@ -160,8 +176,7 @@ export const api = {
         selection_hint,
       },
     });
-    rememberJobOutputs(result.job, result.payload);
-    return result;
+    return normalizeJobResponse(result);
   },
   outputUrl(jobId: string, index = 0) {
     const path = outputPaths.get(`${jobId}:${index}`) ?? (index === 0 ? outputPaths.get(`${jobId}:0`) : undefined);
