@@ -36,6 +36,7 @@ pub const IMAGE_SIZE_MAX_EDGE: u32 = 3840;
 pub const IMAGE_SIZE_MIN_TOTAL_PIXELS: u32 = 655_360;
 pub const IMAGE_SIZE_MAX_TOTAL_PIXELS: u32 = 8_294_400;
 pub const IMAGE_SIZE_MAX_ASPECT_RATIO: f64 = 3.0;
+pub const MAX_REFERENCE_IMAGES: usize = 16;
 pub const REFRESH_ENDPOINT: &str = "https://auth.openai.com/oauth/token";
 pub const REFRESH_CLIENT_ID: &str = "app_EMoamEEZ73f0CkXaXp7hrann";
 pub const DELEGATED_IMAGE_MODEL: &str = "gpt-image-2";
@@ -2230,6 +2231,20 @@ fn validate_provider_specific_image_args(
     Ok(())
 }
 
+fn validate_reference_image_count(count: usize) -> Result<(), AppError> {
+    if count > MAX_REFERENCE_IMAGES {
+        return Err(AppError::new(
+            "ref_image_too_many",
+            format!("At most {MAX_REFERENCE_IMAGES} reference images are supported."),
+        )
+        .with_detail(json!({
+            "max": MAX_REFERENCE_IMAGES,
+            "actual": count,
+        })));
+    }
+    Ok(())
+}
+
 fn should_retry(error: &AppError) -> bool {
     if let Some(status_code) = error.status_code {
         return status_code == 429 || status_code >= 500;
@@ -4351,6 +4366,7 @@ fn run_images_command(
             }
         }
         ImagesSubcommand::Edit(args) => {
+            validate_reference_image_count(args.ref_image.len())?;
             let use_batch = args.shared.n.unwrap_or(1) > 1 && !selection.supports_n;
             let mut validation_shared = args.shared.clone();
             if use_batch {
