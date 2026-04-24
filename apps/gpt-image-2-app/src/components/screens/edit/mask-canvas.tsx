@@ -45,9 +45,32 @@ export function MaskCanvas({
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [painting, setPainting] = useState(false);
   const [cursor, setCursor] = useState({ x: 512, y: 512 });
+  const [imageSize, setImageSize] = useState({ width: 1024, height: 1024 });
   const hintId = useId();
-  const W = 1024;
-  const H = 1024;
+  const W = imageSize.width;
+  const H = imageSize.height;
+
+  useEffect(() => {
+    if (!imageUrl) {
+      setImageSize({ width: 1024, height: 1024 });
+      return;
+    }
+    let cancelled = false;
+    loadImage(imageUrl)
+      .then((image) => {
+        if (cancelled) return;
+        setImageSize({
+          width: Math.max(1, image.naturalWidth),
+          height: Math.max(1, image.naturalHeight),
+        });
+      })
+      .catch(() => {
+        if (!cancelled) setImageSize({ width: 1024, height: 1024 });
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [imageUrl]);
 
   const commitSnapshot = () => {
     const c = canvasRef.current;
@@ -64,7 +87,7 @@ export function MaskCanvas({
     onClear?.();
     onSnapshotChange?.(null);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [clearKey]);
+  }, [clearKey, H, W]);
 
   useEffect(() => {
     const c = canvasRef.current;
@@ -84,8 +107,7 @@ export function MaskCanvas({
     return () => {
       cancelled = true;
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [snapshotKey, snapshot]);
+  }, [H, W, snapshot, snapshotKey]);
 
   useEffect(() => {
     if (exportKey == null) return;
@@ -179,8 +201,8 @@ export function MaskCanvas({
 
   return (
     <div
-      className="relative w-full aspect-square rounded-[10px] overflow-hidden bg-sunken border border-border"
-      style={{ touchAction: "none" }}
+      className="relative w-full overflow-hidden rounded-[10px] border border-border bg-sunken"
+      style={{ aspectRatio: `${W} / ${H}`, touchAction: "none" }}
     >
       <div className="absolute inset-0">
         {imageUrl ? (
@@ -190,7 +212,7 @@ export function MaskCanvas({
             aria-hidden="true"
             loading="lazy"
             decoding="async"
-            className="w-full h-full object-cover"
+            className="h-full w-full object-contain"
           />
         ) : (
           <PlaceholderImage seed={seed ?? 7} />
@@ -277,23 +299,6 @@ function loadImage(src?: string) {
   });
 }
 
-function drawCover(
-  ctx: CanvasRenderingContext2D,
-  image: HTMLImageElement,
-  width: number,
-  height: number,
-) {
-  const scale = Math.max(
-    width / image.naturalWidth,
-    height / image.naturalHeight,
-  );
-  const sw = width / scale;
-  const sh = height / scale;
-  const sx = (image.naturalWidth - sw) / 2;
-  const sy = (image.naturalHeight - sh) / 2;
-  ctx.drawImage(image, sx, sy, sw, sh, 0, 0, width, height);
-}
-
 async function exportMaskPayload(
   selectionCanvas: HTMLCanvasElement,
   imageUrl?: string,
@@ -307,7 +312,7 @@ async function exportMaskPayload(
   targetCanvas.height = height;
   const targetCtx = targetCanvas.getContext("2d");
   if (!targetCtx) throw new Error("Canvas unavailable");
-  drawCover(targetCtx, image, width, height);
+  targetCtx.drawImage(image, 0, 0, width, height);
 
   const selectionCtx = selectionCanvas.getContext("2d");
   if (!selectionCtx) throw new Error("Canvas unavailable");
