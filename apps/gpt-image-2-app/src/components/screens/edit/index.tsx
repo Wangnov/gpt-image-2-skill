@@ -839,14 +839,16 @@ export function EditScreen({ config }: { config?: ServerConfig }) {
                       全部
                     </Button>
                   )}
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    icon="folder"
-                    onClick={() => revealPath(selectedPath)}
-                  >
-                    位置
-                  </Button>
+                  {api.canRevealFiles && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      icon="folder"
+                      onClick={() => revealPath(selectedPath)}
+                    >
+                      位置
+                    </Button>
+                  )}
                 </>
               )}
             </div>

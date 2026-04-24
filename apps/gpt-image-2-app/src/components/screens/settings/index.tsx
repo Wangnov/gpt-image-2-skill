@@ -190,7 +190,7 @@ function PathRow({
           variant="ghost"
           size="iconSm"
           icon="folder"
-          disabled={!path}
+          disabled={!path || !api.canUseLocalFiles}
           onClick={() => {
             if (!path) return;
             if (isFolder) void openPath(path);

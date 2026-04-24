@@ -6,19 +6,20 @@ import { Icon } from "@/components/icon";
 import { AddProviderDialog } from "./add-provider-dialog";
 import { ProviderDetail } from "./provider-detail";
 import { ProviderRow } from "./provider-row";
+import { api } from "@/lib/api";
 import {
   useDeleteProvider,
   useSetDefaultProvider,
   useTestProvider,
 } from "@/hooks/use-config";
 import type { ServerConfig } from "@/lib/types";
-import { effectiveDefaultProvider } from "@/lib/providers";
+import { effectiveDefaultProvider, providerNames } from "@/lib/providers";
 
 type TestStatus = "idle" | "running" | "ok" | "err";
 
 export function ProvidersScreen({ config }: { config?: ServerConfig }) {
   const providers = config?.providers ?? {};
-  const names = Object.keys(providers);
+  const names = providerNames(config, { includeDisabled: true });
   const effectiveDefault = effectiveDefaultProvider(config);
   const [selected, setSelected] = useState<string | undefined>(
     effectiveDefault || names[0],
@@ -137,7 +138,9 @@ export function ProvidersScreen({ config }: { config?: ServerConfig }) {
         <div className="px-3.5 py-2.5 border-t border-border-faint text-[11px] text-faint flex items-center gap-1.5">
           <Icon name="folder" size={11} />
           <span className="truncate">
-            凭证配置会保存在本机，并和 CLI、Skill 共用。
+            {api.canUseSystemCredentials
+              ? "凭证配置会保存在本机，并和 CLI、Skill 共用。"
+              : "API Key 只保存在这个浏览器的本地数据里。"}
           </span>
         </div>
       </div>

@@ -123,6 +123,7 @@ export function ProviderDetail({
               </Badge>
             )}
             {prov.builtin && <Badge tone="neutral">内置</Badge>}
+            {prov.disabled && <Badge tone="neutral">不可用</Badge>}
           </div>
           <div className="flex items-center gap-1.5 mt-1 text-[12px] text-muted">
             <span>{providerKindLabel(prov.type)}</span>
@@ -134,16 +135,22 @@ export function ProviderDetail({
           variant="secondary"
           icon="play"
           onClick={onTest}
-          disabled={testStatus === "running"}
+          disabled={testStatus === "running" || prov.disabled}
         >
           测试连接
         </Button>
-        {!isDefault && onSetDefault && (
+        {!isDefault && onSetDefault && !prov.disabled && (
           <Button variant="secondary" icon="check" onClick={onSetDefault}>
             设为默认
           </Button>
         )}
       </div>
+
+      {prov.disabled && (
+        <div className="mb-4 rounded-md border border-border bg-sunken px-3 py-2.5 text-[12px] leading-relaxed text-muted">
+          {prov.disabled_reason ?? "这个凭证在当前运行环境不可用。"}
+        </div>
+      )}
 
       {testStatus && testStatus !== "idle" && (
         <div
@@ -267,7 +274,7 @@ export function ProviderDetail({
       </Card>
 
       <div className="mt-5 pt-4 border-t border-border-faint flex justify-end">
-        {!prov.builtin && (
+        {!prov.builtin && !prov.disabled && (
           <Button variant="danger" icon="trash" onClick={onDelete}>
             删除凭证
           </Button>

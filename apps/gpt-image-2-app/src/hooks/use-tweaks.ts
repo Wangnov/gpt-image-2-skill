@@ -7,7 +7,7 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import { invoke } from "@tauri-apps/api/core";
+import { api } from "@/lib/api";
 import {
   DEFAULT_PRESET,
   THEME_PRESETS,
@@ -150,9 +150,7 @@ export function TweaksProvider({ children }: { children: ReactNode }) {
   }, [tweaks.themePreset, lastPreset]);
 
   useEffect(() => {
-    void invoke("set_queue_concurrency", {
-      maxParallel: tweaks.maxParallel,
-    }).catch(() => {
+    void api.setQueueConcurrency(tweaks.maxParallel).catch(() => {
       /* backend will log; UI stays responsive */
     });
   }, [tweaks.maxParallel]);

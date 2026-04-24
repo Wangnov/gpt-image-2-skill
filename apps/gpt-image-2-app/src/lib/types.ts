@@ -19,6 +19,8 @@ export interface ProviderConfig {
   edit_region_mode?: "native-mask" | "reference-hint" | "none";
   credentials: Record<string, CredentialRef>;
   builtin?: boolean;
+  disabled?: boolean;
+  disabled_reason?: string;
   allow_overwrite?: boolean;
   set_default?: boolean;
 }
@@ -70,7 +72,7 @@ export interface JobEvent {
     message?: string;
     percent?: number;
     status?: string;
-    output?: { path?: string };
+    output?: { path?: string; files?: OutputRef[] };
   };
 }
 

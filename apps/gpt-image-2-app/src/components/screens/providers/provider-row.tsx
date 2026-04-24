@@ -52,9 +52,20 @@ export function ProviderRow({
               默认
             </Badge>
           )}
+          {prov.disabled && (
+            <Badge tone="neutral" size="sm">
+              不可用
+            </Badge>
+          )}
         </div>
         <div className="mt-0.5 flex min-w-0 items-center gap-1.5 overflow-hidden whitespace-nowrap text-[11px] text-muted">
           <span className="shrink-0">{providerKindLabel(prov.type)}</span>
+          {prov.disabled && prov.disabled_reason && (
+            <>
+              <span>·</span>
+              <span className="truncate text-faint">{prov.disabled_reason}</span>
+            </>
+          )}
           <span>·</span>
           <span className="t-mono shrink-0">{prov.model ?? "—"}</span>
           {prov.api_base && (
@@ -95,17 +106,19 @@ export function ProviderRow({
             测试中
           </span>
         )}
-        <Button
-          variant="ghost"
-          size="iconSm"
-          icon="dots"
-          onClick={(e) => {
-            e.stopPropagation();
-            onEdit?.();
-          }}
-          title="编辑凭证"
-          aria-label={`编辑凭证 ${name}`}
-        />
+        {!prov.disabled && (
+          <Button
+            variant="ghost"
+            size="iconSm"
+            icon="dots"
+            onClick={(e) => {
+              e.stopPropagation();
+              onEdit?.();
+            }}
+            title="编辑凭证"
+            aria-label={`编辑凭证 ${name}`}
+          />
+        )}
       </div>
     </div>
   );

@@ -1,10 +1,9 @@
 import { useEffect, useRef } from "react";
-import { listen } from "@tauri-apps/api/event";
 import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { useTweaks } from "@/hooks/use-tweaks";
-import { promptSummary } from "@/lib/prompt-display";
 import { api } from "@/lib/api";
+import { promptSummary } from "@/lib/prompt-display";
 import type { Job, JobStatus } from "@/lib/types";
 
 type OpenJob = (jobId: string) => void;
@@ -89,21 +88,9 @@ export function useJobNotifications(jobs: Job[] | undefined, onOpen: OpenJob) {
   const notifyOnFailure = tweaks.notifyOnFailure;
 
   useEffect(() => {
-    let disposed = false;
-    let unlisten: (() => void) | undefined;
-    void listen("gpt-image-2-job-event", () => {
+    return api.subscribeJobUpdates(() => {
       void qc.invalidateQueries({ queryKey: ["jobs"] });
-    }).then((fn) => {
-      if (disposed) {
-        fn();
-      } else {
-        unlisten = fn;
-      }
     });
-    return () => {
-      disposed = true;
-      unlisten?.();
-    };
   }, [qc]);
 
   useEffect(() => {

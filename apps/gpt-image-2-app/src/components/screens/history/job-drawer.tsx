@@ -260,23 +260,29 @@ export function JobMetadataDrawer({
               style={{ color: "var(--text-faint)" }}
             />
             <span className="text-[12px] flex-1 truncate">
-              候选 {selectedLabel} 已保存在本次结果文件夹
+              {api.canRevealFiles
+                ? `候选 ${selectedLabel} 已保存在本次结果文件夹`
+                : `候选 ${selectedLabel} 已保存在浏览器本地`}
             </span>
-            <Button
-              variant="ghost"
-              size="sm"
-              icon="folder"
-              onClick={() => revealPath(previewPath)}
-            >
-              打开
-            </Button>
-            <Button
-              variant="ghost"
-              size="iconSm"
-              icon="copy"
-              onClick={() => copyText(previewPath, "图片位置")}
-              title="复制图片位置"
-            />
+            {api.canRevealFiles && (
+              <>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  icon="folder"
+                  onClick={() => revealPath(previewPath)}
+                >
+                  打开
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="iconSm"
+                  icon="copy"
+                  onClick={() => copyText(previewPath, "图片位置")}
+                  title="复制图片位置"
+                />
+              </>
+            )}
           </div>
         )}
 
@@ -379,8 +385,8 @@ export function JobMetadataDrawer({
               size="iconSm"
               icon="external"
               onClick={() => openPath(previewPath)}
-              title="在系统查看器中打开"
-              aria-label="在系统查看器中打开"
+              title={api.canUseLocalFiles ? "在系统查看器中打开" : "打开图片"}
+              aria-label={api.canUseLocalFiles ? "在系统查看器中打开" : "打开图片"}
             />
           )}
           {onDelete && (

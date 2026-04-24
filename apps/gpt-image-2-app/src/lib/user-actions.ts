@@ -34,7 +34,9 @@ export async function saveImages(paths: Array<string | undefined | null>, label 
     const saved = await api.exportFilesToDownloads(validPaths);
     toast.success(validPaths.length > 1 ? "已保存全部图片" : "图片已保存", {
       id: toastId,
-      description: `已保存到「下载/GPT Image 2」。`,
+      description: api.canExportToDownloadsFolder
+        ? "已保存到「下载/GPT Image 2」。"
+        : "浏览器已开始下载图片。",
     });
     return saved;
   } catch (error) {

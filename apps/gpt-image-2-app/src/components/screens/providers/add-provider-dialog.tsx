@@ -6,6 +6,7 @@ import { Field } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { Segmented } from "@/components/ui/segmented";
 import { useUpsertProvider } from "@/hooks/use-config";
+import { api } from "@/lib/api";
 import type {
   CredentialSource,
   ProviderConfig,
@@ -52,6 +53,7 @@ export function AddProviderDialog({
 
   const upsert = useUpsertProvider();
   const editing = mode === "edit" && Boolean(providerName && provider);
+  const browserRuntime = !api.canUseSystemCredentials;
   const trimmedName = name.trim();
   const existingNamesForCheck = useMemo(
     () =>
@@ -90,11 +92,15 @@ export function AddProviderDialog({
     if (!open) return;
     if (!editing || !providerName || !provider) {
       reset();
+      if (browserRuntime) {
+        setKind("openai-compatible");
+        setKeySource("file");
+      }
       return;
     }
 
     setName(providerName);
-    setKind(provider.type);
+    setKind(browserRuntime ? "openai-compatible" : provider.type);
     setApiBase(provider.api_base ?? "https://example.com/v1");
     setModel(provider.model ?? "gpt-image-2");
     setSupportsN(Boolean(provider.supports_n));
@@ -103,7 +109,7 @@ export function AddProviderDialog({
     );
 
     const apiKeyCredential = provider.credentials.api_key;
-    setKeySource(apiKeyCredential?.source ?? "file");
+    setKeySource(browserRuntime ? "file" : (apiKeyCredential?.source ?? "file"));
     setApiKey("");
     setEnvName(apiKeyCredential?.env ?? "OPENAI_API_KEY");
     setKeychainAccount(apiKeyCredential?.account ?? "");
@@ -111,7 +117,7 @@ export function AddProviderDialog({
     setCodexAccountId("");
     setCodexAccessToken("");
     setCodexRefreshToken("");
-  }, [editing, open, provider, providerName]);
+  }, [browserRuntime, editing, open, provider, providerName]);
 
   const fileCredential = (value: string) =>
     value ? { source: "file" as const, value } : { source: "file" as const };
@@ -253,14 +259,19 @@ export function AddProviderDialog({
               setKind(next);
               setSupportsN(next === "openai");
               setEditRegionMode(defaultEditRegionMode(next));
+              if (browserRuntime) setKeySource("file");
             }}
             ariaLabel="凭证类型"
             className="w-full overflow-x-auto scrollbar-none"
-            options={[
-              { value: "openai-compatible", label: "OpenAI 兼容" },
-              { value: "openai", label: "OpenAI 官方" },
-              { value: "codex", label: "Codex" },
-            ]}
+            options={
+              browserRuntime
+                ? [{ value: "openai-compatible", label: "OpenAI 兼容" }]
+                : [
+                    { value: "openai-compatible", label: "OpenAI 兼容" },
+                    { value: "openai", label: "OpenAI 官方" },
+                    { value: "codex", label: "Codex" },
+                  ]
+            }
           />
         </Field>
         {kind !== "codex" && (
@@ -381,11 +392,15 @@ export function AddProviderDialog({
               onChange={(v) => setKeySource(v as CredentialSource)}
               ariaLabel="密钥保存方式"
               className="w-full overflow-x-auto scrollbar-none"
-              options={[
-                { value: "file", label: "配置文件", icon: "filedot" },
-                { value: "env", label: "环境变量", icon: "envkey" },
-                { value: "keychain", label: "钥匙串", icon: "keychain" },
-              ]}
+              options={
+                browserRuntime
+                  ? [{ value: "file", label: "浏览器本地", icon: "filedot" }]
+                  : [
+                      { value: "file", label: "配置文件", icon: "filedot" },
+                      { value: "env", label: "环境变量", icon: "envkey" },
+                      { value: "keychain", label: "钥匙串", icon: "keychain" },
+                    ]
+              }
             />
           </Field>
           {keySource === "file" && (
