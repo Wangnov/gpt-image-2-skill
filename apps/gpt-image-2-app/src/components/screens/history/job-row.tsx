@@ -6,6 +6,7 @@ import { StatusDot } from "@/components/ui/status-dot";
 import { PlaceholderImage } from "@/components/screens/shared/placeholder-image";
 import { Button } from "@/components/ui/button";
 import { formatTime, statusLabel } from "@/lib/format";
+import { promptSummary } from "@/lib/prompt-display";
 import { api } from "@/lib/api";
 import type { Job } from "@/lib/types";
 
@@ -36,19 +37,15 @@ function plannedCount(job: Job) {
 }
 
 function firstAvailablePath(job: Job) {
-  return job.outputs
-    .slice()
-    .sort((a, b) => a.index - b.index)
-    .find((output) => output.path)?.path ?? job.output_path;
+  return (
+    job.outputs
+      .slice()
+      .sort((a, b) => a.index - b.index)
+      .find((output) => output.path)?.path ?? job.output_path
+  );
 }
 
-function JobAvatar({
-  job,
-  prompt,
-}: {
-  job: Job;
-  prompt?: string;
-}) {
+function JobAvatar({ job, promptTitle }: { job: Job; promptTitle: string }) {
   const doneCount = api.jobOutputPaths(job).length;
   const planned = plannedCount(job);
   const firstPath = firstAvailablePath(job);
@@ -73,7 +70,7 @@ function JobAvatar({
         {firstUrl && !failed ? (
           <img
             src={firstUrl}
-            alt={prompt ? `生成结果缩略图：${prompt}` : "生成结果缩略图"}
+            alt={`生成结果缩略图：${promptTitle}`}
             loading="lazy"
             decoding="async"
             width={36}
@@ -187,9 +184,7 @@ function ExpandedOutputs({
                   loading="lazy"
                   decoding="async"
                   className="h-full w-full object-cover"
-                  onError={() =>
-                    setFailed((prev) => new Set(prev).add(index))
-                  }
+                  onError={() => setFailed((prev) => new Set(prev).add(index))}
                 />
               ) : (
                 <div
@@ -232,6 +227,7 @@ export function JobRow({
   const prompt = (job.metadata as Record<string, unknown>)?.prompt as
     | string
     | undefined;
+  const title = promptSummary(prompt, 36);
   const size = (job.metadata as Record<string, unknown>)?.size as
     | string
     | undefined;
@@ -247,7 +243,7 @@ export function JobRow({
       <div
         role="button"
         tabIndex={0}
-        aria-label={`${prompt ?? "未命名任务"}，${job.provider}，${job.status}`}
+        aria-label={`${title}，${job.provider}，${job.status}`}
         aria-pressed={selected}
         aria-expanded={grouped ? Boolean(expanded) : undefined}
         onClick={onSelect}
@@ -287,7 +283,7 @@ export function JobRow({
         )}
         style={{ gridTemplateColumns: "44px 1fr 130px 120px 100px 80px" }}
       >
-        <JobAvatar job={job} prompt={prompt} />
+        <JobAvatar job={job} promptTitle={title} />
         <div className="min-w-0">
           <div className="flex items-center gap-1.5">
             <Icon
@@ -296,7 +292,7 @@ export function JobRow({
               style={{ color: "var(--text-faint)" }}
             />
             <span className="truncate text-[12.5px] font-semibold">
-              {prompt || "未命名图片"}
+              {title}
             </span>
           </div>
           <div className="mt-0.5 text-[11px] text-faint">

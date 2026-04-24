@@ -3,6 +3,7 @@ import { listen } from "@tauri-apps/api/event";
 import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { useTweaks } from "@/hooks/use-tweaks";
+import { promptSummary } from "@/lib/prompt-display";
 import type { Job, JobStatus } from "@/lib/types";
 
 type OpenJob = (jobId: string) => void;
@@ -13,37 +14,56 @@ const terminalStatuses = new Set<JobStatus>([
   "cancelled",
 ]);
 
-function promptOf(job: Job) {
-  const prompt = job.metadata.prompt;
-  if (typeof prompt === "string" && prompt.trim()) return prompt;
-  return job.command === "images edit" ? "图像编辑" : "图像生成";
-}
-
 function commandLabel(job: Job) {
   return job.command === "images edit" ? "编辑" : "生成";
 }
 
+function outputCount(job: Job) {
+  if (job.outputs.length > 0) return job.outputs.length;
+  return job.output_path ? 1 : 0;
+}
+
+function successDescription(job: Job) {
+  const parts = [job.provider];
+  const size = job.metadata.size;
+  if (typeof size === "string" && size) parts.push(size);
+  const count = outputCount(job);
+  if (count > 0) parts.push(count > 1 ? `${count} 张图片` : "1 张图片");
+  return parts.join(" · ");
+}
+
+function failureDescription(job: Job) {
+  const err = job.error as { message?: string } | null | undefined;
+  return (
+    promptSummary(err?.message, 96, "") ||
+    `${job.provider} · ${promptSummary(job.metadata.prompt, 48, commandLabel(job))}`
+  );
+}
+
 function notifyTerminal(job: Job, onOpen: OpenJob) {
   const id = `job:${job.id}:${job.status}`;
-  const description = promptOf(job);
   const open = () => onOpen(job.id);
   const common = {
     id,
-    description,
     duration: 8_000,
     action: { label: "查看", onClick: open },
   } as const;
 
   if (job.status === "completed") {
-    toast.success(`${commandLabel(job)}完成`, common);
+    toast.success(`${commandLabel(job)}完成`, {
+      ...common,
+      description: successDescription(job),
+    });
   } else if (job.status === "failed") {
-    const err = job.error as { message?: string } | null | undefined;
     toast.error(`${commandLabel(job)}失败`, {
       ...common,
-      description: err?.message || description,
+      description: failureDescription(job),
     });
   } else {
-    toast("任务已取消", common);
+    toast("任务已取消", {
+      ...common,
+      description: `${job.provider} · ${promptSummary(job.metadata.prompt, 48, commandLabel(job))}`,
+    });
   }
 }
 

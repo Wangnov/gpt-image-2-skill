@@ -7,6 +7,7 @@ import { StatusDot } from "@/components/ui/status-dot";
 import { Icon } from "@/components/icon";
 import { PlaceholderImage } from "@/components/screens/shared/placeholder-image";
 import { formatDuration, formatTime, statusLabel } from "@/lib/format";
+import { promptLength, promptSummary, promptText } from "@/lib/prompt-display";
 import { api } from "@/lib/api";
 import { copyText, openPath, revealPath, saveImages } from "@/lib/user-actions";
 import type { Job } from "@/lib/types";
@@ -63,7 +64,13 @@ export function JobMetadataDrawer({
 
   const meta = (job?.metadata ?? {}) as Record<string, unknown>;
   const seed = job ? parseInt(job.id.replace(/\D/g, ""), 10) || 0 : 0;
-  const prompt = (meta.prompt as string | undefined) ?? job?.command ?? "";
+  const prompt = promptText(meta.prompt, job?.command ?? "未命名图片");
+  const promptTitle = promptSummary(
+    meta.prompt,
+    72,
+    job?.command ?? "未命名图片",
+  );
+  const promptCount = promptLength(meta.prompt);
   const outputPaths = job ? api.jobOutputPaths(job) : [];
   const planned = job ? readPlannedCount(job) : 1;
   const doneCount = outputPaths.length;
@@ -118,7 +125,12 @@ export function JobMetadataDrawer({
               </Badge>
             )}
           </div>
-          <div className="t-h3 leading-snug">{prompt}</div>
+          <div
+            className="t-h3 line-clamp-2 break-anywhere leading-snug"
+            title={prompt}
+          >
+            {promptTitle}
+          </div>
         </div>
         <Button variant="ghost" size="iconSm" icon="x" onClick={onClose} />
       </div>
@@ -164,8 +176,12 @@ export function JobMetadataDrawer({
                   }}
                   disabled={disabled}
                   aria-pressed={isSelected}
-                  aria-label={disabled ? `候选 ${label} · 等待生成` : `候选 ${label}`}
-                  title={disabled ? `候选 ${label} · 等待生成` : `候选 ${label}`}
+                  aria-label={
+                    disabled ? `候选 ${label} · 等待生成` : `候选 ${label}`
+                  }
+                  title={
+                    disabled ? `候选 ${label} · 等待生成` : `候选 ${label}`
+                  }
                   className={cn(
                     "relative h-12 w-12 shrink-0 overflow-hidden rounded-md border bg-raised transition-colors focus-visible:outline-none",
                     isSelected
@@ -274,6 +290,26 @@ export function JobMetadataDrawer({
             </div>
           </div>
         )}
+
+        <section className="mb-3.5 rounded-md border border-border bg-sunken px-3 py-2.5">
+          <div className="mb-2 flex items-center gap-2">
+            <div className="text-[12px] font-semibold">提示词</div>
+            {promptCount > 0 && (
+              <span className="t-tiny ml-auto">{promptCount} 字</span>
+            )}
+            <Button
+              variant="ghost"
+              size="iconSm"
+              icon="copy"
+              onClick={() => copyText(prompt, "提示词")}
+              title="复制提示词"
+              aria-label="复制提示词"
+            />
+          </div>
+          <div className="max-h-44 overflow-auto whitespace-pre-wrap break-anywhere rounded bg-raised px-2.5 py-2 text-[12px] leading-[1.55] text-muted">
+            {prompt}
+          </div>
+        </section>
 
         <details className="rounded-md border border-border bg-sunken px-3 py-2 text-[12px]">
           <summary className="cursor-pointer select-none font-semibold">
