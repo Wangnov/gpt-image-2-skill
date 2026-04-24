@@ -9,6 +9,9 @@ cargo-dist-version = "0.31.0"
 allow-dirty = ["ci"]
 # CI backends to support
 ci = "github"
+# The cargo-dist release only ships the CLI/Skill binary. Desktop app installers
+# are built by .github/workflows/tauri-app-release.yml on the same release tag.
+packages = ["gpt-image-2-skill"]
 # The installers to generate for each app
 installers = ["shell", "powershell", "homebrew", "msi"]
 # Target platforms to build apps for (Rust target-triple syntax)
