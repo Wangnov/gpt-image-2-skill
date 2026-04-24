@@ -1,4 +1,11 @@
-import { useEffect, useRef, useState, type KeyboardEvent, type PointerEvent } from "react";
+import {
+  useEffect,
+  useId,
+  useRef,
+  useState,
+  type KeyboardEvent,
+  type PointerEvent,
+} from "react";
 import { PlaceholderImage } from "@/components/screens/shared/placeholder-image";
 
 export type MaskMode = "paint" | "erase";
@@ -37,6 +44,8 @@ export function MaskCanvas({
 }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [painting, setPainting] = useState(false);
+  const [cursor, setCursor] = useState({ x: 512, y: 512 });
+  const hintId = useId();
   const W = 1024;
   const H = 1024;
 
@@ -99,17 +108,23 @@ export function MaskCanvas({
     };
   };
 
-  const draw = (e: PointerEvent<HTMLCanvasElement>) => {
-    if (!painting) return;
+  const drawAt = (x: number, y: number) => {
     const c = canvasRef.current;
     const ctx = c?.getContext("2d");
     if (!c || !ctx) return;
-    const p = getPos(e);
-    ctx.globalCompositeOperation = mode === "erase" ? "destination-out" : "source-over";
+    ctx.globalCompositeOperation =
+      mode === "erase" ? "destination-out" : "source-over";
     ctx.fillStyle = "rgba(16,160,108,0.85)";
     ctx.beginPath();
-    ctx.arc(p.x, p.y, brushSize, 0, Math.PI * 2);
+    ctx.arc(x, y, brushSize, 0, Math.PI * 2);
     ctx.fill();
+  };
+
+  const draw = (e: PointerEvent<HTMLCanvasElement>) => {
+    if (!painting) return;
+    const p = getPos(e);
+    setCursor(p);
+    drawAt(p.x, p.y);
   };
 
   const handleKey = (event: KeyboardEvent<HTMLCanvasElement>) => {
@@ -124,6 +139,41 @@ export function MaskCanvas({
       }
     } else if (event.key === "Escape") {
       (event.currentTarget as HTMLCanvasElement).blur();
+    } else if (
+      ["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"].includes(event.key)
+    ) {
+      event.preventDefault();
+      const step = event.shiftKey ? 48 : 16;
+      setCursor((current) => ({
+        x: Math.max(
+          0,
+          Math.min(
+            W,
+            current.x +
+              (event.key === "ArrowRight"
+                ? step
+                : event.key === "ArrowLeft"
+                  ? -step
+                  : 0),
+          ),
+        ),
+        y: Math.max(
+          0,
+          Math.min(
+            H,
+            current.y +
+              (event.key === "ArrowDown"
+                ? step
+                : event.key === "ArrowUp"
+                  ? -step
+                  : 0),
+          ),
+        ),
+      }));
+    } else if (event.key === " " || event.key === "Enter") {
+      event.preventDefault();
+      drawAt(cursor.x, cursor.y);
+      commitSnapshot();
     }
   };
 
@@ -148,7 +198,7 @@ export function MaskCanvas({
       </div>
       <div
         className="absolute inset-0 pointer-events-none"
-        style={{ background: "rgba(0,0,0,0.15)" }}
+        style={{ background: "var(--mask-dim)" }}
         aria-hidden="true"
       />
       <canvas
@@ -156,13 +206,16 @@ export function MaskCanvas({
         width={W}
         height={H}
         tabIndex={0}
-        role="img"
-        aria-label={`选区绘制画布（${mode === "erase" ? "擦除模式" : "绘制模式"}，按 Delete 清除选区）`}
+        role="application"
+        aria-label={`选区绘制画布（${mode === "erase" ? "擦除模式" : "绘制模式"}）`}
+        aria-describedby={hintId}
         onKeyDown={handleKey}
         onPointerDown={(e) => {
           (e.target as Element).setPointerCapture(e.pointerId);
           setPainting(true);
-          draw(e);
+          const p = getPos(e);
+          setCursor(p);
+          drawAt(p.x, p.y);
         }}
         onPointerMove={draw}
         onPointerUp={(e) => {
@@ -182,15 +235,21 @@ export function MaskCanvas({
         style={{ cursor: mode === "erase" ? "cell" : "crosshair" }}
       />
       <div
-        className="absolute bottom-2.5 left-2.5 px-2 py-1 t-mono rounded pointer-events-none"
-        style={{
-          background: "rgba(0,0,0,0.55)",
-          color: "#fff",
-          fontSize: "10.5px",
-        }}
         aria-hidden="true"
+        className="pointer-events-none absolute rounded-full border border-white/90 shadow-[0_0_0_1px_rgba(0,0,0,0.35)]"
+        style={{
+          width: Math.max(12, brushSize * 2 * 0.1),
+          height: Math.max(12, brushSize * 2 * 0.1),
+          left: `${(cursor.x / W) * 100}%`,
+          top: `${(cursor.y / H) * 100}%`,
+          transform: "translate(-50%, -50%)",
+        }}
+      />
+      <div
+        id={hintId}
+        className="image-overlay absolute bottom-2.5 left-2.5 max-w-[calc(100%-20px)] rounded px-2 py-1 t-mono text-[10.5px] pointer-events-none"
       >
-        涂抹要修改的区域 · 拖动指针
+        拖动指针涂抹；键盘可用方向键移动，空格绘制，Delete 清除
       </div>
     </div>
   );
@@ -218,8 +277,16 @@ function loadImage(src?: string) {
   });
 }
 
-function drawCover(ctx: CanvasRenderingContext2D, image: HTMLImageElement, width: number, height: number) {
-  const scale = Math.max(width / image.naturalWidth, height / image.naturalHeight);
+function drawCover(
+  ctx: CanvasRenderingContext2D,
+  image: HTMLImageElement,
+  width: number,
+  height: number,
+) {
+  const scale = Math.max(
+    width / image.naturalWidth,
+    height / image.naturalHeight,
+  );
   const sw = width / scale;
   const sh = height / scale;
   const sx = (image.naturalWidth - sw) / 2;
@@ -227,7 +294,10 @@ function drawCover(ctx: CanvasRenderingContext2D, image: HTMLImageElement, width
   ctx.drawImage(image, sx, sy, sw, sh, 0, 0, width, height);
 }
 
-async function exportMaskPayload(selectionCanvas: HTMLCanvasElement, imageUrl?: string): Promise<MaskExport> {
+async function exportMaskPayload(
+  selectionCanvas: HTMLCanvasElement,
+  imageUrl?: string,
+): Promise<MaskExport> {
   const width = selectionCanvas.width;
   const height = selectionCanvas.height;
   const image = await loadImage(imageUrl);

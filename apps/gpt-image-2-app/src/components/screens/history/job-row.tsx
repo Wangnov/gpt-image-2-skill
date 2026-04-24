@@ -34,10 +34,17 @@ export function JobRow({
   onDelete?: () => void;
 }) {
   const [hover, setHover] = useState(false);
+  const [focusWithin, setFocusWithin] = useState(false);
   const [imageFailed, setImageFailed] = useState(false);
-  const prompt = (job.metadata as Record<string, unknown>)?.prompt as string | undefined;
-  const size = (job.metadata as Record<string, unknown>)?.size as string | undefined;
-  const format = (job.metadata as Record<string, unknown>)?.format as string | undefined;
+  const prompt = (job.metadata as Record<string, unknown>)?.prompt as
+    | string
+    | undefined;
+  const size = (job.metadata as Record<string, unknown>)?.size as
+    | string
+    | undefined;
+  const format = (job.metadata as Record<string, unknown>)?.format as
+    | string
+    | undefined;
   const outputCount = api.jobOutputPaths(job).length;
   const thumbSrc = job.status === "completed" ? api.jobOutputUrl(job, 0) : null;
 
@@ -64,9 +71,15 @@ export function JobRow({
       }}
       onMouseEnter={() => setHover(true)}
       onMouseLeave={() => setHover(false)}
+      onFocusCapture={() => setFocusWithin(true)}
+      onBlurCapture={(event) => {
+        if (!event.currentTarget.contains(event.relatedTarget as Node | null)) {
+          setFocusWithin(false);
+        }
+      }}
       className={cn(
-        "grid items-center gap-3 px-3.5 py-2.5 border-b border-border-faint cursor-pointer focus-visible:outline-none focus-visible:bg-hover",
-        selected ? "bg-pressed" : hover ? "bg-hover" : "bg-transparent"
+        "grid min-w-[560px] cursor-pointer items-center gap-3 border-b border-border-faint px-3.5 py-2.5 focus-visible:bg-hover focus-visible:outline-none",
+        selected ? "bg-pressed" : hover ? "bg-hover" : "bg-transparent",
       )}
       style={{ gridTemplateColumns: "44px 1fr 130px 120px 100px 80px" }}
     >
@@ -83,7 +96,9 @@ export function JobRow({
             onError={() => setImageFailed(true)}
           />
         ) : job.status === "completed" ? (
-          <PlaceholderImage seed={parseInt(job.id.replace(/\D/g, ""), 10) || 0} />
+          <PlaceholderImage
+            seed={parseInt(job.id.replace(/\D/g, ""), 10) || 0}
+          />
         ) : (
           <div className="w-full h-full flex items-center justify-center text-faint">
             <Icon
@@ -96,17 +111,26 @@ export function JobRow({
       </div>
       <div className="min-w-0">
         <div className="flex items-center gap-1.5">
-          <Icon name={CMD_ICON[job.command] ?? "sparkle"} size={12} style={{ color: "var(--text-faint)" }} />
-          <span className="text-[12.5px] font-semibold truncate">{prompt || "未命名图片"}</span>
+          <Icon
+            name={CMD_ICON[job.command] ?? "sparkle"}
+            size={12}
+            style={{ color: "var(--text-faint)" }}
+          />
+          <span className="text-[12.5px] font-semibold truncate">
+            {prompt || "未命名图片"}
+          </span>
         </div>
-        <div className="text-[11px] text-faint mt-0.5">{formatTime(job.created_at)}</div>
+        <div className="text-[11px] text-faint mt-0.5">
+          {formatTime(job.created_at)}
+        </div>
       </div>
       <div className="flex items-center gap-1.5 text-[12px]">
         <Icon name="cpu" size={12} style={{ color: "var(--text-faint)" }} />
         <span className="truncate">{job.provider}</span>
       </div>
       <div className="text-[11.5px] text-muted font-mono">
-        {size ?? "—"} {format ? `· ${format}` : ""}{outputCount > 1 ? ` · ${outputCount}张` : ""}
+        {size ?? "—"} {format ? `· ${format}` : ""}
+        {outputCount > 1 ? ` · ${outputCount}张` : ""}
       </div>
       <div>
         <Badge tone={badgeTone(job.status)}>
@@ -115,13 +139,17 @@ export function JobRow({
         </Badge>
       </div>
       <div className="flex gap-0.5 justify-end">
-        {hover && onDelete && (
+        {(hover || focusWithin) && onDelete && (
           <Button
             variant="ghost"
             size="iconSm"
             icon="trash"
-            onClick={(e) => { e.stopPropagation(); onDelete(); }}
+            onClick={(e) => {
+              e.stopPropagation();
+              onDelete();
+            }}
             title="删除"
+            aria-label="删除任务"
           />
         )}
       </div>

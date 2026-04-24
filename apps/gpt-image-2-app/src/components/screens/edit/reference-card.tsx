@@ -33,7 +33,10 @@ export function ReferenceImageCard({
     if (event.key === "Enter" || event.key === " ") {
       event.preventDefault();
       onSelect?.();
-    } else if ((event.key === "Delete" || event.key === "Backspace") && onRemove) {
+    } else if (
+      (event.key === "Delete" || event.key === "Backspace") &&
+      onRemove
+    ) {
       event.preventDefault();
       onRemove();
     } else if (event.key === "t" && onSetTarget && role !== "target") {
@@ -54,7 +57,9 @@ export function ReferenceImageCard({
         "relative aspect-square rounded-lg overflow-hidden cursor-pointer transition-all bg-sunken",
         "border-[1.5px]",
         "focus-visible:outline-none focus-visible:border-accent focus-visible:shadow-[0_0_0_3px_var(--accent-faint)]",
-        active ? "border-accent shadow-[0_0_0_3px_var(--accent-faint)]" : "border-border"
+        active
+          ? "border-accent shadow-[0_0_0_3px_var(--accent-faint)]"
+          : "border-border",
       )}
     >
       <img
@@ -66,8 +71,7 @@ export function ReferenceImageCard({
         className="w-full h-full object-cover"
       />
       <div
-        className="absolute top-1.5 left-1.5 px-1.5 py-0.5 rounded t-mono max-w-[calc(100%-64px)] truncate"
-        style={{ background: "rgba(0,0,0,0.55)", color: "#fff", fontSize: "10px" }}
+        className="image-overlay absolute top-1.5 left-1.5 max-w-[calc(100%-64px)] truncate rounded px-1.5 py-0.5 t-mono text-[10px]"
         title={ref_.name}
       >
         {ref_.name}
@@ -81,10 +85,7 @@ export function ReferenceImageCard({
         </div>
       )}
       {role === "reference" && (
-        <div
-          className="absolute top-1.5 right-1.5 px-1.5 py-0.5 rounded text-[10px] font-semibold"
-          style={{ background: "rgba(0,0,0,0.45)", color: "#fff" }}
-        >
+        <div className="image-overlay-soft absolute top-1.5 right-1.5 rounded px-1.5 py-0.5 text-[10px] font-semibold">
           参考
         </div>
       )}
@@ -93,7 +94,8 @@ export function ReferenceImageCard({
           className="absolute top-7 right-1.5 px-1.5 py-0.5 rounded text-[10px] font-semibold flex items-center gap-1"
           style={{ background: "var(--accent)", color: "var(--accent-on)" }}
         >
-          <Icon name="mask" size={10} aria-hidden="true" />遮罩
+          <Icon name="mask" size={10} aria-hidden="true" />
+          遮罩
         </div>
       )}
       {onSetTarget && role !== "target" && (
@@ -104,8 +106,7 @@ export function ReferenceImageCard({
             onSetTarget();
           }}
           aria-label={`把「${ref_.name}」设为目标图`}
-          className="absolute bottom-1.5 left-1.5 min-h-[28px] rounded px-2 text-[11px] font-semibold border-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-[color:var(--accent)]"
-          style={{ background: "rgba(0,0,0,0.55)", color: "#fff" }}
+          className="touch-target image-overlay absolute bottom-1.5 left-1.5 min-h-8 rounded border-none px-2 text-[11px] font-semibold focus-visible:outline focus-visible:outline-2 focus-visible:outline-[color:var(--accent)]"
         >
           设为目标
         </button>
@@ -117,8 +118,7 @@ export function ReferenceImageCard({
           onRemove?.();
         }}
         aria-label={`删除「${ref_.name}」`}
-        className="absolute bottom-1.5 right-1.5 w-7 h-7 rounded border-none flex items-center justify-center focus-visible:outline focus-visible:outline-2 focus-visible:outline-[color:var(--accent)]"
-        style={{ background: "rgba(0,0,0,0.55)", color: "#fff" }}
+        className="touch-target image-overlay absolute bottom-1.5 right-1.5 flex h-8 w-8 items-center justify-center rounded border-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-[color:var(--accent)]"
       >
         <Icon name="x" size={12} aria-hidden="true" />
       </button>

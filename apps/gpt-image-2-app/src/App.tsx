@@ -38,7 +38,8 @@ class ScreenErrorBoundary extends Component<
       >
         <div className="t-h2 text-foreground">界面出现异常</div>
         <div className="max-w-[420px] text-[13px] text-muted">
-          {this.state.error.message || "这个屏幕遇到了未知错误。已经停止渲染,以免影响其他功能。"}
+          {this.state.error.message ||
+            "这个屏幕遇到了未知错误。已经停止渲染,以免影响其他功能。"}
         </div>
         <Button
           variant="primary"
@@ -59,8 +60,16 @@ class ScreenErrorBoundary extends Component<
 function readInitialScreen(): ScreenId {
   try {
     const s = localStorage.getItem("gpt2.screen");
-    if (s === "generate" || s === "edit" || s === "history" || s === "providers") return s;
-  } catch { /* ignore */ }
+    if (
+      s === "generate" ||
+      s === "edit" ||
+      s === "history" ||
+      s === "providers"
+    )
+      return s;
+  } catch {
+    /* ignore */
+  }
   return "generate";
 }
 
@@ -75,12 +84,20 @@ export default function App() {
   const [screen, setScreenState] = useState<ScreenId>(readInitialScreen);
   const [tweaksOpen, setTweaksOpen] = useState(false);
   const [paletteOpen, setPaletteOpen] = useState(false);
-  const { data: config } = useConfig();
+  const {
+    data: config,
+    error: configError,
+    refetch: refetchConfig,
+  } = useConfig();
   const { data: jobs } = useJobs();
 
   const setScreen = (s: ScreenId) => {
     setScreenState(s);
-    try { localStorage.setItem("gpt2.screen", s); } catch { /* ignore */ }
+    try {
+      localStorage.setItem("gpt2.screen", s);
+    } catch {
+      /* ignore */
+    }
   };
 
   useGlobalShortcuts({
@@ -99,7 +116,12 @@ export default function App() {
     <div className="desktop">
       <WindowChrome>
         <div className="relative flex h-full w-full">
-          <Sidebar screen={screen} setScreen={setScreen} config={config} running={running} />
+          <Sidebar
+            screen={screen}
+            setScreen={setScreen}
+            config={config}
+            running={running}
+          />
           <div className="flex-1 min-w-0 flex flex-col relative overflow-hidden">
             <AppToolbar
               title={meta.title}
@@ -117,7 +139,12 @@ export default function App() {
                     aria-expanded={tweaksOpen}
                     data-tweaks-toggle
                   />
-                  <Button variant="solidDark" size="md" icon="sparkle" onClick={() => setScreen("generate")}>
+                  <Button
+                    variant="solidDark"
+                    size="md"
+                    icon="sparkle"
+                    onClick={() => setScreen("generate")}
+                  >
                     新建生成
                   </Button>
                 </>
@@ -131,13 +158,23 @@ export default function App() {
             >
               <div key={screen} className="animate-fade-in h-full">
                 <ScreenErrorBoundary onReset={() => setScreenState(screen)}>
-                  {screen === "generate" && <GenerateScreen config={config} onOpenEdit={() => setScreen("edit")} />}
+                  {screen === "generate" && (
+                    <GenerateScreen
+                      config={config}
+                      onOpenEdit={() => setScreen("edit")}
+                    />
+                  )}
                   {screen === "edit" && <EditScreen config={config} />}
                   {screen === "history" && <HistoryScreen />}
-                  {screen === "providers" && <ProvidersScreen config={config} />}
+                  {screen === "providers" && (
+                    <ProvidersScreen config={config} />
+                  )}
                 </ScreenErrorBoundary>
               </div>
-              <TweaksPanel visible={tweaksOpen} onClose={() => setTweaksOpen(false)} />
+              <TweaksPanel
+                visible={tweaksOpen}
+                onClose={() => setTweaksOpen(false)}
+              />
             </main>
           </div>
           <CommandPalette
@@ -148,13 +185,37 @@ export default function App() {
           />
           {!config && (
             <div
-              role="status"
+              role={configError ? "alert" : "status"}
               aria-live="polite"
-              className="absolute inset-0 flex items-center justify-center bg-background/80 z-20 text-faint text-[13px] pointer-events-none"
+              className="absolute inset-0 z-20 flex items-center justify-center bg-background/80 text-[13px] text-faint"
             >
-              <div className="flex items-center gap-2">
-                <span aria-hidden="true" className="inline-block h-3 w-3 rounded-full bg-accent animate-pulse-subtle" />
-                加载配置中…
+              <div className="surface-panel flex max-w-[360px] flex-col items-center gap-3 p-4 text-center">
+                {configError ? (
+                  <>
+                    <div className="t-h3 text-foreground">配置加载失败</div>
+                    <div className="t-small">
+                      {configError instanceof Error
+                        ? configError.message
+                        : String(configError)}
+                    </div>
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      icon="reload"
+                      onClick={() => refetchConfig()}
+                    >
+                      重试
+                    </Button>
+                  </>
+                ) : (
+                  <div className="flex items-center gap-2">
+                    <span
+                      aria-hidden="true"
+                      className="inline-block h-3 w-3 rounded-full bg-accent animate-pulse-subtle"
+                    />
+                    加载配置中…
+                  </div>
+                )}
               </div>
             </div>
           )}

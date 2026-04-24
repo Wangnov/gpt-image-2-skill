@@ -29,7 +29,7 @@ export function ImageSizeInput({
             type="button"
             onClick={() => onChange(option.value)}
             className={[
-              "h-6 rounded border px-1.5 text-[10.5px] transition-colors",
+              "touch-target min-h-8 rounded border px-2 text-[10.5px] transition-colors",
               value.trim().toLowerCase() === option.value
                 ? "border-accent bg-[color:var(--accent-faint)] text-foreground"
                 : "border-border bg-sunken text-muted hover:text-foreground",
@@ -64,7 +64,9 @@ export function OutputCountInput({
         max={10}
         step={1}
         value={Number.isFinite(value) ? String(value) : ""}
-        onChange={(event) => onChange(event.target.value === "" ? 0 : Number(event.target.value))}
+        onChange={(event) =>
+          onChange(event.target.value === "" ? 0 : Number(event.target.value))
+        }
         monospace
         suffix={<span className="text-[11px] text-faint">张</span>}
       />
@@ -75,7 +77,7 @@ export function OutputCountInput({
             type="button"
             onClick={() => onChange(option)}
             className={[
-              "h-6 min-w-7 rounded border px-2 text-[10.5px] font-medium transition-colors",
+              "touch-target min-h-8 min-w-8 rounded border px-2 text-[10.5px] font-medium transition-colors",
               value === option
                 ? "border-accent bg-[color:var(--accent-faint)] text-foreground"
                 : "border-border bg-sunken text-muted hover:text-foreground",
@@ -93,4 +95,3 @@ export function OutputCountInput({
     </div>
   );
 }
-

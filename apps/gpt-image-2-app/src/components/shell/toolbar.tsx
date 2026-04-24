@@ -13,13 +13,23 @@ export function AppToolbar({
   onOpenCommand?: () => void;
 }) {
   return (
-    <div className="h-14 shrink-0 flex items-center gap-3 px-5 border-b border-border bg-raised">
+    <div className="h-14 shrink-0 flex items-center gap-2.5 px-4 xl:px-5 border-b border-border bg-raised">
       <div className="flex-1 min-w-0">
-        <div className="t-h2 text-foreground">{title}</div>
-        {subtitle && <div className="t-small mt-px">{subtitle}</div>}
+        <div className="t-h2 truncate text-foreground">{title}</div>
+        {subtitle && (
+          <div className="t-small mt-px hidden truncate lg:block">
+            {subtitle}
+          </div>
+        )}
       </div>
-      <Button variant="ghost" size="md" icon="search" onClick={onOpenCommand}>
-        <span className="text-muted">跳转到…</span>
+      <Button
+        variant="ghost"
+        size="md"
+        icon="search"
+        onClick={onOpenCommand}
+        aria-label="打开命令面板"
+      >
+        <span className="hidden text-muted xl:inline">跳转到…</span>
         <span className="kbd">⌘K</span>
       </Button>
       {actions}

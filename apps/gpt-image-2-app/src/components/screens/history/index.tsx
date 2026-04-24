@@ -8,7 +8,13 @@ import { JobRow } from "./job-row";
 import { JobMetadataDrawer } from "./job-drawer";
 import { useDeleteJob, useJobs } from "@/hooks/use-jobs";
 
-type FilterValue = "all" | "running" | "completed" | "failed" | "generate" | "edit";
+type FilterValue =
+  | "all"
+  | "running"
+  | "completed"
+  | "failed"
+  | "generate"
+  | "edit";
 
 const FILTERS: { value: FilterValue; label: string }[] = [
   { value: "all", label: "全部" },
@@ -30,16 +36,28 @@ export function HistoryScreen() {
   const filtered = useMemo(
     () =>
       jobs.filter((j) => {
-        if (filter === "running" && !(j.status === "running" || j.status === "queued")) return false;
+        if (
+          filter === "running" &&
+          !(j.status === "running" || j.status === "queued")
+        )
+          return false;
         if (filter === "completed" && j.status !== "completed") return false;
         if (filter === "failed" && j.status !== "failed") return false;
-        if (filter === "generate" && j.command !== "images generate") return false;
+        if (filter === "generate" && j.command !== "images generate")
+          return false;
         if (filter === "edit" && j.command !== "images edit") return false;
-        const prompt = (j.metadata as Record<string, unknown>)?.prompt as string | undefined;
-        if (query && !(prompt ?? "").toLowerCase().includes(query.toLowerCase()) && !j.id.includes(query)) return false;
+        const prompt = (j.metadata as Record<string, unknown>)?.prompt as
+          | string
+          | undefined;
+        if (
+          query &&
+          !(prompt ?? "").toLowerCase().includes(query.toLowerCase()) &&
+          !j.id.includes(query)
+        )
+          return false;
         return true;
       }),
-    [filter, jobs, query]
+    [filter, jobs, query],
   );
   const selectedJob = jobs.find((j) => j.id === selectedId);
 
@@ -69,11 +87,13 @@ export function HistoryScreen() {
             options={FILTERS}
           />
           <div className="flex-1" />
-          <span className="t-tiny font-mono">{filtered.length} / {jobs.length}</span>
+          <span className="t-tiny font-mono">
+            {filtered.length} / {jobs.length}
+          </span>
         </div>
 
         <div
-          className="grid items-center gap-3 px-3.5 py-1.5 border-b border-border bg-sunken"
+          className="grid min-w-[560px] items-center gap-3 border-b border-border bg-sunken px-3.5 py-1.5"
           style={{ gridTemplateColumns: "44px 1fr 130px 120px 100px 80px" }}
         >
           <span />
@@ -88,14 +108,21 @@ export function HistoryScreen() {
           {isLoading ? (
             <Empty icon="history" title="加载中" subtitle="正在获取任务列表" />
           ) : filtered.length === 0 ? (
-            <Empty icon="search" title="无匹配结果" subtitle="调整筛选或搜索关键词。" />
+            <Empty
+              icon="search"
+              title="无匹配结果"
+              subtitle="调整筛选或搜索关键词。"
+            />
           ) : (
             filtered.map((j) => (
               <JobRow
                 key={j.id}
                 job={j}
                 selected={j.id === selectedId}
-                onSelect={() => { setSelectedId(j.id); setDrawerOpen(true); }}
+                onSelect={() => {
+                  setSelectedId(j.id);
+                  setDrawerOpen(true);
+                }}
                 onDelete={() => deleteJob.mutate(j.id)}
               />
             ))
@@ -104,10 +131,17 @@ export function HistoryScreen() {
 
         <div className="px-4 py-2.5 border-t border-border-faint text-[11px] text-faint flex items-center gap-1.5">
           <Icon name="folder" size={11} />
-          <span className="truncate">图片会自动保存在本机记录里；选中作品后可以保存到下载文件夹。</span>
+          <span className="truncate">
+            图片会自动保存在本机记录里；选中作品后可以保存到下载文件夹。
+          </span>
           <div className="flex-1" />
           {!drawerOpen && (
-            <Button variant="ghost" size="sm" icon="chevleft" onClick={() => setDrawerOpen(true)}>
+            <Button
+              variant="ghost"
+              size="sm"
+              icon="chevleft"
+              onClick={() => setDrawerOpen(true)}
+            >
               显示详情
             </Button>
           )}
@@ -119,7 +153,10 @@ export function HistoryScreen() {
           <JobMetadataDrawer
             job={selectedJob}
             onClose={() => setDrawerOpen(false)}
-            onDelete={(id) => { deleteJob.mutate(id); setSelectedId(null); }}
+            onDelete={(id) => {
+              deleteJob.mutate(id);
+              setSelectedId(null);
+            }}
           />
         </div>
       )}

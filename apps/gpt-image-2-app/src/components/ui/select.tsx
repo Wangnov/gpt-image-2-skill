@@ -28,40 +28,47 @@ export const Select = forwardRef<HTMLSelectElement, Props>(
       "aria-invalid": ariaInvalidProp,
       ...rest
     },
-    ref
+    ref,
   ) => {
     const id = useFieldId(idProp);
     const describedBy = useFieldDescribedBy(
-      typeof ariaDescribedByProp === "string" ? ariaDescribedByProp : undefined
+      typeof ariaDescribedByProp === "string" ? ariaDescribedByProp : undefined,
     );
     const invalid = useFieldInvalid(
       ariaInvalidProp === true || ariaInvalidProp === "true"
         ? true
         : ariaInvalidProp === false || ariaInvalidProp === "false"
           ? false
-          : undefined
+          : undefined,
     );
 
     return (
-      <div className={cn("relative inline-block w-full", heights[size])} style={style}>
+      <div
+        className={cn("relative inline-block w-full", heights[size])}
+        style={style}
+      >
         <select
           ref={ref}
           id={id}
           aria-describedby={describedBy}
           aria-invalid={invalid}
           className={cn(
-            "w-full h-full pl-2.5 pr-7 bg-raised border border-border rounded-md text-[13px] appearance-none cursor-pointer outline-none",
-            invalid && "border-status-err",
-            className
+            "h-full w-full cursor-pointer appearance-none rounded-md border border-border bg-raised pl-2.5 pr-7 text-[13px] outline-none transition-colors focus:border-accent focus:shadow-[0_0_0_3px_var(--accent-faint)]",
+            invalid && "border-status-err focus:border-status-err",
+            className,
           )}
           {...rest}
         >
           {options.map((o) =>
             typeof o === "string" ? (
-              <option key={o} value={o}>{o}</option>
+              <option key={o} value={o}>
+                {o}
+              </option>
             ) : (
-              <option key={o.value} value={o.value}>{o.label}</option>
-            )
+              <option key={o.value} value={o.value}>
+                {o.label}
+              </option>
+            ),
           )}
         </select>
         <Icon
@@ -79,7 +86,7 @@ export const Select = forwardRef<HTMLSelectElement, Props>(
         />
       </div>
     );
-  }
+  },
 );
 
 Select.displayName = "Select";

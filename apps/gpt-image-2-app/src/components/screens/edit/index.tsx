@@ -10,7 +10,10 @@ import { Spinner } from "@/components/ui/spinner";
 import { Textarea } from "@/components/ui/textarea";
 import { Icon } from "@/components/icon";
 import { EventTimeline } from "@/components/screens/shared/event-timeline";
-import { ImageSizeInput, OutputCountInput } from "@/components/screens/shared/image-parameter-inputs";
+import {
+  ImageSizeInput,
+  OutputCountInput,
+} from "@/components/screens/shared/image-parameter-inputs";
 import { OutputTile } from "@/components/screens/shared/output-tile";
 import { MaskCanvas, type MaskExport, type MaskMode } from "./mask-canvas";
 import { ReferenceImageCard, type RefImage } from "./reference-card";
@@ -41,7 +44,10 @@ import {
   providerSupportsMultipleOutputs,
   requestOutputCount,
 } from "@/lib/provider-capabilities";
-import { effectiveDefaultProvider, providerNames as readProviderNames } from "@/lib/providers";
+import {
+  effectiveDefaultProvider,
+  providerNames as readProviderNames,
+} from "@/lib/providers";
 import { openPath, revealPath, saveImages } from "@/lib/user-actions";
 import type { JobEvent, ProviderConfig, ServerConfig } from "@/lib/types";
 
@@ -62,7 +68,8 @@ function regionModeLabel(mode: EditRegionMode) {
 
 function regionModeHint(mode: EditRegionMode) {
   if (mode === "native-mask") return "遮罩会精确作用在目标图上";
-  if (mode === "reference-hint") return "会额外发送一张选区标记图；用户上传图片顺序保持不变";
+  if (mode === "reference-hint")
+    return "会额外发送一张选区标记图；用户上传图片顺序保持不变";
   return "请使用多图参考，或换一个支持局部编辑的服务商";
 }
 
@@ -71,6 +78,7 @@ export function EditScreen({ config }: { config?: ServerConfig }) {
   const providerNames = useMemo(() => readProviderNames(config), [config]);
   const defaultProvider = effectiveDefaultProvider(config);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const refsRef = useRef<RefWithFile[]>([]);
   const [editMode, setEditMode] = useState<EditMode>("reference");
   const [prompt, setPrompt] = useState("");
   const [provider, setProvider] = useState<string>("");
@@ -82,7 +90,9 @@ export function EditScreen({ config }: { config?: ServerConfig }) {
   const [refs, setRefs] = useState<RefWithFile[]>([]);
   const [selectedRef, setSelectedRef] = useState<string | null>(null);
   const [targetRefId, setTargetRefId] = useState<string | null>(null);
-  const [maskSnapshots, setMaskSnapshots] = useState<Record<string, string>>({});
+  const [maskSnapshots, setMaskSnapshots] = useState<Record<string, string>>(
+    {},
+  );
   const [brushSize, setBrushSize] = useState(28);
   const [maskMode, setMaskMode] = useState<MaskMode>("paint");
   const [clearKey, setClearKey] = useState(0);
@@ -90,7 +100,9 @@ export function EditScreen({ config }: { config?: ServerConfig }) {
   const [jobId, setJobId] = useState<string | null>(null);
   const [outputCount, setOutputCount] = useState(0);
   const [selectedOutput, setSelectedOutput] = useState(0);
-  const [pendingOutputCount, setPendingOutputCount] = useState<number | null>(null);
+  const [pendingOutputCount, setPendingOutputCount] = useState<number | null>(
+    null,
+  );
   const [localEvents, setLocalEvents] = useState<JobEvent[]>([]);
   const [runError, setRunError] = useState<string | null>(null);
   const [runNotice, setRunNotice] = useState<string | null>(null);
@@ -99,7 +111,10 @@ export function EditScreen({ config }: { config?: ServerConfig }) {
   const brushSliderId = useId();
 
   useEffect(() => {
-    if (providerNames.length > 0 && (!provider || !config?.providers[provider])) {
+    if (
+      providerNames.length > 0 &&
+      (!provider || !config?.providers[provider])
+    ) {
       setProvider(defaultProvider || providerNames[0]);
     }
   }, [config?.providers, defaultProvider, provider, providerNames]);
@@ -122,22 +137,30 @@ export function EditScreen({ config }: { config?: ServerConfig }) {
   const mutate = useCreateEdit();
   const isWorking = exportKey != null || mutate.isPending || running;
   const providerCfg = provider ? config?.providers[provider] : undefined;
-  const supportsMultipleOutputs = providerSupportsMultipleOutputs(config, provider);
+  const supportsMultipleOutputs = providerSupportsMultipleOutputs(
+    config,
+    provider,
+  );
   const editRegionMode = providerEditRegionMode(config, provider);
   const usesRegion = editMode === "region";
   const usesNativeMask = usesRegion && editRegionMode === "native-mask";
   const usesSoftRegion = usesRegion && editRegionMode === "reference-hint";
   const regionUnavailable = usesRegion && editRegionMode === "none";
   const maxReferenceImages = MAX_INPUT_IMAGES - (usesSoftRegion ? 1 : 0);
-  const referenceCountError = refs.length > maxReferenceImages
-    ? `最多上传 ${maxReferenceImages} 张参考图。`
-    : undefined;
+  const referenceCountError =
+    refs.length > maxReferenceImages
+      ? `最多上传 ${maxReferenceImages} 张参考图。`
+      : undefined;
   const sizeValidation = validateImageSize(size);
   const outputCountValidation = validateOutputCount(n);
-  const parameterError = referenceCountError ?? sizeValidation.message ?? (supportsMultipleOutputs ? outputCountValidation.message : undefined);
+  const parameterError =
+    referenceCountError ??
+    sizeValidation.message ??
+    (supportsMultipleOutputs ? outputCountValidation.message : undefined);
   const safeN = normalizeOutputCount(n);
   const actualN = effectiveOutputCount(config, provider, safeN);
-  const displayN = isWorking && pendingOutputCount != null ? pendingOutputCount : actualN;
+  const displayN =
+    isWorking && pendingOutputCount != null ? pendingOutputCount : actualN;
   const selectedRefObj = refs.find((ref) => ref.id === selectedRef);
   const targetRef = refs.find((ref) => ref.id === targetRefId) ?? refs[0];
 
@@ -166,13 +189,17 @@ export function EditScreen({ config }: { config?: ServerConfig }) {
       const available = Math.max(0, maxReferenceImages - prev.length);
       if (available === 0) {
         additions.forEach((ref) => URL.revokeObjectURL(ref.url));
-        toast.error("参考图已达上限", { description: `最多上传 ${maxReferenceImages} 张。` });
+        toast.error("参考图已达上限", {
+          description: `最多上传 ${maxReferenceImages} 张。`,
+        });
         return prev;
       }
       const accepted = additions.slice(0, available);
       additions.slice(available).forEach((ref) => URL.revokeObjectURL(ref.url));
       if (accepted.length < additions.length) {
-        toast.warning("已按上限添加参考图", { description: `最多上传 ${maxReferenceImages} 张。` });
+        toast.warning("已按上限添加参考图", {
+          description: `最多上传 ${maxReferenceImages} 张。`,
+        });
       }
       setSelectedRef((current) => current ?? accepted[0].id);
       setTargetRefId((current) => current ?? accepted[0].id);
@@ -182,6 +209,8 @@ export function EditScreen({ config }: { config?: ServerConfig }) {
 
   const removeRef = (id: string) => {
     setRefs((prev) => {
+      const removed = prev.find((ref) => ref.id === id);
+      if (removed) URL.revokeObjectURL(removed.url);
       const next = prev.filter((ref) => ref.id !== id);
       if (id === selectedRef) setSelectedRef(next[0]?.id ?? null);
       if (id === targetRefId) setTargetRefId(next[0]?.id ?? null);
@@ -192,6 +221,16 @@ export function EditScreen({ config }: { config?: ServerConfig }) {
       return next;
     });
   };
+
+  useEffect(() => {
+    refsRef.current = refs;
+  }, [refs]);
+
+  useEffect(() => {
+    return () => {
+      refsRef.current.forEach((ref) => URL.revokeObjectURL(ref.url));
+    };
+  }, []);
 
   const resetRunState = (preparingMessage: string) => {
     setRunError(null);
@@ -220,7 +259,11 @@ export function EditScreen({ config }: { config?: ServerConfig }) {
     }
 
     if (usesRegion) {
-      resetRunState(usesNativeMask ? "正在导出目标图和遮罩。" : "正在准备目标图和绿色选区参考。");
+      resetRunState(
+        usesNativeMask
+          ? "正在导出目标图和遮罩。"
+          : "正在准备目标图和绿色选区参考。",
+      );
       setExportKey(Date.now());
       return;
     }
@@ -259,7 +302,9 @@ export function EditScreen({ config }: { config?: ServerConfig }) {
         setExportKey(null);
         setRunError("请先涂抹要修改的区域。");
         setLocalEvents([failedEvent("请先涂抹要修改的区域。")]);
-        toast.error("还没有选区", { description: "请在目标图上涂抹要修改的区域。" });
+        toast.error("还没有选区", {
+          description: "请在目标图上涂抹要修改的区域。",
+        });
         return;
       }
       if (!targetRef) {
@@ -271,19 +316,34 @@ export function EditScreen({ config }: { config?: ServerConfig }) {
         refs
           .filter((ref) => ref.id !== targetRef.id)
           .forEach((ref, index) => {
-            form.append(`ref_${String(index + 1).padStart(2, "0")}`, ref.file, ref.name);
+            form.append(
+              `ref_${String(index + 1).padStart(2, "0")}`,
+              ref.file,
+              ref.name,
+            );
           });
         form.append("mask", blobFile(maskPayload.nativeMask, "mask.png"));
       }
       if (usesSoftRegion) {
         refs.forEach((ref, index) => {
-          form.append(`ref_${String(index).padStart(2, "0")}`, ref.file, ref.name);
+          form.append(
+            `ref_${String(index).padStart(2, "0")}`,
+            ref.file,
+            ref.name,
+          );
         });
-        form.append("selection_hint", blobFile(maskPayload.selectionHint, "selection-hint.png"));
+        form.append(
+          "selection_hint",
+          blobFile(maskPayload.selectionHint, "selection-hint.png"),
+        );
       }
     } else {
       refs.forEach((ref, index) => {
-        form.append(`ref_${String(index).padStart(2, "0")}`, ref.file, ref.name);
+        form.append(
+          `ref_${String(index).padStart(2, "0")}`,
+          ref.file,
+          ref.name,
+        );
       });
     }
 
@@ -329,24 +389,37 @@ export function EditScreen({ config }: { config?: ServerConfig }) {
       .map((_, index) => api.outputPath(jobId, index))
       .filter((path): path is string => Boolean(path));
   }, [jobId, outputCount]);
-  const selectedPath = jobId ? api.outputPath(jobId, selectedOutput) ?? outputPaths[0] : undefined;
+  const selectedPath = jobId
+    ? (api.outputPath(jobId, selectedOutput) ?? outputPaths[0])
+    : undefined;
   const saveSelected = () => saveImages([selectedPath], "图片");
   const saveAll = () => saveImages(outputPaths, "图片");
   const timelineEvents = events.length > 0 ? events : localEvents;
-  const hasOutputs = outputs.some((output) => output.url) || events.some((event) => event.type === "job.completed" || event.type === "output_saved");
+  const hasOutputs =
+    outputs.some((output) => output.url) ||
+    events.some(
+      (event) =>
+        event.type === "job.completed" || event.type === "output_saved",
+    );
   const outputSubtitle = usesRegion
     ? "设为目标图并涂抹要修改的区域，再点击右侧开始。"
     : "上传一张或多张参考图，写清楚希望如何融合或改动。";
 
   return (
-    <div
-      className="grid h-full grid-cols-[220px_minmax(260px,1fr)_260px] overflow-hidden xl:grid-cols-[248px_minmax(320px,1fr)_300px]"
-    >
-      <div className="flex flex-col overflow-auto border-r border-border bg-raised">
+    <div className="edit-layout">
+      <div className="edit-refs flex flex-col overflow-auto border-r border-border bg-raised">
         <div className="border-b border-border-faint p-4">
           <div className="mb-2.5 flex items-center justify-between">
-            <div className="t-h3">{usesRegion ? "目标图与参考图" : "参考图"}</div>
-            <span className={referenceCountError ? "t-tiny font-mono text-status-err" : "t-tiny font-mono"}>
+            <div className="t-h3">
+              {usesRegion ? "目标图与参考图" : "参考图"}
+            </div>
+            <span
+              className={
+                referenceCountError
+                  ? "t-tiny font-mono text-status-err"
+                  : "t-tiny font-mono"
+              }
+            >
               已上传 {refs.length}/{maxReferenceImages}
             </span>
           </div>
@@ -356,12 +429,22 @@ export function EditScreen({ config }: { config?: ServerConfig }) {
                 key={ref.id}
                 ref_={ref}
                 active={ref.id === selectedRef}
-                role={usesRegion ? (ref.id === targetRef?.id ? "target" : "reference") : undefined}
+                role={
+                  usesRegion
+                    ? ref.id === targetRef?.id
+                      ? "target"
+                      : "reference"
+                    : undefined
+                }
                 onSelect={() => setSelectedRef(ref.id)}
-                onSetTarget={usesRegion ? () => {
-                  setTargetRefId(ref.id);
-                  setSelectedRef(ref.id);
-                } : undefined}
+                onSetTarget={
+                  usesRegion
+                    ? () => {
+                        setTargetRefId(ref.id);
+                        setSelectedRef(ref.id);
+                      }
+                    : undefined
+                }
                 onRemove={() => removeRef(ref.id)}
               />
             ))}
@@ -372,7 +455,7 @@ export function EditScreen({ config }: { config?: ServerConfig }) {
                 fileInputRef.current?.click();
               }}
               disabled={refs.length >= maxReferenceImages}
-              className="flex aspect-square flex-col items-center justify-center gap-1 rounded-lg border-[1.5px] border-dashed border-border-strong bg-sunken text-muted disabled:cursor-not-allowed disabled:opacity-50"
+              className="touch-target flex aspect-square flex-col items-center justify-center gap-1 rounded-lg border-[1.5px] border-dashed border-border-strong bg-sunken text-muted disabled:cursor-not-allowed disabled:opacity-50"
             >
               <Icon name="plus" size={18} />
               <span className="text-[11px]">添加</span>
@@ -440,7 +523,12 @@ export function EditScreen({ config }: { config?: ServerConfig }) {
                 className="flex-1"
                 style={{ accentColor: "var(--accent)" }}
               />
-              <span className="t-mono min-w-5 text-right text-faint" aria-hidden="true">{brushSize}</span>
+              <span
+                className="t-mono min-w-5 text-right text-faint"
+                aria-hidden="true"
+              >
+                {brushSize}
+              </span>
             </div>
             <div className="mt-2 rounded-lg border border-border bg-sunken px-3 py-2 text-[11.5px] leading-relaxed text-muted">
               {regionModeHint(editRegionMode)}
@@ -466,16 +554,22 @@ export function EditScreen({ config }: { config?: ServerConfig }) {
             onChange={(event) => setPrompt(event.target.value)}
             minHeight={120}
             maxLength={4000}
-            placeholder={usesRegion ? "描述目标图选区里要变成什么..." : "描述如何参考这些图片进行编辑..."}
+            placeholder={
+              usesRegion
+                ? "描述目标图选区里要变成什么..."
+                : "描述如何参考这些图片进行编辑..."
+            }
           />
           <div className="mt-2 flex items-center gap-1.5 text-[11px] text-faint">
             <Icon name="info" size={11} aria-hidden="true" />
-            {usesRegion ? "越具体，选区外越容易保持稳定。" : "可以说明哪张图负责人物、风格、背景或物体。"}
+            {usesRegion
+              ? "越具体，选区外越容易保持稳定。"
+              : "可以说明哪张图负责人物、风格、背景或物体。"}
           </div>
         </div>
       </div>
 
-      <div className="gridpaper flex flex-col overflow-auto bg-background">
+      <div className="edit-canvas gridpaper flex flex-col overflow-auto bg-background">
         <div className="flex items-center gap-2.5 px-6 pb-3 pt-5">
           <Segmented
             value={editMode}
@@ -492,12 +586,18 @@ export function EditScreen({ config }: { config?: ServerConfig }) {
           />
           <div className="flex-1" />
           <span className="t-mono t-small">
-            {usesRegion ? targetRef?.name ?? "未选择目标图" : selectedRefObj?.name ?? refs[0]?.name ?? "—"}
+            {usesRegion
+              ? (targetRef?.name ?? "未选择目标图")
+              : (selectedRefObj?.name ?? refs[0]?.name ?? "—")}
           </span>
         </div>
 
         <div className="flex justify-center px-6">
-          <div style={{ width: "min(100%, clamp(280px, calc(100vh - 340px), 520px))" }}>
+          <div
+            style={{
+              width: "min(100%, clamp(280px, calc(100vh - 340px), 520px))",
+            }}
+          >
             {usesRegion ? (
               targetRef ? (
                 <MaskCanvas
@@ -510,13 +610,16 @@ export function EditScreen({ config }: { config?: ServerConfig }) {
                   snapshotKey={targetRef.id}
                   onSnapshotChange={(snapshot) => {
                     setMaskSnapshots((current) => {
-                      if (snapshot) return { ...current, [targetRef.id]: snapshot };
+                      if (snapshot)
+                        return { ...current, [targetRef.id]: snapshot };
                       const { [targetRef.id]: _removed, ...rest } = current;
                       return rest;
                     });
                   }}
                   exportKey={exportKey ?? undefined}
-                  onExport={(payload) => { void submit(payload); }}
+                  onExport={(payload) => {
+                    void submit(payload);
+                  }}
                 />
               ) : (
                 <div className="flex aspect-square items-center justify-center rounded-[10px] border border-border bg-sunken text-[12px] text-faint">
@@ -541,17 +644,49 @@ export function EditScreen({ config }: { config?: ServerConfig }) {
 
         <div className="flex flex-wrap items-center gap-2.5 px-6 pb-2 pt-5">
           <div className="t-h3">
-            {isWorking ? `输出 · 请求 ${displayN} 张` : hasOutputs ? `输出 · ${outputs.length} 张` : "输出 · 尚未生成"}
+            {isWorking
+              ? `输出 · 请求 ${displayN} 张`
+              : hasOutputs
+                ? `输出 · ${outputs.length} 张`
+                : "输出 · 尚未生成"}
           </div>
           <div className="flex-1" />
           {hasOutputs && (
             <>
-              <Button variant="ghost" size="sm" icon="download" onClick={saveSelected}>保存选中</Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                icon="download"
+                onClick={saveSelected}
+              >
+                保存选中
+              </Button>
               {outputs.length > 1 && (
-                <Button variant="ghost" size="sm" icon="download" onClick={saveAll}>保存全部</Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  icon="download"
+                  onClick={saveAll}
+                >
+                  保存全部
+                </Button>
               )}
-              <Button variant="ghost" size="sm" icon="folder" onClick={() => revealPath(selectedPath)}>打开文件夹</Button>
-              <Button variant="ghost" size="sm" icon="reload" onClick={handleRun}>重新生成</Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                icon="folder"
+                onClick={() => revealPath(selectedPath)}
+              >
+                打开文件夹
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                icon="reload"
+                onClick={handleRun}
+              >
+                重新生成
+              </Button>
             </>
           )}
         </div>
@@ -562,38 +697,50 @@ export function EditScreen({ config }: { config?: ServerConfig }) {
               icon="warn"
               title="编辑失败"
               subtitle={runError}
-              action={<Button variant="secondary" size="sm" icon="reload" onClick={handleRun}>重试</Button>}
+              action={
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  icon="reload"
+                  onClick={handleRun}
+                >
+                  重试
+                </Button>
+              }
             />
           ) : !hasOutputs && !isWorking ? (
-            <Empty
-              icon="image"
-              title="还没有输出"
-              subtitle={outputSubtitle}
-            />
+            <Empty icon="image" title="还没有输出" subtitle={outputSubtitle} />
           ) : (
             <div className="grid grid-cols-2 gap-4">
-              {isWorking && !hasOutputs &&
+              {isWorking &&
+                !hasOutputs &&
                 Array.from({ length: displayN }).map((_, index) => (
                   <div
                     key={index}
                     className="flex aspect-square items-center justify-center rounded-lg border border-border text-[11px] font-mono text-faint animate-shimmer"
                     style={{
-                      background: "linear-gradient(90deg, var(--bg-sunken) 0%, var(--bg-hover) 40%, var(--bg-sunken) 80%)",
+                      background:
+                        "linear-gradient(90deg, var(--bg-sunken) 0%, var(--bg-hover) 40%, var(--bg-sunken) 80%)",
                       backgroundSize: "200% 100%",
                     }}
                   >
                     生成中 · {String.fromCharCode(65 + index)}
                   </div>
                 ))}
-              {hasOutputs && outputs.map((output) => (
-                <OutputTile
-                  key={output.index}
-                  output={output}
-                  onSelect={() => setSelectedOutput(output.index)}
-                  onDownload={() => saveImages([api.outputPath(jobId!, output.index)], "图片")}
-                  onOpen={() => openPath(api.outputPath(jobId!, output.index))}
-                />
-              ))}
+              {hasOutputs &&
+                outputs.map((output) => (
+                  <OutputTile
+                    key={output.index}
+                    output={output}
+                    onSelect={() => setSelectedOutput(output.index)}
+                    onDownload={() =>
+                      saveImages([api.outputPath(jobId!, output.index)], "图片")
+                    }
+                    onOpen={() =>
+                      openPath(api.outputPath(jobId!, output.index))
+                    }
+                  />
+                ))}
             </div>
           )}
           {runNotice && !isWorking && (
@@ -604,11 +751,16 @@ export function EditScreen({ config }: { config?: ServerConfig }) {
         </div>
       </div>
 
-      <div className="flex flex-col overflow-hidden border-l border-border bg-raised">
+      <div className="edit-settings flex flex-col overflow-hidden border-t border-border bg-raised xl:border-l xl:border-t-0">
         <div className="border-b border-border-faint px-4 py-3.5">
           <Field label="服务商" id={providerSelectId}>
             <div className="flex h-9 items-center gap-1.5 rounded-md border border-border bg-sunken px-2.5 focus-within:border-accent focus-within:shadow-[0_0_0_3px_var(--accent-faint)] transition-colors">
-              <Icon name="cpu" size={14} aria-hidden="true" style={{ color: "var(--accent)" }} />
+              <Icon
+                name="cpu"
+                size={14}
+                aria-hidden="true"
+                style={{ color: "var(--accent)" }}
+              />
               <select
                 id={providerSelectId}
                 value={provider}
@@ -616,23 +768,40 @@ export function EditScreen({ config }: { config?: ServerConfig }) {
                 disabled={providerNames.length === 0}
                 className="flex-1 border-none bg-transparent text-[13px] font-medium outline-none disabled:cursor-not-allowed disabled:opacity-60"
               >
-                {providerNames.length === 0 && <option value="">（无可用 provider）</option>}
+                {providerNames.length === 0 && (
+                  <option value="">（无可用 provider）</option>
+                )}
                 {providerNames.map((name) => (
-                  <option key={name} value={name}>{name}</option>
+                  <option key={name} value={name}>
+                    {name}
+                  </option>
                 ))}
               </select>
-              {provider === defaultProvider && <Badge tone="neutral" size="sm">默认</Badge>}
+              {provider === defaultProvider && (
+                <Badge tone="neutral" size="sm">
+                  默认
+                </Badge>
+              )}
             </div>
             <div className="mt-1.5 flex items-center gap-1.5 text-[11px] text-muted">
-              <span className="t-mono truncate max-w-[160px]" title={providerCfg?.model ?? ""}>{providerCfg?.model ?? "—"}</span>
+              <span
+                className="t-mono truncate max-w-[160px]"
+                title={providerCfg?.model ?? ""}
+              >
+                {providerCfg?.model ?? "—"}
+              </span>
               <span aria-hidden="true">·</span>
-              <span className="truncate">{providerKindLabel(providerCfg?.type)}</span>
+              <span className="truncate">
+                {providerKindLabel(providerCfg?.type)}
+              </span>
             </div>
           </Field>
 
           {usesRegion && (
             <div className="mb-3 rounded-lg border border-border bg-sunken px-3 py-2 text-[11.5px] leading-relaxed text-muted">
-              <div className="font-semibold text-foreground">{regionModeLabel(editRegionMode)}</div>
+              <div className="font-semibold text-foreground">
+                {regionModeLabel(editRegionMode)}
+              </div>
               <div>{regionModeHint(editRegionMode)}</div>
             </div>
           )}
@@ -644,19 +813,35 @@ export function EditScreen({ config }: { config?: ServerConfig }) {
               </Field>
             </div>
             <Field label="质量">
-              <Select value={quality} onChange={(event) => setQuality(event.target.value)} options={QUALITY_OPTIONS} />
+              <Select
+                value={quality}
+                onChange={(event) => setQuality(event.target.value)}
+                options={QUALITY_OPTIONS}
+              />
             </Field>
             <Field label="格式">
-              <Select value={format} onChange={(event) => setFormat(event.target.value)} options={["png", "jpeg", "webp"]} />
+              <Select
+                value={format}
+                onChange={(event) => setFormat(event.target.value)}
+                options={["png", "jpeg", "webp"]}
+              />
             </Field>
             <Field label="背景">
-              <Select value={background} onChange={(event) => setBackground(event.target.value)} options={BACKGROUND_OPTIONS} />
+              <Select
+                value={background}
+                onChange={(event) => setBackground(event.target.value)}
+                options={BACKGROUND_OPTIONS}
+              />
             </Field>
           </div>
 
           <Field
             label="输出数量"
-            hint={supportsMultipleOutputs ? "可以一次生成多张候选" : "这个服务一次只返回一张"}
+            hint={
+              supportsMultipleOutputs
+                ? "可以一次生成多张候选"
+                : "这个服务一次只返回一张"
+            }
           >
             {supportsMultipleOutputs ? (
               <OutputCountInput value={n} onChange={setN} />
@@ -675,11 +860,21 @@ export function EditScreen({ config }: { config?: ServerConfig }) {
             size="lg"
             icon="sparkle"
             onClick={handleRun}
-            disabled={isWorking || refs.length === 0 || !provider || Boolean(parameterError) || regionUnavailable}
+            disabled={
+              isWorking ||
+              refs.length === 0 ||
+              !provider ||
+              Boolean(parameterError) ||
+              regionUnavailable
+            }
             kbd="⌘↵"
             className="w-full justify-center"
           >
-            {isWorking ? "编辑中..." : usesRegion ? "开始局部编辑" : "开始参考编辑"}
+            {isWorking
+              ? "编辑中..."
+              : usesRegion
+                ? "开始局部编辑"
+                : "开始参考编辑"}
           </Button>
           <div className="mt-2 flex justify-between text-[11px] text-faint">
             <span>
@@ -696,7 +891,11 @@ export function EditScreen({ config }: { config?: ServerConfig }) {
             <div className="t-h3">进度</div>
             {isWorking && <Spinner size={12} />}
             <div className="flex-1" />
-            {timelineEvents.length > 0 && <span className="t-tiny font-mono">{timelineEvents.length} 条</span>}
+            {timelineEvents.length > 0 && (
+              <span className="t-tiny font-mono">
+                {timelineEvents.length} 条
+              </span>
+            )}
           </div>
           <EventTimeline events={timelineEvents} mode={tweaks.timeline} />
         </div>
