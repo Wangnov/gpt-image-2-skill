@@ -15,6 +15,7 @@ export interface ProviderConfig {
   api_base?: string;
   endpoint?: string;
   model?: string;
+  supports_n?: boolean;
   credentials: Record<string, CredentialRef>;
   builtin?: boolean;
 }

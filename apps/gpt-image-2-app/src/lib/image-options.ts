@@ -5,6 +5,11 @@ export const QUALITY_OPTIONS = [
   { value: "high", label: "高" },
 ] as const;
 
+export const BACKGROUND_OPTIONS = [
+  { value: "auto", label: "自动" },
+  { value: "opaque", label: "不透明" },
+] as const;
+
 export const POPULAR_SIZE_OPTIONS = [
   { value: "auto", label: "自动" },
   { value: "1024x1024", label: "1024x1024 · 方图" },

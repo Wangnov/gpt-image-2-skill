@@ -89,6 +89,8 @@ export function ProviderDetail({
             <span className="t-mono">{prov.api_base ?? <span className="text-faint">— 使用内置</span>}</span>
             <span className="t-tiny pt-0.5">模型</span>
             <span className="t-mono">{prov.model ?? "—"}</span>
+            <span className="t-tiny pt-0.5">批量策略</span>
+            <span>{prov.supports_n ? "原生 -n 参数" : "并发单张请求"}</span>
           </div>
         </div>
       </Card>

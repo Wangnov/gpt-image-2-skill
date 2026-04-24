@@ -21,7 +21,7 @@ import { useJobEvents } from "@/hooks/use-job-events";
 import { useTweaks } from "@/hooks/use-tweaks";
 import { api } from "@/lib/api";
 import { completedEvent, errorMessage, failedEvent, outputCountDescription, outputCountMismatchMessage, responseOutputCount, submittedEvent } from "@/lib/job-feedback";
-import { normalizeOutputCount, QUALITY_OPTIONS, validateImageSize, validateOutputCount } from "@/lib/image-options";
+import { BACKGROUND_OPTIONS, normalizeOutputCount, QUALITY_OPTIONS, validateImageSize, validateOutputCount } from "@/lib/image-options";
 import { effectiveOutputCount, providerSupportsMultipleOutputs, requestOutputCount } from "@/lib/provider-capabilities";
 import { effectiveDefaultProvider, providerNames as readProviderNames } from "@/lib/providers";
 import type { JobEvent, ServerConfig } from "@/lib/types";
@@ -92,6 +92,12 @@ export function EditScreen({ config }: { config?: ServerConfig }) {
       setN(1);
     }
   }, [n, supportsMultipleOutputs]);
+
+  useEffect(() => {
+    if (background === "transparent") {
+      setBackground("auto");
+    }
+  }, [background]);
 
   const handleRun = () => {
     if (!provider || refs.length === 0 || isWorking) return;
@@ -375,7 +381,7 @@ export function EditScreen({ config }: { config?: ServerConfig }) {
               <Select value={format} onChange={(e) => setFormat(e.target.value)} options={["png", "jpeg", "webp"]} />
             </Field>
             <Field label="背景">
-              <Select value={background} onChange={(e) => setBackground(e.target.value)} options={[{ value: "auto", label: "自动" }, { value: "transparent", label: "透明" }, { value: "opaque", label: "不透明" }]} />
+              <Select value={background} onChange={(e) => setBackground(e.target.value)} options={BACKGROUND_OPTIONS} />
             </Field>
           </div>
 

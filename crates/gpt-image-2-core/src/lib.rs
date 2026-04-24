@@ -130,6 +130,7 @@ struct ProviderSelection {
     api_base: String,
     codex_endpoint: String,
     default_model: String,
+    supports_n: bool,
 }
 
 impl ProviderSelection {
@@ -142,6 +143,7 @@ impl ProviderSelection {
                 ProviderKind::Codex => "codex",
             },
             "reason": self.reason,
+            "supports_n": self.supports_n,
         })
     }
 }
@@ -173,6 +175,8 @@ pub struct ProviderConfig {
     pub model: Option<String>,
     #[serde(default)]
     pub credentials: BTreeMap<String, CredentialRef>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub supports_n: Option<bool>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -384,6 +388,10 @@ pub struct AddProviderArgs {
     pub access_token: Option<String>,
     #[arg(long)]
     pub refresh_token: Option<String>,
+    #[arg(long, action = ArgAction::SetTrue)]
+    pub supports_n: bool,
+    #[arg(long, action = ArgAction::SetTrue)]
+    pub no_supports_n: bool,
     #[arg(long, action = ArgAction::SetTrue)]
     pub set_default: bool,
 }
@@ -1906,6 +1914,9 @@ fn configured_provider_selection(
                     .model
                     .clone()
                     .unwrap_or_else(|| DEFAULT_OPENAI_MODEL.to_string()),
+                supports_n: provider
+                    .supports_n
+                    .unwrap_or(provider.provider_type == "openai"),
             })
         }
         "codex" => {
@@ -1924,6 +1935,7 @@ fn configured_provider_selection(
                     .model
                     .clone()
                     .unwrap_or_else(|| DEFAULT_CODEX_MODEL.to_string()),
+                supports_n: false,
             })
         }
         other => Err(AppError::new(
@@ -1974,6 +1986,7 @@ fn select_builtin_provider(cli: &Cli, requested: &str) -> Result<ProviderSelecti
                 api_base: cli.openai_api_base.clone(),
                 codex_endpoint: cli.endpoint.clone(),
                 default_model: DEFAULT_OPENAI_MODEL.to_string(),
+                supports_n: true,
             })
         }
         "codex" => {
@@ -1991,6 +2004,7 @@ fn select_builtin_provider(cli: &Cli, requested: &str) -> Result<ProviderSelecti
                 api_base: cli.openai_api_base.clone(),
                 codex_endpoint: cli.endpoint.clone(),
                 default_model: DEFAULT_CODEX_MODEL.to_string(),
+                supports_n: false,
             })
         }
         "auto" => {
@@ -2015,6 +2029,7 @@ fn select_builtin_provider(cli: &Cli, requested: &str) -> Result<ProviderSelecti
                     api_base: cli.openai_api_base.clone(),
                     codex_endpoint: cli.endpoint.clone(),
                     default_model: DEFAULT_OPENAI_MODEL.to_string(),
+                    supports_n: true,
                 })
             } else if codex_ready {
                 Ok(ProviderSelection {
@@ -2025,6 +2040,7 @@ fn select_builtin_provider(cli: &Cli, requested: &str) -> Result<ProviderSelecti
                     api_base: cli.openai_api_base.clone(),
                     codex_endpoint: cli.endpoint.clone(),
                     default_model: DEFAULT_CODEX_MODEL.to_string(),
+                    supports_n: false,
                 })
             } else {
                 Err(
@@ -2088,6 +2104,7 @@ fn select_request_provider(
             api_base: cli.openai_api_base.clone(),
             codex_endpoint: cli.endpoint.clone(),
             default_model: DEFAULT_CODEX_MODEL.to_string(),
+            supports_n: false,
         });
     }
     if matches!(
@@ -2106,6 +2123,7 @@ fn select_request_provider(
             api_base: cli.openai_api_base.clone(),
             codex_endpoint: cli.endpoint.clone(),
             default_model: DEFAULT_OPENAI_MODEL.to_string(),
+            supports_n: true,
         });
     }
     select_image_provider(cli)
@@ -3334,6 +3352,12 @@ fn run_config_add_provider(cli: &Cli, args: &AddProviderArgs) -> Result<CommandO
     validate_provider_name(&args.name)?;
     let path = cli_config_path(cli);
     let mut config = load_app_config(&path)?;
+    if args.supports_n && args.no_supports_n {
+        return Err(AppError::new(
+            "invalid_provider_config",
+            "Use either --supports-n or --no-supports-n, not both.",
+        ));
+    }
     let mut credentials = BTreeMap::new();
     if let Some(api_key) = &args.api_key {
         credentials.insert(
@@ -3382,6 +3406,13 @@ fn run_config_add_provider(cli: &Cli, args: &AddProviderArgs) -> Result<CommandO
             "codex" => Some(DEFAULT_CODEX_MODEL.to_string()),
             _ => Some(DEFAULT_OPENAI_MODEL.to_string()),
         });
+    let supports_n = if args.supports_n {
+        Some(true)
+    } else if args.no_supports_n {
+        Some(false)
+    } else {
+        None
+    };
     config.providers.insert(
         args.name.clone(),
         ProviderConfig {
@@ -3390,6 +3421,7 @@ fn run_config_add_provider(cli: &Cli, args: &AddProviderArgs) -> Result<CommandO
             endpoint: args.endpoint.clone(),
             model,
             credentials,
+            supports_n,
         },
     );
     if args.set_default || config.default_provider.is_none() {
@@ -4071,6 +4103,157 @@ fn run_codex_image_command(
     })
 }
 
+fn batch_output_path(output_path: &Path, index: usize) -> String {
+    let base_name = output_path
+        .file_stem()
+        .and_then(|stem| stem.to_str())
+        .or_else(|| output_path.file_name().and_then(|name| name.to_str()))
+        .unwrap_or("image");
+    let suffix = output_path
+        .extension()
+        .and_then(|ext| ext.to_str())
+        .map(|ext| format!(".{ext}"))
+        .unwrap_or_else(|| ".png".to_string());
+    output_path
+        .parent()
+        .unwrap_or_else(|| Path::new("."))
+        .join(format!("{base_name}-{}{}", index + 1, suffix))
+        .display()
+        .to_string()
+}
+
+fn output_files_from_payload(payload: &Value) -> Vec<Value> {
+    let output = payload.get("output").cloned().unwrap_or_else(|| json!({}));
+    let mut files = output
+        .get("files")
+        .and_then(Value::as_array)
+        .cloned()
+        .unwrap_or_default();
+    if files.is_empty()
+        && let Some(path) = output.get("path").and_then(Value::as_str)
+    {
+        files.push(json!({
+            "index": 0,
+            "path": path,
+            "bytes": output.get("bytes").and_then(Value::as_u64).unwrap_or(0),
+        }));
+    }
+    files
+}
+
+fn normalize_batch_saved_files(files: Vec<Value>) -> Vec<Value> {
+    files
+        .into_iter()
+        .enumerate()
+        .map(|(index, mut file)| {
+            if let Value::Object(object) = &mut file {
+                object.insert("index".to_string(), json!(index));
+            }
+            file
+        })
+        .collect()
+}
+
+fn run_batched_image_command(
+    cli: &Cli,
+    selection: &ProviderSelection,
+    shared: &SharedImageArgs,
+    operation: &str,
+    ref_images: &[String],
+    mask: Option<&str>,
+    input_fidelity: Option<InputFidelity>,
+) -> Result<CommandOutcome, AppError> {
+    let count = shared.n.unwrap_or(1);
+    let output_path = PathBuf::from(&shared.out);
+    let jobs = (0..count)
+        .map(|index| {
+            let mut next = shared.clone();
+            next.n = None;
+            next.out = batch_output_path(&output_path, index as usize);
+            next
+        })
+        .collect::<Vec<_>>();
+    let outcomes = std::thread::scope(|scope| {
+        let handles = jobs
+            .into_iter()
+            .map(|next| {
+                scope.spawn(move || {
+                    if matches!(selection.kind, ProviderKind::OpenAi) {
+                        run_openai_image_command(
+                            cli,
+                            selection,
+                            &next,
+                            operation,
+                            ref_images,
+                            mask,
+                            input_fidelity,
+                        )
+                    } else {
+                        run_codex_image_command(cli, selection, &next, operation, ref_images)
+                    }
+                })
+            })
+            .collect::<Vec<_>>();
+        let mut outcomes = Vec::with_capacity(handles.len());
+        for handle in handles {
+            outcomes.push(handle.join().map_err(|_| {
+                AppError::new(
+                    "batch_worker_failed",
+                    "Batch image request worker panicked.",
+                )
+            })??);
+        }
+        Ok::<_, AppError>(outcomes)
+    })?;
+    let saved_files = normalize_batch_saved_files(
+        outcomes
+            .iter()
+            .flat_map(|outcome| output_files_from_payload(&outcome.payload))
+            .collect(),
+    );
+    if saved_files.is_empty() {
+        return Err(AppError::new(
+            "missing_image_result",
+            "The batch response did not include generated images.",
+        ));
+    }
+    let primary_output_path = primary_saved_output_path(&output_path, &saved_files);
+    let history_job_id = record_history_job(
+        &format!("images {operation}"),
+        &selection.resolved,
+        "completed",
+        Some(&primary_output_path),
+        history_image_metadata(operation, selection, shared, &saved_files),
+    )
+    .ok();
+    Ok(CommandOutcome {
+        payload: json!({
+            "ok": true,
+            "command": format!("images {}", operation),
+            "provider": selection.resolved,
+            "provider_selection": selection.payload(),
+            "request": {
+                "operation": operation,
+                "provider": if matches!(selection.kind, ProviderKind::OpenAi) { "openai" } else { "codex" },
+                "n": count,
+                "batch_mode": "parallel-single-output",
+            },
+            "response": {
+                "image_count": saved_files.len(),
+                "batch_request_count": count,
+            },
+            "output": normalize_saved_output(&saved_files),
+            "history": {
+                "job_id": history_job_id,
+            },
+            "events": {
+                "count": outcomes.iter().filter_map(|outcome| outcome.payload.get("events").and_then(|events| events.get("count")).and_then(Value::as_u64)).sum::<u64>(),
+            }
+        }),
+        exit_status: 0,
+    })
+}
+
 fn run_images_command(
     cli: &Cli,
     subcommand: &ImagesSubcommand,
@@ -4078,7 +4261,23 @@ fn run_images_command(
     let selection = select_image_provider(cli)?;
     match subcommand {
         ImagesSubcommand::Generate(args) => {
-            validate_provider_specific_image_args(&selection.kind, &args.shared, None, None)?;
+            let use_batch = args.shared.n.unwrap_or(1) > 1 && !selection.supports_n;
+            let mut validation_shared = args.shared.clone();
+            if use_batch {
+                validation_shared.n = None;
+            }
+            validate_provider_specific_image_args(&selection.kind, &validation_shared, None, None)?;
+            if use_batch {
+                return run_batched_image_command(
+                    cli,
+                    &selection,
+                    &args.shared,
+                    "generate",
+                    &[],
+                    None,
+                    None,
+                );
+            }
             if matches!(selection.kind, ProviderKind::OpenAi) {
                 run_openai_image_command(cli, &selection, &args.shared, "generate", &[], None, None)
             } else {
@@ -4086,12 +4285,28 @@ fn run_images_command(
             }
         }
         ImagesSubcommand::Edit(args) => {
+            let use_batch = args.shared.n.unwrap_or(1) > 1 && !selection.supports_n;
+            let mut validation_shared = args.shared.clone();
+            if use_batch {
+                validation_shared.n = None;
+            }
             validate_provider_specific_image_args(
                 &selection.kind,
-                &args.shared,
+                &validation_shared,
                 args.mask.as_deref(),
                 args.input_fidelity,
             )?;
+            if use_batch {
+                return run_batched_image_command(
+                    cli,
+                    &selection,
+                    &args.shared,
+                    "edit",
+                    &args.ref_image,
+                    args.mask.as_deref(),
+                    args.input_fidelity,
+                );
+            }
             if matches!(selection.kind, ProviderKind::OpenAi) {
                 run_openai_image_command(
                     cli,
@@ -4476,6 +4691,7 @@ mod tests {
                         value: "sk-test".to_string(),
                     },
                 )]),
+                supports_n: Some(false),
             },
         );
         save_app_config(&config_path, &config).unwrap();
@@ -4500,6 +4716,7 @@ mod tests {
                     value: "sk-test".to_string(),
                 },
             )]),
+            supports_n: Some(true),
         };
         let selection = configured_provider_selection("local", &provider, "test", None).unwrap();
         assert_eq!(selection.resolved, "local");

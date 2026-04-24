@@ -1,15 +1,13 @@
 import type { ServerConfig } from "./types";
 
-export function providerSupportsMultipleOutputs(config: ServerConfig | undefined, provider: string) {
-  const providerConfig = provider ? config?.providers[provider] : undefined;
-  if (provider === "codex" || providerConfig?.type === "codex") return false;
+export function providerSupportsMultipleOutputs(_config: ServerConfig | undefined, _provider: string) {
   return true;
 }
 
-export function effectiveOutputCount(config: ServerConfig | undefined, provider: string, requested: number) {
-  return providerSupportsMultipleOutputs(config, provider) ? requested : 1;
+export function effectiveOutputCount(_config: ServerConfig | undefined, _provider: string, requested: number) {
+  return requested;
 }
 
-export function requestOutputCount(config: ServerConfig | undefined, provider: string, requested: number) {
-  return providerSupportsMultipleOutputs(config, provider) ? requested : undefined;
+export function requestOutputCount(_config: ServerConfig | undefined, _provider: string, requested: number) {
+  return requested;
 }

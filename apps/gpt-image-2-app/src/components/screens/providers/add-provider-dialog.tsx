@@ -12,6 +12,7 @@ export function AddProviderDialog({ open, onOpenChange }: { open: boolean; onOpe
   const [kind, setKind] = useState<ProviderKind>("openai-compatible");
   const [apiBase, setApiBase] = useState("https://example.com/v1");
   const [model, setModel] = useState("gpt-image-2");
+  const [supportsN, setSupportsN] = useState(false);
   const [keySource, setKeySource] = useState<CredentialSource>("file");
   const [apiKey, setApiKey] = useState("");
   const [envName, setEnvName] = useState("OPENAI_API_KEY");
@@ -27,6 +28,7 @@ export function AddProviderDialog({ open, onOpenChange }: { open: boolean; onOpe
     setKind("openai-compatible");
     setApiBase("https://example.com/v1");
     setModel("gpt-image-2");
+    setSupportsN(false);
     setKeySource("file");
     setApiKey("");
     setEnvName("OPENAI_API_KEY");
@@ -44,6 +46,7 @@ export function AddProviderDialog({ open, onOpenChange }: { open: boolean; onOpe
         type: kind,
         api_base: kind === "codex" ? undefined : apiBase || undefined,
         model: model || undefined,
+        supports_n: kind === "codex" ? false : supportsN,
         credentials:
           kind === "codex"
             ? {
@@ -89,7 +92,10 @@ export function AddProviderDialog({ open, onOpenChange }: { open: boolean; onOpe
         <Field label="类型">
           <Segmented
             value={kind}
-            onChange={setKind}
+            onChange={(next) => {
+              setKind(next);
+              setSupportsN(next === "openai");
+            }}
             className="w-full overflow-x-auto"
             options={[
               { value: "openai-compatible", label: "OpenAI 兼容" },
@@ -105,6 +111,26 @@ export function AddProviderDialog({ open, onOpenChange }: { open: boolean; onOpe
         )}
         <Field label="模型">
           <Input value={model} onChange={(e) => setModel(e.target.value)} placeholder="gpt-image-2" monospace />
+        </Field>
+        <Field
+          label="批量策略"
+          hint={kind === "codex" ? "Codex 固定并发单张请求" : "关闭后会并发单张请求"}
+        >
+          {kind === "codex" ? (
+            <div className="flex h-8 items-center justify-between rounded-md border border-border bg-sunken px-2.5 text-[12px]">
+              <span className="font-semibold">不支持 -n</span>
+              <span className="text-faint">批量并发</span>
+            </div>
+          ) : (
+            <Segmented
+              value={supportsN ? "yes" : "no"}
+              onChange={(value) => setSupportsN(value === "yes")}
+              options={[
+                { value: "no", label: "批量并发" },
+                { value: "yes", label: "支持 -n 参数" },
+              ]}
+            />
+          )}
         </Field>
       </div>
       {kind === "codex" && (

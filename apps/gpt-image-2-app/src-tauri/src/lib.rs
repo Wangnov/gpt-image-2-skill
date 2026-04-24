@@ -2,6 +2,7 @@ use std::{
     collections::BTreeMap,
     fs,
     path::{Path, PathBuf},
+    thread,
     time::{SystemTime, UNIX_EPOCH},
 };
 
@@ -35,6 +36,7 @@ fn config_for_ui(config: &AppConfig) -> Value {
                 "model": "gpt-5.4",
                 "credentials": {},
                 "builtin": true,
+                "supports_n": false,
             })
         });
         providers.entry("openai".to_string()).or_insert_with(|| {
@@ -46,6 +48,7 @@ fn config_for_ui(config: &AppConfig) -> Value {
                     "api_key": {"source": "env", "env": "OPENAI_API_KEY"}
                 },
                 "builtin": true,
+                "supports_n": true,
             })
         });
     }
@@ -87,6 +90,8 @@ struct ProviderInput {
     model: Option<String>,
     #[serde(default)]
     credentials: BTreeMap<String, CredentialInput>,
+    #[serde(default)]
+    supports_n: Option<bool>,
     #[serde(default)]
     set_default: bool,
 }
@@ -202,6 +207,7 @@ fn convert_provider_input(
             endpoint: input.endpoint,
             model: input.model,
             credentials,
+            supports_n: input.supports_n,
         },
         input.set_default,
     ))
@@ -236,7 +242,7 @@ fn output_extension(format: Option<&str>) -> &str {
     }
 }
 
-fn provider_accepts_multiple_outputs(provider: Option<&str>) -> bool {
+fn provider_supports_n(provider: Option<&str>) -> bool {
     let config = load_config().ok();
     let selected = provider
         .and_then(|name| {
@@ -256,13 +262,118 @@ fn provider_accepts_multiple_outputs(provider: Option<&str>) -> bool {
 
     match selected {
         Some("codex") => false,
+        Some("openai") => true,
         Some(name) => config
             .as_ref()
             .and_then(|config| config.providers.get(name))
-            .map(|provider| provider.provider_type != "codex")
-            .unwrap_or(true),
+            .map(|provider| {
+                provider
+                    .supports_n
+                    .unwrap_or(provider.provider_type == "openai")
+            })
+            .unwrap_or(false),
         None => true,
     }
+}
+
+fn requested_n(n: Option<u8>) -> Result<u8, String> {
+    match n.unwrap_or(1) {
+        1..=10 => Ok(n.unwrap_or(1)),
+        _ => Err("Output count must be between 1 and 10.".to_string()),
+    }
+}
+
+fn batch_output_path(dir: &Path, format: Option<&str>, index: u8) -> PathBuf {
+    dir.join(format!("out-{}.{}", index + 1, output_extension(format)))
+}
+
+fn run_cli_batch(args_list: Vec<Vec<String>>) -> Result<Vec<Value>, String> {
+    thread::scope(|scope| {
+        let handles = args_list
+            .into_iter()
+            .map(|args| scope.spawn(move || cli_json_result(&args)))
+            .collect::<Vec<_>>();
+        let mut payloads = Vec::with_capacity(handles.len());
+        for handle in handles {
+            let payload = handle
+                .join()
+                .map_err(|_| "Batch image request worker panicked.".to_string())??;
+            payloads.push(payload);
+        }
+        Ok(payloads)
+    })
+}
+
+fn output_files_from_payload(payload: &Value) -> Vec<Value> {
+    let output = payload.get("output").cloned().unwrap_or_else(|| json!({}));
+    let mut files = output
+        .get("files")
+        .and_then(Value::as_array)
+        .cloned()
+        .unwrap_or_default();
+    if files.is_empty()
+        && let Some(path) = output.get("path").and_then(Value::as_str)
+    {
+        files.push(json!({
+            "index": 0,
+            "path": path,
+            "bytes": output.get("bytes").and_then(Value::as_u64).unwrap_or(0),
+        }));
+    }
+    files
+}
+
+fn normalize_batch_output(files: Vec<Value>) -> Value {
+    let indexed_files = files
+        .into_iter()
+        .enumerate()
+        .map(|(index, mut file)| {
+            if let Value::Object(object) = &mut file {
+                object.insert("index".to_string(), json!(index));
+            }
+            file
+        })
+        .collect::<Vec<_>>();
+    let total_bytes = indexed_files
+        .iter()
+        .filter_map(|file| file.get("bytes").and_then(Value::as_u64))
+        .sum::<u64>();
+    let primary_path = indexed_files
+        .first()
+        .and_then(|file| file.get("path"))
+        .cloned()
+        .unwrap_or(Value::Null);
+    json!({
+        "path": primary_path,
+        "bytes": total_bytes,
+        "files": indexed_files,
+    })
+}
+
+fn merge_batch_payloads(command: &str, payloads: &[Value]) -> Value {
+    let files = payloads
+        .iter()
+        .flat_map(output_files_from_payload)
+        .collect::<Vec<_>>();
+    let first = payloads.first().cloned().unwrap_or_else(|| json!({}));
+    let output = normalize_batch_output(files);
+    json!({
+        "ok": true,
+        "command": command,
+        "provider": first.get("provider").cloned().unwrap_or(Value::Null),
+        "provider_selection": first.get("provider_selection").cloned().unwrap_or(Value::Null),
+        "auth": first.get("auth").cloned().unwrap_or(Value::Null),
+        "request": first.get("request").cloned().unwrap_or(Value::Null),
+        "response": {
+            "image_count": output.get("files").and_then(Value::as_array).map(Vec::len).unwrap_or(0),
+            "batch_request_count": payloads.len(),
+        },
+        "output": output,
+        "batch": {
+            "mode": "parallel-single-output",
+            "request_count": payloads.len(),
+        },
+    })
 }
 
 fn job_from_payload(payload: &Value, fallback_id: &str, command: &str, request: Value) -> Value {
@@ -435,41 +546,57 @@ async fn generate_image(request: GenerateRequest) -> Result<Value, String> {
             return Err("Prompt is required.".to_string());
         }
         let (fallback_id, dir) = unique_job_dir()?;
-        let out = dir.join(format!(
-            "out.{}",
-            output_extension(request.format.as_deref())
-        ));
-        let mut args = Vec::new();
-        if let Some(provider) = request.provider.as_deref()
-            && !provider.is_empty()
-        {
-            args.push("--provider".to_string());
-            args.push(provider.to_string());
-        }
-        args.extend([
-            "images".to_string(),
-            "generate".to_string(),
-            "--prompt".to_string(),
-            request.prompt.clone(),
-            "--out".to_string(),
-            out.display().to_string(),
-        ]);
-        push_optional(&mut args, "--size", request.size.as_deref());
-        push_optional(&mut args, "--format", request.format.as_deref());
-        push_optional(&mut args, "--quality", request.quality.as_deref());
-        push_optional(&mut args, "--background", request.background.as_deref());
-        push_optional(&mut args, "--moderation", request.moderation.as_deref());
-        if provider_accepts_multiple_outputs(request.provider.as_deref())
-            && let Some(n) = request.n
-        {
-            args.push("--n".to_string());
-            args.push(n.to_string());
-        }
-        if let Some(compression) = request.compression {
-            args.push("--compression".to_string());
-            args.push(compression.to_string());
-        }
-        let payload = cli_json_result(&args)?;
+        let count = requested_n(request.n)?;
+        let use_native_n = count == 1 || provider_supports_n(request.provider.as_deref());
+        let make_args = |out: PathBuf, n: Option<u8>| {
+            let mut args = Vec::new();
+            if let Some(provider) = request.provider.as_deref()
+                && !provider.is_empty()
+            {
+                args.push("--provider".to_string());
+                args.push(provider.to_string());
+            }
+            args.extend([
+                "images".to_string(),
+                "generate".to_string(),
+                "--prompt".to_string(),
+                request.prompt.clone(),
+                "--out".to_string(),
+                out.display().to_string(),
+            ]);
+            push_optional(&mut args, "--size", request.size.as_deref());
+            push_optional(&mut args, "--format", request.format.as_deref());
+            push_optional(&mut args, "--quality", request.quality.as_deref());
+            push_optional(&mut args, "--background", request.background.as_deref());
+            push_optional(&mut args, "--moderation", request.moderation.as_deref());
+            if let Some(n) = n {
+                args.push("--n".to_string());
+                args.push(n.to_string());
+            }
+            if let Some(compression) = request.compression {
+                args.push("--compression".to_string());
+                args.push(compression.to_string());
+            }
+            args
+        };
+        let payload = if use_native_n {
+            let out = dir.join(format!(
+                "out.{}",
+                output_extension(request.format.as_deref())
+            ));
+            cli_json_result(&make_args(out, request.n))?
+        } else {
+            let args_list = (0..count)
+                .map(|index| {
+                    make_args(
+                        batch_output_path(&dir, request.format.as_deref(), index),
+                        None,
+                    )
+                })
+                .collect::<Vec<_>>();
+            let payloads = run_cli_batch(args_list)?;
+            merge_batch_payloads("images generate", &payloads)
+        };
         let request_meta = serde_json::to_value(&request).unwrap_or_else(|_| json!({}));
         let job = job_from_payload(&payload, &fallback_id, "images generate", request_meta);
         Ok(json!({
@@ -498,10 +625,6 @@ async fn edit_image(request: EditRequest) -> Result<Value, String> {
             return Err("At least one reference image is required.".to_string());
         }
         let (fallback_id, dir) = unique_job_dir()?;
-        let out = dir.join(format!(
-            "out.{}",
-            output_extension(request.format.as_deref())
-        ));
         let mut ref_paths = Vec::new();
         for (index, upload) in request.refs.iter().enumerate() {
             let ext = Path::new(&upload.name)
@@ -519,50 +642,70 @@ async fn edit_image(request: EditRequest) -> Result<Value, String> {
         } else {
             None
         };
-        let mut args = Vec::new();
-        if let Some(provider) = request.provider.as_deref()
-            && !provider.is_empty()
-        {
-            args.push("--provider".to_string());
-            args.push(provider.to_string());
-        }
-        args.extend([
-            "images".to_string(),
-            "edit".to_string(),
-            "--prompt".to_string(),
-            request.prompt.clone(),
-            "--out".to_string(),
-            out.display().to_string(),
-        ]);
-        for path in &ref_paths {
-            args.push("--ref-image".to_string());
-            args.push(path.display().to_string());
-        }
-        if let Some(path) = &mask_path {
-            args.push("--mask".to_string());
-            args.push(path.display().to_string());
-        }
-        push_optional(&mut args, "--size", request.size.as_deref());
-        push_optional(&mut args, "--format", request.format.as_deref());
-        push_optional(&mut args, "--quality", request.quality.as_deref());
-        push_optional(&mut args, "--background", request.background.as_deref());
-        push_optional(
-            &mut args,
-            "--input-fidelity",
-            request.input_fidelity.as_deref(),
-        );
-        push_optional(&mut args, "--moderation", request.moderation.as_deref());
-        if provider_accepts_multiple_outputs(request.provider.as_deref())
-            && let Some(n) = request.n
-        {
-            args.push("--n".to_string());
-            args.push(n.to_string());
-        }
-        if let Some(compression) = request.compression {
-            args.push("--compression".to_string());
-            args.push(compression.to_string());
-        }
-        let payload = cli_json_result(&args)?;
+        let count = requested_n(request.n)?;
+        let use_native_n = count == 1 || provider_supports_n(request.provider.as_deref());
+        let make_args = |out: PathBuf, n: Option<u8>| {
+            let mut args = Vec::new();
+            if let Some(provider) = request.provider.as_deref()
+                && !provider.is_empty()
+            {
+                args.push("--provider".to_string());
+                args.push(provider.to_string());
+            }
+            args.extend([
+                "images".to_string(),
+                "edit".to_string(),
+                "--prompt".to_string(),
+                request.prompt.clone(),
+                "--out".to_string(),
+                out.display().to_string(),
+            ]);
+            for path in &ref_paths {
+                args.push("--ref-image".to_string());
+                args.push(path.display().to_string());
+            }
+            if let Some(path) = &mask_path {
+                args.push("--mask".to_string());
+                args.push(path.display().to_string());
+            }
+            push_optional(&mut args, "--size", request.size.as_deref());
+            push_optional(&mut args, "--format", request.format.as_deref());
+            push_optional(&mut args, "--quality", request.quality.as_deref());
+            push_optional(&mut args, "--background", request.background.as_deref());
+            push_optional(
+                &mut args,
+                "--input-fidelity",
+                request.input_fidelity.as_deref(),
+            );
+            push_optional(&mut args, "--moderation", request.moderation.as_deref());
+            if let Some(n) = n {
+                args.push("--n".to_string());
+                args.push(n.to_string());
+            }
+            if let Some(compression) = request.compression {
+                args.push("--compression".to_string());
+                args.push(compression.to_string());
+            }
+            args
+        };
+        let payload = if use_native_n {
+            let out = dir.join(format!(
+                "out.{}",
+                output_extension(request.format.as_deref())
+            ));
+            cli_json_result(&make_args(out, request.n))?
+        } else {
+            let args_list = (0..count)
+                .map(|index| {
+                    make_args(
+                        batch_output_path(&dir, request.format.as_deref(), index),
+                        None,
+                    )
+                })
+                .collect::<Vec<_>>();
+            let payloads = run_cli_batch(args_list)?;
+            merge_batch_payloads("images edit", &payloads)
+        };
         let request_meta = json!({
             "prompt": request.prompt,
             "provider": request.provider,
