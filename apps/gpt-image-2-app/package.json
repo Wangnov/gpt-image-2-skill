@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc --noEmit && vite build",
+    "prepare:sidecar": "node scripts/prepare-sidecar.mjs",
     "typecheck": "tsc --noEmit",
     "tauri": "tauri"
   },
