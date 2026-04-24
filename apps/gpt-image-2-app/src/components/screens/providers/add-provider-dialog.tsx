@@ -71,7 +71,8 @@ export function AddProviderDialog({ open, onOpenChange }: { open: boolean; onOpe
       open={open}
       onOpenChange={onOpenChange}
       title="添加服务商"
-      width={520}
+      width={560}
+      maxHeight={640}
       footer={
         <>
           <Button variant="ghost" onClick={() => onOpenChange(false)}>取消</Button>
@@ -81,30 +82,33 @@ export function AddProviderDialog({ open, onOpenChange }: { open: boolean; onOpe
         </>
       }
     >
-      <Field label="名称" hint="config.json 里的键">
-        <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="例如 my-image-api" autoFocus />
-      </Field>
-      <Field label="类型">
-        <Segmented
-          value={kind}
-          onChange={setKind}
-          options={[
-            { value: "openai-compatible", label: "OpenAI 兼容" },
-            { value: "openai", label: "OpenAI 官方" },
-            { value: "codex", label: "Codex" },
-          ]}
-        />
-      </Field>
-      {kind !== "codex" && (
-        <Field label="Base URL">
-          <Input value={apiBase} onChange={(e) => setApiBase(e.target.value)} placeholder="https://example.com/v1" monospace />
+      <div className="grid gap-3.5">
+        <Field label="名称" hint="config.json 里的键">
+          <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="例如 my-image-api" autoFocus />
         </Field>
-      )}
-      <Field label="模型">
-        <Input value={model} onChange={(e) => setModel(e.target.value)} placeholder="gpt-image-2" monospace />
-      </Field>
+        <Field label="类型">
+          <Segmented
+            value={kind}
+            onChange={setKind}
+            className="w-full overflow-x-auto"
+            options={[
+              { value: "openai-compatible", label: "OpenAI 兼容" },
+              { value: "openai", label: "OpenAI 官方" },
+              { value: "codex", label: "Codex" },
+            ]}
+          />
+        </Field>
+        {kind !== "codex" && (
+          <Field label="Base URL">
+            <Input value={apiBase} onChange={(e) => setApiBase(e.target.value)} placeholder="https://example.com/v1" monospace />
+          </Field>
+        )}
+        <Field label="模型">
+          <Input value={model} onChange={(e) => setModel(e.target.value)} placeholder="gpt-image-2" monospace />
+        </Field>
+      </div>
       {kind === "codex" && (
-        <>
+        <div className="mt-1 grid gap-3.5">
           <Field label="ChatGPT Account ID">
             <Input value={codexAccountId} onChange={(e) => setCodexAccountId(e.target.value)} placeholder="account-id，可留空使用 auth.json" monospace />
           </Field>
@@ -114,14 +118,15 @@ export function AddProviderDialog({ open, onOpenChange }: { open: boolean; onOpe
           <Field label="Refresh Token">
             <Input value={codexRefreshToken} onChange={(e) => setCodexRefreshToken(e.target.value)} placeholder="可选" type="password" monospace />
           </Field>
-        </>
+        </div>
       )}
       {kind !== "codex" && (
-        <>
+        <div className="mt-1 grid gap-3.5">
           <Field label="API Key 来源">
             <Segmented
               value={keySource}
               onChange={(v) => setKeySource(v as CredentialSource)}
+              className="w-full overflow-x-auto"
               options={[
                 { value: "file", label: "file", icon: "filedot" },
                 { value: "env", label: "env", icon: "envkey" },
@@ -149,7 +154,7 @@ export function AddProviderDialog({ open, onOpenChange }: { open: boolean; onOpe
               </Field>
             </>
           )}
-        </>
+        </div>
       )}
     </Dialog>
   );
