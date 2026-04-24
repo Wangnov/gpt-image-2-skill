@@ -10,12 +10,12 @@ import { Button } from "@/components/ui/button";
 import { CommandPalette } from "@/components/command-palette";
 import { AppToolbar } from "@/components/shell/toolbar";
 import { Sidebar, type ScreenId } from "@/components/shell/sidebar";
-import { TweaksPanel } from "@/components/tweaks-panel";
 import { WindowChrome } from "@/components/shell/window-chrome";
 import { GenerateScreen } from "@/components/screens/generate";
 import { EditScreen } from "@/components/screens/edit";
 import { HistoryScreen } from "@/components/screens/history";
 import { ProvidersScreen } from "@/components/screens/providers";
+import { SettingsScreen } from "@/components/screens/settings";
 import { useConfig } from "@/hooks/use-config";
 import { useJobNotifications } from "@/hooks/use-job-notifications";
 import { useJobs } from "@/hooks/use-jobs";
@@ -73,7 +73,8 @@ function readInitialScreen(): ScreenId {
       s === "generate" ||
       s === "edit" ||
       s === "history" ||
-      s === "providers"
+      s === "providers" ||
+      s === "settings"
     )
       return s;
   } catch {
@@ -87,11 +88,11 @@ const TITLES: Record<ScreenId, { title: string; subtitle: string }> = {
   edit: { title: "图像编辑", subtitle: "上传参考图、涂抹遮罩、描述变更" },
   history: { title: "任务", subtitle: "查看正在运行、已完成和失败的生成记录" },
   providers: { title: "服务商", subtitle: "管理生成图片时使用的服务" },
+  settings: { title: "设置", subtitle: "外观、队列与通知偏好" },
 };
 
 export default function App() {
   const [screen, setScreenState] = useState<ScreenId>(readInitialScreen);
-  const [tweaksOpen, setTweaksOpen] = useState(false);
   const [paletteOpen, setPaletteOpen] = useState(false);
   const {
     data: config,
@@ -161,11 +162,9 @@ export default function App() {
                     variant="ghost"
                     size="icon"
                     icon="gear"
-                    onClick={() => setTweaksOpen((o) => !o)}
-                    aria-label="外观与偏好设置"
-                    aria-pressed={tweaksOpen}
-                    aria-expanded={tweaksOpen}
-                    data-tweaks-toggle
+                    onClick={() => setScreen("settings")}
+                    aria-label="打开设置"
+                    aria-pressed={screen === "settings"}
                   />
                   <Button
                     variant="solidDark"
@@ -197,12 +196,9 @@ export default function App() {
                   {screen === "providers" && (
                     <ProvidersScreen config={config} />
                   )}
+                  {screen === "settings" && <SettingsScreen />}
                 </ScreenErrorBoundary>
               </div>
-              <TweaksPanel
-                visible={tweaksOpen}
-                onClose={() => setTweaksOpen(false)}
-              />
             </main>
           </div>
           <CommandPalette

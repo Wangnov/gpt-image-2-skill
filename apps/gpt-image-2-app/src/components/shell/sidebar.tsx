@@ -5,13 +5,19 @@ import type { ServerConfig } from "@/lib/types";
 import { defaultProviderLabel, effectiveDefaultProvider } from "@/lib/providers";
 import logoUrl from "@/assets/logo.png";
 
-export type ScreenId = "generate" | "edit" | "history" | "providers";
+export type ScreenId =
+  | "generate"
+  | "edit"
+  | "history"
+  | "providers"
+  | "settings";
 
 const NAV: { id: ScreenId; label: string; icon: IconName; kbd: string }[] = [
   { id: "generate", label: "生成", icon: "generate", kbd: "1" },
   { id: "edit", label: "编辑", icon: "edit", kbd: "2" },
   { id: "history", label: "任务", icon: "history", kbd: "3" },
   { id: "providers", label: "服务商", icon: "providers", kbd: "4" },
+  { id: "settings", label: "设置", icon: "gear", kbd: "5" },
 ];
 
 function SidebarItem({

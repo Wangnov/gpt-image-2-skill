@@ -97,4 +97,7 @@ export type Tweaks = {
   accent: "green" | "black" | "blue" | "violet" | "orange";
   font: "system" | "mono" | "serif";
   density: "compact" | "comfortable";
+  maxParallel: number;
+  notifyOnComplete: boolean;
+  notifyOnFailure: boolean;
 };

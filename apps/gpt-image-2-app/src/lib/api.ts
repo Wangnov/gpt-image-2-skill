@@ -112,9 +112,19 @@ async function fileToUpload(file: File) {
   };
 }
 
+export type ConfigPaths = {
+  config_dir: string;
+  config_file: string;
+  history_file: string;
+  jobs_dir: string;
+};
+
 export const api = {
   async getConfig() {
     return normalizeConfig(await invoke<ServerConfig>("get_config"));
+  },
+  async configPaths() {
+    return invoke<ConfigPaths>("config_path");
   },
   async setDefault(name: string) {
     return normalizeConfig(await invoke<ServerConfig>("set_default_provider", { name }));

@@ -28,9 +28,15 @@ export function useGlobalShortcuts(callbacks: {
         callbacks.onCommand?.();
         return;
       }
-      if (mod && !e.shiftKey && ["1", "2", "3", "4"].includes(e.key)) {
+      if (mod && !e.shiftKey && ["1", "2", "3", "4", "5"].includes(e.key)) {
         e.preventDefault();
-        const map: Record<string, string> = { "1": "generate", "2": "edit", "3": "history", "4": "providers" };
+        const map: Record<string, string> = {
+          "1": "generate",
+          "2": "edit",
+          "3": "history",
+          "4": "providers",
+          "5": "settings",
+        };
         callbacks.onScreen?.(map[e.key]);
       }
     };

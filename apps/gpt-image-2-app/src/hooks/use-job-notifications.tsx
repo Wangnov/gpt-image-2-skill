@@ -2,6 +2,7 @@ import { useEffect, useRef } from "react";
 import { listen } from "@tauri-apps/api/event";
 import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
+import { useTweaks } from "@/hooks/use-tweaks";
 import type { Job, JobStatus } from "@/lib/types";
 
 type OpenJob = (jobId: string) => void;
@@ -50,6 +51,9 @@ export function useJobNotifications(jobs: Job[] | undefined, onOpen: OpenJob) {
   const qc = useQueryClient();
   const known = useRef(new Map<string, JobStatus>());
   const initialized = useRef(false);
+  const { tweaks } = useTweaks();
+  const notifyOnComplete = tweaks.notifyOnComplete;
+  const notifyOnFailure = tweaks.notifyOnFailure;
 
   useEffect(() => {
     let disposed = false;
@@ -82,10 +86,16 @@ export function useJobNotifications(jobs: Job[] | undefined, onOpen: OpenJob) {
       const previous = known.current.get(job.id);
       if (previous !== job.status) {
         if (previous && terminalStatuses.has(job.status)) {
-          notifyTerminal(job, onOpen);
+          const allowed =
+            job.status === "completed"
+              ? notifyOnComplete
+              : job.status === "failed"
+                ? notifyOnFailure
+                : notifyOnFailure;
+          if (allowed) notifyTerminal(job, onOpen);
         }
         known.current.set(job.id, job.status);
       }
     }
-  }, [jobs, onOpen]);
+  }, [jobs, onOpen, notifyOnComplete, notifyOnFailure]);
 }

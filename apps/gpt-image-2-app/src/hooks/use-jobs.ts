@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/lib/api";
-import type { GenerateRequest, Job } from "@/lib/types";
+import type { GenerateRequest, Job, QueueStatus } from "@/lib/types";
 
 export function useJobs() {
   return useQuery<Job[]>({
@@ -54,5 +54,13 @@ export function useCancelJob() {
   return useMutation({
     mutationFn: (id: string) => api.cancelJob(id),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["jobs"] }),
+  });
+}
+
+export function useQueueStatus() {
+  return useQuery<QueueStatus>({
+    queryKey: ["queue-status"],
+    queryFn: api.queueStatus,
+    refetchInterval: 3_000,
   });
 }

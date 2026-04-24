@@ -7,6 +7,7 @@ import {
   useState,
   type ReactNode,
 } from "react";
+import { invoke } from "@tauri-apps/api/core";
 import type { Tweaks } from "@/lib/types";
 
 const DEFAULT_TWEAKS: Tweaks = {
@@ -14,6 +15,9 @@ const DEFAULT_TWEAKS: Tweaks = {
   accent: "green",
   font: "system",
   density: "comfortable",
+  maxParallel: 2,
+  notifyOnComplete: true,
+  notifyOnFailure: true,
 };
 
 const STORAGE_KEY = "gpt2.tweaks";
@@ -25,12 +29,22 @@ type Ctx = {
 
 const TweaksContext = createContext<Ctx | undefined>(undefined);
 
+function clampParallel(value: unknown): number {
+  const n = typeof value === "number" ? value : Number(value);
+  if (!Number.isFinite(n)) return DEFAULT_TWEAKS.maxParallel;
+  return Math.min(8, Math.max(1, Math.round(n)));
+}
+
 function load(): Tweaks {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (!raw) return DEFAULT_TWEAKS;
     const parsed = JSON.parse(raw);
-    return { ...DEFAULT_TWEAKS, ...parsed };
+    return {
+      ...DEFAULT_TWEAKS,
+      ...parsed,
+      maxParallel: clampParallel(parsed?.maxParallel),
+    };
   } catch {
     return DEFAULT_TWEAKS;
   }
@@ -52,8 +66,22 @@ export function TweaksProvider({ children }: { children: ReactNode }) {
     }
   }, [tweaks]);
 
+  useEffect(() => {
+    void invoke("set_queue_concurrency", {
+      maxParallel: tweaks.maxParallel,
+    }).catch(() => {
+      /* backend will log; UI stays responsive */
+    });
+  }, [tweaks.maxParallel]);
+
   const setTweaks = useCallback((partial: Partial<Tweaks>) => {
-    setTweaksState((prev) => ({ ...prev, ...partial }));
+    setTweaksState((prev) => {
+      const next = { ...prev, ...partial };
+      if (partial.maxParallel !== undefined) {
+        next.maxParallel = clampParallel(partial.maxParallel);
+      }
+      return next;
+    });
   }, []);
 
   return createElement(

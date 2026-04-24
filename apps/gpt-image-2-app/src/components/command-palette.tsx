@@ -69,6 +69,12 @@ export function CommandPalette({
         action: () => setScreen("providers"),
       },
       {
+        group: "跳转",
+        label: "设置",
+        icon: "gear",
+        action: () => setScreen("settings"),
+      },
+      {
         group: "操作",
         label: "使用默认服务商开始新生成",
         icon: "sparkle",
