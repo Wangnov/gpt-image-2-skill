@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Dialog } from "@/components/ui/dialog";
@@ -24,10 +24,16 @@ export function AddProviderDialog({
   open,
   onOpenChange,
   existingNames,
+  mode = "add",
+  providerName,
+  provider,
 }: {
   open: boolean;
   onOpenChange: (v: boolean) => void;
   existingNames: string[];
+  mode?: "add" | "edit";
+  providerName?: string;
+  provider?: ProviderConfig;
 }) {
   const [name, setName] = useState("");
   const [kind, setKind] = useState<ProviderKind>("openai-compatible");
@@ -45,12 +51,24 @@ export function AddProviderDialog({
   const [codexRefreshToken, setCodexRefreshToken] = useState("");
 
   const upsert = useUpsertProvider();
+  const editing = mode === "edit" && Boolean(providerName && provider);
   const trimmedName = name.trim();
+  const existingNamesForCheck = useMemo(
+    () =>
+      editing
+        ? existingNames.filter(
+            (existing) =>
+              existing.toLowerCase() !== providerName?.toLowerCase(),
+          )
+        : existingNames,
+    [editing, existingNames, providerName],
+  );
   const nameTaken =
-    trimmedName.toLowerCase() === "auto" ||
-    existingNames.some(
-      (existing) => existing.toLowerCase() === trimmedName.toLowerCase(),
-    );
+    !editing &&
+    (["auto", "openai", "codex"].includes(trimmedName.toLowerCase()) ||
+      existingNamesForCheck.some(
+        (existing) => existing.toLowerCase() === trimmedName.toLowerCase(),
+      ));
 
   const reset = () => {
     setName("");
@@ -67,6 +85,45 @@ export function AddProviderDialog({
     setCodexAccessToken("");
     setCodexRefreshToken("");
   };
+
+  useEffect(() => {
+    if (!open) return;
+    if (!editing || !providerName || !provider) {
+      reset();
+      return;
+    }
+
+    setName(providerName);
+    setKind(provider.type);
+    setApiBase(provider.api_base ?? "https://example.com/v1");
+    setModel(provider.model ?? "gpt-image-2");
+    setSupportsN(Boolean(provider.supports_n));
+    setEditRegionMode(
+      provider.edit_region_mode ?? defaultEditRegionMode(provider.type),
+    );
+
+    const apiKeyCredential = provider.credentials.api_key;
+    setKeySource(apiKeyCredential?.source ?? "file");
+    setApiKey("");
+    setEnvName(apiKeyCredential?.env ?? "OPENAI_API_KEY");
+    setKeychainAccount(apiKeyCredential?.account ?? "");
+
+    setCodexAccountId("");
+    setCodexAccessToken("");
+    setCodexRefreshToken("");
+  }, [editing, open, provider, providerName]);
+
+  const fileCredential = (value: string) =>
+    value ? { source: "file" as const, value } : { source: "file" as const };
+
+  const keychainCredential = (value: string) =>
+    value
+      ? {
+          source: "keychain" as const,
+          value,
+          account: keychainAccount || undefined,
+        }
+      : { source: "keychain" as const, account: keychainAccount || undefined };
 
   const submit = async () => {
     if (!trimmedName) return;
@@ -95,7 +152,9 @@ export function AddProviderDialog({
                           value: codexAccountId,
                         },
                       }
-                    : {}),
+                    : editing && provider?.credentials.account_id
+                      ? { account_id: fileCredential("") }
+                      : {}),
                   ...(codexAccessToken
                     ? {
                         access_token: {
@@ -103,7 +162,9 @@ export function AddProviderDialog({
                           value: codexAccessToken,
                         },
                       }
-                    : {}),
+                    : editing && provider?.credentials.access_token
+                      ? { access_token: fileCredential("") }
+                      : {}),
                   ...(codexRefreshToken
                     ? {
                         refresh_token: {
@@ -111,30 +172,31 @@ export function AddProviderDialog({
                           value: codexRefreshToken,
                         },
                       }
-                    : {}),
+                    : editing && provider?.credentials.refresh_token
+                      ? { refresh_token: fileCredential("") }
+                      : {}),
                 }
               : {
                   api_key:
                     keySource === "file"
-                      ? { source: "file", value: apiKey }
+                      ? fileCredential(apiKey)
                       : keySource === "env"
                         ? { source: "env", env: envName }
-                        : {
-                            source: "keychain",
-                            value: apiKey,
-                            account: keychainAccount || undefined,
-                          },
+                        : keychainCredential(apiKey),
                 },
-          set_default: true,
+          set_default: !editing,
+          allow_overwrite: editing,
         },
       });
-      toast.success("凭证已添加", {
-        description: `${trimmedName} 已设为默认凭证。`,
+      toast.success(editing ? "凭证已更新" : "凭证已添加", {
+        description: editing
+          ? `${trimmedName} 的配置已保存。`
+          : `${trimmedName} 已设为默认凭证。`,
       });
       reset();
       onOpenChange(false);
     } catch (error) {
-      toast.error("添加失败", {
+      toast.error(editing ? "保存失败" : "添加失败", {
         description: error instanceof Error ? error.message : String(error),
       });
     }
@@ -144,7 +206,7 @@ export function AddProviderDialog({
     <Dialog
       open={open}
       onOpenChange={onOpenChange}
-      title="添加凭证"
+      title={editing ? "编辑凭证" : "添加凭证"}
       width={560}
       maxHeight={640}
       footer={
@@ -158,7 +220,11 @@ export function AddProviderDialog({
             onClick={submit}
             disabled={upsert.isPending || !trimmedName || nameTaken}
           >
-            {upsert.isPending ? "保存中…" : "添加并设为默认"}
+            {upsert.isPending
+              ? "保存中…"
+              : editing
+                ? "保存修改"
+                : "添加并设为默认"}
           </Button>
         </>
       }
@@ -177,6 +243,7 @@ export function AddProviderDialog({
             onChange={(e) => setName(e.target.value)}
             placeholder="例如 my-image-api"
             autoFocus
+            disabled={editing}
           />
         </Field>
         <Field label="类型">
@@ -269,7 +336,10 @@ export function AddProviderDialog({
       </div>
       {kind === "codex" && (
         <div className="mt-1 grid gap-3.5">
-          <Field label="账号 ID">
+          <Field
+            label="账号 ID"
+            hint={editing ? "留空会保留原值。" : undefined}
+          >
             <Input
               value={codexAccountId}
               onChange={(e) => setCodexAccountId(e.target.value)}
@@ -277,7 +347,10 @@ export function AddProviderDialog({
               monospace
             />
           </Field>
-          <Field label="Access Token">
+          <Field
+            label="Access Token"
+            hint={editing ? "留空会保留原值。" : undefined}
+          >
             <Input
               value={codexAccessToken}
               onChange={(e) => setCodexAccessToken(e.target.value)}
@@ -286,7 +359,10 @@ export function AddProviderDialog({
               monospace
             />
           </Field>
-          <Field label="Refresh Token">
+          <Field
+            label="Refresh Token"
+            hint={editing ? "留空会保留原值。" : undefined}
+          >
             <Input
               value={codexRefreshToken}
               onChange={(e) => setCodexRefreshToken(e.target.value)}
@@ -313,7 +389,10 @@ export function AddProviderDialog({
             />
           </Field>
           {keySource === "file" && (
-            <Field label="API Key">
+            <Field
+              label="API Key"
+              hint={editing ? "留空会保留原密钥。" : undefined}
+            >
               <Input
                 value={apiKey}
                 onChange={(e) => setApiKey(e.target.value)}
@@ -343,7 +422,10 @@ export function AddProviderDialog({
                   monospace
                 />
               </Field>
-              <Field label="API Key">
+              <Field
+                label="API Key"
+                hint={editing ? "留空会保留钥匙串里的原密钥。" : undefined}
+              >
                 <Input
                   value={apiKey}
                   onChange={(e) => setApiKey(e.target.value)}

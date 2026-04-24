@@ -26,7 +26,10 @@ export type TauriJobResponse = {
 
 const outputPaths = new Map<string, string>();
 
-function rememberJobOutputs(job?: Partial<Job> | null, payload?: TauriJobResponse["payload"]) {
+function rememberJobOutputs(
+  job?: Partial<Job> | null,
+  payload?: TauriJobResponse["payload"],
+) {
   if (!job?.id) return;
   for (const output of job.outputs ?? []) {
     outputPaths.set(`${job.id}:${output.index}`, output.path);
@@ -48,8 +51,14 @@ function rememberJobOutputs(job?: Partial<Job> | null, payload?: TauriJobRespons
 }
 
 function normalizeJob(raw: Record<string, unknown>): Job {
-  const metadata = (raw.metadata && typeof raw.metadata === "object" ? raw.metadata : {}) as Record<string, unknown>;
-  const output = (metadata.output && typeof metadata.output === "object" ? metadata.output : {}) as {
+  const metadata = (
+    raw.metadata && typeof raw.metadata === "object" ? raw.metadata : {}
+  ) as Record<string, unknown>;
+  const output = (
+    metadata.output && typeof metadata.output === "object"
+      ? metadata.output
+      : {}
+  ) as {
     files?: OutputRef[];
     path?: string | null;
   };
@@ -58,11 +67,12 @@ function normalizeJob(raw: Record<string, unknown>): Job {
     : Array.isArray(output.files)
       ? output.files
       : [];
-  const outputPath = typeof raw.output_path === "string"
-    ? raw.output_path
-    : typeof output.path === "string"
-      ? output.path
-      : outputs[0]?.path;
+  const outputPath =
+    typeof raw.output_path === "string"
+      ? raw.output_path
+      : typeof output.path === "string"
+        ? output.path
+        : outputs[0]?.path;
   const rawStatus = String(raw.status ?? "completed");
   const status = rawStatus === "canceled" ? "cancelled" : rawStatus;
   const job: Job = {
@@ -127,23 +137,40 @@ export const api = {
     return invoke<ConfigPaths>("config_path");
   },
   async setDefault(name: string) {
-    return normalizeConfig(await invoke<ServerConfig>("set_default_provider", { name }));
+    return normalizeConfig(
+      await invoke<ServerConfig>("set_default_provider", { name }),
+    );
   },
-  async upsertProvider(name: string, cfg: ProviderConfig & { set_default?: boolean }) {
-    return normalizeConfig(await invoke<ServerConfig>("upsert_provider", { name, cfg }));
+  async upsertProvider(name: string, cfg: ProviderConfig) {
+    return normalizeConfig(
+      await invoke<ServerConfig>("upsert_provider", { name, cfg }),
+    );
+  },
+  async revealProviderCredential(name: string, credential: string) {
+    return invoke<{ value: string }>("reveal_provider_credential", {
+      name,
+      credential,
+    });
   },
   async deleteProvider(name: string) {
-    return normalizeConfig(await invoke<ServerConfig>("delete_provider", { name }));
+    return normalizeConfig(
+      await invoke<ServerConfig>("delete_provider", { name }),
+    );
   },
   async testProvider(name: string) {
     return invoke<TestProviderResult>("provider_test", { name });
   },
   async listJobs() {
-    const payload = await invoke<{ jobs: Record<string, unknown>[] }>("history_list");
+    const payload = await invoke<{ jobs: Record<string, unknown>[] }>(
+      "history_list",
+    );
     return (payload.jobs ?? []).map(normalizeJob);
   },
   async getJob(id: string) {
-    const payload = await invoke<{ job: Record<string, unknown>; events?: JobEvent[] }>("history_show", { jobId: id });
+    const payload = await invoke<{
+      job: Record<string, unknown>;
+      events?: JobEvent[];
+    }>("history_show", { jobId: id });
     const job = normalizeJob(payload.job ?? {});
     return { job, events: payload.events ?? [] };
   },
@@ -167,7 +194,9 @@ export const api = {
     return invoke<string[]>("export_files_to_downloads", { paths });
   },
   async createGenerate(body: GenerateRequest) {
-    const result = await invoke<TauriJobResponse>("enqueue_generate_image", { request: body });
+    const result = await invoke<TauriJobResponse>("enqueue_generate_image", {
+      request: body,
+    });
     return normalizeJobResponse(result);
   },
   async createEdit(form: FormData) {
@@ -184,7 +213,10 @@ export const api = {
       }
     }
     const selectionHintRaw = form.get("selection_hint");
-    const selection_hint = selectionHintRaw instanceof File ? await fileToUpload(selectionHintRaw) : undefined;
+    const selection_hint =
+      selectionHintRaw instanceof File
+        ? await fileToUpload(selectionHintRaw)
+        : undefined;
     const result = await invoke<TauriJobResponse>("enqueue_edit_image", {
       request: {
         ...meta,
@@ -196,11 +228,16 @@ export const api = {
     return normalizeJobResponse(result);
   },
   outputUrl(jobId: string, index = 0) {
-    const path = outputPaths.get(`${jobId}:${index}`) ?? (index === 0 ? outputPaths.get(`${jobId}:0`) : undefined);
+    const path =
+      outputPaths.get(`${jobId}:${index}`) ??
+      (index === 0 ? outputPaths.get(`${jobId}:0`) : undefined);
     return path ? convertFileSrc(path) : "";
   },
   outputPath(jobId: string, index = 0) {
-    return outputPaths.get(`${jobId}:${index}`) ?? (index === 0 ? outputPaths.get(`${jobId}:0`) : undefined);
+    return (
+      outputPaths.get(`${jobId}:${index}`) ??
+      (index === 0 ? outputPaths.get(`${jobId}:0`) : undefined)
+    );
   },
   fileUrl(path?: string | null) {
     return path ? convertFileSrc(path) : "";

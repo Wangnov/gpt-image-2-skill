@@ -3,7 +3,10 @@ import { api } from "@/lib/api";
 import type { ProviderConfig, ServerConfig } from "@/lib/types";
 
 export function useConfig() {
-  return useQuery<ServerConfig>({ queryKey: ["config"], queryFn: api.getConfig });
+  return useQuery<ServerConfig>({
+    queryKey: ["config"],
+    queryFn: api.getConfig,
+  });
 }
 
 export function useSetDefaultProvider() {
@@ -17,7 +20,7 @@ export function useSetDefaultProvider() {
 export function useUpsertProvider() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: ({ name, cfg }: { name: string; cfg: ProviderConfig & { set_default?: boolean } }) =>
+    mutationFn: ({ name, cfg }: { name: string; cfg: ProviderConfig }) =>
       api.upsertProvider(name, cfg),
     onSuccess: (data) => qc.setQueryData(["config"], data),
   });

@@ -1,3 +1,5 @@
+import { useEffect, useState } from "react";
+import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -5,7 +7,9 @@ import { Empty } from "@/components/ui/empty";
 import { Spinner } from "@/components/ui/spinner";
 import { SourceChip } from "@/components/ui/source-chip";
 import { Icon } from "@/components/icon";
+import { api } from "@/lib/api";
 import { providerKindLabel } from "@/lib/format";
+import { copyText } from "@/lib/user-actions";
 import type { ProviderConfig } from "@/lib/types";
 
 type TestStatus = "idle" | "running" | "ok" | "err";
@@ -38,6 +42,16 @@ export function ProviderDetail({
   onTest?: () => void;
   onDelete?: () => void;
 }) {
+  const [revealed, setRevealed] = useState<Record<string, string>>({});
+  const [revealing, setRevealing] = useState<Record<string, boolean>>({});
+  const [copying, setCopying] = useState<Record<string, boolean>>({});
+
+  useEffect(() => {
+    setRevealed({});
+    setRevealing({});
+    setCopying({});
+  }, [name]);
+
   if (!name || !prov) {
     return (
       <Empty
@@ -47,6 +61,49 @@ export function ProviderDetail({
       />
     );
   }
+
+  const fetchSecret = async (key: string) => {
+    if (revealed[key]) return revealed[key];
+    const result = await api.revealProviderCredential(name, key);
+    return result.value;
+  };
+
+  const toggleSecret = async (key: string) => {
+    if (revealed[key]) {
+      setRevealed((current) => {
+        const next = { ...current };
+        delete next[key];
+        return next;
+      });
+      return;
+    }
+
+    setRevealing((current) => ({ ...current, [key]: true }));
+    try {
+      const value = await fetchSecret(key);
+      setRevealed((current) => ({ ...current, [key]: value }));
+    } catch (error) {
+      toast.error("查看失败", {
+        description: error instanceof Error ? error.message : String(error),
+      });
+    } finally {
+      setRevealing((current) => ({ ...current, [key]: false }));
+    }
+  };
+
+  const copySecret = async (key: string) => {
+    setCopying((current) => ({ ...current, [key]: true }));
+    try {
+      const value = await fetchSecret(key);
+      await copyText(value, key);
+    } catch (error) {
+      toast.error("复制失败", {
+        description: error instanceof Error ? error.message : String(error),
+      });
+    } finally {
+      setCopying((current) => ({ ...current, [key]: false }));
+    }
+  };
 
   return (
     <div className="p-5 h-full overflow-auto">
@@ -159,16 +216,48 @@ export function ProviderDetail({
             >
               <span className="text-[12.5px] font-semibold">{k}</span>
               <div className="flex items-center gap-1.5 px-2.5 h-[30px] bg-sunken border border-border rounded-[5px] font-mono text-[11.5px] text-muted min-w-0 overflow-hidden">
-                {c.source === "file" && (
-                  <span className="flex-1 truncate">
-                    {c.present ? "已保存，内容已隐藏" : "未设置"}
-                  </span>
-                )}
-                {c.source === "env" && <span>${c.env}</span>}
-                {c.source === "keychain" && (
-                  <span>
-                    {c.service} / {c.account}
-                  </span>
+                <span className="flex-1 truncate">
+                  {revealed[k]
+                    ? revealed[k]
+                    : c.source === "file"
+                      ? c.present
+                        ? "••••••••••••••••"
+                        : "未设置"
+                      : c.source === "env"
+                        ? `$${c.env}`
+                        : `${c.service} / ${c.account}`}
+                </span>
+                {c.present && (
+                  <>
+                    <button
+                      type="button"
+                      onClick={() => toggleSecret(k)}
+                      disabled={revealing[k] || copying[k]}
+                      className="bg-transparent border-none cursor-pointer p-0.5 text-faint disabled:cursor-not-allowed disabled:opacity-50"
+                      title={revealed[k] ? "隐藏密钥" : "查看密钥"}
+                      aria-label={revealed[k] ? "隐藏密钥" : "查看密钥"}
+                    >
+                      {revealing[k] ? (
+                        <Spinner size={12} color="currentColor" />
+                      ) : (
+                        <Icon name={revealed[k] ? "eyeoff" : "eye"} size={12} />
+                      )}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => copySecret(k)}
+                      disabled={revealing[k] || copying[k]}
+                      className="bg-transparent border-none cursor-pointer p-0.5 text-faint disabled:cursor-not-allowed disabled:opacity-50"
+                      title="复制密钥"
+                      aria-label="复制密钥"
+                    >
+                      {copying[k] ? (
+                        <Spinner size={12} color="currentColor" />
+                      ) : (
+                        <Icon name="copy" size={12} />
+                      )}
+                    </button>
+                  </>
                 )}
               </div>
               <SourceChip source={c.source} />

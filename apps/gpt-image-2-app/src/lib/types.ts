@@ -19,6 +19,8 @@ export interface ProviderConfig {
   edit_region_mode?: "native-mask" | "reference-hint" | "none";
   credentials: Record<string, CredentialRef>;
   builtin?: boolean;
+  allow_overwrite?: boolean;
+  set_default?: boolean;
 }
 
 export interface ServerConfig {

@@ -11,8 +11,8 @@ use std::{
 use gpt_image_2_core::{
     AppConfig, CredentialRef, KEYCHAIN_SERVICE, ProviderConfig, default_config_path,
     default_keychain_account, delete_history_job, history_db_path, jobs_dir, list_history_jobs,
-    load_app_config, redact_app_config, run_json, save_app_config, shared_config_dir,
-    show_history_job, upsert_history_job, write_keychain_secret,
+    load_app_config, read_keychain_secret, redact_app_config, run_json, save_app_config,
+    shared_config_dir, show_history_job, upsert_history_job, write_keychain_secret,
 };
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
@@ -103,6 +103,8 @@ struct ProviderInput {
     edit_region_mode: Option<String>,
     #[serde(default)]
     set_default: bool,
+    #[serde(default)]
+    allow_overwrite: bool,
 }
 
 #[derive(Debug, Deserialize)]
@@ -227,21 +229,48 @@ struct QueuedJob {
 fn convert_provider_input(
     name: &str,
     input: ProviderInput,
+    existing: Option<&ProviderConfig>,
 ) -> Result<(ProviderConfig, bool), String> {
     let mut credentials = BTreeMap::new();
     for (secret, credential) in input.credentials {
+        let existing_credential = existing.and_then(|provider| provider.credentials.get(&secret));
         let converted = match credential {
-            CredentialInput::File { value } => CredentialRef::File {
-                value: value.unwrap_or_default(),
-            },
+            CredentialInput::File { value } => {
+                let next = value.unwrap_or_default();
+                if next.is_empty()
+                    && let Some(CredentialRef::File { value }) = existing_credential
+                {
+                    CredentialRef::File {
+                        value: value.clone(),
+                    }
+                } else {
+                    CredentialRef::File { value: next }
+                }
+            }
             CredentialInput::Env { env } => CredentialRef::Env { env },
             CredentialInput::Keychain {
                 service,
                 account,
                 value,
             } => {
-                let service = service.unwrap_or_else(|| KEYCHAIN_SERVICE.to_string());
-                let account = account.unwrap_or_else(|| default_keychain_account(name, &secret));
+                let service = service
+                    .or_else(|| {
+                        if let Some(CredentialRef::Keychain { service, .. }) = existing_credential {
+                            service.clone()
+                        } else {
+                            None
+                        }
+                    })
+                    .unwrap_or_else(|| KEYCHAIN_SERVICE.to_string());
+                let account = account
+                    .or_else(|| {
+                        if let Some(CredentialRef::Keychain { account, .. }) = existing_credential {
+                            Some(account.clone())
+                        } else {
+                            None
+                        }
+                    })
+                    .unwrap_or_else(|| default_keychain_account(name, &secret));
                 if let Some(value) = value
                     && !value.is_empty()
                 {
@@ -1182,17 +1211,54 @@ fn upsert_provider(name: String, cfg: ProviderInput) -> Result<Value, String> {
         return Err("凭证名称不能为空。".to_string());
     }
     let mut config = load_config()?;
-    if matches!(name.as_str(), "auto" | "openai" | "codex") || config.providers.contains_key(&name)
+    let allow_overwrite = cfg.allow_overwrite;
+    if name == "auto"
+        || (!allow_overwrite
+            && (matches!(name.as_str(), "openai" | "codex")
+                || config.providers.contains_key(&name)))
     {
         return Err(format!("凭证「{name}」已存在，已配置的凭证不能覆盖。"));
     }
-    let (provider, set_default) = convert_provider_input(&name, cfg)?;
+    let existing = config.providers.get(&name).cloned();
+    let (provider, set_default) = convert_provider_input(&name, cfg, existing.as_ref())?;
     config.providers.insert(name.clone(), provider);
     if set_default || config.default_provider.is_none() {
         config.default_provider = Some(name);
     }
     save_config(&config)?;
     Ok(config_for_ui(&config))
+}
+
+#[tauri::command]
+fn reveal_provider_credential(name: String, credential: String) -> Result<Value, String> {
+    let config = load_config()?;
+    let value = if let Some(provider) = config.providers.get(&name) {
+        let credential_ref = provider
+            .credentials
+            .get(&credential)
+            .ok_or_else(|| format!("凭证「{name}」没有 {credential}。"))?;
+        match credential_ref {
+            CredentialRef::File { value } => value.clone(),
+            CredentialRef::Env { env } => {
+                std::env::var(env).map_err(|_| format!("环境变量 {env} 当前不可用或为空。"))?
+            }
+            CredentialRef::Keychain { service, account } => {
+                let service = service.as_deref().unwrap_or(KEYCHAIN_SERVICE);
+                read_keychain_secret(service, account).map_err(app_error)?
+            }
+        }
+    } else if name == "openai" && credential == "api_key" {
+        std::env::var("OPENAI_API_KEY")
+            .map_err(|_| "环境变量 OPENAI_API_KEY 当前不可用或为空。".to_string())?
+    } else {
+        return Err(format!("凭证「{name}」还没有保存可查看的密钥。"));
+    };
+
+    if value.trim().is_empty() {
+        return Err(format!("凭证「{name}」的 {credential} 是空的。"));
+    }
+
+    Ok(json!({ "value": value }))
 }
 
 #[tauri::command]
@@ -1749,6 +1815,7 @@ pub fn run() {
             config_save,
             set_default_provider,
             upsert_provider,
+            reveal_provider_credential,
             delete_provider,
             provider_test,
             history_list,

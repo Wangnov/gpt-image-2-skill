@@ -28,6 +28,7 @@ export function ProvidersScreen({ config }: { config?: ServerConfig }) {
   >({});
   const [query, setQuery] = useState("");
   const [showAdd, setShowAdd] = useState(false);
+  const [editingName, setEditingName] = useState<string | undefined>();
   const setDefault = useSetDefaultProvider();
   const deleteProv = useDeleteProvider();
   const test = useTestProvider();
@@ -124,6 +125,10 @@ export function ProvidersScreen({ config }: { config?: ServerConfig }) {
                 isDefault={name === effectiveDefault}
                 selected={name === selected}
                 onSelect={() => setSelected(name)}
+                onEdit={() => {
+                  setSelected(name);
+                  setEditingName(name);
+                }}
                 testStatus={testMap[name]?.status}
               />
             ))
@@ -157,6 +162,16 @@ export function ProvidersScreen({ config }: { config?: ServerConfig }) {
         open={showAdd}
         onOpenChange={setShowAdd}
         existingNames={names}
+      />
+      <AddProviderDialog
+        open={Boolean(editingName)}
+        onOpenChange={(open) => {
+          if (!open) setEditingName(undefined);
+        }}
+        existingNames={names}
+        mode="edit"
+        providerName={editingName}
+        provider={editingName ? providers[editingName] : undefined}
       />
     </div>
   );
