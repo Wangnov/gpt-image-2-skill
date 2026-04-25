@@ -198,3 +198,90 @@ jobs:
           fi
 
           gh release upload "$RELEASE_TAG" "${artifacts[@]}" --repo "${{ github.repository }}" --clobber
+
+  publish-homebrew-cask:
+    needs: build-app
+    runs-on: macos-15
+    if: ${{ !inputs.release_draft && !inputs.prerelease }}
+    env:
+      SOURCE_REPO: ${{ github.repository }}
+      RELEASE_TAG: ${{ inputs.release_tag }}
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      GITHUB_USER: "github-actions[bot]"
+      GITHUB_EMAIL: "41898282+github-actions[bot]@users.noreply.github.com"
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          repository: "Wangnov/homebrew-tap"
+          token: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+          persist-credentials: true
+
+      - name: Generate Homebrew cask
+        run: |
+          set -euo pipefail
+
+          version="${RELEASE_TAG#v}"
+          arm_asset="GPT.Image.2_${version}_aarch64.dmg"
+          intel_asset="GPT.Image.2_${version}_x64.dmg"
+          assets_json="$RUNNER_TEMP/release-assets.json"
+
+          gh release view "$RELEASE_TAG" --repo "$SOURCE_REPO" --json assets > "$assets_json"
+
+          arm_sha="$(jq -r --arg name "$arm_asset" '.assets[] | select(.name == $name) | .digest' "$assets_json" | sed 's/^sha256://')"
+          intel_sha="$(jq -r --arg name "$intel_asset" '.assets[] | select(.name == $name) | .digest' "$assets_json" | sed 's/^sha256://')"
+
+          if [ -z "$arm_sha" ] || [ "$arm_sha" = "null" ]; then
+            echo "Missing digest for $arm_asset"
+            exit 1
+          fi
+          if [ -z "$intel_sha" ] || [ "$intel_sha" = "null" ]; then
+            echo "Missing digest for $intel_asset"
+            exit 1
+          fi
+
+          mkdir -p Casks
+          cat > Casks/gpt-image-2.rb <<RUBY
+          cask "gpt-image-2" do
+            arch arm: "aarch64", intel: "x64"
+
+            version "$version"
+            sha256 arm:   "$arm_sha",
+                   intel: "$intel_sha"
+
+            url "https://github.com/Wangnov/gpt-image-2-skill/releases/download/v#{version}/GPT.Image.2_#{version}_#{arch}.dmg"
+            name "GPT Image 2"
+            desc "Desktop image generation and editing for GPT Image 2"
+            homepage "https://github.com/Wangnov/gpt-image-2-skill"
+
+            depends_on macos: ">= :big_sur"
+
+            app "GPT Image 2.app"
+
+            zap trash: [
+              "~/Library/Application Support/com.wangnov.gpt-image-2",
+              "~/Library/Logs/com.wangnov.gpt-image-2",
+              "~/Library/Saved Application State/com.wangnov.gpt-image-2.savedState",
+            ]
+          end
+          RUBY
+
+      - name: Style Homebrew cask
+        run: brew style --cask Casks/gpt-image-2.rb
+
+      - name: Commit and push cask
+        run: |
+          set -euo pipefail
+
+          version="${RELEASE_TAG#v}"
+
+          git config user.name "$GITHUB_USER"
+          git config user.email "$GITHUB_EMAIL"
+
+          if ! git status --short -- Casks/gpt-image-2.rb | grep -q .; then
+            echo "No Homebrew cask changes."
+            exit 0
+          fi
+
+          git add Casks/gpt-image-2.rb
+          git commit -m "chore: update gpt-image-2 cask to ${version}"
+          git push

@@ -88,3 +88,20 @@ jobs:
         run: brew install wangnov/tap/gpt-image-2-skill
       - name: Smoke test
         run: gpt-image-2-skill --json doctor >/tmp/gpt-image-2-skill-brew-doctor.json
+
+  homebrew-cask:
+    runs-on: macos-15
+    env:
+      VERSION: ${{ github.event_name == 'release' && github.event.release.tag_name || format('v{0}', inputs.version) }}
+    steps:
+      - name: Install desktop app cask
+        run: brew install --cask wangnov/tap/gpt-image-2
+      - name: Verify app bundle
+        run: |
+          app="/Applications/GPT Image 2.app"
+          version="${VERSION#v}"
+
+          test -d "$app"
+          /usr/libexec/PlistBuddy -c "Print :CFBundleIdentifier" "$app/Contents/Info.plist" | grep -Fx "com.wangnov.gpt-image-2"
+          /usr/libexec/PlistBuddy -c "Print :CFBundleShortVersionString" "$app/Contents/Info.plist" | grep -Fx "$version"
+          codesign --verify --deep --strict --verbose=2 "$app"

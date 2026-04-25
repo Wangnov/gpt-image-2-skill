@@ -10,6 +10,7 @@ The CLI and Skill release still uses `Release` / cargo-dist. The desktop app use
 - `APPLE_API_KEY_ID`: `875SGQTLJ3`.
 - `APPLE_API_ISSUER`: `9093015f-a519-449b-886a-cc514b563de6`.
 - `APPLE_API_KEY_P8`: Full contents of `AuthKey_875SGQTLJ3.p8`.
+- `HOMEBREW_TAP_TOKEN`: Token with push access to `Wangnov/homebrew-tap`, used to update the desktop app cask after signed DMGs are uploaded.
 
 ## Local macOS Build
 
@@ -44,3 +45,9 @@ Run `Tauri App Release` manually with the same tag as the CLI release, for examp
 - macOS: signed and notarized `.app` / `.dmg` for Apple Silicon and Intel.
 - Windows: NSIS `.exe`.
 - Linux: AppImage, `.deb`, and `.rpm`.
+
+For non-draft, non-prerelease runs, the workflow also updates `Casks/gpt-image-2.rb` in `Wangnov/homebrew-tap`. The cask points at the GitHub Release DMGs and uses GitHub's release asset SHA-256 digests, so macOS users can install with:
+
+```bash
+brew install --cask wangnov/tap/gpt-image-2
+```
