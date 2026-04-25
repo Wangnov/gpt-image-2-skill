@@ -8,15 +8,6 @@ import { useTweaks } from "@/hooks/use-tweaks";
 import { useQueueStatus } from "@/hooks/use-jobs";
 import { api, type ConfigPaths } from "@/lib/api";
 import { copyText, openPath, revealPath } from "@/lib/user-actions";
-import type { Tweaks } from "@/lib/types";
-
-const ACCENTS: { value: Tweaks["accent"]; color: string; label: string }[] = [
-  { value: "green", color: "#0d8b5c", label: "翠绿" },
-  { value: "black", color: "#0d0d0c", label: "石墨" },
-  { value: "blue", color: "#1a6fe0", label: "靛蓝" },
-  { value: "violet", color: "#6e3aff", label: "紫罗兰" },
-  { value: "orange", color: "#cc5b1b", label: "赤橙" },
-];
 
 const PARALLEL_OPTIONS = [1, 2, 3, 4, 6, 8].map((n) => ({
   value: String(n),
@@ -117,42 +108,6 @@ function PathRow({
   );
 }
 
-function AccentPicker({
-  value,
-  onChange,
-}: {
-  value: Tweaks["accent"];
-  onChange: (v: Tweaks["accent"]) => void;
-}) {
-  return (
-    <div className="flex items-center gap-2" role="radiogroup" aria-label="强调色">
-      {ACCENTS.map((option) => {
-        const selected = option.value === value;
-        return (
-          <button
-            key={option.value}
-            type="button"
-            role="radio"
-            aria-checked={selected}
-            aria-label={option.label}
-            title={option.label}
-            onClick={() => onChange(option.value)}
-            className="rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--accent)] focus-visible:ring-offset-2"
-            style={{
-              width: 22,
-              height: 22,
-              background: option.color,
-              border: "1.5px solid rgba(0,0,0,0.1)",
-              outline: selected ? "2px solid var(--accent)" : "none",
-              outlineOffset: 2,
-            }}
-          />
-        );
-      })}
-    </div>
-  );
-}
-
 export function SettingsScreen() {
   const { tweaks, setTweaks } = useTweaks();
   const { data: queue } = useQueueStatus();
@@ -174,32 +129,31 @@ export function SettingsScreen() {
       <div className="mx-auto flex w-full max-w-[720px] flex-col gap-4 p-6">
         <Section
           title="外观"
-          description="主题、强调色、字体与布局密度，变更实时生效。"
+          description="字体与布局密度，变更实时生效。"
         >
           <Row
             title="主题"
-            description="亮色适合白天，暗色适合弱光环境。"
+            description="液态深色 — 玻璃质感单一主题，强调色为紫蓝渐变。"
             control={
-              <Segmented
-                value={tweaks.theme}
-                onChange={(v) => setTweaks({ theme: v })}
-                size="sm"
-                ariaLabel="主题"
-                options={[
-                  { value: "light", label: "亮色" },
-                  { value: "dark", label: "暗色" },
-                ]}
-              />
-            }
-          />
-          <Row
-            title="强调色"
-            description="按钮、徽章和选中态会跟随这个颜色。"
-            control={
-              <AccentPicker
-                value={tweaks.accent}
-                onChange={(v) => setTweaks({ accent: v })}
-              />
+              <span
+                className="inline-flex items-center gap-2 px-3 h-8 rounded-full text-[12.5px]"
+                style={{
+                  background:
+                    "linear-gradient(135deg, rgba(167,139,250,0.18), rgba(103,232,249,0.14))",
+                  border: "1px solid rgba(167,139,250,0.35)",
+                  color: "var(--text)",
+                }}
+              >
+                <span
+                  className="h-2.5 w-2.5 rounded-full"
+                  style={{
+                    background:
+                      "linear-gradient(135deg, #a78bfa, #67e8f9)",
+                    boxShadow: "0 0 8px rgba(167,139,250,0.6)",
+                  }}
+                />
+                Liquid
+              </span>
             }
           />
           <Row

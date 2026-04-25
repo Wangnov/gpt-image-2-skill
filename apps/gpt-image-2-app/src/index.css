@@ -2,49 +2,81 @@
 @tailwind components;
 @tailwind utilities;
 
-/* ── OpenAI-site-inspired token system ──────────────────── */
+/* ──────────────────────────────────────────────────────────
+   Liquid token system — single dark theme.
+   The original tokens (--bg, --text, --accent…) are kept by
+   name so existing components keep compiling, but their
+   VALUES now point at the liquid dark palette. light theme
+   and per-accent overrides have been retired.
+   ────────────────────────────────────────────────────────── */
 :root {
+  /* neutral ramp (liquid-tuned dark) */
   --n-0: #ffffff;
-  --n-25: #fafaf9;
-  --n-50: #f5f5f4;
-  --n-100: #ececeb;
-  --n-150: #e2e2e0;
-  --n-200: #d4d4d2;
-  --n-300: #b4b4b1;
-  --n-400: #8e8e8b;
-  --n-500: #6e6e6b;
-  --n-600: #4f4f4d;
-  --n-700: #35352f;
-  --n-800: #1f1f1b;
-  --n-900: #0d0d0c;
+  --n-25: #f8f8fa;
+  --n-50: #e9e9ed;
+  --n-100: #c3c3ca;
+  --n-150: #9a9aa3;
+  --n-200: #74747e;
+  --n-300: #54545d;
+  --n-400: #3c3c44;
+  --n-500: #2a2a31;
+  --n-600: #1d1d23;
+  --n-700: #14141a;
+  --n-800: #0c0c12;
+  --n-900: #06060a;
 
-  --bg: var(--n-25);
-  --bg-raised: #ffffff;
-  --bg-sunken: var(--n-50);
-  --bg-hover: var(--n-50);
-  --bg-pressed: var(--n-100);
-  --border: var(--n-150);
-  --border-strong: var(--n-200);
-  --border-faint: var(--n-100);
-  --text: var(--n-900);
-  --text-muted: var(--n-600);
-  --text-faint: var(--n-600);
-  --text-inverted: var(--n-0);
+  /* surfaces */
+  --bg: #06060a;
+  --bg-raised: rgba(20, 20, 28, 0.62);
+  --bg-sunken: rgba(8, 8, 12, 0.7);
+  --bg-hover: rgba(255, 255, 255, 0.05);
+  --bg-pressed: rgba(255, 255, 255, 0.09);
 
-  --accent: #0a6f49;
-  --accent-hover: #075d3d;
-  --accent-faint: #e7f3ed;
-  --accent-on: #ffffff;
+  /* glass-specific extras (liquid namespace) */
+  --lq-glass: rgba(20, 20, 28, 0.42);
+  --lq-glass-strong: rgba(24, 24, 34, 0.62);
+  --lq-glass-deep: rgba(10, 10, 14, 0.78);
+  --lq-glass-row: rgba(255, 255, 255, 0.04);
+  --lq-glass-row-hover: rgba(255, 255, 255, 0.07);
+  --lq-blur: 28px;
+  --lq-blur-soft: 16px;
 
-  --status-running: #936300;
-  --status-running-bg: #fdf4de;
-  --status-ok: #0d8b5c;
-  --status-ok-bg: #e7f3ed;
-  --status-err: #b42318;
-  --status-err-bg: #fde7e4;
-  --status-queued: var(--n-500);
-  --status-queued-bg: var(--n-100);
+  /* lines / borders */
+  --border: rgba(255, 255, 255, 0.1);
+  --border-strong: rgba(255, 255, 255, 0.18);
+  --border-faint: rgba(255, 255, 255, 0.05);
 
+  /* text */
+  --text: #f5f5f7;
+  --text-muted: rgba(245, 245, 247, 0.7);
+  --text-faint: rgba(245, 245, 247, 0.45);
+  --text-inverted: #06060a;
+
+  /* accent — fixed liquid violet→cyan brand gradient */
+  --accent: #a78bfa;
+  --accent-hover: #c4b5fd;
+  --accent-faint: rgba(167, 139, 250, 0.14);
+  --accent-on: #06060a;
+  --accent-2: #67e8f9;
+  --accent-3: #f0abfc;
+  --accent-gradient: linear-gradient(
+    135deg,
+    #a78bfa 0%,
+    #67e8f9 60%,
+    #f0abfc 100%
+  );
+
+  /* status (dark-tuned) */
+  --status-running: #fbbf24;
+  --status-running-bg: rgba(251, 191, 36, 0.14);
+  --status-ok: #34d399;
+  --status-ok-bg: rgba(52, 211, 153, 0.14);
+  --status-err: #f87171;
+  --status-err-bg: rgba(248, 113, 113, 0.16);
+  --status-queued: #94a3b8;
+  --status-queued-bg: rgba(148, 163, 184, 0.14);
+
+  /* type */
   --f-sans:
     "Inter", -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue",
     sans-serif;
@@ -53,130 +85,44 @@
   --f-serif: "Source Serif 4", "Iowan Old Style", "Georgia", serif;
   --f-ui: var(--f-sans);
 
+  /* density */
   --d-row: 44px;
   --d-input: 36px;
   --d-pad: 16px;
   --d-gap: 16px;
 
-  --r-sm: 4px;
-  --r-md: 6px;
-  --r-lg: 10px;
-  --r-xl: 14px;
-
-  --grid-line: rgba(13, 13, 12, 0.04);
-  --grid-size: 32px;
-  --image-overlay: rgba(0, 0, 0, 0.62);
-  --image-overlay-soft: rgba(0, 0, 0, 0.48);
-  --image-overlay-text: #ffffff;
-  --mask-dim: rgba(0, 0, 0, 0.15);
-  --modal-overlay: rgba(13, 13, 12, 0.28);
-
-  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.04);
-  --shadow-md: 0 2px 8px rgba(0, 0, 0, 0.06), 0 1px 2px rgba(0, 0, 0, 0.04);
-  --shadow-lg: 0 16px 48px rgba(0, 0, 0, 0.18), 0 2px 8px rgba(0, 0, 0, 0.1);
-  --shadow-popover:
-    0 12px 32px rgba(0, 0, 0, 0.14), 0 2px 6px rgba(0, 0, 0, 0.06);
-}
-
-[data-theme="dark"] {
-  --bg: #0d0d0c;
-  --bg-raised: #171715;
-  --bg-sunken: #080807;
-  --bg-hover: #1f1f1b;
-  --bg-pressed: #2a2a25;
-  --border: #2a2a25;
-  --border-strong: #3a3a33;
-  --border-faint: #1f1f1b;
-  --text: #f5f5f4;
-  --text-muted: #bebeba;
-  --text-faint: #bebeba;
-  --text-inverted: #0d0d0c;
-
-  --accent: #21b47d;
-  --accent-hover: #31c98f;
-  --accent-faint: rgba(16, 160, 108, 0.14);
-  --accent-on: #0d0d0c;
-
-  --status-running: #e5a93d;
-  --status-running-bg: rgba(229, 169, 61, 0.14);
-  --status-ok: #10a06c;
-  --status-ok-bg: rgba(16, 160, 108, 0.14);
-  --status-err: #e5604f;
-  --status-err-bg: rgba(229, 96, 79, 0.14);
-  --status-queued: #a0a09c;
-  --status-queued-bg: #1f1f1b;
+  /* radii */
+  --r-sm: 6px;
+  --r-md: 10px;
+  --r-lg: 14px;
+  --r-xl: 18px;
 
   --grid-line: rgba(255, 255, 255, 0.035);
-  --image-overlay: rgba(0, 0, 0, 0.6);
+  --grid-size: 32px;
+  --image-overlay: rgba(0, 0, 0, 0.62);
   --image-overlay-soft: rgba(0, 0, 0, 0.45);
   --image-overlay-text: #ffffff;
   --mask-dim: rgba(0, 0, 0, 0.18);
-  --modal-overlay: rgba(0, 0, 0, 0.42);
+  --modal-overlay: rgba(0, 0, 0, 0.55);
 
-  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4);
-  --shadow-md: 0 2px 8px rgba(0, 0, 0, 0.4), 0 1px 2px rgba(0, 0, 0, 0.3);
-  --shadow-lg: 0 16px 48px rgba(0, 0, 0, 0.55), 0 2px 8px rgba(0, 0, 0, 0.3);
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.5);
+  --shadow-md:
+    0 4px 16px rgba(0, 0, 0, 0.5), 0 1px 3px rgba(0, 0, 0, 0.4);
+  --shadow-lg:
+    0 24px 64px -24px rgba(0, 0, 0, 0.7),
+    0 8px 24px -12px rgba(0, 0, 0, 0.5);
   --shadow-popover:
-    0 12px 32px rgba(0, 0, 0, 0.5), 0 2px 6px rgba(0, 0, 0, 0.3);
+    0 18px 48px rgba(0, 0, 0, 0.55), 0 4px 12px rgba(0, 0, 0, 0.45);
 }
 
-[data-accent="black"] {
-  --accent: #0d0d0c;
-  --accent-hover: #1f1f1b;
-  --accent-faint: #ececeb;
-  --accent-on: #ffffff;
-}
-[data-theme="dark"][data-accent="black"] {
-  --accent: #f5f5f4;
-  --accent-hover: #fff;
-  --accent-faint: rgba(255, 255, 255, 0.08);
-  --accent-on: #0d0d0c;
-}
-[data-accent="green"] {
-  --accent: #0a6f49;
-  --accent-hover: #075d3d;
-  --accent-faint: #e7f3ed;
-}
-[data-theme="dark"][data-accent="green"] {
-  --accent: #21b47d;
-  --accent-hover: #31c98f;
-  --accent-faint: rgba(33, 180, 125, 0.16);
-  --accent-on: #0d0d0c;
-}
-[data-accent="blue"] {
-  --accent: #1a6fe0;
-  --accent-hover: #1561c9;
-  --accent-faint: #e5efff;
-}
-[data-theme="dark"][data-accent="blue"] {
-  --accent: #4a8fff;
-  --accent-hover: #6ea3ff;
-  --accent-faint: rgba(74, 143, 255, 0.16);
-  --accent-on: #0d0d0c;
-}
-[data-accent="violet"] {
-  --accent: #6e3aff;
-  --accent-hover: #5a2ee0;
-  --accent-faint: #eee5ff;
-}
-[data-theme="dark"][data-accent="violet"] {
-  --accent: #9a78ff;
-  --accent-hover: #b197ff;
-  --accent-faint: rgba(154, 120, 255, 0.16);
-  --accent-on: #0d0d0c;
-}
-[data-accent="orange"] {
-  --accent: #a64812;
-  --accent-hover: #893a0d;
-  --accent-faint: #fbead9;
-}
-[data-theme="dark"][data-accent="orange"] {
-  --accent: #e6804a;
-  --accent-hover: #f2956a;
-  --accent-faint: rgba(230, 128, 74, 0.16);
-  --accent-on: #0d0d0c;
+/* keep [data-theme] inert — single dark theme. We leave the
+   selector here so any cached useTweaks state does not crash;
+   the values just resolve to the same as :root. */
+[data-theme="dark"],
+[data-theme="light"] {
 }
 
+/* font + density still respected */
 [data-font="system"] {
   --f-ui: var(--f-sans);
 }
@@ -186,7 +132,6 @@
 [data-font="serif"] {
   --f-ui: var(--f-serif);
 }
-
 [data-density="compact"] {
   --d-row: 36px;
   --d-input: 30px;
@@ -214,13 +159,11 @@
     font-size: 13.5px;
     line-height: 1.5;
     color: var(--text);
-    background: var(--n-100);
+    background: var(--bg);
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
     overflow: hidden;
-  }
-  [data-theme="dark"] body {
-    background: #050504;
+    letter-spacing: -0.005em;
   }
 
   button {
@@ -242,13 +185,13 @@
     background: transparent;
   }
   ::-webkit-scrollbar-thumb {
-    background: var(--border-strong);
+    background: rgba(255, 255, 255, 0.12);
     border-radius: 10px;
     border: 2px solid transparent;
     background-clip: padding-box;
   }
   ::-webkit-scrollbar-thumb:hover {
-    background: var(--n-400);
+    background: rgba(255, 255, 255, 0.22);
     background-clip: padding-box;
   }
 
@@ -263,7 +206,7 @@
   }
 }
 
-/* Typography helpers */
+/* Typography helpers (inherit color tokens, no theme-specific colors) */
 .t-title {
   font-family: var(--f-ui);
   font-size: 22px;
@@ -324,25 +267,33 @@
   justify-content: center;
   min-width: 18px;
   height: 18px;
-  padding: 0 4px;
+  padding: 0 5px;
   font-family: var(--f-mono);
   font-size: 10.5px;
   font-weight: 500;
   color: var(--text-muted);
-  background: var(--bg-raised);
+  background: rgba(255, 255, 255, 0.05);
   border: 1px solid var(--border);
   border-radius: 4px;
-  box-shadow: 0 1px 0 var(--border);
 }
 
+/* ── Desktop shell ─────────────────────────────── */
 .desktop {
   position: fixed;
   inset: 0;
   overflow: hidden;
   background: var(--bg);
-}
-[data-theme="dark"] .desktop {
-  background: var(--bg);
+  /* subtle radial light from top-left for depth */
+  background-image: radial-gradient(
+      120% 80% at 0% 0%,
+      rgba(167, 139, 250, 0.08) 0%,
+      transparent 60%
+    ),
+    radial-gradient(
+      100% 80% at 100% 100%,
+      rgba(103, 232, 249, 0.05) 0%,
+      transparent 60%
+    );
 }
 
 .gridpaper {
@@ -352,27 +303,42 @@
   background-size: var(--grid-size) var(--grid-size);
 }
 
+/* ── surface-panel: glass card (used widely across screens) ─── */
 .surface-panel {
-  background: var(--bg-raised);
+  position: relative;
+  background: var(--lq-glass);
   border: 1px solid var(--border);
   border-radius: var(--r-xl);
-  box-shadow: var(--shadow-sm);
+  box-shadow: var(--shadow-md);
+  -webkit-backdrop-filter: blur(var(--lq-blur-soft)) saturate(140%);
+  backdrop-filter: blur(var(--lq-blur-soft)) saturate(140%);
+}
+.surface-panel::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  background: linear-gradient(
+    180deg,
+    rgba(255, 255, 255, 0.06) 0%,
+    rgba(255, 255, 255, 0) 38%
+  );
 }
 
 .image-overlay {
   background: var(--image-overlay);
   color: var(--image-overlay-text);
 }
-
 .image-overlay-soft {
   background: var(--image-overlay-soft);
   color: var(--image-overlay-text);
 }
-
 .modal-overlay {
   background: var(--modal-overlay);
 }
 
+/* ── layout grids unchanged ─────────────────────── */
 .generate-layout {
   display: grid;
   height: 100%;
@@ -409,7 +375,9 @@
 
 .parameter-actions {
   border-top: 1px solid var(--border-faint);
-  background: var(--bg-raised);
+  background: rgba(255, 255, 255, 0.02);
+  -webkit-backdrop-filter: blur(var(--lq-blur-soft));
+  backdrop-filter: blur(var(--lq-blur-soft));
 }
 
 .edit-refs {

@@ -6,10 +6,21 @@ type Props = HTMLAttributes<HTMLDivElement> & {
   padding?: number;
 };
 
-export function Card({ elevated, padding = 16, className, style, children, ...rest }: Props) {
+/**
+ * Glass card surface — used widely across screens.
+ * Picks up backdrop-blur from .surface-panel via the same token system.
+ */
+export function Card({
+  elevated,
+  padding = 16,
+  className,
+  style,
+  children,
+  ...rest
+}: Props) {
   return (
     <div
-      className={cn("bg-raised border border-border rounded-lg", elevated && "shadow-md", className)}
+      className={cn("surface-panel", elevated && "shadow-md", className)}
       style={{ padding, ...style }}
       {...rest}
     >

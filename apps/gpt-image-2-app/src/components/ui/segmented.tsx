@@ -70,8 +70,9 @@ export function Segmented<T extends string>({
       aria-label={ariaLabel}
       id={groupId}
       className={cn(
-        "inline-flex shrink-0 p-0.5 bg-sunken border border-border rounded-md gap-px",
-        className
+        "inline-flex shrink-0 p-0.5 rounded-md gap-px",
+        "bg-[rgba(0,0,0,0.30)] border border-border",
+        className,
       )}
     >
       {options.map((o, index) => {
@@ -82,7 +83,9 @@ export function Segmented<T extends string>({
         return (
           <button
             key={v}
-            ref={(el) => { btnRefs.current[index] = el; }}
+            ref={(el) => {
+              btnRefs.current[index] = el;
+            }}
             type="button"
             role="radio"
             aria-checked={selected}
@@ -90,10 +93,12 @@ export function Segmented<T extends string>({
             onClick={() => onChange(v)}
             onKeyDown={(e) => onKey(e, index)}
             className={cn(
-              "inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap px-3 rounded text-[12.5px] font-medium transition-colors cursor-pointer",
+              "inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap px-3 rounded text-[12.5px] font-medium transition-all cursor-pointer",
               h,
-              selected ? "bg-raised text-foreground shadow-sm" : "bg-transparent text-muted hover:text-foreground",
-              "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--accent)]"
+              selected
+                ? "bg-[rgba(255,255,255,0.10)] text-foreground shadow-[inset_0_1px_0_rgba(255,255,255,0.10)]"
+                : "bg-transparent text-muted hover:text-foreground hover:bg-[rgba(255,255,255,0.04)]",
+              "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[rgba(167,139,250,0.55)]",
             )}
           >
             {icon && <Icon name={icon} size={13} aria-hidden="true" />}

@@ -23,18 +23,18 @@ export const Textarea = forwardRef<HTMLTextAreaElement, Props>(
       "aria-invalid": ariaInvalidProp,
       ...rest
     },
-    ref
+    ref,
   ) => {
     const id = useFieldId(idProp);
     const describedBy = useFieldDescribedBy(
-      typeof ariaDescribedByProp === "string" ? ariaDescribedByProp : undefined
+      typeof ariaDescribedByProp === "string" ? ariaDescribedByProp : undefined,
     );
     const invalid = useFieldInvalid(
       ariaInvalidProp === true || ariaInvalidProp === "true"
         ? true
         : ariaInvalidProp === false || ariaInvalidProp === "false"
           ? false
-          : undefined
+          : undefined,
     );
 
     return (
@@ -45,15 +45,18 @@ export const Textarea = forwardRef<HTMLTextAreaElement, Props>(
         aria-invalid={invalid}
         style={{ minHeight, ...style }}
         className={cn(
-          "w-full px-3 py-2.5 bg-raised border border-border rounded-md text-[13.5px] leading-[1.55] outline-none transition-colors focus:border-accent focus:shadow-[0_0_0_3px_var(--accent-faint)] resize-y",
-          invalid && "border-status-err focus:border-status-err",
+          "w-full px-3.5 py-3 rounded-md text-[13.5px] leading-[1.55] outline-none transition-colors resize-y",
+          "bg-[rgba(255,255,255,0.04)] border border-border placeholder:text-faint",
+          "focus:border-[rgba(167,139,250,0.55)] focus:bg-[rgba(167,139,250,0.06)] focus:shadow-[0_0_0_3px_rgba(167,139,250,0.14)]",
+          invalid &&
+            "border-status-err focus:border-status-err focus:shadow-[0_0_0_3px_rgba(248,113,113,0.18)]",
           monospace && "font-mono",
-          className
+          className,
         )}
         {...rest}
       />
     );
-  }
+  },
 );
 
 Textarea.displayName = "Textarea";

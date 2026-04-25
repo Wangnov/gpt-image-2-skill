@@ -16,6 +16,7 @@ import { EditScreen } from "@/components/screens/edit";
 import { HistoryScreen } from "@/components/screens/history";
 import { ProvidersScreen } from "@/components/screens/providers";
 import { SettingsScreen } from "@/components/screens/settings";
+import { MockupsScreen } from "@/components/screens/mockups";
 import { useConfig } from "@/hooks/use-config";
 import { useJobNotifications } from "@/hooks/use-job-notifications";
 import { useJobs } from "@/hooks/use-jobs";
@@ -74,7 +75,8 @@ function readInitialScreen(): ScreenId {
       s === "edit" ||
       s === "history" ||
       s === "providers" ||
-      s === "settings"
+      s === "settings" ||
+      s === "mockups"
     )
       return s;
   } catch {
@@ -89,6 +91,7 @@ const TITLES: Record<ScreenId, { title: string; subtitle: string }> = {
   history: { title: "任务", subtitle: "查看正在运行、已完成和失败的生成记录" },
   providers: { title: "凭证", subtitle: "管理生成图片时使用的接入信息" },
   settings: { title: "设置", subtitle: "外观、队列与通知偏好" },
+  mockups: { title: "液态预览", subtitle: "React Bits 风格的视觉重构稿（静态 mockup）" },
 };
 
 export default function App() {
@@ -140,6 +143,26 @@ export default function App() {
       false,
   };
   const meta = TITLES[screen];
+
+  // Mockups screen runs in fullscreen "experience" mode — no sidebar, no toolbar,
+  // no command palette overlay. The mockup itself owns the entire window.
+  if (screen === "mockups") {
+    return (
+      <div className="desktop">
+        <WindowChrome>
+          <ScreenErrorBoundary onReset={() => setScreenState("mockups")}>
+            <MockupsScreen onExit={() => setScreen("generate")} />
+          </ScreenErrorBoundary>
+          <Toaster
+            position="top-right"
+            theme="dark"
+            closeButton
+            richColors
+          />
+        </WindowChrome>
+      </div>
+    );
+  }
 
   return (
     <div className="desktop">

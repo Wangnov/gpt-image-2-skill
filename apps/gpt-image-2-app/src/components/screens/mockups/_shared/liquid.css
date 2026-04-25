@@ -1,0 +1,391 @@
+/* ──────────────────────────────────────────────────────
+   Liquid Mockup tokens — scoped under .liquid-shell only,
+   so they never leak into production screens.
+   ────────────────────────────────────────────────────── */
+
+.liquid-shell {
+  /* dark glass palette */
+  --lq-bg: #06060a;
+  --lq-bg-deep: #050508;
+  --lq-fg: #f5f5f7;
+  --lq-fg-soft: rgba(245, 245, 247, 0.78);
+  --lq-fg-mute: rgba(245, 245, 247, 0.56);
+  --lq-fg-faint: rgba(245, 245, 247, 0.38);
+
+  --lq-glass: rgba(18, 18, 26, 0.42);
+  --lq-glass-strong: rgba(24, 24, 34, 0.62);
+  --lq-glass-deep: rgba(10, 10, 14, 0.74);
+  --lq-glass-row: rgba(255, 255, 255, 0.04);
+  --lq-glass-row-hover: rgba(255, 255, 255, 0.07);
+
+  --lq-line: rgba(255, 255, 255, 0.08);
+  --lq-line-strong: rgba(255, 255, 255, 0.16);
+  --lq-line-faint: rgba(255, 255, 255, 0.04);
+  --lq-line-glow: 0 0 0 1px rgba(255, 255, 255, 0.06) inset,
+    0 1px 0 0 rgba(255, 255, 255, 0.08) inset,
+    0 -1px 0 0 rgba(255, 255, 255, 0.02) inset;
+
+  --lq-shadow-card: 0 24px 64px -24px rgba(0, 0, 0, 0.7),
+    0 8px 24px -12px rgba(0, 0, 0, 0.5);
+  --lq-shadow-pop: 0 18px 48px -18px rgba(0, 0, 0, 0.6);
+  --lq-shadow-row: 0 1px 0 rgba(255, 255, 255, 0.04) inset;
+
+  --lq-accent: #a78bfa;
+  --lq-accent-2: #67e8f9;
+  --lq-accent-3: #f0abfc;
+  --lq-status-ok: #34d399;
+  --lq-status-run: #fbbf24;
+  --lq-status-err: #f87171;
+  --lq-status-queue: #94a3b8;
+
+  --lq-radius-sm: 8px;
+  --lq-radius-md: 12px;
+  --lq-radius-lg: 18px;
+  --lq-radius-xl: 24px;
+
+  position: relative;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  color: var(--lq-fg);
+  background: var(--lq-bg);
+  font-family:
+    "Inter", -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue",
+    sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  letter-spacing: -0.005em;
+}
+
+/* full-bleed background layer (LiquidChrome canvas lives here) */
+.liquid-bg {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+}
+.liquid-bg > * {
+  width: 100% !important;
+  height: 100% !important;
+}
+
+/* darkening / vignette overlay above the bg, below content */
+.liquid-veil {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  pointer-events: none;
+}
+.liquid-veil--soft {
+  background:
+    radial-gradient(120% 80% at 50% 12%, transparent 0%, rgba(6, 6, 10, 0.55) 70%),
+    linear-gradient(180deg, rgba(6, 6, 10, 0.18) 0%, rgba(6, 6, 10, 0.78) 100%);
+}
+.liquid-veil--strong {
+  background:
+    radial-gradient(120% 100% at 50% 50%, transparent 0%, rgba(4, 4, 8, 0.85) 80%),
+    linear-gradient(180deg, rgba(4, 4, 8, 0.42) 0%, rgba(4, 4, 8, 0.92) 100%);
+}
+.liquid-veil--mid {
+  background:
+    radial-gradient(110% 90% at 50% 30%, transparent 0%, rgba(6, 6, 10, 0.62) 75%),
+    linear-gradient(180deg, rgba(6, 6, 10, 0.28) 0%, rgba(6, 6, 10, 0.84) 100%);
+}
+
+/* content layer */
+.liquid-content {
+  position: relative;
+  z-index: 2;
+  width: 100%;
+  height: 100%;
+}
+
+/* ── glass primitives ─────────────────────────────── */
+
+.glass-panel {
+  position: relative;
+  background: var(--lq-glass);
+  border: 1px solid var(--lq-line);
+  border-radius: var(--lq-radius-lg);
+  box-shadow: var(--lq-shadow-card);
+  -webkit-backdrop-filter: blur(28px) saturate(140%);
+  backdrop-filter: blur(28px) saturate(140%);
+}
+.glass-panel::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  background: linear-gradient(
+    180deg,
+    rgba(255, 255, 255, 0.08) 0%,
+    rgba(255, 255, 255, 0) 38%,
+    rgba(255, 255, 255, 0) 78%,
+    rgba(255, 255, 255, 0.04) 100%
+  );
+}
+
+.glass-panel--strong {
+  background: var(--lq-glass-strong);
+  border-color: var(--lq-line-strong);
+}
+
+.glass-panel--deep {
+  background: var(--lq-glass-deep);
+  border-color: var(--lq-line);
+}
+
+.glass-row {
+  background: var(--lq-glass-row);
+  border: 1px solid transparent;
+  border-radius: var(--lq-radius-md);
+  transition:
+    background 160ms ease,
+    border-color 160ms ease;
+}
+.glass-row:hover {
+  background: var(--lq-glass-row-hover);
+  border-color: var(--lq-line);
+}
+
+.glass-input,
+.glass-textarea,
+.glass-select {
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--lq-line);
+  color: var(--lq-fg);
+  border-radius: 10px;
+  outline: none;
+  transition: border-color 140ms ease, background 140ms ease;
+}
+.glass-input::placeholder,
+.glass-textarea::placeholder {
+  color: var(--lq-fg-faint);
+}
+.glass-input:focus,
+.glass-textarea:focus,
+.glass-select:focus {
+  border-color: rgba(167, 139, 250, 0.55);
+  background: rgba(167, 139, 250, 0.06);
+  box-shadow: 0 0 0 4px rgba(167, 139, 250, 0.1);
+}
+
+.glass-button {
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid var(--lq-line);
+  color: var(--lq-fg);
+  border-radius: 999px;
+  font-weight: 500;
+  letter-spacing: -0.005em;
+  transition:
+    background 160ms ease,
+    border-color 160ms ease,
+    transform 120ms ease;
+}
+.glass-button:hover {
+  background: rgba(255, 255, 255, 0.1);
+  border-color: var(--lq-line-strong);
+}
+.glass-button:active {
+  transform: translateY(0.5px);
+}
+
+.glass-button--primary {
+  background:
+    linear-gradient(180deg, rgba(167, 139, 250, 0.42), rgba(103, 232, 249, 0.32)),
+    rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(167, 139, 250, 0.5);
+  box-shadow:
+    0 8px 24px -8px rgba(167, 139, 250, 0.55),
+    0 0 0 1px rgba(255, 255, 255, 0.08) inset;
+}
+.glass-button--primary:hover {
+  background:
+    linear-gradient(180deg, rgba(167, 139, 250, 0.55), rgba(103, 232, 249, 0.45)),
+    rgba(255, 255, 255, 0.06);
+  border-color: rgba(167, 139, 250, 0.7);
+}
+
+.glass-button--ghost {
+  background: transparent;
+  border-color: transparent;
+}
+.glass-button--ghost:hover {
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.glass-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  font-size: 12px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid var(--lq-line);
+  color: var(--lq-fg-soft);
+  font-weight: 500;
+}
+
+/* dotted dashed selection ring (for edit canvas mask) */
+.dashed-selection {
+  border: 1.5px dashed rgba(255, 255, 255, 0.7);
+  border-radius: 50%;
+  pointer-events: none;
+}
+
+/* divider */
+.glass-divider {
+  height: 1px;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    var(--lq-line) 18%,
+    var(--lq-line) 82%,
+    transparent
+  );
+}
+
+/* progress bar */
+.glass-progress {
+  height: 4px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.08);
+  overflow: hidden;
+}
+.glass-progress > div {
+  height: 100%;
+  background: linear-gradient(
+    90deg,
+    rgba(167, 139, 250, 0.9),
+    rgba(103, 232, 249, 0.8)
+  );
+  box-shadow: 0 0 12px rgba(167, 139, 250, 0.6);
+}
+
+/* status dot */
+.status-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 999px;
+  display: inline-block;
+}
+.status-dot--ok {
+  background: var(--lq-status-ok);
+  box-shadow: 0 0 8px rgba(52, 211, 153, 0.6);
+}
+.status-dot--run {
+  background: var(--lq-status-run);
+  box-shadow: 0 0 8px rgba(251, 191, 36, 0.6);
+}
+.status-dot--err {
+  background: var(--lq-status-err);
+  box-shadow: 0 0 8px rgba(248, 113, 113, 0.6);
+}
+.status-dot--queue {
+  background: var(--lq-status-queue);
+}
+
+/* placeholder image gradients (for mockup tiles where we don't have real assets) */
+.tile-placeholder {
+  background:
+    radial-gradient(120% 80% at 30% 20%, rgba(167, 139, 250, 0.6), transparent 60%),
+    radial-gradient(120% 80% at 70% 80%, rgba(103, 232, 249, 0.5), transparent 60%),
+    linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+}
+.tile-cyber {
+  background:
+    radial-gradient(120% 80% at 30% 30%, rgba(244, 114, 182, 0.55), transparent 60%),
+    radial-gradient(120% 80% at 70% 70%, rgba(34, 211, 238, 0.45), transparent 60%),
+    linear-gradient(135deg, #0f0a1f 0%, #1f0a2e 100%);
+}
+.tile-mountain {
+  background:
+    linear-gradient(180deg, #2c3e50 0%, #4ca1af 100%);
+}
+.tile-flow {
+  background:
+    radial-gradient(140% 100% at 50% 50%, rgba(192, 192, 220, 0.5), transparent 60%),
+    linear-gradient(135deg, #2e2e3e 0%, #1a1a28 100%);
+}
+.tile-cat {
+  background:
+    radial-gradient(120% 80% at 50% 40%, rgba(249, 168, 212, 0.4), transparent 60%),
+    linear-gradient(135deg, #1a1a2e 0%, #0f3460 100%);
+}
+.tile-arch {
+  background:
+    radial-gradient(120% 80% at 50% 30%, rgba(180, 200, 220, 0.45), transparent 60%),
+    radial-gradient(120% 80% at 30% 80%, rgba(100, 150, 180, 0.35), transparent 60%),
+    linear-gradient(180deg, #2a2f38 0%, #0f1219 100%);
+}
+
+/* utility for forcing white text against any bg */
+.text-on-glass {
+  color: var(--lq-fg);
+}
+.text-on-glass-soft {
+  color: var(--lq-fg-soft);
+}
+.text-on-glass-mute {
+  color: var(--lq-fg-mute);
+}
+.text-on-glass-faint {
+  color: var(--lq-fg-faint);
+}
+
+/* keyboard kbd in dark mockup */
+.lq-kbd {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  font-family: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 10.5px;
+  font-weight: 500;
+  color: var(--lq-fg-mute);
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid var(--lq-line);
+  border-radius: 4px;
+}
+
+/* mockup-nav floating chip bar at the very top */
+.mockup-nav {
+  position: absolute;
+  top: 12px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 10;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px;
+  border-radius: 999px;
+  background: rgba(8, 8, 12, 0.6);
+  border: 1px solid var(--lq-line);
+  -webkit-backdrop-filter: blur(20px) saturate(140%);
+  backdrop-filter: blur(20px) saturate(140%);
+  box-shadow: var(--lq-shadow-pop);
+}
+.mockup-nav-item {
+  padding: 7px 14px;
+  font-size: 12.5px;
+  font-weight: 500;
+  color: var(--lq-fg-mute);
+  border-radius: 999px;
+  cursor: pointer;
+  border: none;
+  background: transparent;
+  transition: color 160ms ease, background 160ms ease;
+}
+.mockup-nav-item:hover {
+  color: var(--lq-fg);
+}
+.mockup-nav-item[data-active="true"] {
+  color: var(--lq-fg);
+  background: rgba(255, 255, 255, 0.1);
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.12) inset;
+}
