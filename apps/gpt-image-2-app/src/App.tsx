@@ -152,6 +152,7 @@ export default function App() {
                   <GenerateScreen
                     config={config}
                     onOpenEdit={() => setScreen("edit")}
+                    onOpenHistory={() => setScreen("history")}
                   />
                 )}
                 {screen === "edit" && <EditScreen config={config} />}
