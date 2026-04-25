@@ -355,11 +355,13 @@
   min-width: 0;
   min-height: 0;
   overflow: hidden;
-  grid-template-columns: 220px minmax(0, 1fr);
-  grid-template-rows: minmax(0, 1fr) minmax(220px, 36%);
+  gap: 12px;
+  padding: 12px;
+  grid-template-columns: 300px minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr) auto;
   grid-template-areas:
     "refs canvas"
-    "refs settings";
+    "settings canvas";
 }
 
 .parameter-shelf {
@@ -408,9 +410,7 @@
     grid-template-columns: minmax(0, 1fr) 340px;
   }
   .edit-layout {
-    grid-template-columns: 248px minmax(320px, 1fr) 300px;
-    grid-template-rows: minmax(0, 1fr);
-    grid-template-areas: "refs canvas settings";
+    grid-template-columns: 320px minmax(0, 1fr);
   }
 }
 

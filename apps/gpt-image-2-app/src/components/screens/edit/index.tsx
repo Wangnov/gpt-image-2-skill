@@ -395,7 +395,7 @@ export function EditScreen({ config }: { config?: ServerConfig }) {
 
   return (
     <div className="edit-layout">
-      <div className="edit-refs flex flex-col overflow-auto border-r border-border bg-raised">
+      <div className="edit-refs surface-panel flex flex-col overflow-auto">
         <div className="border-b border-border-faint p-4">
           <div className="mb-2.5 flex items-center justify-between">
             <div className="t-h3">
@@ -568,7 +568,7 @@ export function EditScreen({ config }: { config?: ServerConfig }) {
         </div>
       </div>
 
-      <div className="edit-canvas gridpaper flex flex-col overflow-auto bg-background">
+      <div className="edit-canvas surface-panel flex flex-col overflow-auto">
         <div className="flex items-center gap-2.5 px-6 pb-3 pt-5">
           <Segmented
             value={editMode}
@@ -750,7 +750,7 @@ export function EditScreen({ config }: { config?: ServerConfig }) {
         </div>
       </div>
 
-      <div className="edit-settings parameter-shelf border-t border-border bg-raised xl:border-l xl:border-t-0">
+      <div className="edit-settings surface-panel parameter-shelf">
         <div className="parameter-scroll px-4 py-3.5">
           <Field label="凭证" id={providerSelectId}>
             <div className="flex h-9 items-center gap-1.5 rounded-md border border-border bg-sunken px-2.5 focus-within:border-accent focus-within:shadow-[0_0_0_3px_var(--accent-faint)] transition-colors">
