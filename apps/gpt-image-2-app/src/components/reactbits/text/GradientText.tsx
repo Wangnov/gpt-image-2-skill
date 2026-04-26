@@ -95,17 +95,17 @@ export default function GradientText({
   };
 
   return (
-    <motion.div
-      className={`relative mx-auto flex max-w-fit flex-row items-center justify-center rounded-[1.25rem] font-medium backdrop-blur transition-shadow duration-500 overflow-hidden cursor-pointer ${showBorder ? 'py-1 px-2' : ''} ${className}`}
+    <motion.span
+      className={`relative inline-flex max-w-fit items-baseline ${showBorder ? 'rounded-[1.25rem] px-2 py-1 backdrop-blur transition-shadow duration-500 overflow-hidden cursor-pointer' : ''} ${className}`}
       onMouseEnter={handleMouseEnter}
       onMouseLeave={handleMouseLeave}
     >
       {showBorder && (
-        <motion.div
+        <motion.span
           className="absolute inset-0 z-0 pointer-events-none rounded-[1.25rem]"
           style={{ ...gradientStyle, backgroundPosition }}
         >
-          <div
+          <span
             className="absolute bg-black rounded-[1.25rem] z-[-1]"
             style={{
               width: 'calc(100% - 2px)',
@@ -115,14 +115,16 @@ export default function GradientText({
               transform: 'translate(-50%, -50%)'
             }}
           />
-        </motion.div>
+        </motion.span>
       )}
-      <motion.div
-        className="inline-block relative z-2 text-transparent bg-clip-text"
+      {/* descender-safe inner span: leading-[1.2] + small bottom padding so
+          characters like "g" / "y" / "j" never get clipped by bg-clip-text. */}
+      <motion.span
+        className="inline-block relative z-[2] text-transparent bg-clip-text leading-[1.15] pb-[0.08em]"
         style={{ ...gradientStyle, backgroundPosition, WebkitBackgroundClip: 'text' }}
       >
         {children}
-      </motion.div>
-    </motion.div>
+      </motion.span>
+    </motion.span>
   );
 }
