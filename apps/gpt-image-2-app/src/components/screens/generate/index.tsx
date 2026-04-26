@@ -284,43 +284,47 @@ export function GenerateScreen({
             </div>
           </div>
 
-          {/* parameter chips + CTA */}
-          <div className="mt-3 flex items-center gap-2 flex-wrap">
-            <GlassCombobox
-              variant="chip"
-              label="尺寸"
-              value={size}
-              options={POPULAR_SIZE_OPTIONS}
-              onValueChange={setSize}
-              placeholder="auto / 1536x1024"
-              minWidth="170px"
-              invalid={!sizeValidation.ok}
-            />
-            <GlassSelect
-              variant="chip"
-              label="质量"
-              value={quality}
-              options={QUALITY_CHIP_OPTIONS}
-              onValueChange={setQuality}
-            />
-            <GlassSelect
-              variant="chip"
-              label="格式"
-              value={format}
-              options={FORMAT_OPTIONS}
-              onValueChange={setFormat}
-            />
-            <GlassCombobox
-              variant="chip"
-              label="数量"
-              value={String(n)}
-              options={COUNT_OPTIONS}
-              onValueChange={(v) => setN(Number(v) || 1)}
-              disabled={!supportsMultipleOutputs}
-              inputMode="numeric"
-              minWidth="100px"
-            />
-            <div className="flex-1" />
+          {/* parameter chips + CTA — single row, scroll if too narrow */}
+          <div className="mt-3 flex items-center gap-2">
+            <div className="flex flex-1 min-w-0 items-center gap-2 overflow-x-auto pb-px">
+              <GlassCombobox
+                variant="chip"
+                label="尺寸"
+                value={size}
+                options={POPULAR_SIZE_OPTIONS}
+                onValueChange={setSize}
+                placeholder="WxH"
+                className="shrink-0 w-[150px]"
+                invalid={!sizeValidation.ok}
+              />
+              <GlassSelect
+                variant="chip"
+                label="质量"
+                value={quality}
+                options={QUALITY_CHIP_OPTIONS}
+                onValueChange={setQuality}
+                className="shrink-0"
+              />
+              <GlassSelect
+                variant="chip"
+                label="格式"
+                value={format}
+                options={FORMAT_OPTIONS}
+                onValueChange={setFormat}
+                className="shrink-0"
+              />
+              <GlassCombobox
+                variant="chip"
+                label="数量"
+                value={String(n)}
+                options={COUNT_OPTIONS}
+                onValueChange={(v) => setN(Number(v) || 1)}
+                disabled={!supportsMultipleOutputs}
+                inputMode="numeric"
+                placeholder="1-10"
+                className="shrink-0 w-[88px]"
+              />
+            </div>
             <button
               type="button"
               onClick={handleRun}

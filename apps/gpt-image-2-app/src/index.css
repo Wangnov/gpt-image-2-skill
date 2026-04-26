@@ -436,3 +436,81 @@
     transition-duration: 0.01ms !important;
   }
 }
+
+/* ── Sonner toast — liquid glass override ────────────────
+   Sonner ships a clean dark theme but it's flat/opaque. Repaint each
+   tone (default / success / error / info / warning) as a translucent
+   glass surface so toasts feel native to the liquid app. */
+[data-sonner-toaster] {
+  --normal-bg: rgba(14, 14, 20, 0.78);
+  --normal-text: var(--text);
+  --normal-border: rgba(255, 255, 255, 0.12);
+
+  --success-bg: rgba(14, 22, 18, 0.82);
+  --success-border: rgba(52, 211, 153, 0.32);
+  --success-text: var(--text);
+
+  --error-bg: rgba(26, 14, 18, 0.82);
+  --error-border: rgba(248, 113, 113, 0.36);
+  --error-text: var(--text);
+
+  --info-bg: rgba(16, 18, 28, 0.82);
+  --info-border: rgba(167, 139, 250, 0.32);
+  --info-text: var(--text);
+
+  --warning-bg: rgba(26, 22, 14, 0.82);
+  --warning-border: rgba(251, 191, 36, 0.32);
+  --warning-text: var(--text);
+}
+
+[data-sonner-toast] {
+  -webkit-backdrop-filter: blur(28px) saturate(150%);
+  backdrop-filter: blur(28px) saturate(150%);
+  border-radius: 12px !important;
+  box-shadow:
+    0 24px 64px -24px rgba(0, 0, 0, 0.72),
+    0 8px 24px -12px rgba(0, 0, 0, 0.5),
+    inset 0 1px 0 rgba(255, 255, 255, 0.06) !important;
+}
+
+[data-sonner-toast] [data-title] {
+  color: var(--text) !important;
+  font-weight: 600;
+  letter-spacing: -0.005em;
+}
+
+[data-sonner-toast] [data-description] {
+  color: var(--text-muted) !important;
+}
+
+[data-sonner-toast] [data-icon] {
+  opacity: 0.92;
+}
+
+[data-sonner-toast] [data-button] {
+  background: rgba(167, 139, 250, 0.18) !important;
+  color: var(--text) !important;
+  border: 1px solid rgba(167, 139, 250, 0.4) !important;
+  font-weight: 500;
+  border-radius: 8px !important;
+  transition: background 120ms ease;
+}
+[data-sonner-toast] [data-button]:hover {
+  background: rgba(167, 139, 250, 0.26) !important;
+}
+
+[data-sonner-toast] [data-cancel] {
+  background: rgba(255, 255, 255, 0.06) !important;
+  color: var(--text-muted) !important;
+  border: 1px solid var(--border) !important;
+}
+
+[data-sonner-toast] [data-close-button] {
+  background: rgba(255, 255, 255, 0.06) !important;
+  color: var(--text-muted) !important;
+  border: 1px solid var(--border) !important;
+}
+[data-sonner-toast] [data-close-button]:hover {
+  background: rgba(255, 255, 255, 0.10) !important;
+  color: var(--text) !important;
+}
