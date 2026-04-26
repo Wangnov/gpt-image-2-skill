@@ -814,14 +814,14 @@ export function EditScreen({ config }: { config?: ServerConfig }) {
             <Field label="质量">
               <Select
                 value={quality}
-                onChange={(event) => setQuality(event.target.value)}
+                onValueChange={setQuality}
                 options={QUALITY_OPTIONS}
               />
             </Field>
             <Field label="格式">
               <Select
                 value={format}
-                onChange={(event) => setFormat(event.target.value)}
+                onValueChange={setFormat}
                 options={["png", "jpeg", "webp"]}
               />
             </Field>

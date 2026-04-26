@@ -3,6 +3,7 @@ import { toast } from "sonner";
 import { Sparkles, ListChecks, Image as ImageIcon, X } from "lucide-react";
 import GradientText from "@/components/reactbits/text/GradientText";
 import ShinyText from "@/components/reactbits/text/ShinyText";
+import { GlassSelect } from "@/components/ui/select";
 import { useCreateGenerate, useJobs } from "@/hooks/use-jobs";
 import { useJobEvents } from "@/hooks/use-job-events";
 import {
@@ -25,68 +26,6 @@ import {
   providerNames as readProviderNames,
 } from "@/lib/providers";
 import type { ServerConfig } from "@/lib/types";
-import { cn } from "@/lib/cn";
-
-/* ── ChipSelect ─ a glass-style native <select> wearing chip clothing ── */
-function ChipSelect({
-  label,
-  value,
-  options,
-  onChange,
-  disabled,
-}: {
-  label: string;
-  value: string;
-  options: { value: string; label: string }[];
-  onChange: (v: string) => void;
-  disabled?: boolean;
-}) {
-  return (
-    <label
-      className={cn(
-        "relative inline-flex items-center gap-2 h-9 px-3 rounded-md cursor-pointer transition-colors",
-        "border border-border bg-[rgba(255,255,255,0.04)] hover:bg-[rgba(255,255,255,0.07)]",
-        disabled && "opacity-50 cursor-not-allowed",
-      )}
-    >
-      <span className="text-[10.5px] uppercase tracking-wider text-faint">
-        {label}
-      </span>
-      <span className="text-[12.5px] text-foreground">
-        {options.find((o) => o.value === value)?.label ?? value}
-      </span>
-      <svg
-        width="10"
-        height="10"
-        viewBox="0 0 12 12"
-        fill="none"
-        className="opacity-60"
-        aria-hidden
-      >
-        <path
-          d="M3 4.5L6 7.5L9 4.5"
-          stroke="currentColor"
-          strokeWidth="1.5"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        />
-      </svg>
-      <select
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        disabled={disabled}
-        className="absolute inset-0 cursor-pointer opacity-0"
-        aria-label={label}
-      >
-        {options.map((o) => (
-          <option key={o.value} value={o.value}>
-            {o.label}
-          </option>
-        ))}
-      </select>
-    </label>
-  );
-}
 
 const SIZE_OPTIONS = [
   { value: "auto", label: "自动" },
@@ -358,29 +297,33 @@ export function GenerateScreen({
 
           {/* parameter chips + CTA */}
           <div className="mt-3 flex items-center gap-2 flex-wrap">
-            <ChipSelect
+            <GlassSelect
+              variant="chip"
               label="尺寸"
               value={size}
               options={SIZE_OPTIONS}
-              onChange={setSize}
+              onValueChange={setSize}
             />
-            <ChipSelect
+            <GlassSelect
+              variant="chip"
               label="质量"
               value={quality}
               options={QUALITY_CHIP_OPTIONS}
-              onChange={setQuality}
+              onValueChange={setQuality}
             />
-            <ChipSelect
+            <GlassSelect
+              variant="chip"
               label="格式"
               value={format}
               options={FORMAT_OPTIONS}
-              onChange={setFormat}
+              onValueChange={setFormat}
             />
-            <ChipSelect
+            <GlassSelect
+              variant="chip"
               label="数量"
               value={String(n)}
               options={N_OPTIONS}
-              onChange={(v) => setN(Number(v))}
+              onValueChange={(v) => setN(Number(v))}
               disabled={!supportsMultipleOutputs}
             />
             <div className="flex-1" />
