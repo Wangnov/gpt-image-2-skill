@@ -15,6 +15,12 @@ const queryClient = new QueryClient({
   },
 });
 
+// In dev mode, expose the QueryClient on window so we can inspect & mock data
+// from the browser console / preview eval. No-op in production builds.
+if (import.meta.env.DEV) {
+  (window as unknown as { __qc?: QueryClient }).__qc = queryClient;
+}
+
 ReactDOM.createRoot(document.getElementById("root")!).render(
   <React.StrictMode>
     <QueryClientProvider client={queryClient}>
