@@ -767,17 +767,17 @@ fn apply_partial_output(
         .and_then(Value::as_str)
         .map(ToString::to_string);
 
-    let parent_snapshot = job_snapshot(
-        &ctx.job_id,
-        &ctx.command,
-        &ctx.provider,
-        "running",
-        &ctx.created_at,
-        ctx.metadata.clone(),
-        first_path,
-        json!(sorted_outputs),
-        Value::Null,
-    );
+    let parent_snapshot = job_snapshot(JobSnapshotInput {
+        id: &ctx.job_id,
+        command: &ctx.command,
+        provider: &ctx.provider,
+        status: "running",
+        created_at: &ctx.created_at,
+        metadata: ctx.metadata.clone(),
+        output_path: first_path,
+        outputs: json!(sorted_outputs),
+        error: Value::Null,
+    });
     let _ = persist_job(&parent_snapshot);
 
     let payload_path = payload
@@ -1033,28 +1033,30 @@ fn output_path_from_payload(payload: &Value) -> Option<String> {
         })
 }
 
-fn job_snapshot(
-    id: &str,
-    command: &str,
-    provider: &str,
-    status: &str,
-    created_at: &str,
+struct JobSnapshotInput<'a> {
+    id: &'a str,
+    command: &'a str,
+    provider: &'a str,
+    status: &'a str,
+    created_at: &'a str,
     metadata: Value,
     output_path: Option<String>,
     outputs: Value,
     error: Value,
-) -> Value {
+}
+
+fn job_snapshot(input: JobSnapshotInput<'_>) -> Value {
     json!({
-        "id": id,
-        "command": command,
-        "provider": provider,
-        "status": status,
-        "created_at": created_at,
+        "id": input.id,
+        "command": input.command,
+        "provider": input.provider,
+        "status": input.status,
+        "created_at": input.created_at,
         "updated_at": chrono_like_now(),
-        "metadata": metadata,
-        "outputs": outputs,
-        "output_path": output_path,
-        "error": error,
+        "metadata": input.metadata,
+        "outputs": input.outputs,
+        "output_path": input.output_path,
+        "error": input.error,
     })
 }
 
@@ -1361,31 +1363,31 @@ fn completed_job_for_queue(queued: &QueuedJob, response: &Value) -> Value {
             .and_then(Value::as_str)
             .map(ToString::to_string)
     });
-    job_snapshot(
-        &queued.id,
-        &queued.command,
+    job_snapshot(JobSnapshotInput {
+        id: &queued.id,
+        command: &queued.command,
         provider,
-        "completed",
-        &queued.created_at,
-        queued.metadata.clone(),
+        status: "completed",
+        created_at: &queued.created_at,
+        metadata: queued.metadata.clone(),
         output_path,
         outputs,
-        Value::Null,
-    )
+        error: Value::Null,
+    })
 }
 
 fn failed_job_for_queue(queued: &QueuedJob, message: String) -> Value {
-    job_snapshot(
-        &queued.id,
-        &queued.command,
-        &queued.provider,
-        "failed",
-        &queued.created_at,
-        queued.metadata.clone(),
-        None,
-        json!([]),
-        json!({"message": message}),
-    )
+    job_snapshot(JobSnapshotInput {
+        id: &queued.id,
+        command: &queued.command,
+        provider: &queued.provider,
+        status: "failed",
+        created_at: &queued.created_at,
+        metadata: queued.metadata.clone(),
+        output_path: None,
+        outputs: json!([]),
+        error: json!({"message": message}),
+    })
 }
 
 fn finish_queued_job(
@@ -1445,17 +1447,17 @@ fn start_queued_jobs(app: tauri::AppHandle, state: JobQueueState) {
                 return;
             };
             inner.running += 1;
-            let running_job = job_snapshot(
-                &queued.id,
-                &queued.command,
-                &queued.provider,
-                "running",
-                &queued.created_at,
-                queued.metadata.clone(),
-                None,
-                json!([]),
-                Value::Null,
-            );
+            let running_job = job_snapshot(JobSnapshotInput {
+                id: &queued.id,
+                command: &queued.command,
+                provider: &queued.provider,
+                status: "running",
+                created_at: &queued.created_at,
+                metadata: queued.metadata.clone(),
+                output_path: None,
+                outputs: json!([]),
+                error: Value::Null,
+            });
             let event = append_queue_event(
                 &mut inner,
                 &queued.id,
@@ -1500,17 +1502,17 @@ fn enqueue_job(
     state: JobQueueState,
     queued: QueuedJob,
 ) -> Result<Value, String> {
-    let job = job_snapshot(
-        &queued.id,
-        &queued.command,
-        &queued.provider,
-        "queued",
-        &queued.created_at,
-        queued.metadata.clone(),
-        None,
-        json!([]),
-        Value::Null,
-    );
+    let job = job_snapshot(JobSnapshotInput {
+        id: &queued.id,
+        command: &queued.command,
+        provider: &queued.provider,
+        status: "queued",
+        created_at: &queued.created_at,
+        metadata: queued.metadata.clone(),
+        output_path: None,
+        outputs: json!([]),
+        error: Value::Null,
+    });
     persist_job(&job)?;
     let job_id = queued.id.clone();
     let (event, queue) = {
@@ -1598,17 +1600,17 @@ fn cancel_job(
         );
         (queued, event)
     };
-    let job = job_snapshot(
-        &queued.id,
-        &queued.command,
-        &queued.provider,
-        "canceled",
-        &queued.created_at,
-        queued.metadata,
-        None,
-        json!([]),
-        Value::Null,
-    );
+    let job = job_snapshot(JobSnapshotInput {
+        id: &queued.id,
+        command: &queued.command,
+        provider: &queued.provider,
+        status: "canceled",
+        created_at: &queued.created_at,
+        metadata: queued.metadata,
+        output_path: None,
+        outputs: json!([]),
+        error: Value::Null,
+    });
     persist_job(&job)?;
     emit_queue_event(&app, &job_id, &event);
     Ok(json!({

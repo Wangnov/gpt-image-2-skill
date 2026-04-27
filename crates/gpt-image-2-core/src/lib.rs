@@ -361,7 +361,7 @@ pub enum ConfigSubcommand {
     Inspect,
     ListProviders,
     SetDefault(SetDefaultArgs),
-    AddProvider(AddProviderArgs),
+    AddProvider(Box<AddProviderArgs>),
     RemoveProvider(RemoveProviderArgs),
     TestProvider(TestProviderArgs),
 }
@@ -4801,8 +4801,10 @@ mod tests {
     fn app_config_round_trips_with_file_secret() {
         let temp_dir = tempfile::tempdir().unwrap();
         let config_path = temp_dir.path().join("config.json");
-        let mut config = AppConfig::default();
-        config.default_provider = Some("local".to_string());
+        let mut config = AppConfig {
+            default_provider: Some("local".to_string()),
+            ..Default::default()
+        };
         config.providers.insert(
             "local".to_string(),
             ProviderConfig {
