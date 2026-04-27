@@ -1,4 +1,4 @@
-import { type ReactNode, useState } from "react";
+import { type ReactNode, useEffect, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { toast } from "sonner";
 import {
@@ -36,7 +36,41 @@ import { copyText, openPath, revealPath } from "@/lib/user-actions";
 import { effectiveDefaultProvider } from "@/lib/providers";
 import { AddProviderDialog } from "@/components/screens/providers/add-provider-dialog";
 import type { ProviderConfig, ServerConfig } from "@/lib/types";
+import {
+  HIDDEN_PRESETS,
+  THEME_PRESETS,
+  readUnlockedPresets,
+  unlockPreset,
+  type ThemePreset,
+  type ThemePresetId,
+} from "@/lib/theme-presets";
+import ScrambleText from "@/components/reactbits/text/ScrambleText";
 import { cn } from "@/lib/cn";
+
+// Visible preset order in the Appearance gallery. Hidden presets join
+// at the tail once unlocked (see HIDDEN_PRESETS).
+const PRESET_ORDER: ThemePresetId[] = [
+  "liquid-violet",
+  "plasma-sunset",
+  "beams-cyan",
+  "mesh-mono",
+];
+
+const FONT_LABEL: Record<ThemePreset["suggestedFont"], string> = {
+  system: "系统",
+  mono: "等宽",
+  serif: "衬线",
+};
+
+const DENSITY_LABEL: Record<ThemePreset["suggestedDensity"], string> = {
+  compact: "紧凑",
+  comfortable: "舒适",
+};
+
+/** Custom event emitted when AboutPanel unlocks a hidden preset, so
+ *  AppearancePanel can re-read the localStorage-backed unlock set
+ *  without prop-drilling or context. */
+const UNLOCK_EVENT = "gpt2:unlocks";
 
 type SettingsTab = "creds" | "appearance" | "runtime" | "about";
 
@@ -131,6 +165,11 @@ function PathRow({
   path?: string;
   isFolder?: boolean;
 }) {
+  // Bumping this trigger replays the ScrambleText reveal — used as a
+  // visual receipt that "the value you just copied is the value you
+  // see right now", catching cases where the user might have stale
+  // path text in their clipboard.
+  const [copyTrigger, setCopyTrigger] = useState(0);
   return (
     <div className="flex items-center gap-4 px-5 py-3">
       <div className="min-w-0 flex-1">
@@ -139,7 +178,11 @@ function PathRow({
           className="mt-0.5 truncate font-mono text-[11px] text-faint"
           title={path ?? undefined}
         >
-          {path ?? "—"}
+          <ScrambleText
+            text={path ?? "—"}
+            trigger={copyTrigger}
+            duration={520}
+          />
         </div>
       </div>
       <div className="flex shrink-0 gap-0.5">
@@ -162,7 +205,9 @@ function PathRow({
           icon="copy"
           disabled={!path}
           onClick={() => {
-            if (path) void copyText(path, "路径");
+            if (!path) return;
+            void copyText(path, "路径");
+            setCopyTrigger((n) => n + 1);
           }}
           title="复制路径"
           aria-label="复制路径"
@@ -527,47 +572,150 @@ function CredsPanel({ config }: { config?: ServerConfig }) {
   );
 }
 
+function ThemePreviewCard({
+  preset,
+  isActive,
+  onSelect,
+}: {
+  preset: ThemePreset;
+  isActive: boolean;
+  onSelect: () => void;
+}) {
+  // Mini gradient preview is built from the preset's RGB triplets so
+  // the card itself uses the colors it would apply when selected.
+  // Three color dots mirror the accent / accent-2 / accent-3 swatches
+  // that drive the alpha ramps in index.css.
+  return (
+    <button
+      type="button"
+      onClick={onSelect}
+      aria-pressed={isActive}
+      title={preset.description}
+      className={cn(
+        "group relative h-[88px] rounded-lg overflow-hidden text-left transition-all",
+        "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--accent)]",
+        isActive
+          ? "ring-2 ring-[color:var(--accent)] shadow-[0_0_24px_-6px_rgba(var(--accent-rgb),0.55)]"
+          : "ring-1 ring-[color:var(--w-10)] hover:ring-[color:var(--w-20)] hover:scale-[1.015]",
+      )}
+    >
+      <div
+        aria-hidden
+        className="absolute inset-0"
+        style={{
+          background: `linear-gradient(135deg, rgba(${preset.accentRgb}, 0.42) 0%, rgba(${preset.accent2Rgb}, 0.36) 60%, rgba(${preset.accent3Rgb}, 0.30) 100%)`,
+        }}
+      />
+      <div
+        aria-hidden
+        className="absolute inset-0 opacity-30 mix-blend-overlay"
+        style={{
+          background:
+            "radial-gradient(80% 60% at 50% 0%, rgba(255,255,255,0.18) 0%, transparent 70%)",
+        }}
+      />
+      <div className="relative flex h-full flex-col justify-between p-2">
+        <div className="flex items-center gap-1">
+          {[preset.accentRgb, preset.accent2Rgb, preset.accent3Rgb].map(
+            (rgb, i) => (
+              <span
+                key={i}
+                className="h-2.5 w-2.5 rounded-full"
+                style={{
+                  background: `rgb(${rgb})`,
+                  boxShadow: `0 0 6px rgba(${rgb}, 0.6)`,
+                }}
+              />
+            ),
+          )}
+          <span className="ml-auto t-mono text-[9.5px] text-foreground/85">
+            Aa
+          </span>
+        </div>
+        <div className="min-w-0">
+          <div className="text-[12px] font-semibold text-foreground truncate">
+            {preset.displayName}
+          </div>
+          <div className="mt-0.5 text-[10px] text-foreground/60 truncate">
+            {preset.description}
+          </div>
+        </div>
+      </div>
+      {isActive && (
+        <span
+          className="absolute top-1.5 right-1.5 inline-flex h-4 w-4 items-center justify-center rounded-full"
+          style={{ background: "var(--accent)" }}
+          aria-label="当前主题"
+        >
+          <Check size={10} className="text-[color:var(--accent-on)]" />
+        </span>
+      )}
+    </button>
+  );
+}
+
 function AppearancePanel() {
   const { tweaks, setTweaks } = useTweaks();
+  const [unlocked, setUnlocked] = useState<Set<ThemePresetId>>(() =>
+    readUnlockedPresets(),
+  );
+
+  // Stay in sync with localStorage when AboutPanel unlocks a hidden
+  // preset. Custom event keeps both panels coordinated without
+  // lifting state into TweaksContext.
+  useEffect(() => {
+    const refresh = () => setUnlocked(readUnlockedPresets());
+    window.addEventListener(UNLOCK_EVENT, refresh);
+    return () => window.removeEventListener(UNLOCK_EVENT, refresh);
+  }, []);
+
+  const visibleIds: ThemePresetId[] = [
+    ...PRESET_ORDER,
+    ...HIDDEN_PRESETS.filter((id) => unlocked.has(id)),
+  ];
+  const activePreset = THEME_PRESETS[tweaks.themePreset];
+
+  const opacityHint =
+    activePreset.surfaceStyle === "paper"
+      ? "纸感主题下用作描边强度。值越高边线越清晰。"
+      : activePreset.surfaceStyle === "neon"
+        ? "霓虹主题下用作发光强度。值越高边光越明显。"
+        : "玻璃面板的不透明度。值越低背景越能透出，值越高内容越易读。";
+
   return (
     <div className="flex-1 min-h-0 overflow-auto p-5 space-y-4">
       <Section title="主题">
-        <Row
-          title="主题"
-          description="液态深色 — 玻璃质感单一主题，强调色为紫蓝渐变。"
-          control={
-            <span
-              className="inline-flex items-center gap-2 px-3 h-8 rounded-full text-[12.5px]"
-              style={{
-                background: "var(--accent-gradient-soft)",
-                border: "1px solid var(--accent-35)",
-                color: "var(--text)",
-              }}
-            >
-              <span
-                className="h-2.5 w-2.5 rounded-full"
-                style={{
-                  background: "var(--accent-gradient-line)",
-                  boxShadow: "0 0 8px var(--accent-60)",
-                }}
+        <div className="space-y-2.5 px-5 py-3.5">
+          <div>
+            <div className="text-[13px] font-semibold text-foreground">
+              主题预设
+            </div>
+            <div className="mt-0.5 text-[11.5px] text-muted">
+              一键切换背景动效、配色、面板风格；字体和密度也会跟着调到主题推荐值。想禁用所有动效，切到「网格灰」或在 macOS
+              辅助功能里开启「减弱动态效果」。
+            </div>
+          </div>
+          <div
+            className={cn(
+              "grid gap-2",
+              visibleIds.length <= 4
+                ? "grid-cols-2 lg:grid-cols-4"
+                : "grid-cols-2 lg:grid-cols-5",
+            )}
+          >
+            {visibleIds.map((id) => (
+              <ThemePreviewCard
+                key={id}
+                preset={THEME_PRESETS[id]}
+                isActive={tweaks.themePreset === id}
+                onSelect={() => setTweaks({ themePreset: id })}
               />
-              Liquid
-            </span>
-          }
-        />
-        <Row
-          title="液态背景"
-          description="启用 WebGL 流体动画作为窗口背景。关闭后改用静态深色，节省 GPU。"
-          control={
-            <Toggle
-              checked={tweaks.liquidBackground}
-              onChange={(v) => setTweaks({ liquidBackground: v })}
-            />
-          }
-        />
+            ))}
+          </div>
+        </div>
         <Row
           title="面板透明度"
-          description="所有玻璃面板的不透明度。值越低背景越能透出，值越高内容越易读。"
+          description={opacityHint}
           control={
             <div className="flex items-center gap-3 w-[240px]">
               <input
@@ -594,10 +742,13 @@ function AppearancePanel() {
         />
       </Section>
 
-      <Section title="排版">
+      <Section
+        title="排版"
+        description="主题切换会把字体和密度调到推荐值；下面的设置会覆盖推荐。"
+      >
         <Row
           title="字体"
-          description="系统默认读起来最自然；等宽/衬线用于强调代码或文本风格。"
+          description={`主题推荐：${FONT_LABEL[activePreset.suggestedFont]}。`}
           control={
             <Segmented
               value={tweaks.font}
@@ -614,7 +765,7 @@ function AppearancePanel() {
         />
         <Row
           title="界面密度"
-          description="紧凑减少空白，舒适更透气。"
+          description={`主题推荐：${DENSITY_LABEL[activePreset.suggestedDensity]}。`}
           control={
             <Segmented
               value={tweaks.density}
@@ -694,14 +845,65 @@ function RuntimePanel() {
 }
 
 function AboutPanel() {
+  const { setTweaks } = useTweaks();
   const { data: paths } = useQuery<ConfigPaths>({
     queryKey: ["config-paths"],
     queryFn: api.configPaths,
     staleTime: 60_000,
   });
+  // Tap-counter state for the Easter egg. Counts taps on the
+  // "GPT Image 2" title; 7 within 600ms windows unlocks the
+  // letter-matrix preset. Stored in refs so re-renders don't
+  // reset the counter mid-streak.
+  const tapsRef = useRef(0);
+  const lastTapRef = useRef(0);
+
+  const handleTitleTap = () => {
+    const now = Date.now();
+    // 600ms is forgiving enough that intentional 7-taps land easily
+    // but still rejects accidental double-clicks separated by
+    // pauses. Each tap resets the window.
+    tapsRef.current = now - lastTapRef.current > 600 ? 1 : tapsRef.current + 1;
+    lastTapRef.current = now;
+    if (tapsRef.current < 7) return;
+    tapsRef.current = 0;
+    const already = readUnlockedPresets().has("letter-matrix");
+    if (!already) {
+      unlockPreset("letter-matrix");
+      window.dispatchEvent(new CustomEvent(UNLOCK_EVENT));
+      toast.success("You've found it.", {
+        description: "「字符矩阵」主题已解锁，可在「外观」里随时切换。",
+        duration: 4500,
+      });
+    }
+    setTweaks({ themePreset: "letter-matrix" });
+  };
 
   return (
     <div className="flex-1 min-h-0 overflow-auto p-5 space-y-4">
+      <header className="px-1 pt-0.5 space-y-1">
+        <div className="flex items-baseline gap-2">
+          <button
+            type="button"
+            onClick={handleTitleTap}
+            className={cn(
+              "t-h2 text-foreground tracking-tight",
+              "select-none focus-visible:outline-none",
+              "transition-transform active:scale-[0.985]",
+            )}
+            aria-label="GPT Image 2"
+          >
+            GPT Image 2
+          </button>
+          <span className="t-mono text-[11px] text-faint">
+            v{__APP_VERSION__}
+          </span>
+        </div>
+        <div className="text-[11.5px] text-muted">
+          本地图像生成与编辑桌面客户端。
+        </div>
+      </header>
+
       <Section
         title="数据位置"
         description="本地存放配置、历史和生成结果的路径。只读信息。"
