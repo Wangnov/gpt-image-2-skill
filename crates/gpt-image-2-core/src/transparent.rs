@@ -12,6 +12,7 @@ use super::*;
 const DEFAULT_MATTE_COLOR: &str = "#00ff00";
 const DEFAULT_CHROMA_THRESHOLD: f32 = 28.0;
 const DEFAULT_CHROMA_SOFTNESS: f32 = 34.0;
+const DEFAULT_SPILL_SUPPRESSION: f32 = 0.85;
 const TRANSPARENT_ALPHA_MAX: u8 = 5;
 const NONTRANSPARENT_ALPHA_MIN: u8 = 20;
 const MIN_TRANSPARENT_RATIO: f64 = 0.005;
@@ -122,6 +123,8 @@ pub struct TransparentGenerateArgs {
     pub threshold: f32,
     #[arg(long, default_value_t = DEFAULT_CHROMA_SOFTNESS)]
     pub softness: f32,
+    #[arg(long, default_value_t = DEFAULT_SPILL_SUPPRESSION, value_parser = parse_unit_float)]
+    pub spill_suppression: f32,
 }
 
 #[derive(Args, Debug, Clone)]
@@ -144,6 +147,8 @@ pub struct TransparentExtractArgs {
     pub threshold: f32,
     #[arg(long, default_value_t = DEFAULT_CHROMA_SOFTNESS)]
     pub softness: f32,
+    #[arg(long, default_value_t = DEFAULT_SPILL_SUPPRESSION, value_parser = parse_unit_float)]
+    pub spill_suppression: f32,
     #[arg(long, action = ArgAction::SetTrue)]
     pub strict: bool,
 }
@@ -197,6 +202,7 @@ struct TransparentVerification {
     stray_pixel_count: u64,
     alpha_noise_score: f64,
     matte_residue_score: Option<f64>,
+    matte_residue_checked: bool,
     halo_score: f64,
     transparent_rgb_scrubbed: bool,
     checkerboard_detected: bool,
@@ -215,6 +221,7 @@ struct ExtractionReport {
     matte_color: Option<String>,
     threshold: Option<f32>,
     softness: Option<f32>,
+    spill_suppression: Option<f32>,
     matte_decontamination_applied: bool,
     rgb_scrubbed: bool,
     dual_alignment: Option<DualAlignmentReport>,
@@ -292,6 +299,7 @@ fn run_transparent_generate(
         Some(matte_color),
         args.threshold,
         args.softness,
+        args.spill_suppression,
     )?;
     let verification = verify_transparent_file(&output_path, verification_options)?;
     if !verification.passed {
@@ -338,6 +346,7 @@ fn run_transparent_generate(
                 "method": method.as_str(),
                 "profile": args.profile.as_str(),
                 "matte_color": color_to_hex(matte_color),
+                "spill_suppression": args.spill_suppression,
                 "size": args.size,
                 "quality": args.quality.map(Quality::as_str),
                 "format": "png",
@@ -574,6 +583,7 @@ fn run_transparent_extract(args: &TransparentExtractArgs) -> Result<CommandOutco
                 matte,
                 args.threshold,
                 args.softness,
+                args.spill_suppression,
             )?
         }
         TransparentMethod::Dual => {
@@ -705,10 +715,11 @@ fn extract_chroma_file(
     matte_color: Option<[u8; 3]>,
     threshold: f32,
     softness: f32,
+    spill_suppression: f32,
 ) -> Result<ExtractionReport, AppError> {
     let image = read_image(input_path)?.to_rgba8();
     let matte = matte_color.unwrap_or_else(|| estimate_matte_color(&image));
-    let mut output = extract_chroma(&image, matte, threshold, softness);
+    let mut output = extract_chroma(&image, matte, threshold, softness, spill_suppression);
     scrub_transparent_rgb(&mut output);
     save_rgba_png(output_path, &output)?;
     Ok(ExtractionReport {
@@ -720,6 +731,7 @@ fn extract_chroma_file(
         matte_color: Some(color_to_hex(matte)),
         threshold: Some(threshold),
         softness: Some(softness),
+        spill_suppression: Some(spill_suppression),
         matte_decontamination_applied: true,
         rgb_scrubbed: true,
         dual_alignment: None,
@@ -759,13 +771,20 @@ fn extract_dual_file(
         matte_color: None,
         threshold: None,
         softness: None,
+        spill_suppression: None,
         matte_decontamination_applied: false,
         rgb_scrubbed: true,
         dual_alignment: Some(dual_alignment),
     })
 }
 
-fn extract_chroma(image: &RgbaImage, matte: [u8; 3], threshold: f32, softness: f32) -> RgbaImage {
+fn extract_chroma(
+    image: &RgbaImage,
+    matte: [u8; 3],
+    threshold: f32,
+    softness: f32,
+    spill_suppression: f32,
+) -> RgbaImage {
     let low = threshold.max(0.0);
     let high = (threshold + softness.max(1.0)).max(low + 1.0);
     let mut output = RgbaImage::new(image.width(), image.height());
@@ -775,7 +794,7 @@ fn extract_chroma(image: &RgbaImage, matte: [u8; 3], threshold: f32, softness: f
         let t = ((distance - low) / (high - low)).clamp(0.0, 1.0);
         let smoothed = t * t * (3.0 - 2.0 * t);
         let alpha = (smoothed * 255.0).round().clamp(0.0, 255.0) as u8;
-        *pixel = decontaminate_pixel(source, matte, alpha);
+        *pixel = decontaminate_pixel(source, matte, alpha, spill_suppression);
     }
     output
 }
@@ -883,6 +902,7 @@ fn verify_transparent_file(
     });
     let touches_edge = edge_margin_px == Some(0);
     let component_stats = component_stats(&rgba);
+    let matte_residue_checked = options.expected_matte_color.is_some();
     let matte_residue_score = options
         .expected_matte_color
         .map(|matte| matte_residue_score(&rgba, matte));
@@ -914,6 +934,18 @@ fn verify_transparent_file(
         && score > 0.12
     {
         warnings.push("possible matte-color residue on semi-transparent edge pixels".to_string());
+    }
+    if !matte_residue_checked
+        && matches!(
+            options.profile,
+            TransparentProfile::Icon | TransparentProfile::Product
+        )
+        && partial_pixels > 0
+    {
+        warnings.push(
+            "matte residue was not checked; pass --expected-matte-color when verifying chroma outputs"
+                .to_string(),
+        );
     }
     let (passed, failure_reasons) = evaluate_transparency_gate(TransparencyGateInput {
         profile: options.profile,
@@ -969,6 +1001,7 @@ fn verify_transparent_file(
         stray_pixel_count: component_stats.stray_pixel_count,
         alpha_noise_score: component_stats.alpha_noise_score,
         matte_residue_score,
+        matte_residue_checked,
         halo_score,
         transparent_rgb_scrubbed,
         checkerboard_detected,
@@ -1173,6 +1206,19 @@ fn scrub_transparent_rgb(image: &mut RgbaImage) {
 }
 
 fn matte_residue_score(image: &RgbaImage, matte: [u8; 3]) -> f64 {
+    let max_matte = matte.iter().copied().max().unwrap_or(0);
+    let min_matte = matte.iter().copied().min().unwrap_or(0);
+    let dominant_channels = (0..3)
+        .filter(|&channel| matte[channel] >= max_matte.saturating_sub(8))
+        .collect::<Vec<_>>();
+    let other_channels = (0..3)
+        .filter(|channel| !dominant_channels.contains(channel))
+        .collect::<Vec<_>>();
+    if max_matte >= 192 && max_matte.saturating_sub(min_matte) >= 128 && !other_channels.is_empty()
+    {
+        return saturated_matte_residue_score(image, &dominant_channels, &other_channels);
+    }
+
     let mut weighted_score = 0.0f64;
     let mut total_weight = 0.0f64;
     for pixel in image.pixels() {
@@ -1184,6 +1230,41 @@ fn matte_residue_score(image: &RgbaImage, matte: [u8; 3]) -> f64 {
         let similarity = 1.0
             - f64::from(color_distance([red, green, blue], matte)) / (255.0_f64 * 3.0_f64.sqrt());
         weighted_score += similarity.clamp(0.0, 1.0) * alpha_weight;
+        total_weight += alpha_weight;
+    }
+    if total_weight == 0.0 {
+        0.0
+    } else {
+        weighted_score / total_weight
+    }
+}
+
+fn saturated_matte_residue_score(
+    image: &RgbaImage,
+    dominant_channels: &[usize],
+    other_channels: &[usize],
+) -> f64 {
+    let mut weighted_score = 0.0f64;
+    let mut total_weight = 0.0f64;
+    for pixel in image.pixels() {
+        let [red, green, blue, alpha] = pixel.0;
+        if alpha <= TRANSPARENT_ALPHA_MAX || alpha >= MIN_OPAQUE_ALPHA {
+            continue;
+        }
+        let rgb = [red, green, blue];
+        let alpha_weight = 1.0 - f64::from(alpha) / 255.0;
+        let reference = other_channels
+            .iter()
+            .map(|&channel| rgb[channel])
+            .max()
+            .unwrap_or(0);
+        let excess = dominant_channels
+            .iter()
+            .map(|&channel| rgb[channel].saturating_sub(reference))
+            .map(f64::from)
+            .sum::<f64>()
+            / dominant_channels.len() as f64;
+        weighted_score += (excess / 255.0) * alpha_weight;
         total_weight += alpha_weight;
     }
     if total_weight == 0.0 {
@@ -1395,7 +1476,12 @@ fn save_rgba_png(path: &Path, image: &RgbaImage) -> Result<(), AppError> {
     })
 }
 
-fn decontaminate_pixel(source: [u8; 4], matte: [u8; 3], alpha: u8) -> Rgba<u8> {
+fn decontaminate_pixel(
+    source: [u8; 4],
+    matte: [u8; 3],
+    alpha: u8,
+    spill_suppression: f32,
+) -> Rgba<u8> {
     if alpha <= TRANSPARENT_ALPHA_MAX {
         return Rgba([0, 0, 0, 0]);
     }
@@ -1408,8 +1494,54 @@ fn decontaminate_pixel(source: [u8; 4], matte: [u8; 3], alpha: u8) -> Rgba<u8> {
         .round()
         .clamp(0.0, 255.0) as u8;
     }
+    suppress_matte_spill(&mut output, matte, alpha, spill_suppression);
     output[3] = alpha.min(source[3]);
     Rgba(output)
+}
+
+fn suppress_matte_spill(rgb_alpha: &mut [u8; 4], matte: [u8; 3], alpha: u8, amount: f32) {
+    let amount = amount.clamp(0.0, 1.0);
+    if amount <= 0.0 || alpha <= TRANSPARENT_ALPHA_MAX {
+        return;
+    }
+    let max_matte = matte.iter().copied().max().unwrap_or(0);
+    let min_matte = matte.iter().copied().min().unwrap_or(0);
+    if max_matte < 192 || max_matte.saturating_sub(min_matte) < 128 {
+        return;
+    }
+    let dominant_channels = (0..3)
+        .filter(|&channel| matte[channel] >= max_matte.saturating_sub(8))
+        .collect::<Vec<_>>();
+    let other_channels = (0..3)
+        .filter(|channel| !dominant_channels.contains(channel))
+        .collect::<Vec<_>>();
+    if dominant_channels.is_empty() || other_channels.is_empty() {
+        return;
+    }
+
+    let rgb = [rgb_alpha[0], rgb_alpha[1], rgb_alpha[2]];
+    let max_distance = 255.0_f32 * 3.0_f32.sqrt();
+    let matte_similarity = (1.0 - color_distance(rgb, matte) / max_distance).clamp(0.0, 1.0);
+    let alpha_edge_factor = (1.0 - f32::from(alpha) / 255.0).clamp(0.0, 1.0).sqrt();
+    let strength = amount * matte_similarity.sqrt().max(alpha_edge_factor);
+    if strength <= 0.01 {
+        return;
+    }
+
+    let reference = other_channels
+        .iter()
+        .map(|&channel| rgb_alpha[channel])
+        .max()
+        .unwrap_or(0);
+    for channel in dominant_channels {
+        if rgb_alpha[channel] <= reference {
+            continue;
+        }
+        let excess = f32::from(rgb_alpha[channel] - reference);
+        rgb_alpha[channel] = (f32::from(rgb_alpha[channel]) - excess * strength)
+            .round()
+            .clamp(0.0, 255.0) as u8;
+    }
 }
 
 fn estimate_matte_color(image: &RgbaImage) -> [u8; 3] {
@@ -1497,6 +1629,17 @@ fn invalid_color_error(value: &str) -> AppError {
         "Matte color must be a named color or #RRGGBB.",
     )
     .with_detail(json!({ "value": value }))
+}
+
+fn parse_unit_float(value: &str) -> Result<f32, String> {
+    let parsed = value
+        .parse::<f32>()
+        .map_err(|error| format!("must be a number from 0 to 1: {error}"))?;
+    if (0.0..=1.0).contains(&parsed) {
+        Ok(parsed)
+    } else {
+        Err("must be between 0 and 1".to_string())
+    }
 }
 
 fn color_to_hex(color: [u8; 3]) -> String {
@@ -1600,6 +1743,7 @@ mod tests {
             Some([0, 255, 0]),
             DEFAULT_CHROMA_THRESHOLD,
             DEFAULT_CHROMA_SOFTNESS,
+            DEFAULT_SPILL_SUPPRESSION,
         )
         .unwrap();
         let verification = verify_transparent_file(
@@ -1613,6 +1757,95 @@ mod tests {
         assert!(verification.passed);
         assert_eq!(verification.alpha_min, 0);
         assert_eq!(verification.alpha_max, 255);
+        assert!(verification.matte_residue_checked);
+    }
+
+    #[test]
+    fn chroma_spill_suppression_reduces_green_edge() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let weak_path = temp_dir.path().join("weak.png");
+        let strong_path = temp_dir.path().join("strong.png");
+        let mut input = RgbaImage::from_pixel(64, 64, Rgba([0, 255, 0, 255]));
+        for y in 16..48 {
+            for x in 16..48 {
+                input.put_pixel(x, y, Rgba([20, 230, 40, 255]));
+            }
+        }
+
+        let mut weak = extract_chroma(
+            &input,
+            [0, 255, 0],
+            DEFAULT_CHROMA_THRESHOLD,
+            DEFAULT_CHROMA_SOFTNESS,
+            0.0,
+        );
+        let mut strong = extract_chroma(
+            &input,
+            [0, 255, 0],
+            DEFAULT_CHROMA_THRESHOLD,
+            DEFAULT_CHROMA_SOFTNESS,
+            1.0,
+        );
+        scrub_transparent_rgb(&mut weak);
+        scrub_transparent_rgb(&mut strong);
+        weak.save(&weak_path).unwrap();
+        strong.save(&strong_path).unwrap();
+
+        let weak_verification = verify_transparent_file(
+            &weak_path,
+            VerificationOptions {
+                profile: TransparentProfile::Icon,
+                expected_matte_color: Some([0, 255, 0]),
+            },
+        )
+        .unwrap();
+        let strong_verification = verify_transparent_file(
+            &strong_path,
+            VerificationOptions {
+                profile: TransparentProfile::Icon,
+                expected_matte_color: Some([0, 255, 0]),
+            },
+        )
+        .unwrap();
+        assert!(
+            strong_verification.matte_residue_score.unwrap_or_default()
+                < weak_verification.matte_residue_score.unwrap_or_default()
+        );
+    }
+
+    #[test]
+    fn verification_reports_when_matte_residue_was_not_checked() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let input_path = temp_dir.path().join("soft.png");
+        let mut input = RgbaImage::from_pixel(64, 64, Rgba([0, 0, 0, 0]));
+        for y in 18..46 {
+            for x in 18..46 {
+                let alpha = if x == 18 || x == 45 || y == 18 || y == 45 {
+                    128
+                } else {
+                    255
+                };
+                input.put_pixel(x, y, Rgba([220, 20, 20, alpha]));
+            }
+        }
+        input.save(&input_path).unwrap();
+
+        let verification = verify_transparent_file(
+            &input_path,
+            VerificationOptions {
+                profile: TransparentProfile::Icon,
+                ..Default::default()
+            },
+        )
+        .unwrap();
+        assert!(verification.passed);
+        assert!(!verification.matte_residue_checked);
+        assert!(
+            verification
+                .warnings
+                .iter()
+                .any(|warning| warning.contains("matte residue was not checked"))
+        );
     }
 
     #[test]
