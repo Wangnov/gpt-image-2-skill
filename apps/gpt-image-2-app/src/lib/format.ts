@@ -1,10 +1,24 @@
-export function formatTime(iso: string): string {
-  const trimmed = iso.trim();
+function parseTime(value: string): Date | null {
+  const trimmed = value.trim();
   const numeric = Number(trimmed);
-  const d = Number.isFinite(numeric) && trimmed !== ""
-    ? new Date(numeric < 1_000_000_000_000 ? numeric * 1000 : numeric)
-    : new Date(iso);
-  if (Number.isNaN(d.getTime())) return iso;
+  const d =
+    Number.isFinite(numeric) && trimmed !== ""
+      ? new Date(numeric < 1_000_000_000_000 ? numeric * 1000 : numeric)
+      : new Date(value);
+  return Number.isNaN(d.getTime()) ? null : d;
+}
+
+export function formatDateTime(value?: string | null): string {
+  if (!value) return "—";
+  const d = parseTime(value);
+  if (!d) return value;
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
+export function formatTime(iso: string): string {
+  const d = parseTime(iso);
+  if (!d) return iso;
 
   const now = new Date();
   const diffSec = (now.getTime() - d.getTime()) / 1000;

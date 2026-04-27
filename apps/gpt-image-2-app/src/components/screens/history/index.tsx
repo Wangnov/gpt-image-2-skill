@@ -10,8 +10,14 @@ import {
 } from "lucide-react";
 import { useCancelJob, useDeleteJob, useJobs } from "@/hooks/use-jobs";
 import { OPEN_JOB_EVENT } from "@/lib/job-navigation";
-import { api } from "@/lib/api";
 import { revealPath, saveImages } from "@/lib/user-actions";
+import { formatTime } from "@/lib/format";
+import {
+  jobOutputCount,
+  jobOutputIndexes,
+  jobOutputPath,
+  jobOutputUrl,
+} from "@/lib/job-outputs";
 import { Empty } from "@/components/ui/empty";
 import { Button } from "@/components/ui/button";
 import SpotlightCard from "@/components/reactbits/components/SpotlightCard";
@@ -30,13 +36,13 @@ const FILTERS: { value: FilterValue; label: string }[] = [
 ];
 
 function jobThumbUrl(job: Job): string | null {
-  if (!job.outputs || job.outputs.length === 0) return null;
-  return api.outputUrl(job.id, 0) ?? null;
+  const index = jobOutputIndexes(job)[0];
+  return index === undefined ? null : jobOutputUrl(job, index);
 }
 
 function jobThumbPath(job: Job): string | null {
-  if (!job.outputs || job.outputs.length === 0) return null;
-  return api.outputPath(job.id, 0) ?? null;
+  const index = jobOutputIndexes(job)[0];
+  return index === undefined ? null : jobOutputPath(job, index);
 }
 
 function jobRatio(job: Job): string {
@@ -72,24 +78,10 @@ function jobPrompt(job: Job): string {
 }
 
 function totalBytes(job: Job): string {
-  const total = (job.outputs ?? []).reduce(
-    (acc, o) => acc + (o.bytes ?? 0),
-    0,
-  );
+  const total = (job.outputs ?? []).reduce((acc, o) => acc + (o.bytes ?? 0), 0);
   if (total === 0) return "";
   if (total > 1024 * 1024) return `${(total / 1024 / 1024).toFixed(1)} MB`;
   return `${(total / 1024).toFixed(1)} KB`;
-}
-
-function formatTime(s: string): string {
-  try {
-    const d = new Date(s);
-    if (Number.isNaN(d.getTime())) return s;
-    const pad = (n: number) => String(n).padStart(2, "0");
-    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
-  } catch {
-    return s;
-  }
 }
 
 function StatusChip({ status }: { status: JobStatus }) {
@@ -159,13 +151,13 @@ function JobRowExpandable({
   const showCancel = status === "running" || status === "queued";
   const isQueueing = status === "queued";
   const isRunning = status === "running";
-  const outputCount = job.outputs?.length ?? 0;
+  const outputIndexes = jobOutputIndexes(job);
+  const outputCount = outputIndexes.length;
   const extraCount = Math.max(0, outputCount - 1);
 
   const saveAll = () => {
-    if (!job.outputs || job.outputs.length === 0) return;
-    const paths = job.outputs
-      .map((_, i) => api.outputPath(job.id, i))
+    const paths = outputIndexes
+      .map((index) => jobOutputPath(job, index))
       .filter((p): p is string => Boolean(p));
     if (paths.length > 0) void saveImages(paths, "图片");
   };
@@ -206,7 +198,9 @@ function JobRowExpandable({
           className={cn(
             "pointer-events-none absolute left-0 top-1.5 bottom-1.5 rounded-r-sm",
             "bg-[color:var(--accent)] transition-all duration-200 ease-out",
-            expanded ? "w-[3px] opacity-100" : "w-0 opacity-0 group-hover:w-[2px] group-hover:opacity-70",
+            expanded
+              ? "w-[3px] opacity-100"
+              : "w-0 opacity-0 group-hover:w-[2px] group-hover:opacity-70",
           )}
         />
         <span className="w-6 text-center text-[12px] text-faint font-mono shrink-0">
@@ -342,16 +336,16 @@ function JobRowExpandable({
                 gridTemplateColumns: `repeat(${Math.min(outputCount, 4)}, minmax(0, 1fr))`,
               }}
             >
-              {job.outputs!.map((_, i) => {
-                const url = api.outputUrl(job.id, i);
+              {outputIndexes.map((outputIndex, i) => {
+                const url = jobOutputUrl(job, outputIndex);
                 const letter = String.fromCharCode(65 + i);
                 return (
                   <button
-                    key={i}
+                    key={outputIndex}
                     type="button"
                     onClick={(e) => {
                       e.stopPropagation();
-                      onOpenDetail(i);
+                      onOpenDetail(outputIndex);
                     }}
                     className="group relative aspect-square w-full rounded-lg overflow-hidden ring-1 ring-[color:var(--w-08)] hover:ring-[color:var(--accent-45)] transition-all hover:scale-[1.015]"
                     title={`查看第 ${letter} 张`}
