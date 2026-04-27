@@ -17,10 +17,10 @@
 
 ## 功能特性
 
-- `images generate`、`images edit`、`request create`
+- `images generate`、`images edit`、`transparent generate/extract/verify`、`request create`
 - OpenAI `gpt-image-2` 与兼容服务端，支持自定义 `--openai-api-base`
 - Codex `auth.json` 图片链路，默认模型 `gpt-5.4`
-- `-m/--model`、`--ref-image`、`--mask`、`--background transparent`
+- `-m/--model`、`--ref-image`、`--mask`、透明 PNG 本地抠图与验证
 - `--format png|jpeg|webp`、`--quality`、`--compression`、`--input-fidelity`
 - `--json` stdout 结果与 `--json-events` stderr JSONL 进度事件
 - 默认 3 次 retry，Codex `401` 自动 refresh 后重试
@@ -115,6 +115,29 @@ gpt-image-2-skill --json --json-events \
   images generate \
   --prompt "A glossy red apple sticker on transparent background" \
   --out ./apple.png
+```
+
+透明 PNG 交付：
+
+```bash
+gpt-image-2-skill --json --json-events \
+  --provider codex \
+  transparent generate \
+  --prompt "A glossy red apple sticker, centered, no text, no frame" \
+  --out ./apple-transparent.png \
+  --size 2K \
+  --quality high
+```
+
+对于玻璃、流光、烟雾等半透明素材，Agent 可以先生成黑底/白底源图，再用本地双背景抠图：
+
+```bash
+gpt-image-2-skill --json \
+  transparent extract --method dual \
+  --dark-image ./glow-black.png \
+  --light-image ./glow-white.png \
+  --out ./glow-transparent.png \
+  --strict
 ```
 
 参考图编辑：
