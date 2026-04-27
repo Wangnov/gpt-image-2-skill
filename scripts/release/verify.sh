@@ -24,7 +24,7 @@ done
 
 cd "$ROOT_DIR"
 
-node scripts/sync_skill_bundle.cjs
+node scripts/release/sync-version-manifests.mjs
 if [[ -n "$RELEASE_DIR" ]]; then
   node scripts/npm/build-matrix.mjs --release-dir "$RELEASE_DIR"
 else

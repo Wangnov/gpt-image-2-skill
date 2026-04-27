@@ -30,3 +30,12 @@ project_tag() {
 current_branch() {
   git -C "$ROOT_DIR" rev-parse --abbrev-ref HEAD
 }
+
+require_clean_worktree() {
+  local context="$1"
+  if ! git -C "$ROOT_DIR" diff --quiet || ! git -C "$ROOT_DIR" diff --cached --quiet; then
+    echo "working tree is dirty after $context; commit or discard these changes before releasing:" >&2
+    git -C "$ROOT_DIR" status --short >&2
+    exit 1
+  fi
+}

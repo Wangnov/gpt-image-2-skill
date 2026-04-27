@@ -10,8 +10,7 @@ require_cmd npx
 
 cd "$ROOT_DIR"
 
-node scripts/sync_skill_bundle.cjs
-node scripts/npm/build-matrix.mjs
+node scripts/release/sync-version-manifests.mjs
 cargo fmt --check
 cargo test -p "$CRATE_NAME"
 cargo run -q -p "$CRATE_NAME" -- --json doctor >/tmp/gpt-image-2-skill-doctor.json
