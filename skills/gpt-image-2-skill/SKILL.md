@@ -118,7 +118,7 @@ The CLI is intentionally not a material classifier. The Agent should choose gene
 | Asset type | Generation guidance | Extraction guidance |
 |---|---|---|
 | Opaque object, icon, sticker, product | Single isolated subject, clear margin, perfectly flat chroma matte. Pick a matte color absent from the object. | `transparent generate` or `transparent extract --method chroma --matte-color <color>` |
-| Thin edges, hair, fur, lace, chain, netting | Use high resolution, strong subject/background contrast, no contact shadow, no background-colored details. Try magenta/cyan/green mattes if one contaminates the edge. | Chroma extraction, then `transparent verify --strict`; retry with a different matte if edge residue appears. |
+| Thin edges, hair, fur, lace, chain, netting | Use high resolution, strong subject/background contrast, no contact shadow, no background-colored details. Try magenta/cyan/green mattes if one contaminates the edge. | Chroma extraction with `--spill-suppression` when needed, then verify with `--expected-matte-color`; retry with a different matte if residue remains. |
 | Glass, crystal, liquid, hologram | Ask for a centered asset on flat black and flat white backgrounds, keeping geometry identical. Use reference/edit flow when possible to keep alignment. | `transparent extract --method dual --dark-image black.png --light-image white.png` |
 | Glow, flame, smoke, mist, magic particles | Generate dark and light background variants. Avoid textured backgrounds and avoid bloom reaching the image edge unless the edge is intentional. | Prefer dual extraction; verify that `partial_pixels` is non-zero. |
 | Shadows | Decide whether the shadow is part of the asset. If not, explicitly forbid contact shadows. If yes, generate on a flat matte with enough margin. | Chroma for opaque shadow silhouettes; dual extraction for soft translucent shadows. |
@@ -141,7 +141,7 @@ node scripts/gpt_image_2_skill.cjs --json --json-events \
 node scripts/gpt_image_2_skill.cjs --json \
   transparent extract --method chroma \
   --input /tmp/necklace-magenta.png --matte-color magenta \
-  --out /tmp/necklace.png --strict
+  --out /tmp/necklace.png --spill-suppression 0.85 --strict
 
 # Semi-transparent material flow
 node scripts/gpt_image_2_skill.cjs --json \
@@ -151,7 +151,7 @@ node scripts/gpt_image_2_skill.cjs --json \
   --out /tmp/glow.png --strict
 ```
 
-Always inspect the JSON verification fields before delivery: `passed`, `alpha_min`, `alpha_max`, `transparent_ratio`, `partial_pixels`, and `warnings`. Also inspect quality fields: `checkerboard_detected`, `touches_edge`, `edge_margin_px`, `stray_pixel_count`, `largest_component_ratio`, `matte_residue_score`, `halo_score`, `transparent_rgb_scrubbed`, `quality_score`, and `failure_reasons`. If `passed` is false, do not deliver the file as a transparent PNG.
+Always inspect the JSON verification fields before delivery: `passed`, `alpha_min`, `alpha_max`, `transparent_ratio`, `partial_pixels`, and `warnings`. Also inspect quality fields: `checkerboard_detected`, `touches_edge`, `edge_margin_px`, `stray_pixel_count`, `largest_component_ratio`, `matte_residue_checked`, `matte_residue_score`, `halo_score`, `transparent_rgb_scrubbed`, `quality_score`, and `failure_reasons`. If `passed` is false, do not deliver the file as a transparent PNG. If `matte_residue_checked` is false for a chroma-derived PNG, run `transparent verify` again with the source matte via `--expected-matte-color`.
 
 ## Notes
 

@@ -151,6 +151,17 @@ gpt-image-2-skill --json \
   --strict
 ```
 
+如果素材来自 chroma 纯色底抠图，单独 verify 时要带上原始 matte 才会检查色边残留：
+
+```bash
+gpt-image-2-skill --json \
+  transparent verify \
+  --input ./apple-transparent.png \
+  --expected-matte-color '#00ff00' \
+  --profile product \
+  --strict
+```
+
 参考图编辑：
 
 ```bash

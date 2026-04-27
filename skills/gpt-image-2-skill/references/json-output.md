@@ -115,6 +115,7 @@ Returns the final verified transparent PNG. The command fails with `transparent_
     "method": "chroma",
     "profile": "generic",
     "matte_color": "#00ff00",
+    "spill_suppression": 0.85,
     "format": "png"
   },
   "source": {
@@ -138,6 +139,7 @@ Returns the final verified transparent PNG. The command fails with `transparent_
     "edge_margin_px": 96,
     "stray_pixel_count": 0,
     "largest_component_ratio": 1.0,
+    "matte_residue_checked": true,
     "matte_residue_score": 0.01,
     "halo_score": 0.0,
     "transparent_rgb_scrubbed": true,
@@ -179,6 +181,8 @@ Runs local extraction only. Use `--strict` when the command should fail if verif
 }
 ```
 
+Chroma extraction reports `threshold`, `softness`, and `spill_suppression`; `spill_suppression` is a `0..1` matte-edge cleanup strength and defaults to `0.85`.
+
 ### `transparent verify`
 
 Verifies any image file as a transparent PNG deliverable. With `--strict`, a failed verification returns the standard error envelope.
@@ -207,6 +211,7 @@ Verifies any image file as a transparent PNG deliverable. With `--strict`, a fai
     "largest_component_ratio": 0.99,
     "stray_pixel_count": 24,
     "alpha_noise_score": 0.00001,
+    "matte_residue_checked": false,
     "matte_residue_score": null,
     "halo_score": 0.0,
     "transparent_rgb_scrubbed": true,
@@ -216,6 +221,8 @@ Verifies any image file as a transparent PNG deliverable. With `--strict`, a fai
   }
 }
 ```
+
+`matte_residue_checked` is false unless the verifier received `--expected-matte-color`. For chroma-derived outputs, a passing verification with `matte_residue_checked: false` did not check source-matte edge residue.
 
 ## When `--json` is omitted
 

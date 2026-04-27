@@ -20,7 +20,7 @@ A transparent deliverable is valid only if the final file has a real PNG alpha c
 2. If verification fails, keep sources with `--report-dir` and inspect the source matte.
 3. Change the matte color or source prompt, then call `transparent extract`.
 4. For translucency or glow, create black and white variants and use dual extraction.
-5. Run `transparent verify --profile <profile> --strict` on the final PNG.
+5. Run `transparent verify --profile <profile> --strict` on the final PNG. If the PNG came from chroma extraction, include `--expected-matte-color <matte>`.
 6. Deliver only the verified PNG unless the user asked for diagnostics.
 
 ## Strict profiles
@@ -97,7 +97,9 @@ Good source prompt details:
 - `clear margin around every edge`
 - `flat pure magenta/cyan background`
 
-Retry by changing matte color if verification warns about edges or the visual preview shows residue.
+The chroma extractor applies matte decontamination and default `--spill-suppression 0.85`. Increase toward `1` only for stubborn colored spill; lower toward `0` only when it visibly damages legitimate edge color.
+
+Retry by changing matte color if verification warns about edges or the visual preview still shows residue.
 
 ### Glass, liquid, transparent plastic, holograms
 
@@ -160,6 +162,7 @@ Important fields:
 | `checkerboard_detected` | Reject visual fake transparency. |
 | `touches_edge` / `edge_margin_px` | Detect edge contact and likely cropping. |
 | `stray_pixel_count` / `largest_component_ratio` | Detect isolated background fragments. |
+| `matte_residue_checked` | True only when verification received `--expected-matte-color`. If false for a chroma output, residue was not checked. |
 | `matte_residue_score` | Detect expected matte-color contamination when `--expected-matte-color` is provided. |
 | `halo_score` | Detect strong black/white halos in semi-transparent pixels. |
 | `transparent_rgb_scrubbed` | Confirms fully transparent pixels have RGB cleared. |
@@ -178,12 +181,14 @@ node scripts/gpt_image_2_skill.cjs --json \
   --strict
 ```
 
+If `matte_residue_checked` is false, a passing result does not prove the edge is free of the source matte color.
+
 ## Failure handling
 
 | Symptom | Action |
 |---|---|
 | `transparent_verification_failed` | Do not deliver. Retry with a different matte or dual extraction. |
-| Edge residue | Change matte color, increase contrast, or reduce source shadows. |
+| Edge residue | Use `--spill-suppression`, change matte color, increase contrast, or reduce source shadows. |
 | Object partially removed | Matte color appears in the object; choose a different matte. |
 | No semi-transparent pixels for glow/glass | Use dual extraction instead of chroma. |
 | Dual extraction looks noisy | The two source images are not aligned; regenerate via edit/reference flow. |
