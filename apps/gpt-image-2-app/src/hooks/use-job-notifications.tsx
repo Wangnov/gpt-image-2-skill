@@ -4,6 +4,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { useTweaks } from "@/hooks/use-tweaks";
 import { promptSummary } from "@/lib/prompt-display";
+import { api } from "@/lib/api";
 import type { Job, JobStatus } from "@/lib/types";
 
 type OpenJob = (jobId: string) => void;
@@ -50,9 +51,21 @@ function notifyTerminal(job: Job, onOpen: OpenJob) {
   } as const;
 
   if (job.status === "completed") {
+    // Thumbnail of the freshly produced image so the toast is itself a
+    // glance-able reveal — not just "task done" text. Click → open detail.
+    const firstPath = job.outputs?.[0]?.path ?? job.output_path;
+    const thumbUrl = firstPath ? api.fileUrl(firstPath) : null;
     toast.success(`${commandLabel(job)}完成`, {
       ...common,
       description: successDescription(job),
+      icon: thumbUrl ? (
+        <img
+          src={thumbUrl}
+          alt=""
+          decoding="async"
+          className="h-9 w-9 rounded-md object-cover ring-1 ring-[color:var(--w-10)] -ml-1 mr-0.5"
+        />
+      ) : undefined,
     });
   } else if (job.status === "failed") {
     toast.error(`${commandLabel(job)}失败`, {
