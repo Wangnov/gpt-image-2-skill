@@ -17,13 +17,13 @@ export function Tooltip({
         <Tip.Portal>
           <Tip.Content
             sideOffset={6}
-            className="z-[100] text-white text-[11px] font-medium px-2.5 py-1.5 rounded-md animate-fade-in"
+            className="z-[100] text-foreground text-[11px] font-medium px-2.5 py-1.5 rounded-md animate-fade-in"
             style={{
-              background: "rgba(20,20,28,0.92)",
+              background: "var(--surface-floating-strong)",
               backdropFilter: "blur(12px)",
               WebkitBackdropFilter: "blur(12px)",
-              border: "1px solid rgba(255,255,255,0.12)",
-              boxShadow: "0 8px 24px rgba(0,0,0,0.5)",
+              border: "1px solid var(--surface-floating-border)",
+              boxShadow: "0 8px 24px var(--k-55)",
             }}
           >
             {text}

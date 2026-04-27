@@ -52,10 +52,10 @@ export const Input = forwardRef<HTMLInputElement, Props>(
       <div
         className={cn(
           "flex items-center gap-2 px-2.5 rounded-md transition-colors",
-          "bg-[rgba(255,255,255,0.04)] border border-border",
-          "focus-within:border-[rgba(167,139,250,0.55)] focus-within:bg-[rgba(167,139,250,0.06)] focus-within:shadow-[0_0_0_3px_rgba(167,139,250,0.14)]",
+          "bg-[color:var(--w-04)] border border-border",
+          "focus-within:border-[color:var(--accent-55)] focus-within:bg-[color:var(--accent-06)] focus-within:shadow-[0_0_0_3px_var(--accent-14)]",
           invalid &&
-            "border-status-err focus-within:border-status-err focus-within:shadow-[0_0_0_3px_rgba(248,113,113,0.18)]",
+            "border-status-err focus-within:border-status-err focus-within:shadow-[0_0_0_3px_var(--status-err-18)]",
           heights[size],
           wrapperClassName,
         )}

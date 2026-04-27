@@ -15,6 +15,7 @@ import { revealPath, saveImages } from "@/lib/user-actions";
 import { Empty } from "@/components/ui/empty";
 import { Button } from "@/components/ui/button";
 import SpotlightCard from "@/components/reactbits/components/SpotlightCard";
+import { useConfirm } from "@/hooks/use-confirm";
 import type { Job, JobStatus } from "@/lib/types";
 import { cn } from "@/lib/cn";
 import { JobImageDetailDrawer } from "./job-image-detail-drawer";
@@ -149,6 +150,7 @@ function JobRowExpandable({
   onDelete: () => void;
   onOpenDetail: (outputIndex: number) => void;
 }) {
+  const confirm = useConfirm();
   const thumbUrl = jobThumbUrl(job);
   const thumbPath = jobThumbPath(job);
   const ratio = jobRatio(job);
@@ -172,64 +174,82 @@ function JobRowExpandable({
     <div
       className={cn(
         "transition-colors",
-        expanded ? "bg-[rgba(167,139,250,0.06)]" : "",
+        expanded ? "bg-[color:var(--accent-06)]" : "",
       )}
     >
-      {/* COMPACT ROW (always visible) */}
-      <button
-        type="button"
+      {/* COMPACT ROW (always visible) — div role=button so we can nest a real
+          <button> for cancel without violating HTML's "no button-in-button" rule.
+          `group relative` + the inset accent bar give the layered hover affordance. */}
+      <div
+        role="button"
+        tabIndex={0}
         onClick={onToggleExpand}
+        onKeyDown={(e) => {
+          if (e.target !== e.currentTarget) return;
+          if (e.key === "Enter" || e.key === " ") {
+            e.preventDefault();
+            onToggleExpand();
+          }
+        }}
         className={cn(
-          "flex w-full items-center gap-4 px-4 py-3 text-left transition-colors",
+          "group relative flex w-full items-center gap-4 px-4 py-3 text-left transition-colors cursor-pointer",
+          "focus-visible:outline-none focus-visible:bg-[color:var(--w-04)]",
           expanded
-            ? "bg-[rgba(167,139,250,0.08)]"
-            : "hover:bg-[rgba(255,255,255,0.04)]",
+            ? "bg-[color:var(--accent-08)]"
+            : "hover:bg-[color:var(--w-04)]",
         )}
         aria-expanded={expanded}
       >
+        {/* left accent bar — grows on hover/expand for a quiet "you're here" cue */}
+        <span
+          aria-hidden
+          className={cn(
+            "pointer-events-none absolute left-0 top-1.5 bottom-1.5 rounded-r-sm",
+            "bg-[color:var(--accent)] transition-all duration-200 ease-out",
+            expanded ? "w-[3px] opacity-100" : "w-0 opacity-0 group-hover:w-[2px] group-hover:opacity-70",
+          )}
+        />
         <span className="w-6 text-center text-[12px] text-faint font-mono shrink-0">
           {index}
         </span>
 
-        <div className="relative h-14 w-20 shrink-0 rounded-md overflow-hidden ring-1 ring-white/[.10]">
+        <div className="relative h-14 w-20 shrink-0 rounded-md overflow-hidden ring-1 ring-[color:var(--w-10)] transition-transform duration-200 ease-out group-hover:scale-[1.02]">
           {thumbUrl ? (
             <img
               src={thumbUrl}
               alt=""
+              loading="lazy"
+              decoding="async"
               className="h-full w-full object-cover"
               draggable={false}
             />
           ) : (
             <div
               className="h-full w-full"
-              style={{
-                background:
-                  "radial-gradient(120% 80% at 30% 30%, rgba(167,139,250,0.5), transparent 60%), radial-gradient(120% 80% at 70% 70%, rgba(103,232,249,0.4), transparent 60%), linear-gradient(135deg, #1a1a2e 0%, #16213e 100%)",
-              }}
+              style={{ background: "var(--image-placeholder-bg)" }}
             />
           )}
           {(isRunning || isQueueing) && (
-            <div className="absolute inset-0 backdrop-blur-[2px] bg-black/40 flex items-center justify-center">
+            <div className="absolute inset-0 backdrop-blur-[2px] bg-[color:var(--k-40)] flex items-center justify-center">
               {isRunning ? (
                 <Loader2
                   size={18}
-                  className="text-white animate-spin opacity-80"
+                  className="text-foreground animate-spin opacity-80"
                 />
               ) : (
-                <Clock size={16} className="text-white opacity-70" />
+                <Clock size={16} className="text-foreground opacity-70" />
               )}
             </div>
           )}
           {/* +N badge for grouped outputs */}
           {extraCount > 0 && (
             <span
-              className="absolute right-1 top-1 inline-flex items-center px-1.5 py-px rounded-md text-[9.5px] font-mono font-semibold leading-none"
+              className="absolute right-1 top-1 inline-flex items-center px-1.5 py-px rounded-md text-[9.5px] font-mono font-semibold leading-none text-foreground"
               style={{
-                background: "rgba(0,0,0,0.65)",
-                color: "white",
+                background: "var(--k-65)",
                 backdropFilter: "blur(4px)",
                 WebkitBackdropFilter: "blur(4px)",
-                border: "1px solid rgba(255,255,255,0.12)",
+                border: "1px solid var(--w-12)",
               }}
               aria-label={`这个任务共有 ${outputCount} 张图`}
               title={`共 ${outputCount} 张`}
@@ -277,26 +297,18 @@ function JobRowExpandable({
 
         <div className="flex items-center gap-0.5">
           {showCancel && (
-            <span
-              role="button"
-              tabIndex={0}
+            <button
+              type="button"
               onClick={(e) => {
                 e.stopPropagation();
                 onCancel();
               }}
-              onKeyDown={(e) => {
-                if (e.key === "Enter" || e.key === " ") {
-                  e.preventDefault();
-                  e.stopPropagation();
-                  onCancel();
-                }
-              }}
-              className="h-7 w-7 inline-flex items-center justify-center rounded-md text-muted hover:text-foreground hover:bg-white/[.06] transition-colors cursor-pointer"
+              className="h-7 w-7 inline-flex items-center justify-center rounded-md text-muted hover:text-foreground hover:bg-[color:var(--w-06)] transition-colors cursor-pointer"
               aria-label="取消任务"
               title="取消任务"
             >
               <X size={14} />
-            </span>
+            </button>
           )}
           <ChevronDown
             size={14}
@@ -307,7 +319,7 @@ function JobRowExpandable({
             )}
           />
         </div>
-      </button>
+      </div>
 
       {/* EXPANDED CONTENT */}
       {expanded && (
@@ -341,28 +353,30 @@ function JobRowExpandable({
                       e.stopPropagation();
                       onOpenDetail(i);
                     }}
-                    className="group relative aspect-square w-full rounded-lg overflow-hidden ring-1 ring-white/[.08] hover:ring-[rgba(167,139,250,0.45)] transition-all hover:scale-[1.015]"
+                    className="group relative aspect-square w-full rounded-lg overflow-hidden ring-1 ring-[color:var(--w-08)] hover:ring-[color:var(--accent-45)] transition-all hover:scale-[1.015]"
                     title={`查看第 ${letter} 张`}
                     aria-label={`查看第 ${letter} 张`}
                   >
                     <SpotlightCard
-                      spotlightColor="rgba(167,139,250,0.32)"
+                      spotlightColor="rgba(167, 139, 250, 0.30)"
                       className="!rounded-lg !p-0 !bg-transparent !border-0 !w-full !h-full absolute inset-0"
                     >
                       {url ? (
                         <img
                           src={url}
                           alt=""
+                          loading="lazy"
+                          decoding="async"
                           className="absolute inset-0 h-full w-full object-cover"
                           draggable={false}
                         />
                       ) : (
-                        <div className="absolute inset-0 bg-[rgba(255,255,255,0.04)]" />
+                        <div className="absolute inset-0 bg-[color:var(--w-04)]" />
                       )}
                       <span
-                        className="absolute bottom-1.5 left-1.5 px-1.5 py-0.5 rounded text-[10.5px] font-mono font-semibold text-white"
+                        className="absolute bottom-1.5 left-1.5 px-1.5 py-0.5 rounded text-[10.5px] font-mono font-semibold text-foreground"
                         style={{
-                          background: "rgba(0,0,0,0.55)",
+                          background: "var(--k-55)",
                           backdropFilter: "blur(4px)",
                           WebkitBackdropFilter: "blur(4px)",
                         }}
@@ -417,11 +431,25 @@ function JobRowExpandable({
               variant="ghost"
               size="sm"
               icon="trash"
-              onClick={(e) => {
+              onClick={async (e) => {
                 e.stopPropagation();
-                if (window.confirm("删除这条任务记录？图片文件不会被删除。")) {
-                  onDelete();
-                }
+                const summary =
+                  prompt.length > 60 ? `${prompt.slice(0, 60)}…` : prompt;
+                const ok = await confirm({
+                  title: "删除任务记录",
+                  description: (
+                    <>
+                      将删除任务{" "}
+                      <span className="text-foreground font-medium">
+                        「{summary}」
+                      </span>
+                      。图片文件不会被删除。
+                    </>
+                  ),
+                  confirmText: "删除",
+                  variant: "danger",
+                });
+                if (ok) onDelete();
               }}
             >
               删除
@@ -433,10 +461,15 @@ function JobRowExpandable({
   );
 }
 
-export function HistoryScreen() {
+export function HistoryScreen({
+  onSwitchToGenerate,
+}: {
+  onSwitchToGenerate?: () => void;
+} = {}) {
   const { data: jobs = [], isLoading } = useJobs();
   const deleteJob = useDeleteJob();
   const cancelJob = useCancelJob();
+  const confirm = useConfirm();
   const [filter, setFilter] = useState<FilterValue>("all");
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
   const [detailJobId, setDetailJobId] = useState<string | null>(null);
@@ -455,11 +488,11 @@ export function HistoryScreen() {
     const onOpenJob = (event: Event) => {
       const detail = (event as CustomEvent<{ jobId?: string }>).detail;
       if (!detail?.jobId) return;
-      setExpandedIds((prev) => {
-        const next = new Set(prev);
-        next.add(detail.jobId!);
-        return next;
-      });
+      // Only open the detail drawer — do NOT auto-expand the row in
+      // the underlying list. Auto-expansion duplicates the image at
+      // ~600px width in the main area, which leaks through the drawer
+      // backdrop and makes the screen feel redundant. User can still
+      // expand the row manually after closing the drawer.
       setDetailJobId(detail.jobId);
       setDetailIndex(0);
     };
@@ -485,13 +518,27 @@ export function HistoryScreen() {
     jobs.filter((j) => j.status === "completed" || j.status === "failed")
       .length > 0;
 
-  const handleClearFinished = () => {
+  const handleClearFinished = async () => {
     if (!clearable) return;
-    if (!window.confirm("清理所有已完成 / 已失败的任务记录？此操作不可撤销。"))
-      return;
-    jobs
-      .filter((j) => j.status === "completed" || j.status === "failed")
-      .forEach((j) => deleteJob.mutate(j.id));
+    const finished = jobs.filter(
+      (j) => j.status === "completed" || j.status === "failed",
+    );
+    const ok = await confirm({
+      title: "清理任务记录",
+      description: (
+        <>
+          将清除{" "}
+          <span className="text-foreground font-medium">
+            {finished.length} 条
+          </span>{" "}
+          已完成 / 已失败的任务。图片文件不会被删除,此操作不可撤销。
+        </>
+      ),
+      confirmText: "清理",
+      variant: "danger",
+    });
+    if (!ok) return;
+    finished.forEach((j) => deleteJob.mutate(j.id));
   };
 
   const detailJob = detailJobId
@@ -503,14 +550,12 @@ export function HistoryScreen() {
       {/* header */}
       <header className="flex items-end justify-between mb-5">
         <div className="flex items-baseline gap-3">
-          <h1 className="text-[26px] font-semibold tracking-tight text-foreground">
-            生成队列
-          </h1>
+          <h1 className="t-screen-title text-foreground">生成队列</h1>
           <span
             className="inline-flex items-center justify-center min-w-[26px] h-[22px] px-2 rounded-full text-[12px] font-medium text-foreground"
             style={{
-              background: "rgba(255,255,255,0.08)",
-              border: "1px solid rgba(255,255,255,0.10)",
+              background: "var(--w-08)",
+              border: "1px solid var(--w-10)",
             }}
             aria-label="任务总数"
           >
@@ -521,10 +566,10 @@ export function HistoryScreen() {
           type="button"
           onClick={handleClearFinished}
           disabled={!clearable}
-          className="inline-flex items-center gap-1.5 h-8 px-3 rounded-full text-[12px] text-muted hover:text-foreground hover:bg-white/[.06] transition-colors disabled:opacity-45 disabled:cursor-not-allowed"
+          className="inline-flex items-center gap-1.5 h-8 px-3 rounded-full text-[12px] text-muted hover:text-foreground hover:bg-[color:var(--w-06)] transition-colors disabled:opacity-45 disabled:cursor-not-allowed"
           style={{
-            background: "rgba(255,255,255,0.04)",
-            border: "1px solid rgba(255,255,255,0.08)",
+            background: "var(--w-04)",
+            border: "1px solid var(--w-08)",
           }}
         >
           <Trash2 size={13} />
@@ -542,8 +587,8 @@ export function HistoryScreen() {
             className={cn(
               "px-3.5 h-8 rounded-full text-[12.5px] font-medium transition-colors",
               filter === f.value
-                ? "bg-white/[.10] text-foreground border border-white/[.12]"
-                : "border border-transparent text-muted hover:text-foreground hover:bg-white/[.04]",
+                ? "bg-[color:var(--accent-14)] text-foreground border border-[color:var(--accent-30)]"
+                : "border border-transparent text-muted hover:text-foreground hover:bg-[color:var(--w-04)]",
             )}
           >
             {f.label}
@@ -556,7 +601,7 @@ export function HistoryScreen() {
 
       {/* list */}
       <section className="surface-panel flex-1 min-h-0 flex flex-col overflow-hidden">
-        <div className="flex-1 overflow-auto divide-y divide-white/[.06]">
+        <div className="flex-1 overflow-auto divide-y divide-[color:var(--w-06)]">
           {isLoading ? (
             <div className="p-12 flex justify-center">
               <Empty
@@ -628,6 +673,7 @@ export function HistoryScreen() {
             return next;
           });
         }}
+        onRerun={onSwitchToGenerate}
       />
     </div>
   );

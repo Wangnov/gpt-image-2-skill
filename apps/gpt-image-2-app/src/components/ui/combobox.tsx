@@ -94,11 +94,11 @@ export function GlassCombobox(props: GlassComboboxProps) {
     <RadixPopover.Root open={open} onOpenChange={setOpen}>
       <div
         className={cn(
-          "group relative inline-flex items-center gap-2 rounded-md border bg-[rgba(255,255,255,0.04)] transition-colors",
-          "hover:bg-[rgba(255,255,255,0.07)]",
-          "focus-within:border-[rgba(167,139,250,0.55)] focus-within:bg-[rgba(167,139,250,0.06)] focus-within:shadow-[0_0_0_3px_rgba(167,139,250,0.18)]",
+          "group relative inline-flex items-center gap-2 rounded-md border bg-[color:var(--w-04)] transition-colors",
+          "hover:bg-[color:var(--w-07)]",
+          "focus-within:border-[color:var(--accent-55)] focus-within:bg-[color:var(--accent-06)] focus-within:shadow-[0_0_0_3px_var(--accent-18)]",
           open &&
-            "border-[rgba(167,139,250,0.55)] bg-[rgba(167,139,250,0.06)]",
+            "border-[color:var(--accent-55)] bg-[color:var(--accent-06)]",
           isChip ? "px-3" : "px-2.5",
           invalid
             ? "border-[color:var(--status-err)]"
@@ -110,9 +110,7 @@ export function GlassCombobox(props: GlassComboboxProps) {
         style={{ minWidth }}
       >
         {chipLabel && (
-          <span className="text-[10.5px] uppercase tracking-wider text-faint shrink-0">
-            {chipLabel}
-          </span>
+          <span className="t-caps shrink-0">{chipLabel}</span>
         )}
         <input
           ref={inputRef}
@@ -159,12 +157,11 @@ export function GlassCombobox(props: GlassComboboxProps) {
             "data-[side=bottom]:slide-in-from-top-1 data-[side=top]:slide-in-from-bottom-1",
           )}
           style={{
-            background: "rgba(14, 14, 20, 0.82)",
-            borderColor: "rgba(255,255,255,0.12)",
+            background: "var(--surface-floating)",
+            borderColor: "var(--surface-floating-border)",
             backdropFilter: "blur(28px) saturate(150%)",
             WebkitBackdropFilter: "blur(28px) saturate(150%)",
-            boxShadow:
-              "0 24px 64px -24px rgba(0,0,0,0.75), 0 8px 24px -12px rgba(0,0,0,0.55), inset 0 1px 0 rgba(255,255,255,0.05)",
+            boxShadow: "var(--shadow-floating)",
           }}
         >
           {/* Custom-value indicator (when current value isn't in presets) */}
@@ -173,8 +170,8 @@ export function GlassCombobox(props: GlassComboboxProps) {
               <div
                 className="flex items-center gap-2 rounded-md px-2.5 py-2 text-[12.5px]"
                 style={{
-                  background: "rgba(167,139,250,0.10)",
-                  border: "1px dashed rgba(167,139,250,0.35)",
+                  background: "var(--accent-10)",
+                  border: "1px dashed var(--accent-35)",
                 }}
               >
                 <Check
@@ -187,7 +184,7 @@ export function GlassCombobox(props: GlassComboboxProps) {
                   自定义
                 </span>
               </div>
-              <div className="my-1 mx-2 border-t border-white/[0.06]" />
+              <div className="my-1 mx-2 border-t border-[color:var(--w-06)]" />
             </>
           )}
 
@@ -200,8 +197,8 @@ export function GlassCombobox(props: GlassComboboxProps) {
                 onClick={() => handlePick(opt.value)}
                 className={cn(
                   "relative flex w-full items-center gap-2 rounded-md px-2.5 py-2 pr-8 text-left text-[13px] text-foreground transition-colors",
-                  "hover:bg-[rgba(167,139,250,0.14)]",
-                  isSelected && "bg-[rgba(167,139,250,0.10)]",
+                  "hover:bg-[color:var(--accent-14)]",
+                  isSelected && "bg-[color:var(--accent-10)]",
                 )}
               >
                 <div className="flex flex-col gap-0.5 min-w-0 flex-1">

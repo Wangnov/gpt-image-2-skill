@@ -19,10 +19,10 @@ export function Empty({
           className="w-12 h-12 rounded-2xl flex items-center justify-center"
           style={{
             background:
-              "radial-gradient(120% 80% at 30% 30%, rgba(167,139,250,0.25), transparent 60%), rgba(255,255,255,0.04)",
-            border: "1px solid rgba(255,255,255,0.10)",
+              "radial-gradient(120% 80% at 30% 30%, var(--accent-25), transparent 60%), var(--w-04)",
+            border: "1px solid var(--w-10)",
             boxShadow:
-              "0 8px 24px -8px rgba(167,139,250,0.25), inset 0 1px 0 rgba(255,255,255,0.08)",
+              "0 8px 24px -8px var(--accent-25), inset 0 1px 0 var(--w-08)",
             color: "var(--accent)",
           }}
         >

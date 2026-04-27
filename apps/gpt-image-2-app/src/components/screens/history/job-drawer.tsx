@@ -141,6 +141,7 @@ export function JobMetadataDrawer({
             <img
               src={previewUrl}
               alt={`生成图片预览 · 候选 ${selectedLabel}`}
+              decoding="async"
               className="w-full h-full object-cover"
               onError={() => setImageFailed(true)}
             />
@@ -206,7 +207,7 @@ export function JobMetadataDrawer({
                       style={SHIMMER_STYLE}
                     />
                   )}
-                  <span className="pointer-events-none absolute bottom-0 left-0 right-0 bg-[color:var(--n-900)]/70 px-1 py-0.5 text-center text-[9.5px] font-semibold text-white">
+                  <span className="pointer-events-none absolute bottom-0 left-0 right-0 bg-[color:var(--n-900)]/70 px-1 py-0.5 text-center text-[9.5px] font-semibold text-foreground">
                     {label}
                   </span>
                 </button>

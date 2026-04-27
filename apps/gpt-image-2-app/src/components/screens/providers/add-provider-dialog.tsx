@@ -255,7 +255,7 @@ export function AddProviderDialog({
               setEditRegionMode(defaultEditRegionMode(next));
             }}
             ariaLabel="凭证类型"
-            className="w-full overflow-x-auto"
+            className="w-full overflow-x-auto scrollbar-none"
             options={[
               { value: "openai-compatible", label: "OpenAI 兼容" },
               { value: "openai", label: "OpenAI 官方" },
@@ -324,7 +324,7 @@ export function AddProviderDialog({
               value={editRegionMode}
               onChange={setEditRegionMode}
               ariaLabel="局部编辑模式"
-              className="w-full overflow-x-auto"
+              className="w-full overflow-x-auto scrollbar-none"
               options={[
                 { value: "reference-hint", label: "软选区参考" },
                 { value: "native-mask", label: "精确遮罩" },
@@ -380,7 +380,7 @@ export function AddProviderDialog({
               value={keySource}
               onChange={(v) => setKeySource(v as CredentialSource)}
               ariaLabel="密钥保存方式"
-              className="w-full overflow-x-auto"
+              className="w-full overflow-x-auto scrollbar-none"
               options={[
                 { value: "file", label: "配置文件", icon: "filedot" },
                 { value: "env", label: "环境变量", icon: "envkey" },

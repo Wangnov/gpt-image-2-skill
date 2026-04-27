@@ -24,6 +24,7 @@ import { Icon } from "@/components/icon";
 import { OutputTile } from "@/components/screens/shared/output-tile";
 import { MaskCanvas, type MaskExport, type MaskMode } from "./mask-canvas";
 import { ReferenceImageCard, type RefImage } from "./reference-card";
+import { LocalEditOnboarding } from "./local-edit-onboarding";
 import { providerKindLabel } from "@/lib/format";
 import { useCreateEdit } from "@/hooks/use-jobs";
 import { useJobEvents } from "@/hooks/use-job-events";
@@ -420,6 +421,7 @@ export function EditScreen({ config }: { config?: ServerConfig }) {
 
   return (
     <div className="relative h-full w-full overflow-hidden flex flex-col">
+      <LocalEditOnboarding active={usesRegion} />
       {/* TOOLBAR — wraps when narrow, never clips */}
       <header className="shrink-0 px-4 pt-3 pb-2 flex items-center gap-2 flex-wrap">
         <Segmented
@@ -444,7 +446,7 @@ export function EditScreen({ config }: { config?: ServerConfig }) {
               type="button"
               className={cn(
                 "inline-flex items-center gap-1.5 h-8 px-3 rounded-full text-[12px] transition-colors",
-                "border bg-[rgba(255,255,255,0.04)] hover:bg-[rgba(255,255,255,0.07)]",
+                "border bg-[color:var(--w-04)] hover:bg-[color:var(--w-07)]",
                 referenceCountError
                   ? "border-[color:var(--status-err)] text-[color:var(--status-err)]"
                   : "border-border text-foreground",
@@ -502,7 +504,7 @@ export function EditScreen({ config }: { config?: ServerConfig }) {
                 type="button"
                 onClick={() => fileInputRef.current?.click()}
                 disabled={refs.length >= maxReferenceImages}
-                className="touch-target flex aspect-square flex-col items-center justify-center gap-1 rounded-lg border-[1.5px] border-dashed border-border-strong bg-[rgba(255,255,255,0.02)] text-muted hover:border-foreground/30 disabled:cursor-not-allowed disabled:opacity-50 transition-colors"
+                className="touch-target flex aspect-square flex-col items-center justify-center gap-1 rounded-lg border-[1.5px] border-dashed border-border-strong bg-[color:var(--w-02)] text-muted hover:border-foreground/30 disabled:cursor-not-allowed disabled:opacity-50 transition-colors"
               >
                 <Plus size={16} />
                 <span className="text-[10.5px]">添加</span>
@@ -520,7 +522,7 @@ export function EditScreen({ config }: { config?: ServerConfig }) {
               />
             </div>
             {usesRegion && (
-              <div className="mt-3 rounded-md border border-border-faint bg-[rgba(255,255,255,0.03)] px-2.5 py-1.5 text-[11px] leading-relaxed text-muted">
+              <div className="mt-3 rounded-md border border-border-faint bg-[color:var(--w-04)] px-2.5 py-1.5 text-[11px] leading-relaxed text-muted">
                 遮罩只作用在标记为「目标图」的图片上；其他图片只作为风格、人物或物体参考。
               </div>
             )}
@@ -533,8 +535,8 @@ export function EditScreen({ config }: { config?: ServerConfig }) {
           <span
             className="hidden md:inline-flex items-center gap-1.5 h-8 px-3 rounded-full text-[12px] text-foreground"
             style={{
-              background: "rgba(255,255,255,0.05)",
-              border: "1px solid rgba(255,255,255,0.10)",
+              background: "var(--w-05)",
+              border: "1px solid var(--w-10)",
             }}
             title={providerKindLabel(providerCfg?.type)}
           >
@@ -548,10 +550,10 @@ export function EditScreen({ config }: { config?: ServerConfig }) {
           <PopoverTrigger asChild>
             <button
               type="button"
-              className="inline-flex items-center gap-1.5 h-8 px-3 rounded-full text-[12px] text-foreground transition-colors hover:bg-[rgba(255,255,255,0.07)]"
+              className="inline-flex items-center gap-1.5 h-8 px-3 rounded-full text-[12px] text-foreground transition-colors hover:bg-[color:var(--w-07)]"
               style={{
-                background: "rgba(255,255,255,0.05)",
-                border: "1px solid rgba(255,255,255,0.10)",
+                background: "var(--w-05)",
+                border: "1px solid var(--w-10)",
               }}
             >
               <SettingsIcon size={12} />
@@ -559,7 +561,7 @@ export function EditScreen({ config }: { config?: ServerConfig }) {
             </button>
           </PopoverTrigger>
           <PopoverContent className="w-[340px] space-y-3">
-            <div className="text-[10.5px] font-semibold tracking-wider uppercase text-faint">
+            <div className="t-caps">
               编辑参数
             </div>
 
@@ -623,8 +625,8 @@ export function EditScreen({ config }: { config?: ServerConfig }) {
 
             {usesRegion && (
               <>
-                <div className="pt-2 mt-1 border-t border-white/[0.06]" />
-                <div className="text-[10.5px] font-semibold tracking-wider uppercase text-faint">
+                <div className="pt-2 mt-1 border-t border-[color:var(--w-06)]" />
+                <div className="t-caps">
                   遮罩工具
                 </div>
                 <div className="space-y-2">
@@ -655,7 +657,7 @@ export function EditScreen({ config }: { config?: ServerConfig }) {
                         setBrushSize(Number(event.target.value))
                       }
                       className="flex-1 cursor-pointer"
-                      style={{ accentColor: "#a78bfa", height: 4 }}
+                      style={{ accentColor: "var(--accent)", height: 4 }}
                     />
                     <span className="text-[11px] text-faint font-mono w-7 text-right tabular-nums">
                       {brushSize}
@@ -664,12 +666,12 @@ export function EditScreen({ config }: { config?: ServerConfig }) {
                   <button
                     type="button"
                     onClick={() => setClearKey((k) => k + 1)}
-                    className="inline-flex items-center gap-1.5 h-7 px-3 rounded-md text-[11.5px] text-muted hover:text-foreground hover:bg-white/[.05] transition-colors"
+                    className="inline-flex items-center gap-1.5 h-7 px-3 rounded-md text-[11.5px] text-muted hover:text-foreground hover:bg-[color:var(--w-05)] transition-colors"
                   >
                     <Trash2 size={11} /> 清除选区
                   </button>
                 </div>
-                <div className="rounded-md border border-border-faint bg-[rgba(255,255,255,0.03)] px-2.5 py-1.5 text-[11px] leading-relaxed text-muted">
+                <div className="rounded-md border border-border-faint bg-[color:var(--w-04)] px-2.5 py-1.5 text-[11px] leading-relaxed text-muted">
                   {regionModeHint(editRegionMode)}
                 </div>
               </>
@@ -681,13 +683,11 @@ export function EditScreen({ config }: { config?: ServerConfig }) {
           type="button"
           onClick={handleRun}
           disabled={submitDisabled}
-          className="inline-flex items-center justify-center gap-1.5 h-8 px-4 rounded-full text-[12px] font-semibold text-white transition-[background,opacity] hover:opacity-95 active:translate-y-[0.5px] disabled:opacity-45 disabled:cursor-not-allowed"
+          className="inline-flex items-center justify-center gap-1.5 h-8 px-4 rounded-full text-[12px] font-semibold text-foreground transition-[background,opacity] hover:opacity-95 active:translate-y-[0.5px] disabled:opacity-45 disabled:cursor-not-allowed"
           style={{
-            backgroundImage:
-              "linear-gradient(135deg, rgba(167,139,250,0.95) 0%, rgba(103,232,249,0.92) 100%)",
-            border: "1px solid rgba(167,139,250,0.50)",
-            boxShadow:
-              "0 8px 24px -8px rgba(167,139,250,0.55), inset 0 1px 0 rgba(255,255,255,0.18)",
+            backgroundImage: "var(--accent-gradient-fill)",
+            border: "1px solid var(--accent-50)",
+            boxShadow: "var(--shadow-accent-glow)",
           }}
         >
           {isSubmitting ? (
@@ -850,16 +850,15 @@ export function EditScreen({ config }: { config?: ServerConfig }) {
                 </>
               )}
             </div>
-            <div className="flex gap-2 overflow-x-auto pb-1">
+            <div className="flex gap-2 overflow-x-auto scrollbar-none pb-1">
               {isWorking &&
                 !hasOutputs &&
                 Array.from({ length: displayN }).map((_, i) => (
                   <div
                     key={i}
-                    className="shrink-0 h-20 w-20 rounded-md border border-border bg-[rgba(255,255,255,0.04)] flex items-center justify-center text-[10px] font-mono text-faint animate-shimmer"
+                    className="shrink-0 h-20 w-20 rounded-md border border-border bg-[color:var(--w-04)] flex items-center justify-center text-[10px] font-mono text-faint animate-shimmer"
                     style={{
-                      background:
-                        "linear-gradient(90deg, rgba(255,255,255,0.04) 0%, rgba(255,255,255,0.10) 40%, rgba(255,255,255,0.04) 80%)",
+                      background: "var(--skeleton-gradient-soft)",
                       backgroundSize: "200% 100%",
                     }}
                   >

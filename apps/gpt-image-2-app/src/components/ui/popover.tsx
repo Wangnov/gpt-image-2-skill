@@ -36,12 +36,11 @@ export const PopoverContent = forwardRef<
         className,
       )}
       style={{
-        background: "rgba(14, 14, 20, 0.82)",
-        borderColor: "rgba(255,255,255,0.12)",
+        background: "var(--surface-floating)",
+        borderColor: "var(--surface-floating-border)",
         backdropFilter: "blur(28px) saturate(150%)",
         WebkitBackdropFilter: "blur(28px) saturate(150%)",
-        boxShadow:
-          "0 24px 64px -24px rgba(0,0,0,0.75), 0 8px 24px -12px rgba(0,0,0,0.55), inset 0 1px 0 rgba(255,255,255,0.05)",
+        boxShadow: "var(--shadow-floating)",
       }}
       {...rest}
     >

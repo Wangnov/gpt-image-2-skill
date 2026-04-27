@@ -85,12 +85,11 @@ const SelectContent = forwardRef<
         className,
       )}
       style={{
-        background: "rgba(14, 14, 20, 0.78)",
-        borderColor: "rgba(255,255,255,0.12)",
+        background: "var(--surface-floating-soft)",
+        borderColor: "var(--surface-floating-border)",
         backdropFilter: "blur(28px) saturate(150%)",
         WebkitBackdropFilter: "blur(28px) saturate(150%)",
-        boxShadow:
-          "0 24px 64px -24px rgba(0, 0, 0, 0.75), 0 8px 24px -12px rgba(0, 0, 0, 0.55), inset 0 1px 0 rgba(255,255,255,0.05)",
+        boxShadow: "var(--shadow-floating)",
       }}
       {...rest}
     >
@@ -110,8 +109,8 @@ const SelectItem = forwardRef<
     ref={ref}
     className={cn(
       "relative flex cursor-pointer select-none items-center gap-2 rounded-md px-2.5 py-2 pr-8 text-[13px] text-foreground outline-none transition-colors",
-      "data-[highlighted]:bg-[rgba(167,139,250,0.14)] data-[highlighted]:text-foreground",
-      "data-[state=checked]:bg-[rgba(167,139,250,0.10)]",
+      "data-[highlighted]:bg-[color:var(--accent-14)] data-[highlighted]:text-foreground",
+      "data-[state=checked]:bg-[color:var(--accent-10)]",
       "data-[disabled]:pointer-events-none data-[disabled]:opacity-50",
       className,
     )}
@@ -159,10 +158,10 @@ function DefaultTrigger({
       aria-invalid={invalid || undefined}
       disabled={disabled}
       className={cn(
-        "group inline-flex w-full items-center justify-between gap-2 rounded-md border border-border bg-[rgba(255,255,255,0.04)] pl-2.5 pr-2 text-[13px] text-foreground outline-none transition-colors",
-        "hover:bg-[rgba(255,255,255,0.07)]",
-        "focus-visible:border-[rgba(167,139,250,0.55)] focus-visible:bg-[rgba(167,139,250,0.06)] focus-visible:shadow-[0_0_0_3px_rgba(167,139,250,0.18)]",
-        "data-[state=open]:border-[rgba(167,139,250,0.55)] data-[state=open]:bg-[rgba(167,139,250,0.06)]",
+        "group inline-flex w-full items-center justify-between gap-2 rounded-md border border-border bg-[color:var(--w-04)] pl-2.5 pr-2 text-[13px] text-foreground outline-none transition-colors",
+        "hover:bg-[color:var(--w-07)]",
+        "focus-visible:border-[color:var(--accent-55)] focus-visible:bg-[color:var(--accent-06)] focus-visible:shadow-[0_0_0_3px_var(--accent-18)]",
+        "data-[state=open]:border-[color:var(--accent-55)] data-[state=open]:bg-[color:var(--accent-06)]",
         "disabled:cursor-not-allowed disabled:opacity-55",
         invalid && "border-[color:var(--status-err)]",
         triggerHeights[size],
@@ -201,20 +200,16 @@ function ChipTrigger({
       aria-label={ariaLabel ?? label}
       disabled={disabled}
       className={cn(
-        "group inline-flex items-center gap-2 rounded-md border border-border bg-[rgba(255,255,255,0.04)] px-3 text-[12.5px] text-foreground outline-none transition-colors",
-        "hover:bg-[rgba(255,255,255,0.07)]",
-        "focus-visible:border-[rgba(167,139,250,0.55)] focus-visible:bg-[rgba(167,139,250,0.06)] focus-visible:shadow-[0_0_0_3px_rgba(167,139,250,0.18)]",
-        "data-[state=open]:border-[rgba(167,139,250,0.55)] data-[state=open]:bg-[rgba(167,139,250,0.06)]",
+        "group inline-flex items-center gap-2 rounded-md border border-border bg-[color:var(--w-04)] px-3 text-[12.5px] text-foreground outline-none transition-colors",
+        "hover:bg-[color:var(--w-07)]",
+        "focus-visible:border-[color:var(--accent-55)] focus-visible:bg-[color:var(--accent-06)] focus-visible:shadow-[0_0_0_3px_var(--accent-18)]",
+        "data-[state=open]:border-[color:var(--accent-55)] data-[state=open]:bg-[color:var(--accent-06)]",
         "disabled:cursor-not-allowed disabled:opacity-55",
         triggerHeights[size],
         className,
       )}
     >
-      {label && (
-        <span className="text-[10.5px] uppercase tracking-wider text-faint">
-          {label}
-        </span>
-      )}
+      {label && <span className="t-caps">{label}</span>}
       <RadixSelect.Value />
       <RadixSelect.Icon asChild>
         <ChevronDown

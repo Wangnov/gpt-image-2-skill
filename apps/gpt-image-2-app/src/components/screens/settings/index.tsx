@@ -21,6 +21,7 @@ import type { LucideIcon } from "lucide-react";
 import { Segmented } from "@/components/ui/segmented";
 import { Toggle } from "@/components/ui/toggle";
 import { Button } from "@/components/ui/button";
+import { useConfirm } from "@/hooks/use-confirm";
 import { Empty } from "@/components/ui/empty";
 import { Icon } from "@/components/icon";
 import { useTweaks } from "@/hooks/use-tweaks";
@@ -84,7 +85,7 @@ function Section({
   return (
     <section
       className="rounded-xl overflow-hidden border border-border-faint"
-      style={{ background: "rgba(255,255,255,0.02)" }}
+      style={{ background: "var(--w-02)" }}
     >
       {(title || description) && (
         <header className="border-b border-border-faint px-5 py-3">
@@ -197,8 +198,8 @@ function SettingsNav({
               className={cn(
                 "flex items-center gap-2.5 h-9 px-3 rounded-md text-[13px] transition-colors text-left",
                 active
-                  ? "bg-white/[.10] text-foreground border border-white/[.10]"
-                  : "border border-transparent text-muted hover:text-foreground hover:bg-white/[.05]",
+                  ? "bg-[color:var(--w-10)] text-foreground border border-[color:var(--w-10)]"
+                  : "border border-transparent text-muted hover:text-foreground hover:bg-[color:var(--w-05)]",
               )}
             >
               <I size={14} className="opacity-80" />
@@ -217,7 +218,7 @@ function PanelHeader({ tab }: { tab: SettingsTab }) {
   const meta = TAB_TITLES[tab];
   return (
     <header className="px-6 pt-5 pb-4 border-b border-border-faint">
-      <div className="t-h2 tracking-tight">{meta.title}</div>
+      <div className="t-h2">{meta.title}</div>
       <div className="mt-0.5 text-[12px] text-muted">{meta.subtitle}</div>
     </header>
   );
@@ -229,13 +230,13 @@ function PanelHeader({ tab }: { tab: SettingsTab }) {
 function CredIcon({ kind }: { kind: ProviderConfig["type"] }) {
   if (kind === "openai") {
     return (
-      <div className="h-10 w-10 shrink-0 rounded-xl bg-white/[.06] border border-white/[.10] flex items-center justify-center">
+      <div className="h-10 w-10 shrink-0 rounded-xl bg-[color:var(--w-06)] border border-[color:var(--w-10)] flex items-center justify-center">
         <svg
           viewBox="0 0 24 24"
           width="20"
           height="20"
           fill="none"
-          className="text-white opacity-90"
+          className="text-foreground opacity-90"
         >
           <path
             d="M22.28 9.82a5.85 5.85 0 0 0-.5-4.81 5.93 5.93 0 0 0-6.4-2.84A5.93 5.93 0 0 0 4.7 4.74 5.85 5.85 0 0 0 .8 7.58a5.92 5.92 0 0 0 .73 6.93 5.85 5.85 0 0 0 .5 4.82 5.93 5.93 0 0 0 6.39 2.84 5.85 5.85 0 0 0 4.41 1.96 5.93 5.93 0 0 0 5.65-4.1 5.85 5.85 0 0 0 3.9-2.84 5.92 5.92 0 0 0-.74-6.93Z"
@@ -251,18 +252,17 @@ function CredIcon({ kind }: { kind: ProviderConfig["type"] }) {
       <div
         className="h-10 w-10 shrink-0 rounded-xl flex items-center justify-center"
         style={{
-          background:
-            "linear-gradient(135deg, rgba(167,139,250,0.45), rgba(103,232,249,0.30))",
-          border: "1px solid rgba(167,139,250,0.35)",
+          background: "var(--accent-gradient-glow)",
+          border: "1px solid var(--accent-35)",
         }}
       >
-        <Bot size={18} className="text-white" />
+        <Bot size={18} className="text-foreground" />
       </div>
     );
   }
   return (
-    <div className="h-10 w-10 shrink-0 rounded-xl bg-white/[.06] border border-white/[.10] flex items-center justify-center">
-      <FileCog size={17} className="text-white opacity-85" />
+    <div className="h-10 w-10 shrink-0 rounded-xl bg-[color:var(--w-06)] border border-[color:var(--w-10)] flex items-center justify-center">
+      <FileCog size={17} className="text-foreground opacity-85" />
     </div>
   );
 }
@@ -294,6 +294,7 @@ function CredCard({
   onTest,
   onDelete,
 }: CredCardProps) {
+  const confirm = useConfirm();
   // Surface a key value if any credential exposes a literal value.
   const apiKeyCredential = Object.values(prov.credentials ?? {}).find(
     (c) =>
@@ -311,8 +312,8 @@ function CredCard({
       className={cn(
         "flex items-center gap-3 px-3.5 py-3 rounded-xl border transition-colors",
         isDefault
-          ? "border-[rgba(167,139,250,0.30)] bg-[rgba(167,139,250,0.05)]"
-          : "border-border bg-[rgba(255,255,255,0.03)] hover:bg-[rgba(255,255,255,0.05)]",
+          ? "border-[color:var(--accent-30)] bg-[color:var(--accent-04)]"
+          : "border-border bg-[color:var(--w-04)] hover:bg-[color:var(--w-05)]",
       )}
     >
       <CredIcon kind={prov.type} />
@@ -325,14 +326,12 @@ function CredCard({
           {isDefault && (
             <span
               className="text-[10.5px] font-medium tracking-wide"
-              style={{ color: "#86efac" }}
+              style={{ color: "var(--status-ok-soft)" }}
             >
               当前使用
             </span>
           )}
-          <span
-            className="text-[10.5px] uppercase tracking-wider text-faint"
-          >
+          <span className="t-caps">
             {prov.type === "openai-compatible"
               ? "OpenAI 兼容"
               : prov.type === "codex"
@@ -367,7 +366,7 @@ function CredCard({
           type="button"
           onClick={onTest}
           disabled={testStatus === "running"}
-          className="h-8 w-8 inline-flex items-center justify-center rounded-md text-muted hover:text-foreground hover:bg-white/[.06] transition-colors disabled:opacity-50"
+          className="h-8 w-8 inline-flex items-center justify-center rounded-md text-muted hover:text-foreground hover:bg-[color:var(--w-06)] transition-colors disabled:opacity-50"
           title="测试连接"
           aria-label={`测试 ${name} 的连接`}
         >
@@ -384,7 +383,7 @@ function CredCard({
         <button
           type="button"
           onClick={onEdit}
-          className="h-8 w-8 inline-flex items-center justify-center rounded-md text-muted hover:text-foreground hover:bg-white/[.06] transition-colors"
+          className="h-8 w-8 inline-flex items-center justify-center rounded-md text-muted hover:text-foreground hover:bg-[color:var(--w-06)] transition-colors"
           title="编辑"
           aria-label={`编辑 ${name}`}
         >
@@ -397,12 +396,16 @@ function CredCard({
         )}
         <button
           type="button"
-          onClick={() => {
-            if (window.confirm(`删除凭证 “${name}”？此操作无法撤销。`)) {
-              onDelete();
-            }
+          onClick={async () => {
+            const ok = await confirm({
+              title: `删除凭证「${name}」`,
+              description: "此操作无法撤销。",
+              confirmText: "删除",
+              variant: "danger",
+            });
+            if (ok) onDelete();
           }}
-          className="h-8 w-8 inline-flex items-center justify-center rounded-md text-muted hover:text-[color:var(--status-err)] hover:bg-[rgba(248,113,113,0.10)] transition-colors"
+          className="h-8 w-8 inline-flex items-center justify-center rounded-md text-muted hover:text-[color:var(--status-err)] hover:bg-[color:var(--status-err-10)] transition-colors"
           title="删除"
           aria-label={`删除 ${name}`}
         >
@@ -497,8 +500,8 @@ function CredsPanel({ config }: { config?: ServerConfig }) {
         onClick={() => setShowAdd(true)}
         className="mt-3 w-full flex items-center justify-center gap-2 h-12 rounded-xl text-[13px] text-muted hover:text-foreground transition-colors"
         style={{
-          background: "rgba(255,255,255,0.02)",
-          border: "1px dashed rgba(255,255,255,0.16)",
+          background: "var(--w-02)",
+          border: "1px dashed var(--w-16)",
         }}
       >
         <Plus size={15} />
@@ -536,17 +539,16 @@ function AppearancePanel() {
             <span
               className="inline-flex items-center gap-2 px-3 h-8 rounded-full text-[12.5px]"
               style={{
-                background:
-                  "linear-gradient(135deg, rgba(167,139,250,0.18), rgba(103,232,249,0.14))",
-                border: "1px solid rgba(167,139,250,0.35)",
+                background: "var(--accent-gradient-soft)",
+                border: "1px solid var(--accent-35)",
                 color: "var(--text)",
               }}
             >
               <span
                 className="h-2.5 w-2.5 rounded-full"
                 style={{
-                  background: "linear-gradient(135deg, #a78bfa, #67e8f9)",
-                  boxShadow: "0 0 8px rgba(167,139,250,0.6)",
+                  background: "var(--accent-gradient-line)",
+                  boxShadow: "0 0 8px var(--accent-60)",
                 }}
               />
               Liquid
@@ -579,7 +581,7 @@ function AppearancePanel() {
                 }
                 className="flex-1 cursor-pointer"
                 style={{
-                  accentColor: "#a78bfa",
+                  accentColor: "var(--accent)",
                   height: 4,
                 }}
                 aria-label="面板透明度"

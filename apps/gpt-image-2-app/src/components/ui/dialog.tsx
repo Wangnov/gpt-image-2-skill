@@ -28,7 +28,7 @@ export function Dialog({
         <Radix.Overlay
           className="fixed inset-0 z-40 animate-fade-in"
           style={{
-            background: "rgba(0,0,0,0.55)",
+            background: "var(--k-55)",
             backdropFilter: "blur(6px)",
             WebkitBackdropFilter: "blur(6px)",
           }}
@@ -40,18 +40,18 @@ export function Dialog({
             maxHeight: `min(${maxHeight}px, calc(100vh - 48px))`,
             backdropFilter: "blur(28px) saturate(140%)",
             WebkitBackdropFilter: "blur(28px) saturate(140%)",
+            background: "var(--surface-floating-soft)",
           }}
           className={cn(
             "fixed left-1/2 top-1/2 z-50 grid -translate-x-1/2 -translate-y-1/2 overflow-hidden",
             "grid-rows-[auto_minmax(0,1fr)_auto]",
             "rounded-xl shadow-lg animate-fade-in",
             "border border-border-strong",
-            "bg-[rgba(20,20,28,0.78)]",
           )}
         >
           {title && (
             <div className="flex shrink-0 items-center justify-between px-[18px] py-3.5 border-b border-border-faint">
-              <Radix.Title className="t-h2 tracking-tight">{title}</Radix.Title>
+              <Radix.Title className="t-h2">{title}</Radix.Title>
               <Radix.Close asChild>
                 <Button variant="ghost" size="iconSm" icon="x" />
               </Radix.Close>
@@ -61,7 +61,7 @@ export function Dialog({
             {children}
           </div>
           {footer && (
-            <div className="flex shrink-0 justify-end gap-2 border-t border-border-faint px-[18px] py-3 bg-[rgba(255,255,255,0.02)]">
+            <div className="flex shrink-0 justify-end gap-2 border-t border-border-faint px-[18px] py-3 bg-[color:var(--w-02)]">
               {footer}
             </div>
           )}

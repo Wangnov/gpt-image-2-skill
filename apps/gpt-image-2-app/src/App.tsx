@@ -42,10 +42,9 @@ class ScreenErrorBoundary extends Component<
         role="alert"
         className="flex h-full flex-col items-center justify-center gap-3 p-10 text-center"
       >
-        <div className="t-h2 text-foreground">界面出现异常</div>
+        <div className="t-h2 text-foreground">这个屏幕崩了</div>
         <div className="max-w-[420px] text-[13px] text-muted">
-          {this.state.error.message ||
-            "这个屏幕遇到了未知错误。已经停止渲染,以免影响其他功能。"}
+          {this.state.error.message || "出现了一个未知错误。"}
         </div>
         <Button
           variant="primary"
@@ -56,7 +55,7 @@ class ScreenErrorBoundary extends Component<
             this.props.onReset();
           }}
         >
-          重新加载这个屏幕
+          重新加载
         </Button>
       </div>
     );
@@ -116,13 +115,16 @@ export default function App() {
 
   const active = (job: { status: string }) =>
     job.status === "running" || job.status === "queued";
+  const generateCount =
+    jobs?.filter((job) => active(job) && job.command === "images generate")
+      .length ?? 0;
+  const editCount =
+    jobs?.filter((job) => active(job) && job.command === "images edit")
+      .length ?? 0;
   const running = {
-    generate:
-      jobs?.some((job) => active(job) && job.command === "images generate") ??
-      false,
-    edit:
-      jobs?.some((job) => active(job) && job.command === "images edit") ??
-      false,
+    generate: generateCount,
+    edit: editCount,
+    total: generateCount + editCount,
   };
 
   return (
@@ -148,10 +150,15 @@ export default function App() {
                     config={config}
                     onOpenEdit={() => setScreen("edit")}
                     onOpenHistory={() => setScreen("history")}
+                    onOpenJob={openJob}
                   />
                 )}
                 {screen === "edit" && <EditScreen config={config} />}
-                {screen === "history" && <HistoryScreen />}
+                {screen === "history" && (
+                  <HistoryScreen
+                    onSwitchToGenerate={() => setScreen("generate")}
+                  />
+                )}
                 {screen === "settings" && <SettingsScreen config={config} />}
               </ScreenErrorBoundary>
             </div>

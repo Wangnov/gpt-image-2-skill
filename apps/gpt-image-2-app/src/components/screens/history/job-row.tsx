@@ -104,9 +104,9 @@ function JobAvatar({ job, promptTitle }: { job: Job; promptTitle: string }) {
         <span
           aria-hidden="true"
           className={cn(
-            "pointer-events-none absolute -bottom-1 -right-1 flex h-4 min-w-[16px] items-center justify-center rounded-[4px] border border-[color:var(--bg-raised)] px-1 text-[10px] font-semibold leading-none text-white",
+            "pointer-events-none absolute -bottom-1 -right-1 flex h-4 min-w-[16px] items-center justify-center rounded-[4px] border border-[color:var(--bg-raised)] px-1 text-[10px] font-semibold leading-none text-foreground",
             isRunning
-              ? "bg-status-running text-white"
+              ? "bg-status-running text-foreground"
               : "bg-[color:var(--n-900)]",
           )}
         >

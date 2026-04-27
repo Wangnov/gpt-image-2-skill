@@ -22,17 +22,17 @@ type Props = {
 
 const toneClass: Record<Tone, string> = {
   neutral:
-    "bg-[rgba(255,255,255,0.05)] text-muted border-border",
+    "bg-[color:var(--w-05)] text-muted border-border",
   accent:
-    "bg-[rgba(167,139,250,0.14)] text-[color:var(--accent)] border-[rgba(167,139,250,0.30)]",
-  ok: "bg-[rgba(52,211,153,0.14)] text-[color:var(--status-ok)] border-[rgba(52,211,153,0.25)]",
+    "bg-[color:var(--accent-14)] text-[color:var(--accent)] border-[color:var(--accent-30)]",
+  ok: "bg-[color:var(--status-ok-bg)] text-[color:var(--status-ok)] border-[color:var(--status-ok-25)]",
   running:
-    "bg-[rgba(251,191,36,0.14)] text-[color:var(--status-running)] border-[rgba(251,191,36,0.25)]",
-  err: "bg-[rgba(248,113,113,0.16)] text-[color:var(--status-err)] border-[rgba(248,113,113,0.30)]",
+    "bg-[color:var(--status-running-bg)] text-[color:var(--status-running)] border-[color:var(--status-running-25)]",
+  err: "bg-[color:var(--status-err-bg)] text-[color:var(--status-err)] border-[color:var(--status-err-30)]",
   queued:
-    "bg-[rgba(148,163,184,0.14)] text-[color:var(--status-queued)] border-[rgba(148,163,184,0.20)]",
+    "bg-[color:var(--status-queued-bg)] text-[color:var(--status-queued)] border-[color:var(--status-queued-20)]",
   outline: "bg-transparent text-muted border-border",
-  dark: "bg-white text-[#06060a] border-white",
+  dark: "bg-[color:var(--surface-inverted)] text-[color:var(--text-on-inverted)] border-[color:var(--surface-inverted)]",
 };
 
 export function Badge({

@@ -255,7 +255,7 @@ export function MaskCanvas({
       />
       <div
         aria-hidden="true"
-        className="pointer-events-none absolute rounded-full border border-white/90 shadow-[0_0_0_1px_rgba(0,0,0,0.35)]"
+        className="pointer-events-none absolute rounded-full border border-foreground/90 shadow-[0_0_0_1px_var(--k-35)]"
         style={{
           width: Math.max(12, brushSize * 2 * 0.1),
           height: Math.max(12, brushSize * 2 * 0.1),

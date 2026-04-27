@@ -11,7 +11,7 @@
    ────────────────────────────────────────────────────────── */
 :root {
   /* neutral ramp (liquid-tuned dark) */
-  --n-0: #ffffff;
+  --n-0: #fafafb;
   --n-25: #f8f8fa;
   --n-50: #e9e9ed;
   --n-100: #c3c3ca;
@@ -79,7 +79,12 @@
   --status-queued: #94a3b8;
   --status-queued-bg: rgba(148, 163, 184, 0.14);
 
-  /* type */
+  /* type — families
+     Inter is intentionally still the first stop (audit notes it as a known
+     "reflex" font). Replacement is deferred to a dedicated session because
+     the project is CJK-primary: most users see PingFang / 微软雅黑 system
+     fallbacks, so the Inter swap mostly affects digits & dev strings. When
+     replacement happens, candidates live in apps/gpt-image-2-app/.impeccable.md. */
   --f-sans:
     "Inter", -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue",
     sans-serif;
@@ -87,6 +92,36 @@
     "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   --f-serif: "Source Serif 4", "Iowan Old Style", "Georgia", serif;
   --f-ui: var(--f-sans);
+
+  /* type — modular scale, fixed rem (this is a desktop tool UI, fluid
+     sizing would undermine the spatial predictability of dense panels).
+     Hero/display sizes step up via media query in .t-display below.
+     Use semantic tokens, not raw px, in components. */
+  --text-display: 3.25rem;     /* 52px — hero "GPT Image 2" */
+  --text-screen: 1.625rem;     /* 26px — screen-level h1 */
+  --text-title: 1.375rem;      /* 22px — section title */
+  --text-h2: 1rem;             /* 16px — section h2 */
+  --text-h3: 0.84375rem;       /* 13.5px — h3 (matches body weight=600) */
+  --text-body: 0.84375rem;     /* 13.5px — body default */
+  --text-md: 0.8125rem;        /* 13px */
+  --text-sm: 0.75rem;          /* 12px */
+  --text-xs: 0.6875rem;        /* 11px */
+  --text-2xs: 0.65625rem;      /* 10.5px — caps label */
+  --text-3xs: 0.59375rem;      /* 9.5px — micro chip */
+
+  /* line-heights — tighter for display, looser for body */
+  --leading-display: 1;
+  --leading-tight: 1.15;
+  --leading-snug: 1.3;
+  --leading-normal: 1.5;
+  --leading-relaxed: 1.65;
+
+  /* letter-spacing — only at the extremes; default is 0 */
+  --track-display: -0.025em;   /* large headings */
+  --track-tight: -0.02em;
+  --track-snug: -0.01em;
+  --track-tiny: 0.02em;        /* very small UI labels read better with a hair of opening */
+  --track-caps: 0.08em;        /* uppercase caps labels */
 
   /* density */
   --d-row: 44px;
@@ -116,6 +151,172 @@
     0 8px 24px -12px rgba(0, 0, 0, 0.5);
   --shadow-popover:
     0 18px 48px rgba(0, 0, 0, 0.55), 0 4px 12px rgba(0, 0, 0, 0.45);
+
+  /* ──────────────────────────────────────────────────────────
+     Liquid alpha ramps & semantic tokens.
+
+     Two-layer system:
+       1. Atomic alphas (--accent-NN, --w-NN, --k-NN, --status-X-NN):
+          raw rgba values, indexed by alpha percent. Use only when no
+          semantic token fits. Adding a new value here is cheap.
+       2. Semantic tokens (--surface-floating-*, --accent-gradient-*,
+          --shadow-*, --skeleton-gradient-*): named after intent. Reach
+          for these first — they make refactors safer.
+
+     RULE: components must NOT inline rgba() / linear-gradient() / hex
+     colors. If a value is missing here, add a token, don't write the
+     literal in TSX.
+     ────────────────────────────────────────────────────────── */
+
+  /* accent (violet #a78bfa) alpha ramp */
+  --accent-04: rgba(167, 139, 250, 0.04);
+  --accent-06: rgba(167, 139, 250, 0.06);
+  --accent-08: rgba(167, 139, 250, 0.08);
+  --accent-10: rgba(167, 139, 250, 0.10);
+  --accent-14: rgba(167, 139, 250, 0.14);
+  --accent-18: rgba(167, 139, 250, 0.18);
+  --accent-25: rgba(167, 139, 250, 0.25);
+  --accent-30: rgba(167, 139, 250, 0.30);
+  --accent-35: rgba(167, 139, 250, 0.35);
+  --accent-45: rgba(167, 139, 250, 0.45);
+  --accent-50: rgba(167, 139, 250, 0.50);
+  --accent-55: rgba(167, 139, 250, 0.55);
+  --accent-60: rgba(167, 139, 250, 0.60);
+  --accent-75: rgba(167, 139, 250, 0.75);
+
+  /* accent-2 (cyan #67e8f9) alpha ramp — used sparingly */
+  --accent-2-06: rgba(103, 232, 249, 0.06);
+  --accent-2-14: rgba(103, 232, 249, 0.14);
+  --accent-2-30: rgba(103, 232, 249, 0.30);
+
+  /* white scrim alpha ramp (for hovers, soft fills, borders) */
+  --w-02: rgba(255, 255, 255, 0.02);
+  --w-04: rgba(255, 255, 255, 0.04);
+  --w-05: rgba(255, 255, 255, 0.05);
+  --w-06: rgba(255, 255, 255, 0.06);
+  --w-07: rgba(255, 255, 255, 0.07);
+  --w-08: rgba(255, 255, 255, 0.08);
+  --w-10: rgba(255, 255, 255, 0.10);
+  --w-12: rgba(255, 255, 255, 0.12);
+  --w-16: rgba(255, 255, 255, 0.16);
+  --w-18: rgba(255, 255, 255, 0.18);
+  --w-20: rgba(255, 255, 255, 0.20);
+  --w-40: rgba(255, 255, 255, 0.40);
+
+  /* black scrim alpha ramp (for image overlays, button glow, dialog veil) */
+  --k-30: rgba(0, 0, 0, 0.30);
+  --k-35: rgba(0, 0, 0, 0.35);
+  --k-40: rgba(0, 0, 0, 0.40);
+  --k-45: rgba(0, 0, 0, 0.45);
+  --k-55: rgba(0, 0, 0, 0.55);
+  --k-65: rgba(0, 0, 0, 0.65);
+  --k-70: rgba(0, 0, 0, 0.70);
+
+  /* deep-bg veil (color matches --bg, used to dim WebGL background) */
+  --bg-veil-soft: rgba(6, 6, 10, 0.18);
+  --bg-veil-strong: rgba(6, 6, 10, 0.62);
+
+  /* page noise dot (paired with mix-blend-overlay over --bg) */
+  --w-noise: rgba(255, 255, 255, 0.025);
+
+  /* status alpha ramps */
+  --status-err-08: rgba(248, 113, 113, 0.08);
+  --status-err-10: rgba(248, 113, 113, 0.10);
+  --status-err-18: rgba(248, 113, 113, 0.18);
+  --status-err-25: rgba(248, 113, 113, 0.25);
+  --status-err-30: rgba(248, 113, 113, 0.30);
+  --status-running-25: rgba(251, 191, 36, 0.25);
+  --status-running-60: rgba(251, 191, 36, 0.60);
+  --status-ok-25: rgba(52, 211, 153, 0.25);
+  --status-ok-soft: #86efac;
+  --status-queued-20: rgba(148, 163, 184, 0.20);
+
+  /* brand gradient variants — use these, never the raw linear-gradient() */
+  --accent-gradient-fill: linear-gradient(
+    135deg,
+    rgba(167, 139, 250, 0.95) 0%,
+    rgba(103, 232, 249, 0.92) 100%
+  );
+  --accent-gradient-soft: linear-gradient(
+    135deg,
+    var(--accent-18),
+    var(--accent-2-14)
+  );
+  --accent-gradient-glow: linear-gradient(
+    135deg,
+    var(--accent-45),
+    var(--accent-2-30)
+  );
+  --accent-gradient-line: linear-gradient(135deg, #a78bfa 0%, #67e8f9 100%);
+
+  /* floating surfaces (popover / dialog / drawer / tooltip / combobox menu) */
+  --surface-floating: rgba(14, 14, 20, 0.82);
+  --surface-floating-strong: rgba(14, 14, 20, 0.92);
+  --surface-floating-soft: rgba(14, 14, 20, 0.78);
+  --surface-floating-border: var(--w-12);
+
+  /* top-nav surfaces — sit lower than floating layers; intentionally
+     more transparent so they recede behind hero content */
+  --surface-nav: rgba(10, 10, 14, 0.55);
+  --surface-nav-strong: rgba(8, 8, 12, 0.60);
+  --shadow-floating:
+    0 24px 64px -24px var(--k-70),
+    0 8px 24px -12px var(--k-55),
+    inset 0 1px 0 var(--w-05);
+  --shadow-floating-side:
+    -32px 0 80px -32px var(--k-70),
+    -12px 0 32px -16px var(--k-55),
+    inset 1px 0 0 var(--w-05);
+
+  /* primary CTA glow (used by button.primary + inline run buttons) */
+  --shadow-accent-glow:
+    0 8px 24px -8px var(--accent-55),
+    inset 0 1px 0 var(--w-18);
+  --shadow-accent-glow-soft: 0 0 12px var(--accent-45);
+  --shadow-accent-glow-hover:
+    0 12px 32px -8px var(--accent-60),
+    inset 0 1px 0 var(--w-18);
+  /* press burst — adds a thin accent ring around the button at the moment
+     of click. CSS `active:` is brief, so the ring works as a "pulse" cue
+     rather than a sustained state. */
+  --shadow-accent-glow-press:
+    0 0 0 4px var(--accent-30),
+    0 8px 24px -8px var(--accent-55),
+    inset 0 1px 0 var(--w-18);
+
+  /* shimmer / skeleton gradients (use these, not raw linear-gradient) */
+  --skeleton-gradient: linear-gradient(
+    110deg,
+    var(--bg-sunken) 0%,
+    var(--bg-hover) 40%,
+    var(--bg-sunken) 80%
+  );
+  --skeleton-gradient-soft: linear-gradient(
+    90deg,
+    var(--w-04) 0%,
+    var(--w-10) 40%,
+    var(--w-04) 80%
+  );
+
+  /* image placeholder when no thumbnail exists yet — token-bound, not
+     a one-off navy. Two violet/cyan light blooms over the sunken
+     surface, so it stays inside the brand light language. */
+  --image-placeholder-bg:
+    radial-gradient(120% 80% at 30% 30%, var(--accent-50), transparent 60%),
+    radial-gradient(120% 80% at 70% 70%, var(--accent-2-30), transparent 60%),
+    var(--bg-sunken);
+
+  /* surface "inverted" — soft white used by solid CTAs and toggle thumb,
+     instead of pure #fff. Reads warmer against deep backgrounds. */
+  --surface-inverted: var(--n-25);
+  --surface-inverted-hover: var(--n-50);
+  --text-on-inverted: var(--n-900);
+
+  /* row hover/pressed semantics (alias to existing bg-* tokens for
+     readability where the meaning is "list row state") */
+  --row-hover: var(--w-04);
+  --row-hover-strong: var(--w-06);
+  --row-pressed: var(--w-09, var(--bg-pressed));
 }
 
 /* keep [data-theme] inert — single dark theme. We leave the
@@ -159,14 +360,13 @@
   }
   body {
     font-family: var(--f-ui);
-    font-size: 13.5px;
-    line-height: 1.5;
+    font-size: var(--text-body);
+    line-height: var(--leading-normal);
     color: var(--text);
     background: var(--bg);
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
     overflow: hidden;
-    letter-spacing: -0.005em;
   }
 
   button {
@@ -209,47 +409,84 @@
   }
 }
 
-/* Typography helpers (inherit color tokens, no theme-specific colors) */
+/* Typography helpers — every size, weight, leading and tracking
+   reads from a token. Components should reach for these classes
+   instead of inline `text-[Xpx]` whenever the role is one of the
+   semantic levels below. */
+.t-display {
+  font-family: var(--f-ui);
+  font-size: var(--text-display);
+  font-weight: 600;
+  letter-spacing: var(--track-display);
+  line-height: var(--leading-display);
+}
+@media (max-width: 640px) {
+  .t-display {
+    font-size: 2.75rem; /* 44px on narrow viewports */
+  }
+}
+.t-screen-title {
+  font-family: var(--f-ui);
+  font-size: var(--text-screen);
+  font-weight: 600;
+  letter-spacing: var(--track-display);
+  line-height: var(--leading-tight);
+}
 .t-title {
   font-family: var(--f-ui);
-  font-size: 22px;
+  font-size: var(--text-title);
   font-weight: 600;
-  letter-spacing: -0.02em;
-  line-height: 1.2;
+  letter-spacing: var(--track-tight);
+  line-height: var(--leading-tight);
 }
 .t-h2 {
   font-family: var(--f-ui);
-  font-size: 16px;
+  font-size: var(--text-h2);
   font-weight: 600;
-  letter-spacing: -0.01em;
+  letter-spacing: var(--track-tight);
 }
 .t-h3 {
   font-family: var(--f-ui);
-  font-size: 13.5px;
+  font-size: var(--text-h3);
   font-weight: 600;
 }
 .t-body {
-  font-size: 13.5px;
+  font-size: var(--text-body);
+}
+.t-md {
+  font-size: var(--text-md);
 }
 .t-small {
-  font-size: 12px;
+  font-size: var(--text-sm);
   color: var(--text-muted);
 }
 .t-tiny {
-  font-size: 11px;
+  font-size: var(--text-xs);
   color: var(--text-muted);
-  letter-spacing: 0.02em;
+  letter-spacing: var(--track-tiny);
 }
 .t-mono {
   font-family: var(--f-mono);
-  font-size: 12px;
+  font-size: var(--text-sm);
+  font-feature-settings: "tnum" 1, "calt" 1;
 }
 .t-caps {
-  font-size: 10.5px;
+  font-size: var(--text-2xs);
   text-transform: uppercase;
-  letter-spacing: 0.08em;
+  letter-spacing: var(--track-caps);
   color: var(--text-faint);
   font-weight: 600;
+}
+
+/* Hide scrollbars on overflow-* containers while keeping the area
+   scrollable (touch / wheel / keyboard). The native scrollbar in macOS
+   renders a faint ghost line on Liquid backgrounds — visually noisy
+   for chip rows, image strips, and segmented controls. */
+.scrollbar-none {
+  scrollbar-width: none;
+}
+.scrollbar-none::-webkit-scrollbar {
+  display: none;
 }
 
 .line-clamp-2 {

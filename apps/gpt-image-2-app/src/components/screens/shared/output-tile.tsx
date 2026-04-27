@@ -91,7 +91,7 @@ export function OutputTile({
         }}
       >
         <div className="flex items-center gap-1.5">
-          <span className="inline-flex h-[18px] w-[18px] items-center justify-center rounded-[3px] bg-white/20 font-mono text-[10px] font-bold uppercase">
+          <span className="inline-flex h-[18px] w-[18px] items-center justify-center rounded-[3px] bg-[color:var(--w-20)] font-mono text-[10px] font-bold uppercase">
             {letter}
           </span>
           {output.seed != null && (

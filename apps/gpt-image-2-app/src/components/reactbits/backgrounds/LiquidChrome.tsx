@@ -138,18 +138,49 @@ export const LiquidChrome: React.FC<LiquidChromeProps> = ({
       container.addEventListener('touchmove', handleTouchMove);
     }
 
-    let animationId: number;
+    // raf loop is paused while the document is hidden so the WebGL pipeline
+    // doesn't keep the GPU busy when the window is in the background or
+    // minimized. uTime is advanced by elapsed wall-time minus paused-time so
+    // the animation resumes seamlessly after returning.
+    let animationId: number | null = null;
+    let pausedAt: number | null = null;
+    let pauseAccumMs = 0;
     function update(t: number) {
       animationId = requestAnimationFrame(update);
-      program.uniforms.uTime.value = t * 0.001 * speed;
+      program.uniforms.uTime.value = (t - pauseAccumMs) * 0.001 * speed;
       renderer.render({ scene: mesh });
     }
-    animationId = requestAnimationFrame(update);
+    function start() {
+      if (animationId == null) {
+        animationId = requestAnimationFrame(update);
+      }
+    }
+    function stop() {
+      if (animationId != null) {
+        cancelAnimationFrame(animationId);
+        animationId = null;
+      }
+    }
+    function handleVisibility() {
+      if (document.hidden) {
+        pausedAt = performance.now();
+        stop();
+      } else {
+        if (pausedAt != null) {
+          pauseAccumMs += performance.now() - pausedAt;
+          pausedAt = null;
+        }
+        start();
+      }
+    }
+    document.addEventListener('visibilitychange', handleVisibility);
+    if (!document.hidden) start();
 
     container.appendChild(gl.canvas);
 
     return () => {
-      cancelAnimationFrame(animationId);
+      stop();
+      document.removeEventListener('visibilitychange', handleVisibility);
       window.removeEventListener('resize', resize);
       if (interactive) {
         container.removeEventListener('mousemove', handleMouseMove);

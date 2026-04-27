@@ -71,7 +71,7 @@ export function Segmented<T extends string>({
       id={groupId}
       className={cn(
         "inline-flex shrink-0 p-0.5 rounded-md gap-px",
-        "bg-[rgba(0,0,0,0.30)] border border-border",
+        "bg-[color:var(--k-30)] border border-border",
         className,
       )}
     >
@@ -96,9 +96,9 @@ export function Segmented<T extends string>({
               "inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap px-3 rounded text-[12.5px] font-medium transition-all cursor-pointer",
               h,
               selected
-                ? "bg-[rgba(255,255,255,0.10)] text-foreground shadow-[inset_0_1px_0_rgba(255,255,255,0.10)]"
-                : "bg-transparent text-muted hover:text-foreground hover:bg-[rgba(255,255,255,0.04)]",
-              "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[rgba(167,139,250,0.55)]",
+                ? "bg-[color:var(--w-10)] text-foreground shadow-[inset_0_1px_0_var(--w-10)]"
+                : "bg-transparent text-muted hover:text-foreground hover:bg-[color:var(--w-04)]",
+              "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--accent-55)]",
             )}
           >
             {icon && <Icon name={icon} size={13} aria-hidden="true" />}

@@ -4,25 +4,27 @@ import { cn } from "@/lib/cn";
 import { Icon, type IconName } from "@/components/icon";
 
 const button = cva(
-  "relative inline-flex items-center gap-1.5 font-medium leading-none whitespace-nowrap border rounded-full border-transparent transition-[background,border-color,color,box-shadow,transform] duration-150 select-none disabled:opacity-45 disabled:cursor-not-allowed active:translate-y-[0.5px]",
+  "relative inline-flex items-center gap-1.5 font-medium leading-none whitespace-nowrap border rounded-full border-transparent transition-[background,border-color,color,box-shadow,transform] duration-150 select-none disabled:opacity-40 disabled:saturate-50 disabled:cursor-not-allowed active:translate-y-[0.5px] active:scale-[0.985]",
   {
     variants: {
       variant: {
-        // Brand primary — liquid gradient fill (violet → cyan)
+        // Brand primary — liquid gradient fill (violet → cyan).
+        // Hover lifts the glow, press fires a one-shot accent ring as a
+        // tactile "click registered" cue (--shadow-accent-glow-press).
         primary:
-          "text-white border-[rgba(167,139,250,0.5)] shadow-[0_8px_24px_-8px_rgba(167,139,250,0.55),inset_0_1px_0_rgba(255,255,255,0.18)] hover:border-[rgba(167,139,250,0.75)]",
+          "text-foreground border-[color:var(--accent-50)] shadow-[var(--shadow-accent-glow)] hover:border-[color:var(--accent-75)] hover:shadow-[var(--shadow-accent-glow-hover)] active:shadow-[var(--shadow-accent-glow-press)]",
         // Glass secondary — soft surface, used everywhere as default
         secondary:
-          "bg-[rgba(255,255,255,0.05)] text-foreground border-border hover:bg-[rgba(255,255,255,0.09)] hover:border-border-strong",
+          "bg-[color:var(--w-05)] text-foreground border-border hover:bg-[color:var(--w-10)] hover:border-border-strong",
         // Ghost — completely transparent, just hover hint
         ghost:
-          "bg-transparent text-foreground border-transparent hover:bg-[rgba(255,255,255,0.06)]",
+          "bg-transparent text-foreground border-transparent hover:bg-[color:var(--w-06)]",
         // Danger — subtle red tint
         danger:
-          "bg-[rgba(248,113,113,0.08)] text-status-err border-[rgba(248,113,113,0.25)] hover:bg-[rgba(248,113,113,0.16)]",
-        // Solid dark — for "新建生成" CTA in toolbar
+          "bg-[color:var(--status-err-08)] text-status-err border-[color:var(--status-err-25)] hover:bg-[color:var(--status-err-bg)]",
+        // Solid inverted — soft white CTA (used by "新建生成" toolbar action)
         solidDark:
-          "bg-white text-[#06060a] border-white hover:bg-white/90",
+          "bg-[color:var(--surface-inverted)] text-[color:var(--text-on-inverted)] border-[color:var(--surface-inverted)] hover:bg-[color:var(--surface-inverted-hover)]",
       },
       size: {
         sm: "h-8 px-3.5 text-[12.5px]",
@@ -32,12 +34,12 @@ const button = cva(
         iconSm: "w-8 h-8 p-0 justify-center",
       },
       active: {
-        true: "bg-[rgba(255,255,255,0.10)]",
+        true: "bg-[color:var(--w-10)]",
         false: "",
       },
     },
     compoundVariants: [
-      { variant: "ghost", active: true, class: "bg-[rgba(255,255,255,0.10)]" },
+      { variant: "ghost", active: true, class: "bg-[color:var(--w-10)]" },
     ],
     defaultVariants: { variant: "secondary", size: "md", active: false },
   },
@@ -78,8 +80,7 @@ export const Button = forwardRef<HTMLButtonElement, Props>(
         style={
           isPrimary
             ? {
-                backgroundImage:
-                  "linear-gradient(135deg, rgba(167,139,250,0.95) 0%, rgba(103,232,249,0.92) 100%)",
+                backgroundImage: "var(--accent-gradient-fill)",
                 ...style,
               }
             : style

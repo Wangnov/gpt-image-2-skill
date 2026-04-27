@@ -90,12 +90,20 @@ const config: Config = {
           "100%": { backgroundPosition: "200% 0" },
         },
         spin: { to: { transform: "rotate(360deg)" } },
+        // Brand-accent ripple from button center on click — drives the
+        // "press feels alive" reveal moment for the generate CTA.
+        "accent-pulse-out": {
+          "0%": { transform: "scale(0.4)", opacity: "0.85" },
+          "100%": { transform: "scale(2.2)", opacity: "0" },
+        },
       },
       animation: {
         "fade-in": "fade-in 0.24s ease both",
         "fade-up": "fade-up 0.32s ease both",
         "pulse-subtle": "pulse-subtle 1.6s ease-in-out infinite",
         shimmer: "shimmer 1.6s linear infinite",
+        "accent-pulse-out":
+          "accent-pulse-out 600ms cubic-bezier(0.16, 1, 0.3, 1) forwards",
       },
     },
   },
