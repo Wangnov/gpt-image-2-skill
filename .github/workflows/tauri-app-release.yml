@@ -211,6 +211,7 @@ jobs:
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       GITHUB_USER: "github-actions[bot]"
       GITHUB_EMAIL: "41898282+github-actions[bot]@users.noreply.github.com"
+      HOMEBREW_TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
     steps:
       - uses: actions/checkout@v6
         with:
@@ -227,6 +228,7 @@ jobs:
           mkdir -p "$(dirname "$tap_dir")"
           rm -rf "$tap_dir"
           rsync -a --delete "$PWD/" "$tap_dir/"
+          git -C "$tap_dir" remote set-url origin "https://x-access-token:${HOMEBREW_TAP_TOKEN}@github.com/Wangnov/homebrew-tap.git"
           echo "HOMEBREW_TAP_DIR=$tap_dir" >> "$GITHUB_ENV"
 
       - name: Generate Homebrew cask
