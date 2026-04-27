@@ -217,9 +217,22 @@ jobs:
           token: ${{ secrets.HOMEBREW_TAP_TOKEN }}
           persist-credentials: true
 
+      - name: Move checkout into Homebrew tap path
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          tap_dir="$(brew --repo)/Library/Taps/wangnov/homebrew-tap"
+          mkdir -p "$(dirname "$tap_dir")"
+          rm -rf "$tap_dir"
+          rsync -a --delete "$PWD/" "$tap_dir/"
+          echo "HOMEBREW_TAP_DIR=$tap_dir" >> "$GITHUB_ENV"
+
       - name: Generate Homebrew cask
         run: |
           set -euo pipefail
+
+          cd "$HOMEBREW_TAP_DIR"
 
           version="${RELEASE_TAG#v}"
           arm_asset="GPT.Image.2_${version}_aarch64.dmg"
@@ -267,11 +280,17 @@ jobs:
           RUBY
 
       - name: Style Homebrew cask
-        run: brew style --cask Casks/gpt-image-2.rb
+        run: |
+          set -euo pipefail
+
+          cd "$HOMEBREW_TAP_DIR"
+          brew style --cask Casks/gpt-image-2.rb
 
       - name: Commit and push cask
         run: |
           set -euo pipefail
+
+          cd "$HOMEBREW_TAP_DIR"
 
           version="${RELEASE_TAG#v}"
 
