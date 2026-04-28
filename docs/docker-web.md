@@ -19,14 +19,16 @@ docker run --rm -p 8787:8787 \
   gpt-image-2-web
 ```
 
-Codex auth mounted from the host:
+Development mode sharing the same local app history as Tauri:
 
 ```bash
 docker run --rm -p 8787:8787 \
-  -v gpt-image-2-data:/data \
-  -v "$HOME/.codex:/data/codex:ro" \
+  -v "$HOME/.codex/gpt-image-2-skill:/data/codex/gpt-image-2-skill" \
+  -v "$HOME/.codex/auth.json:/data/codex/auth.json:ro" \
   gpt-image-2-web
 ```
+
+The project shortcut is `just dev-http-backend`; it creates the local app data directory, restarts the detached `gpt-image-2-web-dev` container, mounts `~/.codex/gpt-image-2-skill` read-write for shared SQLite history/jobs, and mounts `~/.codex/auth.json` read-only when it exists.
 
 Open [http://localhost:8787](http://localhost:8787). The browser talks to `/api`, while image files are served only from the server-side jobs directory.
 
