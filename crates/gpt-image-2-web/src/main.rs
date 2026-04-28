@@ -16,10 +16,11 @@ use axum::{
     routing::{get, post, put},
 };
 use gpt_image_2_core::{
-    AppConfig, CredentialRef, KEYCHAIN_SERVICE, ProviderConfig, default_config_path,
-    default_keychain_account, delete_history_job, history_db_path, jobs_dir, list_history_jobs,
-    load_app_config, read_keychain_secret, redact_app_config, run_json, save_app_config,
-    shared_config_dir, show_history_job, upsert_history_job, write_keychain_secret,
+    AppConfig, CONFIG_DIR_NAME, CredentialRef, KEYCHAIN_SERVICE, ProviderConfig,
+    default_config_path, default_keychain_account, delete_history_job, history_db_path, jobs_dir,
+    list_history_jobs, load_app_config, read_keychain_secret, redact_app_config, run_json,
+    save_app_config, shared_config_dir, show_history_job, upsert_history_job,
+    write_keychain_secret,
 };
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
@@ -1700,8 +1701,20 @@ async fn enqueue_edit_image(
     .map_err(ApiError::internal)
 }
 
+fn remap_host_codex_app_path(path: &str) -> Option<PathBuf> {
+    let marker = format!("/.codex/{CONFIG_DIR_NAME}");
+    let marker_index = path.find(&marker)?;
+    let suffix = path[marker_index + marker.len()..].trim_start_matches(['/', '\\']);
+    let base = shared_config_dir();
+    Some(if suffix.is_empty() {
+        base
+    } else {
+        base.join(suffix)
+    })
+}
+
 fn safe_job_file_path(path: &str) -> Result<PathBuf, ApiError> {
-    let requested = PathBuf::from(path);
+    let requested = remap_host_codex_app_path(path).unwrap_or_else(|| PathBuf::from(path));
     let file = requested
         .canonicalize()
         .map_err(|_| ApiError::not_found("文件不存在，可能已被移动或删除。"))?;
