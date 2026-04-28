@@ -6,6 +6,7 @@ import GradientText from "@/components/reactbits/text/GradientText";
 import ShinyText from "@/components/reactbits/text/ShinyText";
 import ClickSpark from "@/components/reactbits/components/ClickSpark";
 import ElectricBorder from "@/components/reactbits/components/ElectricBorder";
+import { PlaceholderImage } from "@/components/screens/shared/placeholder-image";
 import logoUrl from "@/assets/logo.png";
 import { useTweaks } from "@/hooks/use-tweaks";
 import { THEME_PRESETS } from "@/lib/theme-presets";
@@ -36,7 +37,7 @@ import {
   effectiveDefaultProvider,
   providerNames as readProviderNames,
 } from "@/lib/providers";
-import type { ServerConfig } from "@/lib/types";
+import type { Job, ServerConfig } from "@/lib/types";
 
 const QUALITY_CHIP_OPTIONS = [
   { value: "auto", label: "自动" },
@@ -63,6 +64,70 @@ const PROMPT_TEMPLATES: { label: string; prompt: string }[] = [
   { label: "Cosplay", prompt: "电影级 Cosplay 海报，动态姿态，日式美感，大景深" },
   { label: "赛博朋克", prompt: "赛博朋克城市夜景，霓虹灯反射在湿地上，雨后" },
 ];
+
+function jobPlaceholderSeed(job: Job) {
+  return (
+    Array.from(job.id).reduce((sum, char) => sum + char.charCodeAt(0), 0) || 1
+  );
+}
+
+function RecentWorkTile({
+  job,
+  url,
+  promptText,
+  onOpenJob,
+}: {
+  job: Job;
+  url: string | null;
+  promptText: string;
+  onOpenJob?: (jobId: string) => void;
+}) {
+  const [imageFailed, setImageFailed] = useState(false);
+
+  useEffect(() => {
+    setImageFailed(false);
+  }, [url]);
+
+  return (
+    <motion.button
+      key={job.id}
+      layout
+      initial={{
+        opacity: 0,
+        scale: 0.85,
+        filter: "blur(12px)",
+      }}
+      animate={{ opacity: 1, scale: 1, filter: "blur(0px)" }}
+      exit={{ opacity: 0, scale: 0.9, filter: "blur(8px)" }}
+      transition={{
+        duration: 0.5,
+        ease: [0.16, 1, 0.3, 1], // ease-out-expo, smooth deceleration
+      }}
+      type="button"
+      onClick={() => onOpenJob?.(job.id)}
+      className="aspect-square rounded-md overflow-hidden ring-1 ring-[color:var(--w-10)] hover:ring-[color:var(--accent-45)] hover:scale-[1.03] transition-shadow bg-[color:var(--bg-sunken)] focus-visible:outline-none focus-visible:ring-[color:var(--accent-55)]"
+      title={promptText.slice(0, 80)}
+      aria-label={`打开作品:${promptText.slice(0, 40)}`}
+    >
+      {url && !imageFailed ? (
+        <img
+          src={url}
+          alt=""
+          loading="lazy"
+          decoding="async"
+          className="h-full w-full object-cover"
+          draggable={false}
+          onError={() => setImageFailed(true)}
+        />
+      ) : (
+        <PlaceholderImage
+          seed={jobPlaceholderSeed(job)}
+          variant="recent"
+        />
+      )}
+    </motion.button>
+  );
+}
 
 export function GenerateScreen({
   config,
@@ -680,61 +745,30 @@ export function GenerateScreen({
                   </motion.div>
                 ))}
                 {recentCompleted.map((job) => {
-                // Use jobOutputUrl (same path as history thumbnail) — it
-                // resolves outputs[].path / output_path / legacy fallbacks
-                // and pipes through Tauri's convertFileSrc so the webview
-                // can actually load the image. The try/catch guards the
-                // browser-dev environment where the Tauri runtime that
-                // convertFileSrc depends on isn't installed — there we
-                // just fall through to the placeholder gradient.
-                let url: string | null = null;
-                try {
-                  url = api.jobOutputUrl(job, 0) || null;
-                } catch {
-                  url = null;
-                }
-                const promptText =
-                  ((job.metadata as Record<string, unknown>)?.prompt as
-                    | string
-                    | undefined) ?? "";
-                return (
-                  <motion.button
-                    key={job.id}
-                    layout
-                    initial={{
-                      opacity: 0,
-                      scale: 0.85,
-                      filter: "blur(12px)",
-                    }}
-                    animate={{ opacity: 1, scale: 1, filter: "blur(0px)" }}
-                    exit={{ opacity: 0, scale: 0.9, filter: "blur(8px)" }}
-                    transition={{
-                      duration: 0.5,
-                      ease: [0.16, 1, 0.3, 1], // ease-out-expo, smooth deceleration
-                    }}
-                    type="button"
-                    onClick={() => onOpenJob?.(job.id)}
-                    className="aspect-square rounded-md overflow-hidden ring-1 ring-[color:var(--w-10)] hover:ring-[color:var(--accent-45)] hover:scale-[1.03] transition-shadow bg-[color:var(--bg-sunken)] focus-visible:outline-none focus-visible:ring-[color:var(--accent-55)]"
-                    title={promptText.slice(0, 80)}
-                    aria-label={`打开作品:${promptText.slice(0, 40)}`}
-                  >
-                    {url ? (
-                      <img
-                        src={url}
-                        alt=""
-                        loading="lazy"
-                        decoding="async"
-                        className="h-full w-full object-cover"
-                      />
-                    ) : (
-                      <div
-                        className="h-full w-full"
-                        style={{ background: "var(--image-placeholder-bg)" }}
-                      />
-                    )}
-                  </motion.button>
-                );
-              })}
+                  // Use jobOutputUrl (same path as history thumbnail) —
+                  // it resolves outputs[].path / output_path / legacy
+                  // fallbacks and pipes through Tauri's convertFileSrc so
+                  // the webview can actually load the image.
+                  let url: string | null = null;
+                  try {
+                    url = api.jobOutputUrl(job, 0) || null;
+                  } catch {
+                    url = null;
+                  }
+                  const promptText =
+                    ((job.metadata as Record<string, unknown>)?.prompt as
+                      | string
+                      | undefined) ?? "";
+                  return (
+                    <RecentWorkTile
+                      key={job.id}
+                      job={job}
+                      url={url}
+                      promptText={promptText}
+                      onOpenJob={onOpenJob}
+                    />
+                  );
+                })}
               </AnimatePresence>
             </div>
           </section>
