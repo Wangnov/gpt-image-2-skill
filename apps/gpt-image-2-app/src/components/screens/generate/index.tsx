@@ -1,11 +1,14 @@
 import { useEffect, useId, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { Sparkles, ListChecks, Loader2, Image as ImageIcon, X } from "lucide-react";
-import { motion, AnimatePresence } from "motion/react";
+import { motion } from "motion/react";
 import GradientText from "@/components/reactbits/text/GradientText";
 import ShinyText from "@/components/reactbits/text/ShinyText";
 import ClickSpark from "@/components/reactbits/components/ClickSpark";
 import ElectricBorder from "@/components/reactbits/components/ElectricBorder";
+import Masonry, {
+  type MasonryItem,
+} from "@/components/reactbits/components/Masonry";
 import { PlaceholderImage } from "@/components/screens/shared/placeholder-image";
 import logoUrl from "@/assets/logo.png";
 import { useTweaks } from "@/hooks/use-tweaks";
@@ -71,6 +74,32 @@ function jobPlaceholderSeed(job: Job) {
   );
 }
 
+function heightRatioFromSize(size: unknown) {
+  if (typeof size !== "string") return 1;
+  const match = size.match(/^(\d{2,5})x(\d{2,5})$/i);
+  if (!match) return 1;
+  const width = Number(match[1]);
+  const height = Number(match[2]);
+  if (!width || !height) return 1;
+  return height / width;
+}
+
+type PendingGalleryTile = {
+  kind: "pending";
+  jobId: string;
+  slotIndex: number;
+  seed: number;
+};
+
+type CompletedGalleryTile = {
+  kind: "completed";
+  job: Job;
+  url: string | null;
+  promptText: string;
+};
+
+type GalleryTile = PendingGalleryTile | CompletedGalleryTile;
+
 function RecentWorkTile({
   job,
   url,
@@ -89,23 +118,11 @@ function RecentWorkTile({
   }, [url]);
 
   return (
-    <motion.button
+    <button
       key={job.id}
-      layout
-      initial={{
-        opacity: 0,
-        scale: 0.85,
-        filter: "blur(12px)",
-      }}
-      animate={{ opacity: 1, scale: 1, filter: "blur(0px)" }}
-      exit={{ opacity: 0, scale: 0.9, filter: "blur(8px)" }}
-      transition={{
-        duration: 0.5,
-        ease: [0.16, 1, 0.3, 1], // ease-out-expo, smooth deceleration
-      }}
       type="button"
       onClick={() => onOpenJob?.(job.id)}
-      className="aspect-square rounded-md overflow-hidden ring-1 ring-[color:var(--w-10)] hover:ring-[color:var(--accent-45)] hover:scale-[1.03] transition-shadow bg-[color:var(--bg-sunken)] focus-visible:outline-none focus-visible:ring-[color:var(--accent-55)]"
+      className="h-full w-full rounded-md overflow-hidden ring-1 ring-[color:var(--w-10)] hover:ring-[color:var(--accent-45)] hover:scale-[1.025] transition-[box-shadow,transform] bg-[color:var(--bg-sunken)] focus-visible:outline-none focus-visible:ring-[color:var(--accent-55)]"
       title={promptText.slice(0, 80)}
       aria-label={`打开作品:${promptText.slice(0, 40)}`}
     >
@@ -125,7 +142,52 @@ function RecentWorkTile({
           variant="recent"
         />
       )}
-    </motion.button>
+    </button>
+  );
+}
+
+function PendingWorkTile({
+  seed,
+  slotIndex,
+  accentHex,
+}: {
+  seed: number;
+  slotIndex: number;
+  accentHex: string;
+}) {
+  return (
+    <div className="relative h-full w-full" aria-label="生成中">
+      <ElectricBorder
+        color={accentHex}
+        speed={1.1}
+        chaos={0.55}
+        borderRadius={6}
+        className="absolute inset-0"
+      >
+        <div className="relative h-full w-full overflow-hidden rounded-md bg-[color:var(--bg-sunken)]">
+          <PlaceholderImage
+            seed={seed}
+            variant={`pending-${slotIndex}`}
+            style={{ opacity: 0.58 }}
+          />
+          <div
+            className="absolute inset-0 animate-shimmer"
+            style={{
+              background: "var(--skeleton-gradient-soft)",
+              backgroundSize: "200% 100%",
+              mixBlendMode: "screen",
+            }}
+          />
+          <div className="absolute inset-0 flex flex-col items-center justify-center gap-1.5">
+            <Loader2
+              size={18}
+              className="animate-spin text-[color:var(--accent)]"
+            />
+            <span className="text-[10px] text-faint">生成中…</span>
+          </div>
+        </div>
+      </ElectricBorder>
+    </div>
   );
 }
 
@@ -223,6 +285,8 @@ export function GenerateScreen({
         return Array.from({ length: n }, (_, i) => ({
           jobId: job.id,
           slotIndex: i,
+          seed: jobPlaceholderSeed(job) + i * 13,
+          heightRatio: heightRatioFromSize(meta.size),
         }));
       });
   }, [jobs]);
@@ -238,6 +302,44 @@ export function GenerateScreen({
       )
       .slice(0, Math.max(0, GALLERY_MAX - pendingPlaceholders.length));
   }, [jobs, pendingPlaceholders.length]);
+  const galleryItems = useMemo<MasonryItem<GalleryTile>[]>(() => {
+    const pendingItems: MasonryItem<GalleryTile>[] = pendingPlaceholders.map(
+      (placeholder) => ({
+        id: `pending-${placeholder.jobId}-${placeholder.slotIndex}`,
+        heightRatio: placeholder.heightRatio,
+        data: {
+          kind: "pending",
+          jobId: placeholder.jobId,
+          slotIndex: placeholder.slotIndex,
+          seed: placeholder.seed,
+        },
+      }),
+    );
+    const completedItems: MasonryItem<GalleryTile>[] = recentCompleted.map(
+      (job) => {
+        let url: string | null = null;
+        try {
+          url = api.jobOutputUrl(job, 0) || null;
+        } catch {
+          url = null;
+        }
+        const meta = (job.metadata ?? {}) as Record<string, unknown>;
+        const promptText = (meta.prompt as string | undefined) ?? "";
+        return {
+          id: `completed-${job.id}`,
+          heightRatio: heightRatioFromSize(meta.size),
+          data: {
+            kind: "completed",
+            job,
+            url,
+            promptText,
+          },
+        };
+      },
+    );
+
+    return [...pendingItems, ...completedItems];
+  }, [pendingPlaceholders, recentCompleted]);
   // Split layout activates on lg+ viewports once the user has any
   // completed work OR anything in flight — form on the left, gallery
   // on the right, hero spanning above. New users / empty history fall
@@ -678,99 +780,30 @@ export function GenerateScreen({
                 </button>
               )}
             </div>
-            {/* Gallery is only rendered when we have results, so we're
-                always effectively in split mode here. 3 cols on narrow
-                viewports (~640px), 4 on desktop split (~700px right pane)
-                — gives each thumbnail enough breathing room to read as a
-                discrete piece of work, not a contact-sheet pixel. */}
-            <div className="grid grid-cols-3 lg:grid-cols-4 gap-2">
-              {/* AnimatePresence wraps both the in-flight pending tiles
-                  and the completed thumbnails so the moment a job
-                  transitions completed → its placeholder gracefully
-                  swaps for the real image (blur+scale+fade reveal). */}
-              <AnimatePresence mode="popLayout">
-                {/* Pending placeholders — one per expected output across
-                    all in-flight jobs. Driven by the global jobs cache
-                    (not local state) so they survive screen switches and
-                    accumulate when the user fires multiple submissions. */}
-                {pendingPlaceholders.map((p) => (
-                  <motion.div
-                    key={`pending-${p.jobId}-${p.slotIndex}`}
-                    layout
-                    initial={{ opacity: 0, scale: 0.85 }}
-                    animate={{ opacity: 1, scale: 1 }}
-                    exit={{
-                      opacity: 0,
-                      scale: 0.95,
-                      transition: { duration: 0.25 },
-                    }}
-                    transition={{
-                      duration: 0.4,
-                      ease: [0.16, 1, 0.3, 1],
-                    }}
-                    className="aspect-square relative"
-                    aria-label="生成中"
-                  >
-                    {/* ElectricBorder paints the accent-tinted electric
-                        border around each pending tile so "GPU is working"
-                        is visible at a glance, not just generic shimmer. */}
-                    <ElectricBorder
-                      color={accentHex}
-                      speed={1.1}
-                      chaos={0.55}
-                      borderRadius={6}
-                      className="absolute inset-0"
-                    >
-                      <div className="relative h-full w-full overflow-hidden rounded-md bg-[color:var(--bg-sunken)]">
-                        {/* Shimmer wash */}
-                        <div
-                          className="absolute inset-0 animate-shimmer"
-                          style={{
-                            background: "var(--skeleton-gradient-soft)",
-                            backgroundSize: "200% 100%",
-                          }}
-                        />
-                        {/* Center spinner + label */}
-                        <div className="absolute inset-0 flex flex-col items-center justify-center gap-1.5">
-                          <Loader2
-                            size={18}
-                            className="animate-spin text-[color:var(--accent)]"
-                          />
-                          <span className="text-[10px] text-faint">
-                            生成中…
-                          </span>
-                        </div>
-                      </div>
-                    </ElectricBorder>
-                  </motion.div>
-                ))}
-                {recentCompleted.map((job) => {
-                  // Use jobOutputUrl (same path as history thumbnail) —
-                  // it resolves outputs[].path / output_path / legacy
-                  // fallbacks and pipes through Tauri's convertFileSrc so
-                  // the webview can actually load the image.
-                  let url: string | null = null;
-                  try {
-                    url = api.jobOutputUrl(job, 0) || null;
-                  } catch {
-                    url = null;
-                  }
-                  const promptText =
-                    ((job.metadata as Record<string, unknown>)?.prompt as
-                      | string
-                      | undefined) ?? "";
-                  return (
-                    <RecentWorkTile
-                      key={job.id}
-                      job={job}
-                      url={url}
-                      promptText={promptText}
-                      onOpenJob={onOpenJob}
-                    />
-                  );
-                })}
-              </AnimatePresence>
-            </div>
+            <Masonry
+              items={galleryItems}
+              gap={10}
+              minColumnWidth={126}
+              maxColumns={4}
+              animateFrom="bottom"
+              className="min-h-[260px]"
+              renderItem={({ data }) =>
+                data.kind === "pending" ? (
+                  <PendingWorkTile
+                    seed={data.seed}
+                    slotIndex={data.slotIndex}
+                    accentHex={accentHex}
+                  />
+                ) : (
+                  <RecentWorkTile
+                    job={data.job}
+                    url={data.url}
+                    promptText={data.promptText}
+                    onOpenJob={onOpenJob}
+                  />
+                )
+              }
+            />
           </section>
         )}
 

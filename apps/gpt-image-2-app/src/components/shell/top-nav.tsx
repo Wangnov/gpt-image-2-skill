@@ -1,5 +1,6 @@
 import type { MouseEvent } from "react";
 import { getCurrentWindow } from "@tauri-apps/api/window";
+import GlassSurface from "@/components/reactbits/components/GlassSurface";
 import Magnet from "@/components/reactbits/components/Magnet";
 import CountUp from "@/components/reactbits/text/CountUp";
 import logoUrl from "@/assets/logo.png";
@@ -59,15 +60,16 @@ export function TopNav({
     >
       {/* Left — brand chip */}
       <div className="flex items-center gap-2">
-        <div
-          className="inline-flex items-center gap-2 px-3 h-9 rounded-full border"
-          style={{
-            background: "var(--surface-nav)",
-            borderColor: "var(--w-10)",
-            backdropFilter: "blur(18px) saturate(140%)",
-            WebkitBackdropFilter: "blur(18px) saturate(140%)",
-            boxShadow: "inset 0 1px 0 var(--w-06)",
-          }}
+        <GlassSurface
+          height={36}
+          borderRadius={999}
+          backgroundOpacity={0.14}
+          distortionScale={-26}
+          redOffset={0}
+          greenOffset={2}
+          blueOffset={4}
+          className="inline-flex"
+          contentClassName="gap-2 px-3"
         >
           <img
             src={logoUrl}
@@ -78,20 +80,23 @@ export function TopNav({
           <span className="text-[12.5px] font-semibold tracking-tight text-foreground">
             GPT Image 2
           </span>
-        </div>
+        </GlassSurface>
       </div>
 
       {/* Center — screen tabs */}
-      <div
+      <GlassSurface
         data-no-window-drag
-        className="absolute left-1/2 top-2 -translate-x-1/2 inline-flex items-center gap-0.5 p-1 rounded-full border"
-        style={{
-          background: "var(--surface-nav-strong)",
-          borderColor: "var(--w-08)",
-          backdropFilter: "blur(20px) saturate(140%)",
-          WebkitBackdropFilter: "blur(20px) saturate(140%)",
-          boxShadow: "var(--shadow-popover)",
-        }}
+        height={40}
+        borderRadius={999}
+        backgroundOpacity={0.18}
+        saturation={1.55}
+        distortionScale={-24}
+        redOffset={0}
+        greenOffset={2}
+        blueOffset={5}
+        surfaceBackground="var(--surface-nav-strong)"
+        className="absolute left-1/2 top-2 -translate-x-1/2"
+        contentClassName="gap-0.5 p-1"
       >
         {SCREENS.map((s) => {
           const isActive = s.id === screen;
@@ -154,7 +159,7 @@ export function TopNav({
             </Magnet>
           );
         })}
-      </div>
+      </GlassSurface>
 
     </header>
   );
