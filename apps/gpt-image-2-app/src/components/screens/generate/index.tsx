@@ -338,7 +338,7 @@ export function GenerateScreen({
               aria-hidden
             />
             <ShinyText
-              text="将设计交给每一个人。"
+              text="将设计交给每一个人"
               speed={3}
               color="rgba(245,245,247,.55)"
               shineColor="rgba(245,245,247,1)"
