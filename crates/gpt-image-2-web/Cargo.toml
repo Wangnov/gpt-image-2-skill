@@ -1,6 +1,6 @@
 [package]
 name = "gpt-image-2-web"
-version = "0.3.2"
+version = "0.3.3"
 edition.workspace = true
 license.workspace = true
 repository.workspace = true
@@ -14,7 +14,7 @@ dist = false
 
 [dependencies]
 axum = "0.8.7"
-gpt-image-2-core = { path = "../gpt-image-2-core", version = "0.3.2" }
+gpt-image-2-core = { path = "../gpt-image-2-core", version = "0.3.3" }
 mime_guess = "2.0.5"
 serde = { version = "1.0.228", features = ["derive"] }
 serde_json = "1.0.145"
