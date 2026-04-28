@@ -3,5 +3,5 @@
   "identifier": "default",
   "description": "Default desktop app capabilities",
   "windows": ["main"],
-  "permissions": ["core:default"]
+  "permissions": ["core:default", "core:window:allow-start-dragging"]
 }

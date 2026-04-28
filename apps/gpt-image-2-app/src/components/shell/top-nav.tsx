@@ -1,8 +1,42 @@
+import type { MouseEvent } from "react";
+import { getCurrentWindow } from "@tauri-apps/api/window";
 import Magnet from "@/components/reactbits/components/Magnet";
 import CountUp from "@/components/reactbits/text/CountUp";
 import logoUrl from "@/assets/logo.png";
 import { cn } from "@/lib/cn";
 import { SCREENS, type ScreenId } from "./screens";
+
+function isTauriRuntime() {
+  return Boolean(
+    typeof window !== "undefined" &&
+      (window.__TAURI_INTERNALS__ || window.__TAURI__),
+  );
+}
+
+function canStartWindowDrag(target: EventTarget | null) {
+  if (!(target instanceof HTMLElement)) return true;
+  return !target.closest(
+    [
+      "[data-no-window-drag]",
+      "a",
+      "button",
+      "input",
+      "select",
+      "textarea",
+      "[role='button']",
+      "[role='tab']",
+    ].join(","),
+  );
+}
+
+function startWindowDrag(event: MouseEvent<HTMLElement>) {
+  if (event.button !== 0 || !isTauriRuntime()) return;
+  if (!canStartWindowDrag(event.target)) return;
+  event.preventDefault();
+  void getCurrentWindow().startDragging().catch(() => {
+    /* Tauri can reject dragging before the window is focused. */
+  });
+}
 
 export function TopNav({
   screen,
@@ -13,8 +47,16 @@ export function TopNav({
   setScreen: (s: ScreenId) => void;
   running?: { generate: number; edit: number; total: number };
 }) {
+  const tauriRuntime = isTauriRuntime();
+
   return (
-    <header className="relative h-14 shrink-0 z-30 flex items-center px-4 xl:px-5">
+    <header
+      onMouseDown={startWindowDrag}
+      className={cn(
+        "relative h-14 shrink-0 z-30 flex items-start pt-2",
+        tauriRuntime ? "pl-[92px] pr-4 xl:pr-5" : "px-4 xl:px-5",
+      )}
+    >
       {/* Left — brand chip */}
       <div className="flex items-center gap-2">
         <div
@@ -41,7 +83,8 @@ export function TopNav({
 
       {/* Center — screen tabs */}
       <div
-        className="absolute left-1/2 -translate-x-1/2 inline-flex items-center gap-0.5 p-1 rounded-full border"
+        data-no-window-drag
+        className="absolute left-1/2 top-2 -translate-x-1/2 inline-flex items-center gap-0.5 p-1 rounded-full border"
         style={{
           background: "var(--surface-nav-strong)",
           borderColor: "var(--w-08)",
@@ -72,6 +115,7 @@ export function TopNav({
             >
               <button
                 type="button"
+                data-no-window-drag
                 onClick={() => setScreen(s.id)}
                 className={cn(
                   "relative inline-flex items-center gap-1.5 h-8 px-4 rounded-full text-[12.5px] font-medium whitespace-nowrap transition-all",
