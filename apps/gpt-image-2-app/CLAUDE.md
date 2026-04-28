@@ -1,0 +1,1 @@
+调试界面视觉与交互时，优先使用带 HTTP 后端的 Web 开发模式：先在仓库根目录用 `docker run --rm --name gpt-image-2-web-dev -p 8787:8787 -v gpt-image-2-data:/data gpt-image-2-web:latest` 启动 `127.0.0.1:8787` 后端，再在本目录执行 `VITE_GPT_IMAGE_2_API_BASE=/api npm run dev` 打开 `127.0.0.1:5173`；只有需要验证 Tauri 专属能力时才启动 Tauri 开发服务器。
