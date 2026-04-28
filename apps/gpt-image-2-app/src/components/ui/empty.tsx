@@ -1,6 +1,5 @@
 import { type ReactNode } from "react";
 import { Icon, type IconName } from "@/components/icon";
-import FuzzyText from "@/components/reactbits/text/FuzzyText";
 
 export function Empty({
   icon,
@@ -13,11 +12,6 @@ export function Empty({
   subtitle?: ReactNode;
   action?: ReactNode;
 }) {
-  // FuzzyText renders into a canvas, so it only works when the title is
-  // a plain string. ReactNode titles fall back to the regular t-h3
-  // rendering. Color is hard-coded to match --text under all presets so
-  // the canvas doesn't need a theme-token reflow on every preset switch.
-  const titleString = typeof title === "string" ? title : null;
   return (
     <div className="flex flex-col items-center justify-center gap-3 p-10 text-center text-muted">
       {icon && (
@@ -35,20 +29,7 @@ export function Empty({
           <Icon name={icon} size={20} />
         </div>
       )}
-      {titleString ? (
-        <FuzzyText
-          fontSize={15}
-          fontWeight={600}
-          color="#f5f5f7"
-          baseIntensity={0.16}
-          hoverIntensity={0.32}
-          enableHover
-        >
-          {titleString}
-        </FuzzyText>
-      ) : title ? (
-        <div className="t-h3 text-foreground">{title}</div>
-      ) : null}
+      {title && <div className="t-h3 text-foreground">{title}</div>}
       {subtitle && <div className="t-small max-w-[340px]">{subtitle}</div>}
       {action && <div className="mt-1.5">{action}</div>}
     </div>
