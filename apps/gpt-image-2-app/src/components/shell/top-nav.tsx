@@ -1,5 +1,6 @@
 import Magnet from "@/components/reactbits/components/Magnet";
 import CountUp from "@/components/reactbits/text/CountUp";
+import logoUrl from "@/assets/logo.png";
 import { cn } from "@/lib/cn";
 import { SCREENS, type ScreenId } from "./screens";
 
@@ -26,12 +27,10 @@ export function TopNav({
             boxShadow: "inset 0 1px 0 var(--w-06)",
           }}
         >
-          <span
-            className="h-3.5 w-3.5 rounded-[5px]"
-            style={{
-              background: "var(--accent-gradient-line)",
-              boxShadow: "0 0 10px var(--accent-55)",
-            }}
+          <img
+            src={logoUrl}
+            className="h-5 w-5 object-contain drop-shadow-[0_0_10px_var(--accent-40)]"
+            alt=""
             aria-hidden
           />
           <span className="text-[12.5px] font-semibold tracking-tight text-foreground">

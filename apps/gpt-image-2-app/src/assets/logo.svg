@@ -1,35 +1,3 @@
-<svg width="64" height="64" viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg">
-  <defs>
-    <linearGradient id="bg" x1="10" y1="8" x2="56" y2="60" gradientUnits="userSpaceOnUse">
-      <stop offset="0" stop-color="#0B122E"/>
-      <stop offset="0.58" stop-color="#0A2E7D"/>
-      <stop offset="1" stop-color="#0AB7D9"/>
-    </linearGradient>
-    <linearGradient id="ribbon" x1="14" y1="13" x2="52" y2="52" gradientUnits="userSpaceOnUse">
-      <stop offset="0" stop-color="#EAF3FF"/>
-      <stop offset="0.32" stop-color="#7EB7FF"/>
-      <stop offset="0.72" stop-color="#103CDB"/>
-      <stop offset="1" stop-color="#071A67"/>
-    </linearGradient>
-    <radialGradient id="orb" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(32 33) rotate(90) scale(11)">
-      <stop offset="0" stop-color="#E9FFFF"/>
-      <stop offset="0.42" stop-color="#00D5F2"/>
-      <stop offset="1" stop-color="#041663"/>
-    </radialGradient>
-    <filter id="glow" x="-30%" y="-30%" width="160%" height="160%" color-interpolation-filters="sRGB">
-      <feDropShadow dx="0" dy="0" stdDeviation="3" flood-color="#6DB9FF" flood-opacity="0.75"/>
-      <feDropShadow dx="0" dy="5" stdDeviation="5" flood-color="#020817" flood-opacity="0.35"/>
-    </filter>
-  </defs>
-  <rect width="64" height="64" rx="16" fill="url(#bg)"/>
-  <g filter="url(#glow)" stroke-linecap="round" stroke-linejoin="round">
-    <path d="M31.6 9.5 45.5 17.5 36.5 22.8 31.7 20 22 25.6V37L31.8 42.7 42 36.8V29.2" stroke="#F7FBFF" stroke-width="8.8"/>
-    <path d="M31.6 9.5 45.5 17.5 36.5 22.8 31.7 20 22 25.6V37L31.8 42.7 42 36.8V29.2" stroke="url(#ribbon)" stroke-width="6.2"/>
-    <path d="M46 18 53 22V38.5L39 46.5 39.1 36 44 33.2V27.8L33.8 22" stroke="#F7FBFF" stroke-width="8.8"/>
-    <path d="M46 18 53 22V38.5L39 46.5 39.1 36 44 33.2V27.8L33.8 22" stroke="url(#ribbon)" stroke-width="6.2"/>
-    <path d="M39 46.5 32 50.5 18 42.5V26.4L27 21.2V31.5L22 34.3V37.2L32 43" stroke="#F7FBFF" stroke-width="8.8"/>
-    <path d="M39 46.5 32 50.5 18 42.5V26.4L27 21.2V31.5L22 34.3V37.2L32 43" stroke="url(#ribbon)" stroke-width="6.2"/>
-  </g>
-  <circle cx="32" cy="33" r="9.5" fill="url(#orb)" stroke="#E8FBFF" stroke-width="1.7"/>
-  <ellipse cx="29" cy="29" rx="4.4" ry="2.5" transform="rotate(-28 29 29)" fill="#F4FFFF" fill-opacity="0.88"/>
+<svg width="512" height="512" viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg">
+  <image href="./logo.png" width="512" height="512" preserveAspectRatio="xMidYMid meet"/>
 </svg>

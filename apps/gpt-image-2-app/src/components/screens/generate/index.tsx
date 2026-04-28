@@ -6,6 +6,7 @@ import GradientText from "@/components/reactbits/text/GradientText";
 import ShinyText from "@/components/reactbits/text/ShinyText";
 import ClickSpark from "@/components/reactbits/components/ClickSpark";
 import ElectricBorder from "@/components/reactbits/components/ElectricBorder";
+import logoUrl from "@/assets/logo.png";
 import { useTweaks } from "@/hooks/use-tweaks";
 import { THEME_PRESETS } from "@/lib/theme-presets";
 import { GlassSelect } from "@/components/ui/select";
@@ -303,6 +304,15 @@ export function GenerateScreen({
             hasSplit && "lg:col-span-2 lg:mb-2",
           )}
         >
+          <img
+            src={logoUrl}
+            alt=""
+            aria-hidden="true"
+            className={cn(
+              "mb-3 h-16 w-16 object-contain drop-shadow-[0_0_22px_var(--accent-30)]",
+              hasSplit && "lg:h-14 lg:w-14",
+            )}
+          />
           <div className="t-display flex items-baseline gap-3">
             <span className="text-foreground">GPT</span>
             <GradientText
