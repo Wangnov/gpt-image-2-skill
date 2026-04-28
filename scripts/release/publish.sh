@@ -57,8 +57,9 @@ if [[ "$EXECUTE" -eq 1 ]]; then
   git commit -m "release: $(project_version)"
   cargo release publish "${COMMON_ARGS[@]}" --execute
   cargo release tag "${COMMON_ARGS[@]}" --execute
-  cargo release push "${COMMON_ARGS[@]}" --execute
-  echo "published $(project_tag)"
+  RELEASE_TAG="$(project_tag)"
+  git push origin main "$RELEASE_TAG"
+  echo "published $RELEASE_TAG"
 else
   require_clean_worktree "release preparation"
   cargo release "${VERSION_ARGS[@]}"
