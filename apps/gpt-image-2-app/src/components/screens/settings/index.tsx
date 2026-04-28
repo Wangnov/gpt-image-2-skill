@@ -50,6 +50,7 @@ import { cn } from "@/lib/cn";
 // Visible preset order in the Appearance gallery. Hidden presets join
 // at the tail once unlocked (see HIDDEN_PRESETS).
 const PRESET_ORDER: ThemePresetId[] = [
+  "logo-grainient",
   "liquid-violet",
   "plasma-sunset",
   "beams-cyan",

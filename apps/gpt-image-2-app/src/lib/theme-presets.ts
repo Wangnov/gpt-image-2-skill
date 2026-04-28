@@ -20,6 +20,7 @@ import type { Tweaks } from "./types";
  * gallery until unlocked by the user (see `gpt2.unlocks` localStorage).
  */
 export type ThemePresetId =
+  | "logo-grainient"
   | "liquid-violet"
   | "plasma-sunset"
   | "beams-cyan"
@@ -28,6 +29,7 @@ export type ThemePresetId =
 
 export type SurfaceStyle = "glass" | "paper" | "neon";
 export type BackgroundKind =
+  | "grainient"
   | "liquid"
   | "plasma"
   | "beams"
@@ -70,6 +72,29 @@ export interface BackgroundParams {
   smooth?: boolean;
   centerVignette?: boolean;
   outerVignette?: boolean;
+  // Grainient
+  color1?: string;
+  color2?: string;
+  color3?: string;
+  timeSpeed?: number;
+  colorBalance?: number;
+  warpStrength?: number;
+  warpFrequency?: number;
+  warpSpeed?: number;
+  warpAmplitude?: number;
+  blendAngle?: number;
+  blendSoftness?: number;
+  rotationAmount?: number;
+  noiseScale?: number;
+  grainAmount?: number;
+  grainScale?: number;
+  grainAnimated?: boolean;
+  contrast?: number;
+  gamma?: number;
+  saturation?: number;
+  centerX?: number;
+  centerY?: number;
+  zoom?: number;
 }
 
 export interface ThemePreset {
@@ -103,6 +128,51 @@ export interface ThemePreset {
 }
 
 export const THEME_PRESETS: Record<ThemePresetId, ThemePreset> = {
+  "logo-grainient": {
+    id: "logo-grainient",
+    displayName: "彩晶雾",
+    description: "Logo 晶面抽色,颗粒渐变流动",
+    background: {
+      kind: "grainient",
+      color1: "#66f5ff",
+      color2: "#5b2dff",
+      color3: "#ff8a3d",
+      timeSpeed: 0.18,
+      colorBalance: -0.16,
+      warpStrength: 0.95,
+      warpFrequency: 4.8,
+      warpSpeed: 1.55,
+      warpAmplitude: 56,
+      blendAngle: -34,
+      blendSoftness: 0.14,
+      rotationAmount: 460,
+      noiseScale: 1.65,
+      grainAmount: 0.075,
+      grainScale: 2.8,
+      grainAnimated: false,
+      contrast: 1.28,
+      gamma: 0.96,
+      saturation: 1.22,
+      centerX: -0.08,
+      centerY: 0.04,
+      zoom: 1.08,
+    },
+    accentRgb: "109, 92, 255",
+    accent2Rgb: "32, 231, 255",
+    accent3Rgb: "255, 138, 61",
+    accentSolid: "#6d5cff",
+    accent2Solid: "#20e7ff",
+    accent3Solid: "#ff8a3d",
+    accentGradient:
+      "linear-gradient(135deg, #6d5cff 0%, #20e7ff 58%, #ff8a3d 100%)",
+    surfaceStyle: "glass",
+    suggestedFont: "system",
+    suggestedDensity: "comfortable",
+    veil: {
+      soft: "rgba(6, 6, 10, 0.12)",
+      strong: "rgba(6, 6, 10, 0.66)",
+    },
+  },
   "liquid-violet": {
     id: "liquid-violet",
     displayName: "液态紫",
@@ -244,7 +314,7 @@ export const THEME_PRESETS: Record<ThemePresetId, ThemePreset> = {
   },
 };
 
-export const DEFAULT_PRESET: ThemePresetId = "liquid-violet";
+export const DEFAULT_PRESET: ThemePresetId = "logo-grainient";
 
 export const VISIBLE_PRESETS: ThemePresetId[] = (
   Object.keys(THEME_PRESETS) as ThemePresetId[]

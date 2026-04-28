@@ -15,6 +15,9 @@ const DotGrid = lazy(
 const LetterGlitch = lazy(
   () => import("@/components/reactbits/backgrounds/LetterGlitch"),
 );
+const Grainient = lazy(
+  () => import("@/components/reactbits/backgrounds/Grainient"),
+);
 
 /**
  * Render the active theme preset's background. Each kind reads only
@@ -27,6 +30,33 @@ function ThemeBackground({ presetId }: { presetId: ThemePresetId }) {
   const preset = THEME_PRESETS[presetId];
   const bg = preset.background;
   switch (bg.kind) {
+    case "grainient":
+      return (
+        <Grainient
+          color1={bg.color1}
+          color2={bg.color2}
+          color3={bg.color3}
+          timeSpeed={bg.timeSpeed}
+          colorBalance={bg.colorBalance}
+          warpStrength={bg.warpStrength}
+          warpFrequency={bg.warpFrequency}
+          warpSpeed={bg.warpSpeed}
+          warpAmplitude={bg.warpAmplitude}
+          blendAngle={bg.blendAngle}
+          blendSoftness={bg.blendSoftness}
+          rotationAmount={bg.rotationAmount}
+          noiseScale={bg.noiseScale}
+          grainAmount={bg.grainAmount}
+          grainScale={bg.grainScale}
+          grainAnimated={bg.grainAnimated}
+          contrast={bg.contrast}
+          gamma={bg.gamma}
+          saturation={bg.saturation}
+          centerX={bg.centerX}
+          centerY={bg.centerY}
+          zoom={bg.zoom}
+        />
+      );
     case "liquid":
       return (
         <LiquidChrome
