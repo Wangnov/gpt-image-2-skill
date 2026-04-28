@@ -60,8 +60,10 @@ npm install --global gpt-image-2-skill
 本地开发安装：
 
 ```bash
-make install-local
+just install-local
 ```
+
+常用本地任务统一通过 `justfile` 管理，可运行 `just --list` 查看入口。
 
 ## 快速开始
 
@@ -230,6 +232,7 @@ npm 首发通过 GitHub Actions 中的 `NPM_TOKEN` 完成，并保留 `--provena
 - Skill 说明：`skills/gpt-image-2-skill/SKILL.md`
 - Docker Web：`docs/docker-web.md`
 - Release 流程：`scripts/release/prepare.sh`、`scripts/release/publish.sh`、`scripts/release/verify.sh`
+- 本地任务入口：`justfile`
 - Skill 冒烟验证：`scripts/smoke_skill_install.cjs`
 
 ## 许可证
@@ -288,8 +291,10 @@ npm install --global gpt-image-2-skill
 Local development install:
 
 ```bash
-make install-local
+just install-local
 ```
+
+Local project tasks are managed through `justfile`; run `just --list` to see the available commands.
 
 ## Quickstart
 
@@ -412,6 +417,7 @@ The first npm publish uses `NPM_TOKEN` in GitHub Actions and keeps `--provenance
 
 - Skill spec: `skills/gpt-image-2-skill/SKILL.md`
 - Release flow: `scripts/release/prepare.sh`, `scripts/release/publish.sh`, `scripts/release/verify.sh`
+- Local task runner: `justfile`
 - Skill smoke test: `scripts/smoke_skill_install.cjs`
 
 ## License
