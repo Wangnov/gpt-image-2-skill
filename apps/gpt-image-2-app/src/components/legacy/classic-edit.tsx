@@ -1,6 +1,6 @@
 import {
-  type ClipboardEvent,
   type DragEvent,
+  useCallback,
   useEffect,
   useMemo,
   useRef,
@@ -23,6 +23,10 @@ import {
 } from "@/components/screens/edit/mask-canvas";
 import { useCreateEdit } from "@/hooks/use-jobs";
 import { useJobEvents } from "@/hooks/use-job-events";
+import {
+  useGlobalImagePaste,
+  useTauriImageDrop,
+} from "@/hooks/use-image-ingest";
 import { api } from "@/lib/api";
 import { cn } from "@/lib/cn";
 import {
@@ -307,74 +311,71 @@ export function ClassicEditScreen({ config }: { config?: ServerConfig }) {
     }
   }, [n, supportsMultipleOutputs]);
 
-  const addRefFiles = (
-    imageFiles: File[],
-    source: ImageFileSource,
-    ignored = 0,
-  ) => {
-    if (ignored > 0) {
-      toast.warning("已忽略非图片文件", {
-        description: `跳过 ${ignored} 个不支持的文件。`,
-      });
-    }
-    if (imageFiles.length === 0) {
+  const addRefFiles = useCallback(
+    (imageFiles: File[], source: ImageFileSource, ignored = 0) => {
       if (ignored > 0) {
-        toast.error("没有可添加的图片", {
-          description: "请拖入、粘贴或选择图片文件。",
+        toast.warning("已忽略非图片文件", {
+          description: `跳过 ${ignored} 个不支持的文件。`,
         });
       }
-      return;
-    }
+      if (imageFiles.length === 0) {
+        if (ignored > 0) {
+          toast.error("没有可添加的图片", {
+            description: "请拖入、粘贴或选择图片文件。",
+          });
+        }
+        return;
+      }
 
-    const additions = imageFiles.map((file, index) => ({
-      id: `r-${Date.now()}-${index}`,
-      name: file.name,
-      url: URL.createObjectURL(file),
-      file,
-    }));
-    setRefs((prev) => {
-      const available = Math.max(0, maxReferenceImages - prev.length);
-      if (available === 0) {
-        additions.forEach((ref) => URL.revokeObjectURL(ref.url));
-        toast.error("参考图已达上限", {
-          description: `最多上传 ${maxReferenceImages} 张。`,
-        });
-        return prev;
-      }
-      const accepted = additions.slice(0, available);
-      additions.slice(available).forEach((ref) => URL.revokeObjectURL(ref.url));
-      if (accepted.length < additions.length) {
-        toast.warning("已按上限添加参考图", {
-          description: `最多上传 ${maxReferenceImages} 张。`,
-        });
-      }
-      if (source === "drop") {
-        toast.success(`已添加 ${accepted.length} 张参考图`, {
-          description: "来自拖拽上传。",
-        });
-      }
-      if (source === "paste") {
-        toast.success(`已添加 ${accepted.length} 张参考图`, {
-          description: "来自剪贴板。",
-        });
-      }
-      setSelectedRef((current) => current ?? accepted[0].id);
-      setTargetRefId((current) => current ?? accepted[0].id);
-      return [...prev, ...accepted];
-    });
-  };
+      const additions = imageFiles.map((file, index) => ({
+        id: `r-${Date.now()}-${index}`,
+        name: file.name,
+        url: URL.createObjectURL(file),
+        file,
+      }));
+      setRefs((prev) => {
+        const available = Math.max(0, maxReferenceImages - prev.length);
+        if (available === 0) {
+          additions.forEach((ref) => URL.revokeObjectURL(ref.url));
+          toast.error("参考图已达上限", {
+            description: `最多上传 ${maxReferenceImages} 张。`,
+          });
+          return prev;
+        }
+        const accepted = additions.slice(0, available);
+        additions
+          .slice(available)
+          .forEach((ref) => URL.revokeObjectURL(ref.url));
+        if (accepted.length < additions.length) {
+          toast.warning("已按上限添加参考图", {
+            description: `最多上传 ${maxReferenceImages} 张。`,
+          });
+        }
+        if (source === "drop") {
+          toast.success(`已添加 ${accepted.length} 张参考图`, {
+            description: "来自拖拽上传。",
+          });
+        }
+        if (source === "paste") {
+          toast.success(`已添加 ${accepted.length} 张参考图`, {
+            description: "来自剪贴板。",
+          });
+        }
+        setSelectedRef((current) => current ?? accepted[0].id);
+        setTargetRefId((current) => current ?? accepted[0].id);
+        return [...prev, ...accepted];
+      });
+    },
+    [maxReferenceImages],
+  );
 
   const addRef = (files: FileList | null, source: ImageFileSource = "picker") => {
     const result = normalizeImageFiles(files, { source });
     addRefFiles(result.files, source, result.ignored);
   };
 
-  const handlePaste = (event: ClipboardEvent<HTMLDivElement>) => {
-    const result = imageFilesFromDataTransfer(event.clipboardData, "paste");
-    if (result.files.length === 0 && result.ignored === 0) return;
-    event.preventDefault();
-    addRefFiles(result.files, "paste", result.ignored);
-  };
+  useGlobalImagePaste(addRefFiles);
+  useTauriImageDrop(addRefFiles, setIsDraggingImages);
 
   const handleDragEnter = (event: DragEvent<HTMLDivElement>) => {
     if (!dataTransferHasImage(event.dataTransfer)) return;
@@ -600,7 +601,6 @@ export function ClassicEditScreen({ config }: { config?: ServerConfig }) {
   return (
     <div
       className="edit-layout h-full"
-      onPaste={handlePaste}
       onDragEnter={handleDragEnter}
       onDragOver={handleDragOver}
       onDragLeave={handleDragLeave}

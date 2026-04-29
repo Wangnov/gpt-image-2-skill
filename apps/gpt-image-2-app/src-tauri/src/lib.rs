@@ -154,6 +154,19 @@ struct UploadFile {
     bytes: Vec<u8>,
 }
 
+#[derive(Debug, Clone, Serialize)]
+struct DroppedImageFile {
+    name: String,
+    mime: String,
+    bytes: Vec<u8>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+struct DroppedImageFiles {
+    files: Vec<DroppedImageFile>,
+    ignored: usize,
+}
+
 #[derive(Debug, Clone, Deserialize)]
 struct EditRequest {
     prompt: String,
@@ -180,6 +193,28 @@ struct EditRequest {
     mask: Option<UploadFile>,
     #[serde(default)]
     selection_hint: Option<UploadFile>,
+}
+
+const MAX_DROPPED_IMAGE_BYTES: u64 = 64 * 1024 * 1024;
+
+fn image_mime_for_path(path: &Path) -> Option<&'static str> {
+    match path
+        .extension()
+        .and_then(|extension| extension.to_str())
+        .map(|extension| extension.to_ascii_lowercase())
+        .as_deref()
+    {
+        Some("avif") => Some("image/avif"),
+        Some("bmp") => Some("image/bmp"),
+        Some("gif") => Some("image/gif"),
+        Some("heic") => Some("image/heic"),
+        Some("heif") => Some("image/heif"),
+        Some("jpg") | Some("jpeg") => Some("image/jpeg"),
+        Some("png") => Some("image/png"),
+        Some("tif") | Some("tiff") => Some("image/tiff"),
+        Some("webp") => Some("image/webp"),
+        _ => None,
+    }
 }
 
 #[derive(Clone)]
@@ -1622,6 +1657,45 @@ fn cancel_job(
 }
 
 #[tauri::command]
+fn read_dropped_image_files(paths: Vec<String>) -> Result<DroppedImageFiles, String> {
+    let mut files = Vec::new();
+    let mut ignored = 0;
+
+    for raw_path in paths {
+        let path = PathBuf::from(&raw_path);
+        let Some(mime) = image_mime_for_path(&path) else {
+            ignored += 1;
+            continue;
+        };
+        let metadata = match fs::metadata(&path) {
+            Ok(metadata) if metadata.is_file() => metadata,
+            _ => {
+                ignored += 1;
+                continue;
+            }
+        };
+        if metadata.len() > MAX_DROPPED_IMAGE_BYTES {
+            ignored += 1;
+            continue;
+        }
+
+        let bytes = fs::read(&path).map_err(|error| format!("读取图片失败：{error}"))?;
+        let name = path
+            .file_name()
+            .and_then(|name| name.to_str())
+            .map(ToString::to_string)
+            .unwrap_or_else(|| "dropped-image".to_string());
+        files.push(DroppedImageFile {
+            name,
+            mime: mime.to_string(),
+            bytes,
+        });
+    }
+
+    Ok(DroppedImageFiles { files, ignored })
+}
+
+#[tauri::command]
 fn enqueue_generate_image(
     request: GenerateRequest,
     app: tauri::AppHandle,
@@ -1836,6 +1910,7 @@ pub fn run() {
             queue_status,
             set_queue_concurrency,
             cancel_job,
+            read_dropped_image_files,
             enqueue_generate_image,
             enqueue_edit_image,
             generate_image,
