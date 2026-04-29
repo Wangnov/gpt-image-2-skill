@@ -110,7 +110,7 @@ export function GlassCombobox(props: GlassComboboxProps) {
         style={{ minWidth }}
       >
         {chipLabel && (
-          <span className="t-caps shrink-0">{chipLabel}</span>
+          <span className="t-caps shrink-0 whitespace-nowrap">{chipLabel}</span>
         )}
         <input
           ref={inputRef}

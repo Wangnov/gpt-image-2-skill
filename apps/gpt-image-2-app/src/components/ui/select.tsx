@@ -209,8 +209,8 @@ function ChipTrigger({
         className,
       )}
     >
-      {label && <span className="t-caps">{label}</span>}
-      <RadixSelect.Value />
+      {label && <span className="t-caps shrink-0 whitespace-nowrap">{label}</span>}
+      <RadixSelect.Value className="min-w-0 truncate whitespace-nowrap" />
       <RadixSelect.Icon asChild>
         <ChevronDown
           size={11}

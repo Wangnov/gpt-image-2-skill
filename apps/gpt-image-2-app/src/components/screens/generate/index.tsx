@@ -663,7 +663,13 @@ export function GenerateScreen({
           </div>
 
           {/* parameter chips + CTA */}
-          <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-[minmax(146px,1.35fr)_minmax(92px,.8fr)_minmax(92px,.8fr)_minmax(82px,.68fr)_minmax(104px,auto)] sm:items-center">
+          <div
+            className={cn(
+              "mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4 sm:items-center",
+              !hasSplit &&
+                "xl:grid-cols-[minmax(146px,1.35fr)_minmax(92px,.8fr)_minmax(92px,.8fr)_minmax(82px,.68fr)_minmax(104px,auto)]",
+            )}
+          >
             <GlassCombobox
               variant="chip"
               label="尺寸"
@@ -707,57 +713,60 @@ export function GenerateScreen({
               sparkRadius={22}
               sparkSize={8}
               duration={500}
-              className="w-full"
-            >
-            <button
-              type="button"
-              onClick={() => {
-                setPulseKey((n) => n + 1);
-                handleRun();
-              }}
-              disabled={submitDisabled}
-              className="relative overflow-hidden inline-flex w-full items-center justify-center gap-1.5 h-11 px-4 rounded-full text-[14px] font-semibold text-foreground transition-[background,transform,opacity] hover:opacity-95 active:translate-y-[0.5px] disabled:opacity-45 disabled:cursor-not-allowed"
-              style={{
-                backgroundImage: "var(--accent-gradient-fill)",
-                border: "1px solid var(--accent-50)",
-                boxShadow: "var(--shadow-accent-glow)",
-              }}
-            >
-              {/* Brand-accent ripple from center on each press. The
-                  remount-on-key trick replays the animation every click.
-                  pointer-events-none so the ripple never blocks the next
-                  click; aria-hidden because it's purely decorative. */}
-              {pulseKey > 0 && (
-                <span
-                  key={pulseKey}
-                  aria-hidden
-                  className="pointer-events-none absolute inset-0 rounded-full animate-accent-pulse-out"
-                  style={{
-                    background:
-                      "radial-gradient(circle at center, var(--accent-55), transparent 70%)",
-                  }}
-                />
+              className={cn(
+                "col-span-2 w-full sm:col-span-4",
+                !hasSplit && "xl:col-span-1",
               )}
-              {isSubmitting ? (
-                <>
+            >
+              <button
+                type="button"
+                onClick={() => {
+                  setPulseKey((n) => n + 1);
+                  handleRun();
+                }}
+                disabled={submitDisabled}
+                className="relative inline-flex h-11 w-full items-center justify-center gap-1.5 overflow-hidden rounded-full px-4 text-[14px] font-semibold text-foreground transition-[background,transform,opacity] hover:opacity-95 active:translate-y-[0.5px] disabled:cursor-not-allowed disabled:opacity-45"
+                style={{
+                  backgroundImage: "var(--accent-gradient-fill)",
+                  border: "1px solid var(--accent-50)",
+                  boxShadow: "var(--shadow-accent-glow)",
+                }}
+              >
+                {/* Brand-accent ripple from center on each press. The
+                    remount-on-key trick replays the animation every click.
+                    pointer-events-none so the ripple never blocks the next
+                    click; aria-hidden because it's purely decorative. */}
+                {pulseKey > 0 && (
                   <span
-                    className="inline-block h-3.5 w-3.5 rounded-full animate-spin"
+                    key={pulseKey}
+                    aria-hidden
+                    className="pointer-events-none absolute inset-0 rounded-full animate-accent-pulse-out"
                     style={{
-                      border: "2px solid var(--w-40)",
-                      borderTopColor: "var(--text)",
+                      background:
+                        "radial-gradient(circle at center, var(--accent-55), transparent 70%)",
                     }}
                   />
-                  提交中…
-                </>
-              ) : isTracking && pendingOutputCount ? (
-                <>生成中…</>
-              ) : (
-                <>
-                  生成
-                  <Sparkles size={15} />
-                </>
-              )}
-            </button>
+                )}
+                {isSubmitting ? (
+                  <>
+                    <span
+                      className="inline-block h-3.5 w-3.5 rounded-full animate-spin"
+                      style={{
+                        border: "2px solid var(--w-40)",
+                        borderTopColor: "var(--text)",
+                      }}
+                    />
+                    提交中…
+                  </>
+                ) : isTracking && pendingOutputCount ? (
+                  <>生成中…</>
+                ) : (
+                  <>
+                    生成
+                    <Sparkles size={15} />
+                  </>
+                )}
+              </button>
             </ClickSpark>
           </div>
         </section>
