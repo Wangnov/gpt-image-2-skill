@@ -1,7 +1,7 @@
 import { Icon, type IconName } from "@/components/icon";
+import { ClassicEditScreen } from "@/components/legacy/classic-edit";
 import { ClassicGenerateScreen } from "@/components/legacy/classic-generate";
 import { ClassicHistoryScreen } from "@/components/legacy/classic-history";
-import { EditScreen } from "@/components/screens/edit";
 import { SettingsScreen } from "@/components/screens/settings";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/cn";
@@ -235,7 +235,7 @@ export function ClassicShell({
               onOpenHistory={() => setScreen("history")}
             />
           )}
-          {screen === "edit" && <EditScreen config={config} />}
+          {screen === "edit" && <ClassicEditScreen config={config} />}
           {screen === "history" && (
             <ClassicHistoryScreen
               onSwitchToGenerate={() => setScreen("generate")}
