@@ -1,4 +1,12 @@
-import { useEffect, useId, useMemo, useRef, useState } from "react";
+import {
+  type ClipboardEvent,
+  type DragEvent,
+  useEffect,
+  useId,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { toast } from "sonner";
 import {
   Image as ImageIcon,
@@ -57,6 +65,12 @@ import {
 import { openPath, revealPath, saveImages } from "@/lib/user-actions";
 import type { ProviderConfig, ServerConfig } from "@/lib/types";
 import { cn } from "@/lib/cn";
+import {
+  dataTransferHasImage,
+  imageFilesFromDataTransfer,
+  normalizeImageFiles,
+  type ImageFileSource,
+} from "@/lib/image-input";
 
 type EditMode = "reference" | "region";
 type RefWithFile = RefImage & { file: File };
@@ -96,6 +110,7 @@ export function EditScreen({ config }: { config?: ServerConfig }) {
   const defaultProvider = effectiveDefaultProvider(config);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const refsRef = useRef<RefWithFile[]>([]);
+  const dragDepthRef = useRef(0);
   const [editMode, setEditMode] = useState<EditMode>("reference");
   const [prompt, setPrompt] = useState("");
   const [provider, setProvider] = useState<string>("");
@@ -121,6 +136,7 @@ export function EditScreen({ config }: { config?: ServerConfig }) {
   );
   const [runError, setRunError] = useState<string | null>(null);
   const [runNotice, setRunNotice] = useState<string | null>(null);
+  const [isDraggingImages, setIsDraggingImages] = useState(false);
   const promptId = useId();
   const brushSliderId = useId();
 
@@ -186,15 +202,31 @@ export function EditScreen({ config }: { config?: ServerConfig }) {
     }
   }, [n, supportsMultipleOutputs]);
 
-  const addRef = (files: FileList | null) => {
-    if (!files) return;
-    const additions = Array.from(files).map((file, index) => ({
+  const addRefFiles = (
+    imageFiles: File[],
+    source: ImageFileSource,
+    ignored = 0,
+  ) => {
+    if (ignored > 0) {
+      toast.warning("已忽略非图片文件", {
+        description: `跳过 ${ignored} 个不支持的文件。`,
+      });
+    }
+    if (imageFiles.length === 0) {
+      if (ignored > 0) {
+        toast.error("没有可添加的图片", {
+          description: "请拖入、粘贴或选择图片文件。",
+        });
+      }
+      return;
+    }
+
+    const additions = imageFiles.map((file, index) => ({
       id: `r-${Date.now()}-${index}`,
       name: file.name,
       url: URL.createObjectURL(file),
       file,
     }));
-    if (additions.length === 0) return;
     setRefs((prev) => {
       const available = Math.max(0, maxReferenceImages - prev.length);
       if (available === 0) {
@@ -211,10 +243,61 @@ export function EditScreen({ config }: { config?: ServerConfig }) {
           description: `最多上传 ${maxReferenceImages} 张。`,
         });
       }
+      if (source === "drop") {
+        toast.success(`已添加 ${accepted.length} 张参考图`, {
+          description: "来自拖拽上传。",
+        });
+      }
+      if (source === "paste") {
+        toast.success(`已添加 ${accepted.length} 张参考图`, {
+          description: "来自剪贴板。",
+        });
+      }
       setSelectedRef((current) => current ?? accepted[0].id);
       setTargetRefId((current) => current ?? accepted[0].id);
       return [...prev, ...accepted];
     });
+  };
+
+  const addRef = (files: FileList | null, source: ImageFileSource = "picker") => {
+    const result = normalizeImageFiles(files, { source });
+    addRefFiles(result.files, source, result.ignored);
+  };
+
+  const handlePaste = (event: ClipboardEvent<HTMLDivElement>) => {
+    const result = imageFilesFromDataTransfer(event.clipboardData, "paste");
+    if (result.files.length === 0 && result.ignored === 0) return;
+    event.preventDefault();
+    addRefFiles(result.files, "paste", result.ignored);
+  };
+
+  const handleCanvasDragEnter = (event: DragEvent<HTMLDivElement>) => {
+    if (!dataTransferHasImage(event.dataTransfer)) return;
+    event.preventDefault();
+    dragDepthRef.current += 1;
+    setIsDraggingImages(true);
+  };
+
+  const handleCanvasDragOver = (event: DragEvent<HTMLDivElement>) => {
+    if (!dataTransferHasImage(event.dataTransfer)) return;
+    event.preventDefault();
+    event.dataTransfer.dropEffect = "copy";
+  };
+
+  const handleCanvasDragLeave = (event: DragEvent<HTMLDivElement>) => {
+    if (!dataTransferHasImage(event.dataTransfer)) return;
+    event.preventDefault();
+    dragDepthRef.current = Math.max(0, dragDepthRef.current - 1);
+    if (dragDepthRef.current === 0) setIsDraggingImages(false);
+  };
+
+  const handleCanvasDrop = (event: DragEvent<HTMLDivElement>) => {
+    if (!dataTransferHasImage(event.dataTransfer)) return;
+    event.preventDefault();
+    dragDepthRef.current = 0;
+    setIsDraggingImages(false);
+    const result = imageFilesFromDataTransfer(event.dataTransfer, "drop");
+    addRefFiles(result.files, "drop", result.ignored);
   };
 
   const removeRef = (id: string) => {
@@ -421,7 +504,10 @@ export function EditScreen({ config }: { config?: ServerConfig }) {
     regionUnavailable;
 
   return (
-    <div className="relative h-full w-full overflow-hidden flex flex-col">
+    <div
+      className="relative h-full w-full overflow-hidden flex flex-col"
+      onPaste={handlePaste}
+    >
       <LocalEditOnboarding active={usesRegion} />
       {/* TOOLBAR — wraps when narrow, never clips */}
       <header className="shrink-0 px-4 pt-3 pb-2 flex items-center gap-2 flex-wrap">
@@ -698,7 +784,33 @@ export function EditScreen({ config }: { config?: ServerConfig }) {
 
       {/* CANVAS — full bleed, responsive */}
       <main className="flex-1 min-h-0 px-4 py-2 flex items-center justify-center overflow-hidden">
-        <div className="surface-panel relative h-full w-full max-w-[min(70vh,820px)] overflow-hidden flex items-center justify-center p-4">
+        <div
+          className="surface-panel relative h-full w-full max-w-[min(70vh,820px)] overflow-hidden flex items-center justify-center p-4"
+          onDragEnter={handleCanvasDragEnter}
+          onDragOver={handleCanvasDragOver}
+          onDragLeave={handleCanvasDragLeave}
+          onDrop={handleCanvasDrop}
+        >
+          <div
+            aria-hidden="true"
+            className={cn(
+              "pointer-events-none absolute inset-2 z-20 flex items-center justify-center rounded-[inherit] border border-dashed",
+              "bg-[color:var(--w-08)] backdrop-blur-md transition-[opacity,transform,border-color,box-shadow] duration-200 ease-out",
+              isDraggingImages
+                ? "opacity-100 scale-100 border-[color:var(--accent)] shadow-[0_0_0_1px_var(--accent-faint),var(--shadow-accent-glow)]"
+                : "opacity-0 scale-[0.985] border-transparent",
+            )}
+          >
+            <div className="flex flex-col items-center gap-2 rounded-xl border border-border-faint bg-[color:var(--w-08)] px-4 py-3 text-center shadow-popover">
+              <ImageIcon size={20} style={{ color: "var(--accent)" }} />
+              <div className="text-[13px] font-semibold text-foreground">
+                松开添加参考图
+              </div>
+              <div className="text-[11px] text-muted">
+                支持拖拽图片，也支持直接粘贴剪贴板图片
+              </div>
+            </div>
+          </div>
           {usesRegion ? (
             targetRef ? (
               <div
@@ -731,7 +843,7 @@ export function EditScreen({ config }: { config?: ServerConfig }) {
               <Empty
                 icon="mask"
                 title="请上传并设定目标图"
-                subtitle="点击上方「参考图」按钮，再把其中一张设为目标图。"
+                subtitle="拖入图片、粘贴剪贴板图片，或点击上方「参考图」按钮添加。"
               />
             )
           ) : selectedRefObj || refs[0] ? (
@@ -744,7 +856,7 @@ export function EditScreen({ config }: { config?: ServerConfig }) {
             <Empty
               icon="image"
               title="请上传至少一张参考图"
-              subtitle="点击上方「参考图」按钮添加，再描述如何修改。"
+              subtitle="拖入图片、粘贴剪贴板图片，或点击上方「参考图」按钮添加。"
             />
           )}
         </div>
