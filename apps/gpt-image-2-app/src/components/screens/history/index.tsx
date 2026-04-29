@@ -1,4 +1,5 @@
 import { type CSSProperties, useEffect, useMemo, useState } from "react";
+import { AnimatePresence, motion } from "motion/react";
 import {
   CheckCircle2,
   ChevronDown,
@@ -20,8 +21,10 @@ import {
 } from "@/lib/job-outputs";
 import { Empty } from "@/components/ui/empty";
 import { Button } from "@/components/ui/button";
+import { RevealImage } from "@/components/ui/reveal-image";
 import SpotlightCard from "@/components/reactbits/components/SpotlightCard";
 import { useConfirm } from "@/hooks/use-confirm";
+import { useReducedMotion } from "@/hooks/use-reduced-motion";
 import type { Job, JobStatus } from "@/lib/types";
 import { cn } from "@/lib/cn";
 import { PlaceholderImage } from "@/components/screens/shared/placeholder-image";
@@ -147,7 +150,7 @@ function JobPreviewImage({
 
   if (url && !failed) {
     return (
-      <img
+      <RevealImage
         src={url}
         alt=""
         loading="lazy"
@@ -184,6 +187,7 @@ function JobRowExpandable({
   onOpenDetail: (outputIndex: number) => void;
 }) {
   const confirm = useConfirm();
+  const reducedMotion = useReducedMotion();
   const thumbUrl = jobThumbUrl(job);
   const thumbPath = jobThumbPath(job);
   const ratio = jobRatio(job);
@@ -358,131 +362,150 @@ function JobRowExpandable({
       </div>
 
       {/* EXPANDED CONTENT */}
-      {expanded && (
-        <div className="px-3 pb-4 pt-1 sm:px-4 sm:pl-[calc(16px+24px+16px+80px)]">
-          {/* full prompt */}
-          <div className="mb-3 text-[12.5px] leading-relaxed text-muted whitespace-pre-wrap break-words pr-4">
-            {prompt}
-          </div>
+      <AnimatePresence initial={false}>
+        {expanded && (
+          <motion.div
+            key="expanded"
+            className="grid overflow-hidden"
+            initial={
+              reducedMotion
+                ? false
+                : { opacity: 0, gridTemplateRows: "0fr" }
+            }
+            animate={{ opacity: 1, gridTemplateRows: "1fr" }}
+            exit={{ opacity: 0, gridTemplateRows: "0fr" }}
+            transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }}
+          >
+            <div className="min-h-0 overflow-hidden">
+              <div className="px-3 pb-4 pt-1 sm:px-4 sm:pl-[calc(16px+24px+16px+80px)]">
+                {/* full prompt */}
+                <div className="mb-3 text-[12.5px] leading-relaxed text-muted whitespace-pre-wrap break-words pr-4">
+                  {prompt}
+                </div>
 
-          {/* output grid */}
-          {outputCount > 0 ? (
-            <div
-              className="grid grid-cols-2 gap-2 sm:[grid-template-columns:repeat(var(--history-output-cols),minmax(0,1fr))]"
-              style={{
-                "--history-output-cols": Math.min(outputCount, 4),
-              } as CSSProperties}
-            >
-              {outputIndexes.map((outputIndex, i) => {
-                const url = jobOutputUrl(job, outputIndex);
-                const letter = String.fromCharCode(65 + i);
-                return (
-                  <button
-                    key={outputIndex}
-                    type="button"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      onOpenDetail(outputIndex);
-                    }}
-                    className="group relative aspect-square w-full rounded-lg overflow-hidden ring-1 ring-[color:var(--w-08)] hover:ring-[color:var(--accent-45)] transition-all hover:scale-[1.015]"
-                    title={`查看第 ${letter} 张`}
-                    aria-label={`查看第 ${letter} 张`}
+                {/* output grid */}
+                {outputCount > 0 ? (
+                  <div
+                    className="grid grid-cols-2 gap-2 sm:[grid-template-columns:repeat(var(--history-output-cols),minmax(0,1fr))]"
+                    style={{
+                      "--history-output-cols": Math.min(outputCount, 4),
+                    } as CSSProperties}
                   >
-                    <SpotlightCard
-                      spotlightColor="rgba(var(--accent-rgb), 0.30)"
-                      className="!rounded-lg !p-0 !bg-transparent !border-0 !w-full !h-full absolute inset-0"
-                    >
-                      <JobPreviewImage
-                        url={url}
-                        seed={index * 37 + outputIndex + i}
-                        variant={`history-output-${job.id}-${outputIndex}`}
-                        imageClassName="absolute inset-0 h-full w-full object-cover"
-                        placeholderClassName="absolute inset-0"
-                      />
-                      <span
-                        className="absolute bottom-1.5 left-1.5 px-1.5 py-0.5 rounded text-[10.5px] font-mono font-semibold text-foreground"
-                        style={{
-                          background: "var(--k-55)",
-                          backdropFilter: "blur(4px)",
-                          WebkitBackdropFilter: "blur(4px)",
+                    {outputIndexes.map((outputIndex, i) => {
+                      const url = jobOutputUrl(job, outputIndex);
+                      const letter = String.fromCharCode(65 + i);
+                      return (
+                        <button
+                          key={outputIndex}
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onOpenDetail(outputIndex);
+                          }}
+                          className="group relative aspect-square w-full rounded-lg overflow-hidden ring-1 ring-[color:var(--w-08)] hover:ring-[color:var(--accent-45)] transition-all hover:scale-[1.015]"
+                          title={`查看第 ${letter} 张`}
+                          aria-label={`查看第 ${letter} 张`}
+                        >
+                          <SpotlightCard
+                            spotlightColor="rgba(var(--accent-rgb), 0.30)"
+                            className="!rounded-lg !p-0 !bg-transparent !border-0 !w-full !h-full absolute inset-0"
+                          >
+                            <JobPreviewImage
+                              url={url}
+                              seed={index * 37 + outputIndex + i}
+                              variant={`history-output-${job.id}-${outputIndex}`}
+                              imageClassName="absolute inset-0 h-full w-full object-cover"
+                              placeholderClassName="absolute inset-0"
+                            />
+                            <span
+                              className="absolute bottom-1.5 left-1.5 px-1.5 py-0.5 rounded text-[10.5px] font-mono font-semibold text-foreground"
+                              style={{
+                                background: "var(--k-55)",
+                                backdropFilter: "blur(4px)",
+                                WebkitBackdropFilter: "blur(4px)",
+                              }}
+                            >
+                              {letter}
+                            </span>
+                          </SpotlightCard>
+                        </button>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <div className="text-[12px] text-faint">
+                    {isRunning || isQueueing
+                      ? "图片生成完成后会显示在这里。"
+                      : "这个任务没有输出。"}
+                  </div>
+                )}
+
+                {/* row of actions */}
+                <div className="mt-3 flex flex-wrap items-center gap-2">
+                  {outputCount > 0 && (
+                    <>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        icon="download"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          saveAll();
                         }}
                       >
-                        {letter}
-                      </span>
-                    </SpotlightCard>
-                  </button>
-                );
-              })}
-            </div>
-          ) : (
-            <div className="text-[12px] text-faint">
-              {isRunning || isQueueing
-                ? "图片生成完成后会显示在这里。"
-                : "这个任务没有输出。"}
-            </div>
-          )}
-
-          {/* row of actions */}
-          <div className="mt-3 flex flex-wrap items-center gap-2">
-            {outputCount > 0 && (
-              <>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  icon="download"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    saveAll();
-                  }}
-                >
-                  {outputCount > 1 ? "保存全部" : "保存"}
-                </Button>
-                {thumbPath && (
+                        {outputCount > 1 ? "保存全部" : "保存"}
+                      </Button>
+                      {thumbPath && (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          icon="folder"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            void revealPath(thumbPath);
+                          }}
+                        >
+                          打开文件夹
+                        </Button>
+                      )}
+                    </>
+                  )}
+                  <div className="flex-1" />
                   <Button
                     variant="ghost"
                     size="sm"
-                    icon="folder"
-                    onClick={(e) => {
+                    icon="trash"
+                    onClick={async (e) => {
                       e.stopPropagation();
-                      void revealPath(thumbPath);
+                      const summary =
+                        prompt.length > 60
+                          ? `${prompt.slice(0, 60)}…`
+                          : prompt;
+                      const ok = await confirm({
+                        title: "删除任务记录",
+                        description: (
+                          <>
+                            将删除任务{" "}
+                            <span className="text-foreground font-medium">
+                              「{summary}」
+                            </span>
+                            。图片文件不会被删除。
+                          </>
+                        ),
+                        confirmText: "删除",
+                        variant: "danger",
+                      });
+                      if (ok) onDelete();
                     }}
                   >
-                    打开文件夹
+                    删除
                   </Button>
-                )}
-              </>
-            )}
-            <div className="flex-1" />
-            <Button
-              variant="ghost"
-              size="sm"
-              icon="trash"
-              onClick={async (e) => {
-                e.stopPropagation();
-                const summary =
-                  prompt.length > 60 ? `${prompt.slice(0, 60)}…` : prompt;
-                const ok = await confirm({
-                  title: "删除任务记录",
-                  description: (
-                    <>
-                      将删除任务{" "}
-                      <span className="text-foreground font-medium">
-                        「{summary}」
-                      </span>
-                      。图片文件不会被删除。
-                    </>
-                  ),
-                  confirmText: "删除",
-                  variant: "danger",
-                });
-                if (ok) onDelete();
-              }}
-            >
-              删除
-            </Button>
-          </div>
-        </div>
-      )}
+                </div>
+              </div>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }
