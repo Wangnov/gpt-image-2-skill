@@ -663,53 +663,51 @@ export function GenerateScreen({
           </div>
 
           {/* parameter chips + CTA */}
-          <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:items-center">
-            <div className="scrollbar-none grid w-full grid-cols-2 gap-2 sm:flex sm:flex-1 sm:min-w-0 sm:items-center sm:gap-2 sm:overflow-x-auto sm:pb-px">
-              <GlassCombobox
-                variant="chip"
-                label="尺寸"
-                value={size}
-                options={POPULAR_SIZE_OPTIONS}
-                onValueChange={setSize}
-                placeholder="WxH"
-                className="col-span-2 w-full min-w-0 sm:col-span-1 sm:w-[150px] sm:shrink-0"
-                invalid={!sizeValidation.ok}
-              />
-              <GlassSelect
-                variant="chip"
-                label="质量"
-                value={quality}
-                options={QUALITY_CHIP_OPTIONS}
-                onValueChange={setQuality}
-                className="w-full justify-between sm:w-auto sm:shrink-0"
-              />
-              <GlassSelect
-                variant="chip"
-                label="格式"
-                value={format}
-                options={FORMAT_OPTIONS}
-                onValueChange={setFormat}
-                className="w-full justify-between sm:w-auto sm:shrink-0"
-              />
-              <GlassCombobox
-                variant="chip"
-                label="数量"
-                value={String(n)}
-                options={COUNT_OPTIONS}
-                onValueChange={(v) => setN(Number(v) || 1)}
-                disabled={!supportsMultipleOutputs}
-                inputMode="numeric"
-                placeholder="1-10"
-                className="col-span-2 w-full min-w-0 sm:col-span-1 sm:w-[88px] sm:shrink-0"
-              />
-            </div>
+          <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-[minmax(146px,1.35fr)_minmax(92px,.8fr)_minmax(92px,.8fr)_minmax(82px,.68fr)_minmax(104px,auto)] sm:items-center">
+            <GlassCombobox
+              variant="chip"
+              label="尺寸"
+              value={size}
+              options={POPULAR_SIZE_OPTIONS}
+              onValueChange={setSize}
+              placeholder="WxH"
+              className="col-span-2 w-full min-w-0 sm:col-span-1"
+              invalid={!sizeValidation.ok}
+            />
+            <GlassSelect
+              variant="chip"
+              label="质量"
+              value={quality}
+              options={QUALITY_CHIP_OPTIONS}
+              onValueChange={setQuality}
+              className="w-full min-w-0 justify-between"
+            />
+            <GlassSelect
+              variant="chip"
+              label="格式"
+              value={format}
+              options={FORMAT_OPTIONS}
+              onValueChange={setFormat}
+              className="w-full min-w-0 justify-between"
+            />
+            <GlassCombobox
+              variant="chip"
+              label="数量"
+              value={String(n)}
+              options={COUNT_OPTIONS}
+              onValueChange={(v) => setN(Number(v) || 1)}
+              disabled={!supportsMultipleOutputs}
+              inputMode="numeric"
+              placeholder="1-10"
+              className="w-full min-w-0"
+            />
             <ClickSpark
               sparkColor={accentHex}
               sparkCount={10}
               sparkRadius={22}
               sparkSize={8}
               duration={500}
-              className="w-full sm:inline-flex sm:w-auto"
+              className="w-full"
             >
             <button
               type="button"
@@ -718,7 +716,7 @@ export function GenerateScreen({
                 handleRun();
               }}
               disabled={submitDisabled}
-              className="relative overflow-hidden inline-flex w-full items-center justify-center gap-1.5 h-11 px-6 rounded-full text-[14px] font-semibold text-foreground transition-[background,transform,opacity] hover:opacity-95 active:translate-y-[0.5px] disabled:opacity-45 disabled:cursor-not-allowed sm:w-auto"
+              className="relative overflow-hidden inline-flex w-full items-center justify-center gap-1.5 h-11 px-4 rounded-full text-[14px] font-semibold text-foreground transition-[background,transform,opacity] hover:opacity-95 active:translate-y-[0.5px] disabled:opacity-45 disabled:cursor-not-allowed"
               style={{
                 backgroundImage: "var(--accent-gradient-fill)",
                 border: "1px solid var(--accent-50)",
