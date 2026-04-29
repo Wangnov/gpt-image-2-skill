@@ -79,7 +79,7 @@ type SettingsTab = "creds" | "appearance" | "runtime" | "about";
 const NAV: { id: SettingsTab; label: string; icon: LucideIcon }[] = [
   { id: "creds", label: "凭证", icon: KeyRound },
   { id: "appearance", label: "外观", icon: Sparkles },
-  { id: "runtime", label: "队列与通知", icon: ListChecks },
+  { id: "runtime", label: "任务", icon: ListChecks },
   { id: "about", label: "关于", icon: Info },
 ];
 
@@ -98,7 +98,7 @@ const TAB_TITLES: Record<SettingsTab, { title: string; subtitle: string }> = {
     subtitle: "液态背景、字体与界面密度",
   },
   runtime: {
-    title: "队列与通知",
+    title: "任务",
     subtitle: "并发上限和任务结束提示",
   },
   about: {
@@ -676,6 +676,7 @@ function AppearancePanel() {
     ...HIDDEN_PRESETS.filter((id) => unlocked.has(id)),
   ];
   const activePreset = THEME_PRESETS[tweaks.themePreset];
+  const modernInterface = tweaks.interfaceMode === "modern";
 
   const opacityHint =
     activePreset.surfaceStyle === "paper"
@@ -692,7 +693,7 @@ function AppearancePanel() {
           description={
             tweaks.interfaceMode === "legacy"
               ? "经典三栏会复用旧工作台外观，并禁用常驻动态背景以降低资源占用。"
-              : "新版界面使用主题背景、玻璃胶囊和作品墙；适合视觉调试。"
+              : "现代界面使用主题背景、玻璃胶囊和作品墙；适合视觉调试。"
           }
           control={
             <Segmented
@@ -701,57 +702,78 @@ function AppearancePanel() {
               size="sm"
               ariaLabel="界面版本"
               options={[
-                { value: "modern", label: "新版" },
-                { value: "legacy", label: "经典三栏" },
+                { value: "modern", label: "现代" },
+                { value: "legacy", label: "经典" },
               ]}
             />
           }
         />
-        <div className="space-y-2.5 px-4 py-3.5 sm:px-5">
-          <div>
-            <div className="text-[13px] font-semibold text-foreground">
-              主题预设
+        {modernInterface ? (
+          <>
+            <div className="space-y-2.5 px-4 py-3.5 sm:px-5">
+              <div>
+                <div className="text-[13px] font-semibold text-foreground">
+                  主题预设
+                </div>
+                <div className="mt-0.5 text-[11.5px] text-muted">
+                  一键切换背景动效、配色、面板风格；字体和密度也会跟着调到主题推荐值。想禁用所有动效，切到「网格灰」或在 macOS
+                  辅助功能里开启「减弱动态效果」。
+                </div>
+              </div>
+              <div
+                className={cn(
+                  "grid gap-2",
+                  visibleIds.length <= 4
+                    ? "grid-cols-2 lg:grid-cols-4"
+                    : "grid-cols-2 lg:grid-cols-5",
+                )}
+              >
+                {visibleIds.map((id) => (
+                  <ThemePreviewCard
+                    key={id}
+                    preset={THEME_PRESETS[id]}
+                    isActive={tweaks.themePreset === id}
+                    onSelect={() => setTweaks({ themePreset: id })}
+                  />
+                ))}
+              </div>
             </div>
-            <div className="mt-0.5 text-[11.5px] text-muted">
-              一键切换背景动效、配色、面板风格；字体和密度也会跟着调到主题推荐值。想禁用所有动效，切到「网格灰」或在 macOS
-              辅助功能里开启「减弱动态效果」。
-            </div>
-          </div>
-          <div
-            className={cn(
-              "grid gap-2",
-              visibleIds.length <= 4
-                ? "grid-cols-2 lg:grid-cols-4"
-                : "grid-cols-2 lg:grid-cols-5",
-            )}
-          >
-            {visibleIds.map((id) => (
-              <ThemePreviewCard
-                key={id}
-                preset={THEME_PRESETS[id]}
-                isActive={tweaks.themePreset === id}
-                onSelect={() => setTweaks({ themePreset: id })}
+            <Row
+              title="面板透明度"
+              description={opacityHint}
+              control={
+                <div className="w-[252px]">
+                  <ElasticSlider
+                    value={tweaks.glassOpacity}
+                    min={5}
+                    max={95}
+                    step={1}
+                    onChange={(glassOpacity) => setTweaks({ glassOpacity })}
+                    valueSuffix="%"
+                    ariaLabel="面板透明度"
+                  />
+                </div>
+              }
+            />
+          </>
+        ) : (
+          <Row
+            title="亮暗主题"
+            description="只影响经典工作台；现代界面的主题仍由主题预设控制。"
+            control={
+              <Segmented
+                value={tweaks.theme}
+                onChange={(theme) => setTweaks({ theme })}
+                size="sm"
+                ariaLabel="经典亮暗主题"
+                options={[
+                  { value: "dark", label: "暗色" },
+                  { value: "light", label: "亮色" },
+                ]}
               />
-            ))}
-          </div>
-        </div>
-        <Row
-          title="面板透明度"
-          description={opacityHint}
-          control={
-            <div className="w-[252px]">
-              <ElasticSlider
-                value={tweaks.glassOpacity}
-                min={5}
-                max={95}
-                step={1}
-                onChange={(glassOpacity) => setTweaks({ glassOpacity })}
-                valueSuffix="%"
-                ariaLabel="面板透明度"
-              />
-            </div>
-          }
-        />
+            }
+          />
+        )}
       </Section>
 
       <Section
