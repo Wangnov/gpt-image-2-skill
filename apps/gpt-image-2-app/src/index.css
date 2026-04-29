@@ -764,7 +764,7 @@
   gap: 12px;
   padding: 12px;
   grid-template-columns: 300px minmax(0, 1fr);
-  grid-template-rows: minmax(0, 1fr) auto;
+  grid-template-rows: minmax(220px, 26%) minmax(0, 1fr);
   grid-template-areas:
     "refs canvas"
     "settings canvas";

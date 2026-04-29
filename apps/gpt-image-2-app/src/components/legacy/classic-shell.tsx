@@ -91,7 +91,7 @@ function ClassicSidebar({
     <aside className="classic-sidebar flex w-[224px] shrink-0 flex-col border-r border-border-faint bg-[rgba(10,10,14,0.72)]">
       <div
         data-tauri-drag-region
-        className="flex h-14 items-center border-b border-border-faint pb-0 pl-[86px] pr-4"
+        className="flex h-[88px] items-end border-b border-border-faint px-4 pb-4 pt-9"
       >
         <div data-tauri-drag-region className="flex min-w-0 items-center gap-2">
           <img
@@ -187,14 +187,6 @@ function ClassicToolbar({
           {meta.subtitle}
         </div>
       </div>
-      <Button
-        variant="ghost"
-        size="icon"
-        icon="gear"
-        onClick={() => setScreen("settings")}
-        aria-label="打开设置"
-        aria-pressed={screen === "settings"}
-      />
       <Button
         variant="ghost"
         size="icon"
