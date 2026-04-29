@@ -612,6 +612,29 @@
   );
 }
 
+/* Classic workbench mode deliberately drops the expensive always-on glass blur.
+   It should feel like the old three-column desktop surface, not another
+   themed version of the new animated canvas. */
+[data-interface-mode="legacy"] .surface-panel {
+  background: rgba(15, 16, 23, 0.82);
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+  border-color: rgba(255, 255, 255, 0.08);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05), var(--shadow-sm);
+}
+[data-interface-mode="legacy"] .surface-panel::before {
+  background: linear-gradient(
+    180deg,
+    rgba(255, 255, 255, 0.045) 0%,
+    rgba(255, 255, 255, 0) 34%
+  );
+}
+[data-interface-mode="legacy"] .classic-sidebar,
+[data-interface-mode="legacy"] .classic-toolbar {
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
+
 /* Theme switch pulse — a brief brand-tinted veil at the moment of
    preset change, masking the CSS-variable hard-cut. Triggered by
    `body.classList.add('theme-pulse')` in use-tweaks.ts; the keyframe
