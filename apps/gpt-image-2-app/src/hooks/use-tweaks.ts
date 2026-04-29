@@ -60,6 +60,35 @@ function normalizeTheme(value: unknown): Tweaks["theme"] {
   return value === "light" ? "light" : "dark";
 }
 
+function isStaticBrowserRuntime(): boolean {
+  if (typeof window === "undefined") return false;
+  if (window.__TAURI_INTERNALS__ || window.__TAURI__) return false;
+  const configuredHttpApi =
+    window.__GPT_IMAGE_2_API_BASE__?.trim() ||
+    import.meta.env.VITE_GPT_IMAGE_2_API_BASE?.trim();
+  return window.__GPT_IMAGE_2_RUNTIME__ !== "http" && !configuredHttpApi;
+}
+
+function normalizeInitialInterfaceMode(parsed: unknown): InterfaceMode {
+  if (
+    parsed &&
+    typeof parsed === "object" &&
+    !("interfaceMode" in parsed) &&
+    isStaticBrowserRuntime()
+  ) {
+    return "legacy";
+  }
+  return normalizeInterfaceMode(
+    (parsed as { interfaceMode?: unknown })?.interfaceMode,
+  );
+}
+
+export function __resolveInitialInterfaceModeForTests(
+  parsed: unknown,
+): InterfaceMode {
+  return normalizeInitialInterfaceMode(parsed);
+}
+
 function load(): Tweaks {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
@@ -94,7 +123,7 @@ function load(): Tweaks {
           : true,
       glassOpacity: clampOpacity(parsed?.glassOpacity),
       themePreset: presetId,
-      interfaceMode: normalizeInterfaceMode(parsed?.interfaceMode),
+      interfaceMode: normalizeInitialInterfaceMode(parsed),
     };
   } catch {
     return DEFAULT_TWEAKS;
@@ -131,10 +160,7 @@ export function TweaksProvider({ children }: { children: ReactNode }) {
     root.style.setProperty("--bg-veil-strong", preset.veil.strong);
 
     // Glass alpha as a CSS variable so .surface-panel and friends pick it up
-    root.style.setProperty(
-      "--glass-alpha",
-      String(tweaks.glassOpacity / 100),
-    );
+    root.style.setProperty("--glass-alpha", String(tweaks.glassOpacity / 100));
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(tweaks));
     } catch {
@@ -186,7 +212,8 @@ export function TweaksProvider({ children }: { children: ReactNode }) {
       ) {
         const preset = THEME_PRESETS[partial.themePreset];
         if (partial.font === undefined) next.font = preset.suggestedFont;
-        if (partial.density === undefined) next.density = preset.suggestedDensity;
+        if (partial.density === undefined)
+          next.density = preset.suggestedDensity;
       }
       return next;
     });
