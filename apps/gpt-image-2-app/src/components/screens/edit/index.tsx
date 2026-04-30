@@ -16,6 +16,7 @@ import {
   Sparkles,
   Trash2,
 } from "lucide-react";
+import { motion } from "motion/react";
 import { Button } from "@/components/ui/button";
 import { Empty } from "@/components/ui/empty";
 import { Field, FieldLabel } from "@/components/ui/field";
@@ -37,6 +38,7 @@ import ElasticSlider from "@/components/reactbits/components/ElasticSlider";
 import { providerKindLabel } from "@/lib/format";
 import { useCreateEdit } from "@/hooks/use-jobs";
 import { useJobEvents } from "@/hooks/use-job-events";
+import { useReducedMotion } from "@/hooks/use-reduced-motion";
 import { api } from "@/lib/api";
 import {
   errorMessage,
@@ -111,6 +113,7 @@ const COUNT_OPTIONS = OUTPUT_COUNT_OPTIONS.map((n) => ({
 }));
 
 export function EditScreen({ config }: { config?: ServerConfig }) {
+  const reducedMotion = useReducedMotion();
   const providerNames = useMemo(() => readProviderNames(config), [config]);
   const defaultProvider = effectiveDefaultProvider(config);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -265,7 +268,10 @@ export function EditScreen({ config }: { config?: ServerConfig }) {
     [maxReferenceImages],
   );
 
-  const addRef = (files: FileList | null, source: ImageFileSource = "picker") => {
+  const addRef = (
+    files: FileList | null,
+    source: ImageFileSource = "picker",
+  ) => {
     const result = normalizeImageFiles(files, { source });
     addRefFiles(result.files, source, result.ignored);
   };
@@ -663,9 +669,7 @@ export function EditScreen({ config }: { config?: ServerConfig }) {
             </button>
           </PopoverTrigger>
           <PopoverContent className="w-[340px] space-y-3">
-            <div className="t-caps">
-              编辑参数
-            </div>
+            <div className="t-caps">编辑参数</div>
 
             <Field label="凭证">
               <GlassSelect
@@ -690,7 +694,10 @@ export function EditScreen({ config }: { config?: ServerConfig }) {
             </Field>
 
             <div className="grid grid-cols-2 gap-2">
-              <Field label="尺寸" hint={!sizeValidation.ok ? sizeValidation.message : undefined}>
+              <Field
+                label="尺寸"
+                hint={!sizeValidation.ok ? sizeValidation.message : undefined}
+              >
                 <GlassCombobox
                   value={size}
                   onValueChange={setSize}
@@ -728,9 +735,7 @@ export function EditScreen({ config }: { config?: ServerConfig }) {
             {usesRegion && (
               <>
                 <div className="pt-2 mt-1 border-t border-[color:var(--w-06)]" />
-                <div className="t-caps">
-                  遮罩工具
-                </div>
+                <div className="t-caps">遮罩工具</div>
                 <div className="space-y-2">
                   <Segmented
                     value={maskMode}
@@ -806,17 +811,35 @@ export function EditScreen({ config }: { config?: ServerConfig }) {
           onDragLeave={handleCanvasDragLeave}
           onDrop={handleCanvasDrop}
         >
-          <div
+          <motion.div
             aria-hidden="true"
             className={cn(
               "pointer-events-none absolute inset-2 z-20 flex items-center justify-center rounded-[inherit] border border-dashed",
-              "bg-[color:var(--w-08)] backdrop-blur-md transition-[opacity,transform,border-color,box-shadow] duration-200 ease-out",
+              "bg-[color:var(--w-08)] backdrop-blur-md transition-[border-color,box-shadow] duration-200 ease-out",
               isDraggingImages
-                ? "opacity-100 scale-100 border-[color:var(--accent)] shadow-[0_0_0_1px_var(--accent-faint),var(--shadow-accent-glow)]"
-                : "opacity-0 scale-[0.985] border-transparent",
+                ? "border-[color:var(--accent)] shadow-[0_0_0_1px_var(--accent-faint),var(--shadow-accent-glow)]"
+                : "border-transparent",
             )}
+            animate={
+              reducedMotion
+                ? { opacity: isDraggingImages ? 1 : 0 }
+                : {
+                    opacity: isDraggingImages ? 1 : 0,
+                    scale: isDraggingImages ? 1 : 0.985,
+                    y: isDraggingImages ? 0 : 2,
+                  }
+            }
+            transition={{ duration: 0.2, ease: [0.22, 1, 0.36, 1] }}
           >
-            <div className="flex flex-col items-center gap-2 rounded-xl border border-border-faint bg-[color:var(--w-08)] px-4 py-3 text-center shadow-popover">
+            <motion.div
+              className="flex flex-col items-center gap-2 rounded-xl border border-border-faint bg-[color:var(--w-08)] px-4 py-3 text-center shadow-popover"
+              animate={
+                reducedMotion
+                  ? undefined
+                  : { scale: isDraggingImages ? 1.02 : 1 }
+              }
+              transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }}
+            >
               <ImageIcon size={20} style={{ color: "var(--accent)" }} />
               <div className="text-[13px] font-semibold text-foreground">
                 松开添加参考图
@@ -824,8 +847,8 @@ export function EditScreen({ config }: { config?: ServerConfig }) {
               <div className="text-[11px] text-muted">
                 支持拖拽图片，也支持直接粘贴剪贴板图片
               </div>
-            </div>
-          </div>
+            </motion.div>
+          </motion.div>
           {usesRegion ? (
             targetRef ? (
               <div
@@ -886,15 +909,13 @@ export function EditScreen({ config }: { config?: ServerConfig }) {
               size={13}
               style={{ color: "var(--status-err)" }}
             />
-            <span className="text-[12px] flex-1" style={{ color: "var(--status-err)" }}>
+            <span
+              className="text-[12px] flex-1"
+              style={{ color: "var(--status-err)" }}
+            >
               {runError}
             </span>
-            <Button
-              variant="ghost"
-              size="sm"
-              icon="reload"
-              onClick={handleRun}
-            >
+            <Button variant="ghost" size="sm" icon="reload" onClick={handleRun}>
               重试
             </Button>
           </div>

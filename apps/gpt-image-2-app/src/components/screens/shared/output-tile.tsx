@@ -1,6 +1,8 @@
 import { useEffect, useState } from "react";
+import { AnimatePresence, motion } from "motion/react";
 import { Icon } from "@/components/icon";
 import { RevealImage } from "@/components/ui/reveal-image";
+import { useReducedMotion } from "@/hooks/use-reduced-motion";
 import { PlaceholderImage } from "./placeholder-image";
 
 type OutputMeta = {
@@ -21,6 +23,7 @@ export function OutputTile({
   onDownload?: () => void;
   onOpen?: () => void;
 }) {
+  const reducedMotion = useReducedMotion();
   const [hover, setHover] = useState(false);
   const [focusWithin, setFocusWithin] = useState(false);
   const [imageFailed, setImageFailed] = useState(false);
@@ -32,7 +35,7 @@ export function OutputTile({
   }, [output.url]);
 
   return (
-    <div
+    <motion.div
       onMouseEnter={() => setHover(true)}
       onMouseLeave={() => setHover(false)}
       onFocusCapture={() => setFocusWithin(true)}
@@ -46,6 +49,15 @@ export function OutputTile({
       tabIndex={0}
       aria-label={`候选 ${letter.toUpperCase()}${output.selected ? "，已选中" : ""}`}
       aria-pressed={Boolean(output.selected)}
+      animate={
+        reducedMotion
+          ? undefined
+          : {
+              scale: output.selected ? 1.012 : 1,
+            }
+      }
+      whileTap={reducedMotion ? undefined : { scale: 0.985 }}
+      transition={{ duration: 0.18, ease: [0.22, 1, 0.36, 1] }}
       onKeyDown={(e) => {
         if ((e.key === "Enter" || e.key === " ") && onSelect) {
           e.preventDefault();
@@ -61,6 +73,22 @@ export function OutputTile({
       ].join(" ")}
       style={{ background: "var(--bg-sunken)" }}
     >
+      <AnimatePresence>
+        {output.selected && !reducedMotion && (
+          <motion.span
+            aria-hidden="true"
+            className="pointer-events-none absolute inset-0 z-10 rounded-[inherit]"
+            initial={{ opacity: 0.7, scale: 0.96 }}
+            animate={{ opacity: 0, scale: 1.08 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.42, ease: [0.22, 1, 0.36, 1] }}
+            style={{
+              background:
+                "radial-gradient(circle at center, var(--accent-35), transparent 68%)",
+            }}
+          />
+        )}
+      </AnimatePresence>
       {showImage ? (
         <RevealImage
           src={output.url}
@@ -103,36 +131,48 @@ export function OutputTile({
         </div>
         {output.selected && <Icon name="check" size={12} />}
       </div>
-      {(hover || focusWithin || output.selected) && (
-        <div className="absolute top-2 right-2 flex gap-1 animate-fade-in">
-          {onOpen && (
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                onOpen();
-              }}
-              title="打开图片"
-              aria-label="打开图片"
-              className="touch-target image-overlay flex h-8 w-8 items-center justify-center rounded-[4px] border-none"
-            >
-              <Icon name="external" size={13} />
-            </button>
-          )}
-          {onDownload && (
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                onDownload();
-              }}
-              title="保存图片"
-              aria-label="保存图片"
-              className="touch-target image-overlay flex h-8 w-8 items-center justify-center rounded-[4px] border-none"
-            >
-              <Icon name="download" size={13} />
-            </button>
-          )}
-        </div>
-      )}
-    </div>
+      <AnimatePresence>
+        {(hover || focusWithin || output.selected) && (
+          <motion.div
+            className="absolute top-2 right-2 z-20 flex gap-1"
+            initial={reducedMotion ? false : { opacity: 0, y: -3, scale: 0.98 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={
+              reducedMotion
+                ? { opacity: 0 }
+                : { opacity: 0, y: -2, scale: 0.98 }
+            }
+            transition={{ duration: 0.16, ease: [0.22, 1, 0.36, 1] }}
+          >
+            {onOpen && (
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onOpen();
+                }}
+                title="打开图片"
+                aria-label="打开图片"
+                className="touch-target image-overlay flex h-8 w-8 items-center justify-center rounded-[4px] border-none"
+              >
+                <Icon name="external" size={13} />
+              </button>
+            )}
+            {onDownload && (
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onDownload();
+                }}
+                title="保存图片"
+                aria-label="保存图片"
+                className="touch-target image-overlay flex h-8 w-8 items-center justify-center rounded-[4px] border-none"
+              >
+                <Icon name="download" size={13} />
+              </button>
+            )}
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </motion.div>
   );
 }
