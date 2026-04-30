@@ -1,6 +1,12 @@
 import { useEffect, useId, useMemo, useState } from "react";
 import { toast } from "sonner";
-import { Sparkles, ListChecks, Loader2, Image as ImageIcon, X } from "lucide-react";
+import {
+  Sparkles,
+  ListChecks,
+  Loader2,
+  Image as ImageIcon,
+  X,
+} from "lucide-react";
 import { motion } from "motion/react";
 import GradientText from "@/components/reactbits/text/GradientText";
 import ShinyText from "@/components/reactbits/text/ShinyText";
@@ -12,6 +18,7 @@ import Masonry, {
 import { PlaceholderImage } from "@/components/screens/shared/placeholder-image";
 import logoUrl from "@/assets/logo.png";
 import { useTweaks } from "@/hooks/use-tweaks";
+import { useReducedMotion } from "@/hooks/use-reduced-motion";
 import { THEME_PRESETS } from "@/lib/theme-presets";
 import { GlassSelect } from "@/components/ui/select";
 import { GlassCombobox } from "@/components/ui/combobox";
@@ -61,10 +68,16 @@ const COUNT_OPTIONS = OUTPUT_COUNT_OPTIONS.map((n) => ({
 }));
 
 const PROMPT_TEMPLATES: { label: string; prompt: string }[] = [
-  { label: "产品摄影", prompt: "产品摄影：亚光陶瓷杯，纯白背景，柔光，居中构图" },
+  {
+    label: "产品摄影",
+    prompt: "产品摄影：亚光陶瓷杯，纯白背景，柔光，居中构图",
+  },
   { label: "Logo", prompt: "极简几何 logo，渐变填充，矢量风格，纯白背景" },
   { label: "水墨", prompt: "水墨写意山水，留白，竖幅，淡墨远山" },
-  { label: "Cosplay", prompt: "电影级 Cosplay 海报，动态姿态，日式美感，大景深" },
+  {
+    label: "Cosplay",
+    prompt: "电影级 Cosplay 海报，动态姿态，日式美感，大景深",
+  },
   { label: "赛博朋克", prompt: "赛博朋克城市夜景，霓虹灯反射在湿地上，雨后" },
 ];
 
@@ -111,6 +124,7 @@ function RecentWorkTile({
   promptText: string;
   onOpenJob?: (jobId: string) => void;
 }) {
+  const reducedMotion = useReducedMotion();
   const [imageFailed, setImageFailed] = useState(false);
 
   useEffect(() => {
@@ -118,10 +132,12 @@ function RecentWorkTile({
   }, [url]);
 
   return (
-    <button
+    <motion.button
       key={job.id}
       type="button"
       onClick={() => onOpenJob?.(job.id)}
+      whileTap={reducedMotion ? undefined : { scale: 0.985 }}
+      transition={{ duration: 0.16, ease: [0.22, 1, 0.36, 1] }}
       className="h-full w-full rounded-md overflow-hidden ring-1 ring-[color:var(--w-10)] hover:ring-[color:var(--accent-45)] hover:scale-[1.025] transition-[box-shadow,transform] bg-[color:var(--bg-sunken)] focus-visible:outline-none focus-visible:ring-[color:var(--accent-55)]"
       title={promptText.slice(0, 80)}
       aria-label={`打开作品:${promptText.slice(0, 40)}`}
@@ -137,12 +153,9 @@ function RecentWorkTile({
           onError={() => setImageFailed(true)}
         />
       ) : (
-        <PlaceholderImage
-          seed={jobPlaceholderSeed(job)}
-          variant="recent"
-        />
+        <PlaceholderImage seed={jobPlaceholderSeed(job)} variant="recent" />
       )}
-    </button>
+    </motion.button>
   );
 }
 
@@ -202,6 +215,7 @@ export function GenerateScreen({
   onOpenHistory?: () => void;
   onOpenJob?: (jobId: string) => void;
 }) {
+  const reducedMotion = useReducedMotion();
   const providerNames = useMemo(() => readProviderNames(config), [config]);
   const defaultProvider = effectiveDefaultProvider(config);
   // Read the active theme's accent hex so ElectricBorder + ClickSpark
@@ -344,8 +358,7 @@ export function GenerateScreen({
   // completed work OR anything in flight — form on the left, gallery
   // on the right, hero spanning above. New users / empty history fall
   // back to the hero-centered single-column layout.
-  const hasSplit =
-    recentCompleted.length > 0 || pendingPlaceholders.length > 0;
+  const hasSplit = recentCompleted.length > 0 || pendingPlaceholders.length > 0;
   const isSubmitting = mutate.isPending;
   const isTracking = running;
   const isWorking = isSubmitting || isTracking;
@@ -530,7 +543,14 @@ export function GenerateScreen({
         </motion.div>
 
         {/* Form panel */}
-        <section
+        <motion.section
+          initial={reducedMotion ? false : { opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{
+            duration: reducedMotion ? 0 : 0.42,
+            delay: reducedMotion ? 0 : 0.08,
+            ease: [0.22, 1, 0.36, 1],
+          }}
           className={cn(
             "surface-panel mt-3 w-full max-w-[640px] p-4 sm:mt-9 sm:p-5",
             // Split mode: pin to left column, drop top margin (the grid
@@ -769,20 +789,28 @@ export function GenerateScreen({
               </button>
             </ClickSpark>
           </div>
-        </section>
+        </motion.section>
 
         {/* Inline result gallery — closes the prompt → result loop on the
             same screen. Renders whenever there's anything to show
             (completed work OR in-flight placeholders) so the user sees
             their submission immediately, not after the API returns. */}
         {(recentCompleted.length > 0 || pendingPlaceholders.length > 0) && (
-          <section
+          <motion.section
+            initial={reducedMotion ? false : { opacity: 0, y: 12 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{
+              duration: reducedMotion ? 0 : 0.46,
+              delay: reducedMotion ? 0 : 0.14,
+              ease: [0.22, 1, 0.36, 1],
+            }}
             aria-label="最近的作品"
             className={cn(
               "mt-6 w-full max-w-[640px]",
               // Split mode: right column, top-aligned with the form,
               // wider visual since the column is the larger of the two.
-              hasSplit && "lg:col-start-2 lg:row-start-2 lg:mt-0 lg:max-w-none lg:self-start",
+              hasSplit &&
+                "lg:col-start-2 lg:row-start-2 lg:mt-0 lg:max-w-none lg:self-start",
             )}
           >
             <div className="flex items-center justify-between mb-2 px-1">
@@ -821,7 +849,7 @@ export function GenerateScreen({
                 )
               }
             />
-          </section>
+          </motion.section>
         )}
 
         {/* Queue chip — spans both columns in split mode and centers

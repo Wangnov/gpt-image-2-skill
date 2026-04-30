@@ -1,15 +1,17 @@
 import type { MouseEvent } from "react";
 import { getCurrentWindow } from "@tauri-apps/api/window";
+import { motion } from "motion/react";
 import GlassSurface from "@/components/reactbits/components/GlassSurface";
 import CountUp from "@/components/reactbits/text/CountUp";
 import logoUrl from "@/assets/logo.png";
+import { useReducedMotion } from "@/hooks/use-reduced-motion";
 import { cn } from "@/lib/cn";
 import { SCREENS, type ScreenId } from "./screens";
 
 function isTauriRuntime() {
   return Boolean(
     typeof window !== "undefined" &&
-      (window.__TAURI_INTERNALS__ || window.__TAURI__),
+    (window.__TAURI_INTERNALS__ || window.__TAURI__),
   );
 }
 
@@ -33,9 +35,11 @@ function startWindowDrag(event: MouseEvent<HTMLElement>) {
   if (event.button !== 0 || !isTauriRuntime()) return;
   if (!canStartWindowDrag(event.target)) return;
   event.preventDefault();
-  void getCurrentWindow().startDragging().catch(() => {
-    /* Tauri can reject dragging before the window is focused. */
-  });
+  void getCurrentWindow()
+    .startDragging()
+    .catch(() => {
+      /* Tauri can reject dragging before the window is focused. */
+    });
 }
 
 export function TopNav({
@@ -48,6 +52,7 @@ export function TopNav({
   running?: { generate: number; edit: number; total: number };
 }) {
   const tauriRuntime = isTauriRuntime();
+  const reducedMotion = useReducedMotion();
 
   return (
     <header
@@ -123,34 +128,39 @@ export function TopNav({
                   : 0;
           const isRunning = tabCount > 0;
           return (
-            <div
-              key={s.id}
-              className="shrink-0"
-            >
-              <button
+            <div key={s.id} className="shrink-0">
+              <motion.button
                 type="button"
                 data-no-window-drag
                 onClick={() => setScreen(s.id)}
+                whileTap={reducedMotion ? undefined : { scale: 0.985 }}
                 className={cn(
-                  "relative inline-flex items-center gap-1.5 h-8 min-h-8 px-4 rounded-full text-[12.5px] font-medium whitespace-nowrap transition-all",
+                  "relative isolate inline-flex items-center gap-1.5 h-8 min-h-8 px-4 rounded-full text-[12.5px] font-medium whitespace-nowrap transition-colors",
                   isActive
                     ? "text-foreground"
                     : "text-muted hover:text-foreground hover:bg-[color:var(--w-05)]",
                 )}
-                style={
-                  isActive
-                    ? {
-                        minHeight: 32,
-                        background: "rgba(255, 255, 255, 0.14)",
-                        boxShadow: "inset 0 1px 0 rgba(255, 255, 255, 0.16)",
-                      }
-                    : { minHeight: 32 }
-                }
+                style={{ minHeight: 32 }}
               >
-                <span>{s.label}</span>
+                {isActive && (
+                  <motion.span
+                    layoutId="top-nav-active-pill"
+                    aria-hidden="true"
+                    className="absolute inset-0 z-0 rounded-full"
+                    style={{
+                      background: "rgba(255, 255, 255, 0.14)",
+                      boxShadow: "inset 0 1px 0 rgba(255, 255, 255, 0.16)",
+                    }}
+                    transition={{
+                      duration: reducedMotion ? 0 : 0.24,
+                      ease: [0.22, 1, 0.36, 1],
+                    }}
+                  />
+                )}
+                <span className="relative z-10">{s.label}</span>
                 {isRunning && (
                   <span
-                    className="inline-flex items-center justify-center min-w-[16px] h-[16px] px-1 rounded-full text-[9.5px] font-mono font-semibold leading-none animate-pulse-subtle tabular-nums"
+                    className="relative z-10 inline-flex items-center justify-center min-w-[16px] h-[16px] px-1 rounded-full text-[9.5px] font-mono font-semibold leading-none animate-pulse-subtle tabular-nums"
                     style={{
                       background: "var(--status-running-bg)",
                       color: "var(--status-running)",
@@ -165,12 +175,11 @@ export function TopNav({
                     />
                   </span>
                 )}
-              </button>
+              </motion.button>
             </div>
           );
         })}
       </GlassSurface>
-
     </header>
   );
 }
