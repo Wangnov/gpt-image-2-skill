@@ -17,7 +17,9 @@ function okJson(payload: unknown) {
   });
 }
 
-function providerConfig(overrides: Partial<ProviderConfig> = {}): ProviderConfig {
+function providerConfig(
+  overrides: Partial<ProviderConfig> = {},
+): ProviderConfig {
   return {
     type: "openai-compatible",
     api_base: "https://mock.example/v1",
@@ -53,13 +55,14 @@ async function waitForJob(jobId: string) {
   throw new Error(`Timed out waiting for ${jobId}`);
 }
 
-function installBrowserGlobals() {
+function installBrowserGlobals(overrides: Record<string, unknown> = {}) {
   vi.stubGlobal("window", {
     addEventListener: vi.fn(),
     removeEventListener: vi.fn(),
     open: vi.fn(),
     setTimeout,
     clearTimeout,
+    ...overrides,
   });
   vi.stubGlobal("navigator", {
     storage: {
@@ -128,7 +131,9 @@ describe("browserApi", () => {
     expect(job.status).toBe("completed");
     expect(job.outputs).toHaveLength(2);
     expect(browserApi.outputUrl(job.id, 0)).toMatch(/^blob:mock-/);
-    const bodies = requests.map((request) => JSON.parse(String(request.init?.body)));
+    const bodies = requests.map((request) =>
+      JSON.parse(String(request.init?.body)),
+    );
     expect(bodies).toHaveLength(1);
     expect(bodies[0]).toMatchObject({ prompt: "native n", n: 2 });
   });
@@ -154,7 +159,9 @@ describe("browserApi", () => {
 
     expect(job.status).toBe("completed");
     expect(job.outputs.map((output) => output.index)).toEqual([0, 1, 2]);
-    const bodies = requests.map((request) => JSON.parse(String(request.init?.body)));
+    const bodies = requests.map((request) =>
+      JSON.parse(String(request.init?.body)),
+    );
     expect(bodies).toHaveLength(3);
     expect(bodies.every((body) => !("n" in body))).toBe(true);
   });
@@ -221,6 +228,46 @@ describe("browserApi", () => {
     );
   });
 
+  it("falls back to the same-origin relay when browser direct fetch is blocked", async () => {
+    installBrowserGlobals({ __GPT_IMAGE_2_RELAY_BASE__: "/api/relay" });
+    await __resetBrowserApiForTests();
+    const requests: CapturedRequest[] = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+        requests.push({ url: String(input), init });
+        if (String(input) === "https://mock.example/v1/images/generations") {
+          throw new TypeError("Failed to fetch");
+        }
+        if (String(input) === "/api/relay") {
+          const headers = new Headers(init?.headers);
+          expect(headers.get("X-GPT-Image-2-Upstream")).toBe(
+            "https://mock.example/v1/images/generations",
+          );
+          expect(headers.get("X-GPT-Image-2-Method")).toBe("POST");
+          expect(headers.get("Authorization")).toBe("Bearer sk-test");
+          return okJson({ data: [{ b64_json: tinyPng }] });
+        }
+        throw new Error(`unexpected fetch: ${String(input)}`);
+      }),
+    );
+    await addProvider();
+
+    const result = await browserApi.createGenerate({
+      prompt: "relay fallback",
+      provider: "mock",
+      format: "png",
+      n: 1,
+    });
+    const job = await waitForJob(result.job_id);
+
+    expect(job.status).toBe("completed");
+    expect(requests.map((request) => request.url)).toEqual([
+      "https://mock.example/v1/images/generations",
+      "/api/relay",
+    ]);
+  });
+
   it("emits a quota warning event when browser storage is nearly full", async () => {
     vi.stubGlobal("navigator", {
       storage: {
@@ -240,9 +287,12 @@ describe("browserApi", () => {
       format: "png",
       n: 1,
     });
-    const unsubscribe = browserApi.subscribeJobEvents(result.job_id, (event) => {
-      seen.push(event.type);
-    });
+    const unsubscribe = browserApi.subscribeJobEvents(
+      result.job_id,
+      (event) => {
+        seen.push(event.type);
+      },
+    );
     const job = await waitForJob(result.job_id);
     unsubscribe();
 

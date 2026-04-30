@@ -31,7 +31,7 @@ const DB_NAME = "gpt-image-2-web";
 const DB_VERSION = 1;
 const CONFIG_KEY = "config";
 const CORS_MESSAGE =
-  "该服务商不允许浏览器直连，请改用 Docker/App，或换一个允许 CORS 的服务地址。";
+  "该服务商不允许浏览器直连，且本站中转暂时不可用。请稍后重试，或改用 Docker/App。";
 
 type KvRecord<T = unknown> = {
   key: string;
@@ -132,7 +132,9 @@ async function readConfigRecord() {
   const record = await requestToPromise<KvRecord<ServerConfig> | undefined>(
     tx.objectStore("kv").get(CONFIG_KEY),
   );
-  return record?.value ?? ({ version: 1, providers: {} } satisfies ServerConfig);
+  return (
+    record?.value ?? ({ version: 1, providers: {} } satisfies ServerConfig)
+  );
 }
 
 async function writeStoredConfig(config: ServerConfig) {
@@ -256,7 +258,7 @@ function sanitizeCredential(credential: ProviderConfig["credentials"][string]) {
       source: "file" as const,
       present: Boolean(
         credential.present ||
-          (typeof credential.value === "string" && credential.value.length > 0),
+        (typeof credential.value === "string" && credential.value.length > 0),
       ),
     };
   }
@@ -271,10 +273,9 @@ function browserConfigForUi(config: ServerConfig): ServerConfig {
       {
         ...provider,
         credentials: Object.fromEntries(
-          Object.entries(provider.credentials ?? {}).map(([key, credential]) => [
-            key,
-            sanitizeCredential(credential),
-          ]),
+          Object.entries(provider.credentials ?? {}).map(
+            ([key, credential]) => [key, sanitizeCredential(credential)],
+          ),
         ),
       },
     ]),
@@ -285,12 +286,16 @@ function browserConfigForUi(config: ServerConfig): ServerConfig {
     credentials: {},
     builtin: true,
     disabled: true,
-    disabled_reason: "静态 Web 不能读取 Codex 登录态，请使用桌面 App 或 Docker。",
+    disabled_reason:
+      "静态 Web 不能读取 Codex 登录态，请使用桌面 App 或 Docker。",
   };
   const defaultProvider =
-    config.default_provider && providers[config.default_provider]?.disabled !== true
+    config.default_provider &&
+    providers[config.default_provider]?.disabled !== true
       ? config.default_provider
-      : Object.entries(providers).find(([, provider]) => !provider.disabled)?.[0];
+      : Object.entries(providers).find(
+          ([, provider]) => !provider.disabled,
+        )?.[0];
   return normalizeConfig({
     version: 1,
     default_provider: defaultProvider,
@@ -345,6 +350,52 @@ function endpointFor(provider: ProviderConfig, path: string) {
   return `${base}${path}`;
 }
 
+function trimTrailingSlash(value: string) {
+  return value.endsWith("/") ? value.slice(0, -1) : value;
+}
+
+function configuredRelayBase() {
+  if (typeof window === "undefined") return undefined;
+  const configured =
+    window.__GPT_IMAGE_2_RELAY_BASE__ ||
+    import.meta.env.VITE_GPT_IMAGE_2_RELAY_BASE;
+  const value = configured?.trim();
+  if (value) return trimTrailingSlash(value);
+  const host = window.location?.hostname;
+  if (
+    host === "image.codex-pool.com" ||
+    host === "gpt-image-2-dpm.pages.dev" ||
+    host?.endsWith(".gpt-image-2-dpm.pages.dev")
+  ) {
+    return "/api/relay";
+  }
+  return undefined;
+}
+
+function relayRequest(endpoint: string, init: RequestInit) {
+  const relayBase = configuredRelayBase();
+  if (!relayBase) return undefined;
+  try {
+    const upstream = new URL(endpoint);
+    if (window.location?.origin && upstream.origin === window.location.origin) {
+      return undefined;
+    }
+  } catch {
+    return undefined;
+  }
+  const headers = new Headers(init.headers);
+  headers.set("X-GPT-Image-2-Upstream", endpoint);
+  headers.set("X-GPT-Image-2-Method", init.method || "GET");
+  return {
+    url: relayBase,
+    init: {
+      ...init,
+      method: "POST",
+      headers,
+    } satisfies RequestInit,
+  };
+}
+
 function imageMime(format?: string) {
   if (format === "jpeg" || format === "jpg") return "image/jpeg";
   if (format === "webp") return "image/webp";
@@ -367,7 +418,9 @@ function base64ToBlob(value: string, type: string) {
 }
 
 function isLikelyCorsError(error: unknown) {
-  return error instanceof TypeError || String(error).includes("Failed to fetch");
+  return (
+    error instanceof TypeError || String(error).includes("Failed to fetch")
+  );
 }
 
 function networkError(error: unknown, endpoint: string) {
@@ -375,6 +428,21 @@ function networkError(error: unknown, endpoint: string) {
     return new Error(`${CORS_MESSAGE}\n${endpoint}`);
   }
   return error instanceof Error ? error : new Error(String(error));
+}
+
+async function fetchProvider(endpoint: string, init: RequestInit) {
+  try {
+    return await fetch(endpoint, init);
+  } catch (error) {
+    if (!isLikelyCorsError(error)) throw networkError(error, endpoint);
+    const relay = relayRequest(endpoint, init);
+    if (!relay) throw networkError(error, endpoint);
+    try {
+      return await fetch(relay.url, relay.init);
+    } catch (relayError) {
+      throw networkError(relayError, endpoint);
+    }
+  }
 }
 
 async function parseErrorResponse(response: Response) {
@@ -404,7 +472,7 @@ async function fetchJson(
 ) {
   let response: Response;
   try {
-    response = await fetch(endpoint, {
+    response = await fetchProvider(endpoint, {
       method: "POST",
       headers: {
         Authorization: `Bearer ${apiKey}`,
@@ -431,7 +499,7 @@ async function fetchMultipart(
 ) {
   let response: Response;
   try {
-    response = await fetch(endpoint, {
+    response = await fetchProvider(endpoint, {
       method: "POST",
       headers: {
         Authorization: `Bearer ${apiKey}`,
@@ -459,7 +527,7 @@ async function blobFromImageItem(
     throw new Error("图片接口没有返回 b64_json 或 url。");
   }
   try {
-    const response = await fetch(item.url, { signal });
+    const response = await fetchProvider(item.url, { signal });
     if (!response.ok) {
       throw new Error(`${response.status} ${response.statusText}`);
     }
@@ -478,7 +546,9 @@ async function decodeImagePayload(
   if (items.length === 0) {
     throw new Error("接口响应里没有生成图片。");
   }
-  return Promise.all(items.map((item) => blobFromImageItem(item, format, signal)));
+  return Promise.all(
+    items.map((item) => blobFromImageItem(item, format, signal)),
+  );
 }
 
 function generateBody(
@@ -517,11 +587,7 @@ async function runGenerationRequest(
   return decodeImagePayload(payload, request.format, signal);
 }
 
-function editBodyField(
-  form: FormData,
-  key: string,
-  value: unknown,
-) {
+function editBodyField(form: FormData, key: string, value: unknown) {
   if (value === undefined || value === null || value === "") return;
   form.append(key, String(value));
 }
@@ -759,7 +825,10 @@ async function startQueuedJobs() {
     };
     task.job = runningJob;
     await writeJob(runningJob);
-    appendEvent(task.job.id, "job.running", { status: "running", job: runningJob });
+    appendEvent(task.job.id, "job.running", {
+      status: "running",
+      job: runningJob,
+    });
     void task
       .run(task)
       .catch((error) => failTask(task, error))
@@ -770,10 +839,7 @@ async function startQueuedJobs() {
   }
 }
 
-async function enqueueBrowserTask(
-  job: Job,
-  run: BrowserQueuedTask["run"],
-) {
+async function enqueueBrowserTask(job: Job, run: BrowserQueuedTask["run"]) {
   await prepareBrowserRuntime();
   await writeJob(job);
   const task: BrowserQueuedTask = {
@@ -911,7 +977,9 @@ export const browserApi: ApiClient = {
     const trimmed = name.trim();
     if (!trimmed) throw new Error("凭证名称不能为空。");
     if (trimmed === "codex" || cfg.type === "codex") {
-      throw new Error("静态 Web 不能添加 Codex 凭证，请使用桌面 App 或 Docker。");
+      throw new Error(
+        "静态 Web 不能添加 Codex 凭证，请使用桌面 App 或 Docker。",
+      );
     }
     if (cfg.type !== "openai-compatible") {
       throw new Error("静态 Web 只支持 OpenAI-compatible API Key 凭证。");
@@ -975,8 +1043,11 @@ export const browserApi: ApiClient = {
     const apiKey = requireApiKey(name, provider);
     const endpoint = endpointFor(provider, "/models");
     try {
-      const response = await fetch(endpoint, {
-        headers: { Authorization: `Bearer ${apiKey}`, Accept: "application/json" },
+      const response = await fetchProvider(endpoint, {
+        headers: {
+          Authorization: `Bearer ${apiKey}`,
+          Accept: "application/json",
+        },
       });
       const latency_ms = Math.round(performance.now() - started);
       if (!response.ok) {
@@ -1021,8 +1092,10 @@ export const browserApi: ApiClient = {
   async cancelJob(id: string) {
     await prepareBrowserRuntime();
     const queuedIndex = queue.findIndex((task) => task.job.id === id);
-    const task = queuedIndex >= 0 ? queue.splice(queuedIndex, 1)[0] : running.get(id);
-    if (!task) throw new Error("Only queued or running browser jobs can be cancelled.");
+    const task =
+      queuedIndex >= 0 ? queue.splice(queuedIndex, 1)[0] : running.get(id);
+    if (!task)
+      throw new Error("Only queued or running browser jobs can be cancelled.");
     task.cancelled = true;
     task.abort.abort();
     if (queuedIndex >= 0) await failTask(task, new Error("任务已取消。"));
@@ -1086,7 +1159,8 @@ export const browserApi: ApiClient = {
       typeof metaRaw === "string"
         ? (JSON.parse(metaRaw) as Record<string, unknown>)
         : {};
-    if (!String(meta.prompt ?? "").trim()) throw new Error("Prompt is required.");
+    if (!String(meta.prompt ?? "").trim())
+      throw new Error("Prompt is required.");
     if (sortedFiles(form, "ref_").length === 0) {
       throw new Error("At least one reference image is required.");
     }
@@ -1120,7 +1194,11 @@ export const browserApi: ApiClient = {
   },
   jobOutputPath,
   jobOutputPaths,
-  subscribeJobEvents(jobId: string, onEvent: EventHandler, onDone?: () => void) {
+  subscribeJobEvents(
+    jobId: string,
+    onEvent: EventHandler,
+    onDone?: () => void,
+  ) {
     const handlers = jobSubscribers.get(jobId) ?? new Set<EventHandler>();
     const wrapped: EventHandler = (event) => {
       onEvent(event);
