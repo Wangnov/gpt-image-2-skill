@@ -1,6 +1,8 @@
 import { type ReactNode, useEffect, useRef, useState } from "react";
+import { AnimatePresence, motion } from "motion/react";
 import { useQuery } from "@tanstack/react-query";
 import { toast } from "sonner";
+import { useReducedMotion } from "@/hooks/use-reduced-motion";
 import {
   KeyRound,
   Sparkles,
@@ -327,6 +329,17 @@ function CredCard({
   onDelete,
 }: CredCardProps) {
   const confirm = useConfirm();
+  const reducedMotion = useReducedMotion();
+  // Bumped on every transition into "ok" / "err" so the success ring
+  // (or failure shake) replays even when the user clicks 测试 twice
+  // in a row and lands on the same terminal state. Without this the
+  // motion would only fire on the very first state change.
+  const [resultPulseKey, setResultPulseKey] = useState(0);
+  useEffect(() => {
+    if (testStatus === "ok" || testStatus === "err") {
+      setResultPulseKey((k) => k + 1);
+    }
+  }, [testStatus]);
   // Surface a key value if any credential exposes a literal value.
   const apiKeyCredential = Object.values(prov.credentials ?? {}).find(
     (c) =>
@@ -396,23 +409,72 @@ function CredCard({
                 : "测试连接"
           }
         >
-          <button
+          <motion.button
             type="button"
             onClick={onTest}
             disabled={testStatus === "running"}
-            className="h-8 w-8 inline-flex items-center justify-center rounded-md text-muted hover:text-foreground hover:bg-[color:var(--w-06)] transition-colors disabled:opacity-50"
+            // Failure shake — three small horizontal nudges, only on the
+            // err pulse. Success path leaves the button still and lets
+            // the ring carry the news.
+            animate={
+              !reducedMotion && testStatus === "err"
+                ? { x: [0, -2, 2, -1.5, 1.5, 0] }
+                : { x: 0 }
+            }
+            transition={{ duration: 0.32, ease: [0.22, 1, 0.36, 1] }}
+            key={testStatus === "err" ? `err-${resultPulseKey}` : "idle"}
+            className="relative h-8 w-8 inline-flex items-center justify-center rounded-md text-muted hover:text-foreground hover:bg-[color:var(--w-06)] transition-colors disabled:opacity-50"
             aria-label={`测试 ${name} 的连接`}
           >
-            {testStatus === "running" ? (
-              <Loader2 size={14} className="animate-spin" />
-            ) : testStatus === "ok" ? (
-              <Check size={14} className="text-[color:var(--status-ok)]" />
-            ) : testStatus === "err" ? (
-              <X size={14} className="text-[color:var(--status-err)]" />
-            ) : (
-              <Play size={13} />
-            )}
-          </button>
+            {/* Success ring pulse — radial accent fading from 0.7 -> 0
+                as it scales out. Only paints on each fresh "ok" via
+                resultPulseKey so re-tests replay the cue. */}
+            <AnimatePresence>
+              {testStatus === "ok" && !reducedMotion && (
+                <motion.span
+                  key={`ok-pulse-${resultPulseKey}`}
+                  aria-hidden="true"
+                  className="pointer-events-none absolute inset-0 rounded-md"
+                  initial={{ opacity: 0.75, scale: 0.7 }}
+                  animate={{ opacity: 0, scale: 1.6 }}
+                  exit={{ opacity: 0 }}
+                  transition={{ duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
+                  style={{
+                    background:
+                      "radial-gradient(circle at center, var(--status-ok-25), transparent 70%)",
+                    boxShadow: "0 0 0 1px var(--status-ok-25)",
+                  }}
+                />
+              )}
+            </AnimatePresence>
+            {/* Status icon swap — mode="wait" so each glyph plays its
+                own enter after the previous one finishes its exit;
+                avoids two icons overlapping mid-transition. */}
+            <AnimatePresence mode="wait" initial={false}>
+              <motion.span
+                key={testStatus ?? "idle"}
+                initial={
+                  reducedMotion ? { opacity: 1 } : { opacity: 0, scale: 0.6 }
+                }
+                animate={{ opacity: 1, scale: 1 }}
+                exit={
+                  reducedMotion ? { opacity: 0 } : { opacity: 0, scale: 0.8 }
+                }
+                transition={{ duration: 0.18, ease: [0.22, 1, 0.36, 1] }}
+                className="relative z-10 inline-flex"
+              >
+                {testStatus === "running" ? (
+                  <Loader2 size={14} className="animate-spin" />
+                ) : testStatus === "ok" ? (
+                  <Check size={14} className="text-[color:var(--status-ok)]" />
+                ) : testStatus === "err" ? (
+                  <X size={14} className="text-[color:var(--status-err)]" />
+                ) : (
+                  <Play size={13} />
+                )}
+              </motion.span>
+            </AnimatePresence>
+          </motion.button>
         </Tooltip>
         <Tooltip text="编辑凭证">
           <button
