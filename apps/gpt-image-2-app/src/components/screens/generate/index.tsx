@@ -648,10 +648,17 @@ export function GenerateScreen({
         <motion.section
           initial={reducedMotion ? false : { opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
+          // FLIP layout: when hasSplit flips at xl, the form re-anchors
+          // from a centered max-w-[640px] block to the left grid column.
+          // motion.section animates that transition with transform-only,
+          // so the panel slides + resizes smoothly instead of snapping
+          // when the first job lands. Gated off when reducedMotion is on.
+          layout={reducedMotion ? false : "position"}
           transition={{
             duration: reducedMotion ? 0 : 0.42,
             delay: reducedMotion ? 0 : 0.08,
             ease: [0.22, 1, 0.36, 1],
+            layout: { duration: 0.5, ease: [0.22, 1, 0.36, 1] },
           }}
           className={cn(
             "surface-panel mt-3 w-full max-w-[640px] p-4 sm:mt-9 sm:p-5",
