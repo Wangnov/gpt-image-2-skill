@@ -45,7 +45,11 @@ export function RevealImage({
         opacity: loaded ? 1 : 0,
         filter: loaded ? "blur(0)" : "blur(8px)",
         transform: loaded ? "scale(1)" : "scale(1.02)",
-        transition: `opacity ${duration}ms ease-out, filter ${duration}ms ease-out, transform ${duration}ms ease-out`,
+        // Project-wide easing — `cubic-bezier(.22, 1, .36, 1)` is the
+        // ease-out-quint every motion.* transition in the app uses.
+        // Brings the image reveal in line with how the rest of the
+        // surface moves instead of the browser default ease-out.
+        transition: `opacity ${duration}ms cubic-bezier(0.22, 1, 0.36, 1), filter ${duration}ms cubic-bezier(0.22, 1, 0.36, 1), transform ${duration}ms cubic-bezier(0.22, 1, 0.36, 1)`,
         willChange: "opacity, filter, transform",
         ...style,
       }}
