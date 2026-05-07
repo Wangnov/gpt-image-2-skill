@@ -85,7 +85,7 @@ export function TopNav({
         >
           <img
             src={logoUrl}
-            className="h-5 w-5 object-contain drop-shadow-[0_0_10px_var(--accent-40)]"
+            className="h-5 w-5 object-contain [filter:drop-shadow(var(--logo-halo-sm))]"
             alt=""
             aria-hidden
           />

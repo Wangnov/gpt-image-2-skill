@@ -232,7 +232,7 @@ export function CreationParamsBar({
     <div
       className={cn(
         "mt-2 flex items-center gap-2",
-        stackActionOnDesktop && "lg:flex-col lg:items-stretch",
+        stackActionOnDesktop && "xl:flex-col xl:items-stretch",
         className,
       )}
     >
@@ -242,7 +242,7 @@ export function CreationParamsBar({
       <div
         className={cn(
           "hidden min-w-0 flex-1 grid-cols-4 gap-2 sm:grid",
-          stackActionOnDesktop && "lg:w-full lg:flex-none",
+          stackActionOnDesktop && "xl:w-full xl:flex-none",
         )}
       >
         <ParamsFields {...params} variant="chip" />
@@ -250,7 +250,7 @@ export function CreationParamsBar({
       <div
         className={cn(
           "w-[112px] shrink-0 sm:w-[168px]",
-          stackActionOnDesktop && "lg:w-full lg:flex-none",
+          stackActionOnDesktop && "xl:w-full xl:flex-none",
         )}
       >
         {action}

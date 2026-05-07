@@ -243,11 +243,13 @@ export function GenerateScreen({
   onOpenEdit,
   onOpenHistory,
   onOpenJob,
+  onOpenSettings,
 }: {
   config?: ServerConfig;
   onOpenEdit?: () => void;
   onOpenHistory?: () => void;
   onOpenJob?: (jobId: string) => void;
+  onOpenSettings?: () => void;
 }) {
   const reducedMotion = useReducedMotion();
   const providerNames = useMemo(() => readProviderNames(config), [config]);
@@ -559,11 +561,13 @@ export function GenerateScreen({
           // single-column stack — same feel as the original onboarding hero.
           "px-4 pb-8 pt-3 sm:px-10 sm:pb-12 sm:pt-4 flex flex-col items-center justify-start",
           !hasSplit && "sm:justify-center",
-          // Split mode (lg+ AND has completed work): hero spans top, form
+          // Split mode (xl+ AND has completed work): hero spans top, form
           // pinned to the left column, gallery on the right. Closes the
-          // prompt → result loop on a single screen.
+          // prompt → result loop on a single screen. Gated at xl (≥1280)
+          // so the form / gallery pair doesn't get crammed in the awkward
+          // 1024–1279 band where both columns end up vertically tight.
           hasSplit &&
-            "lg:grid lg:grid-cols-[minmax(440px,520px)_1fr] lg:gap-x-10 lg:gap-y-6 lg:items-start lg:content-start lg:max-w-[1440px] lg:mx-auto lg:px-12 lg:pt-10 lg:pb-10 lg:justify-items-stretch",
+            "xl:grid xl:grid-cols-[minmax(420px,500px)_minmax(480px,1fr)] xl:gap-x-10 xl:gap-y-6 xl:items-start xl:content-start xl:max-w-[1440px] xl:mx-auto xl:px-12 xl:pt-10 xl:pb-10 xl:justify-items-stretch",
         )}
       >
         {/* Hero — spans both columns in split mode so the form/gallery
@@ -575,7 +579,7 @@ export function GenerateScreen({
           transition={{ duration: 0.7, ease: [0.16, 1, 0.3, 1] }}
           className={cn(
             "flex flex-col items-center text-center",
-            hasSplit && "mb-1 lg:col-span-2 lg:mb-2",
+            hasSplit && "mb-1 xl:col-span-2 xl:mb-2",
           )}
         >
           <img
@@ -583,15 +587,18 @@ export function GenerateScreen({
             alt=""
             aria-hidden="true"
             className={cn(
-              "mb-3 h-16 w-16 object-contain drop-shadow-[0_0_22px_var(--accent-30)]",
-              hasSplit &&
-                "mb-1 h-10 w-10 sm:mb-2 sm:h-12 sm:w-12 lg:mb-3 lg:h-14 lg:w-14",
+              "mb-3 h-16 w-16 object-contain",
+              // Halo size follows logo size so the small split-mode logo
+              // doesn't get crowned with the same 22px aura as the hero.
+              hasSplit
+                ? "[filter:drop-shadow(var(--logo-halo-md))] mb-1 h-10 w-10 sm:mb-2 sm:h-12 sm:w-12 xl:mb-3 xl:h-14 xl:w-14"
+                : "[filter:drop-shadow(var(--logo-halo-lg))]",
             )}
           />
           <div
             className={cn(
               "t-display flex items-baseline gap-3",
-              hasSplit && "gap-2 text-[34px] sm:text-[44px] lg:text-[64px]",
+              hasSplit && "gap-2 text-[34px] sm:text-[44px] xl:text-[64px]",
             )}
           >
             <span className="text-foreground">GPT</span>
@@ -650,7 +657,7 @@ export function GenerateScreen({
             "surface-panel mt-3 w-full max-w-[640px] p-4 sm:mt-9 sm:p-5",
             // Split mode: pin to left column, drop top margin (the grid
             // gap takes over), drop the centering max-width.
-            hasSplit && "lg:col-start-1 lg:mt-0 lg:max-w-none",
+            hasSplit && "xl:col-start-1 xl:mt-0 xl:max-w-none",
           )}
           aria-label="生成表单"
         >
@@ -703,17 +710,33 @@ export function GenerateScreen({
           )}
 
           {noProviders && !runError && (
-            <div
-              role="status"
-              className="mb-3 inline-flex items-center gap-2 rounded-md border border-[color:var(--accent-30)] px-3 py-1.5 text-[12px]"
-              style={{
-                background: "var(--accent-08)",
-                color: "var(--text-muted)",
-              }}
-            >
-              <ImageIcon size={12} className="opacity-70" />
-              先在「设置 → 凭证」里添加一个 API Key，才能开始生成。
-            </div>
+            onOpenSettings ? (
+              <button
+                type="button"
+                onClick={onOpenSettings}
+                className="group mb-3 inline-flex items-center gap-2 rounded-md border border-[color:var(--accent-30)] px-3 py-1.5 text-[12px] text-muted transition-colors hover:border-[color:var(--accent-55)] hover:text-foreground hover:bg-[color:var(--accent-14)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--accent-55)]"
+                style={{ background: "var(--accent-08)" }}
+              >
+                <ImageIcon size={12} className="opacity-70 transition-opacity group-hover:opacity-100" />
+                还没有凭证，
+                <span className="font-medium text-foreground underline decoration-dotted underline-offset-2">
+                  去「设置 → 凭证」添加
+                </span>
+                <Sparkles size={11} className="opacity-60" />
+              </button>
+            ) : (
+              <div
+                role="status"
+                className="mb-3 inline-flex items-center gap-2 rounded-md border border-[color:var(--accent-30)] px-3 py-1.5 text-[12px]"
+                style={{
+                  background: "var(--accent-08)",
+                  color: "var(--text-muted)",
+                }}
+              >
+                <ImageIcon size={12} className="opacity-70" />
+                先在「设置 → 凭证」里添加一个 API Key，才能开始生成。
+              </div>
+            )
           )}
 
           {/* textarea */}
@@ -772,12 +795,25 @@ export function GenerateScreen({
                     handleRun();
                   }}
                   disabled={submitDisabled}
-                  className="relative inline-flex h-11 w-full items-center justify-center gap-1.5 overflow-hidden rounded-full px-4 text-[14px] font-semibold text-foreground transition-[background,transform,opacity] hover:opacity-95 active:translate-y-[0.5px] disabled:cursor-not-allowed disabled:opacity-45"
-                  style={{
-                    backgroundImage: "var(--accent-gradient-fill)",
-                    border: "1px solid var(--accent-50)",
-                    boxShadow: "var(--shadow-accent-glow)",
-                  }}
+                  className="relative inline-flex h-11 w-full items-center justify-center gap-1.5 overflow-hidden rounded-full px-4 text-[14px] font-semibold text-foreground transition-[background,transform,opacity] hover:opacity-95 active:translate-y-[0.5px] disabled:cursor-not-allowed"
+                  style={
+                    submitDisabled
+                      ? {
+                          // Disabled: drop the accent gradient so the
+                          // button doesn't dissolve into the liquid
+                          // background. Neutral surface keeps a clear
+                          // edge in dark + busy preset combinations.
+                          background: "var(--w-06)",
+                          border: "1px solid var(--w-12)",
+                          boxShadow: "none",
+                          color: "var(--text-faint)",
+                        }
+                      : {
+                          backgroundImage: "var(--accent-gradient-fill)",
+                          border: "1px solid var(--accent-50)",
+                          boxShadow: "var(--shadow-accent-glow)",
+                        }
+                  }
                 >
                   {/* Brand-accent ripple from center on each press. The
                       remount-on-key trick replays the animation every click.
@@ -838,7 +874,7 @@ export function GenerateScreen({
               // Split mode: right column, top-aligned with the form,
               // wider visual since the column is the larger of the two.
               hasSplit &&
-                "lg:col-start-2 lg:row-start-2 lg:mt-0 lg:max-w-none lg:self-start",
+                "xl:col-start-2 xl:row-start-2 xl:mt-0 xl:max-w-none xl:self-start",
             )}
           >
             <div className="flex items-center justify-between mb-2 px-1">
@@ -895,7 +931,7 @@ export function GenerateScreen({
         <div
           className={cn(
             "mt-7 flex items-center gap-2",
-            hasSplit && "lg:col-span-2 lg:justify-self-center lg:mt-4",
+            hasSplit && "xl:col-span-2 xl:justify-self-center xl:mt-4",
           )}
         >
           <button

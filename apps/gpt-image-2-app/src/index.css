@@ -274,6 +274,14 @@
     -12px 0 32px -16px var(--k-55),
     inset 1px 0 0 var(--w-05);
 
+  /* logo halo — sized in tiers so a 5×5 nav chip and a 64px hero share
+     one accent-driven palette but don't share blur radius. Plug into
+     `filter: drop-shadow(var(--logo-halo-*))` so theme presets retint
+     every halo when --accent-rgb shifts. */
+  --logo-halo-sm: 0 0 8px var(--accent-30);
+  --logo-halo-md: 0 0 14px var(--accent-25);
+  --logo-halo-lg: 0 0 22px var(--accent-30);
+
   /* primary CTA glow (used by button.primary + inline run buttons) */
   --shadow-accent-glow:
     0 8px 24px -8px var(--accent-55),

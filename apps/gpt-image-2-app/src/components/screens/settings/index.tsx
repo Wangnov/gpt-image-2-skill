@@ -22,6 +22,7 @@ import { Toggle } from "@/components/ui/toggle";
 import { Button } from "@/components/ui/button";
 import { useConfirm } from "@/hooks/use-confirm";
 import { Empty } from "@/components/ui/empty";
+import { Tooltip } from "@/components/ui/tooltip";
 import { Icon } from "@/components/icon";
 import { useTweaks } from "@/hooks/use-tweaks";
 import { useQueueStatus } from "@/hooks/use-jobs";
@@ -247,7 +248,7 @@ function SettingsNav({
       <div className="px-2 pt-1 pb-1 sm:pb-2">
         <div className="t-title text-foreground">设置</div>
       </div>
-      <div className="surface-panel flex gap-1.5 overflow-x-auto p-1.5 scrollbar-none md:flex-col md:gap-0.5 md:overflow-visible">
+      <div className="surface-panel flex gap-1.5 overflow-x-auto p-1.5 scrollbar-none [mask-image:linear-gradient(to_right,black_calc(100%-32px),transparent_100%)] md:flex-col md:gap-0.5 md:overflow-visible md:[mask-image:none]">
         {NAV.map((n) => {
           const I = n.icon;
           const active = n.id === tab;
@@ -386,55 +387,68 @@ function CredCard({
       </div>
 
       <div className="flex w-full shrink-0 items-center justify-end gap-1 sm:w-auto">
-        <button
-          type="button"
-          onClick={onTest}
-          disabled={testStatus === "running"}
-          className="h-8 w-8 inline-flex items-center justify-center rounded-md text-muted hover:text-foreground hover:bg-[color:var(--w-06)] transition-colors disabled:opacity-50"
-          title="测试连接"
-          aria-label={`测试 ${name} 的连接`}
+        <Tooltip
+          text={
+            testStatus === "ok"
+              ? "连接正常 · 重新测试"
+              : testStatus === "err"
+                ? "连接失败 · 重新测试"
+                : "测试连接"
+          }
         >
-          {testStatus === "running" ? (
-            <Loader2 size={14} className="animate-spin" />
-          ) : testStatus === "ok" ? (
-            <Check size={14} className="text-[color:var(--status-ok)]" />
-          ) : testStatus === "err" ? (
-            <X size={14} className="text-[color:var(--status-err)]" />
-          ) : (
-            <Play size={13} />
-          )}
-        </button>
-        <button
-          type="button"
-          onClick={onEdit}
-          className="h-8 w-8 inline-flex items-center justify-center rounded-md text-muted hover:text-foreground hover:bg-[color:var(--w-06)] transition-colors"
-          title="编辑"
-          aria-label={`编辑 ${name}`}
-        >
-          <Pencil size={13} />
-        </button>
+          <button
+            type="button"
+            onClick={onTest}
+            disabled={testStatus === "running"}
+            className="h-8 w-8 inline-flex items-center justify-center rounded-md text-muted hover:text-foreground hover:bg-[color:var(--w-06)] transition-colors disabled:opacity-50"
+            aria-label={`测试 ${name} 的连接`}
+          >
+            {testStatus === "running" ? (
+              <Loader2 size={14} className="animate-spin" />
+            ) : testStatus === "ok" ? (
+              <Check size={14} className="text-[color:var(--status-ok)]" />
+            ) : testStatus === "err" ? (
+              <X size={14} className="text-[color:var(--status-err)]" />
+            ) : (
+              <Play size={13} />
+            )}
+          </button>
+        </Tooltip>
+        <Tooltip text="编辑凭证">
+          <button
+            type="button"
+            onClick={onEdit}
+            className="h-8 w-8 inline-flex items-center justify-center rounded-md text-muted hover:text-foreground hover:bg-[color:var(--w-06)] transition-colors"
+            aria-label={`编辑 ${name}`}
+          >
+            <Pencil size={13} />
+          </button>
+        </Tooltip>
         {!isDefault && (
-          <Button size="sm" onClick={onUse}>
-            使用
-          </Button>
+          <Tooltip text="设为默认凭证">
+            <Button size="sm" onClick={onUse}>
+              使用
+            </Button>
+          </Tooltip>
         )}
-        <button
-          type="button"
-          onClick={async () => {
-            const ok = await confirm({
-              title: `删除凭证「${name}」`,
-              description: "此操作无法撤销。",
-              confirmText: "删除",
-              variant: "danger",
-            });
-            if (ok) onDelete();
-          }}
-          className="h-8 w-8 inline-flex items-center justify-center rounded-md text-muted hover:text-[color:var(--status-err)] hover:bg-[color:var(--status-err-10)] transition-colors"
-          title="删除"
-          aria-label={`删除 ${name}`}
-        >
-          <Trash2 size={13} />
-        </button>
+        <Tooltip text="删除凭证">
+          <button
+            type="button"
+            onClick={async () => {
+              const ok = await confirm({
+                title: `删除凭证「${name}」`,
+                description: "此操作无法撤销。",
+                confirmText: "删除",
+                variant: "danger",
+              });
+              if (ok) onDelete();
+            }}
+            className="h-8 w-8 inline-flex items-center justify-center rounded-md text-muted hover:text-[color:var(--status-err)] hover:bg-[color:var(--status-err-10)] transition-colors"
+            aria-label={`删除 ${name}`}
+          >
+            <Trash2 size={13} />
+          </button>
+        </Tooltip>
       </div>
     </div>
   );

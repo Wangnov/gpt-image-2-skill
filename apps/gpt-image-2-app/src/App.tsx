@@ -228,6 +228,7 @@ export default function App() {
                       onOpenEdit={() => setScreen("edit")}
                       onOpenHistory={() => setScreen("history")}
                       onOpenJob={openJob}
+                      onOpenSettings={() => setScreen("settings")}
                     />
                   </ScreenErrorBoundary>
                 </section>
