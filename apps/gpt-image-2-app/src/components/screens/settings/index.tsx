@@ -245,6 +245,7 @@ function SettingsNav({
   tab: SettingsTab;
   setTab: (t: SettingsTab) => void;
 }) {
+  const reducedMotion = useReducedMotion();
   return (
     <aside className="flex min-w-0 shrink-0 flex-col gap-2">
       <div className="px-2 pt-1 pb-1 sm:pb-2">
@@ -260,14 +261,29 @@ function SettingsNav({
               type="button"
               onClick={() => setTab(n.id)}
               className={cn(
-                "flex h-9 shrink-0 items-center gap-2.5 rounded-md px-3 text-left text-[13px] transition-colors md:w-full",
+                "relative flex h-9 shrink-0 items-center gap-2.5 rounded-md px-3 text-left text-[13px] transition-colors md:w-full",
                 active
-                  ? "bg-[color:var(--w-10)] text-foreground border border-[color:var(--w-10)]"
-                  : "border border-transparent text-muted hover:text-foreground hover:bg-[color:var(--w-05)]",
+                  ? "text-foreground"
+                  : "text-muted hover:text-foreground hover:bg-[color:var(--w-05)]",
               )}
             >
-              <I size={14} className="opacity-80" />
-              <span className="flex-1">{n.label}</span>
+              {/* Sliding active pill — same trick the top-nav uses.
+                  motion shares one element across all tabs via layoutId,
+                  so the highlight slides between tabs instead of cutting. */}
+              {active && (
+                <motion.span
+                  layoutId="settings-nav-active-pill"
+                  aria-hidden="true"
+                  className="absolute inset-0 z-0 rounded-md border border-[color:var(--w-10)]"
+                  style={{ background: "var(--w-10)" }}
+                  transition={{
+                    duration: reducedMotion ? 0 : 0.24,
+                    ease: [0.22, 1, 0.36, 1],
+                  }}
+                />
+              )}
+              <I size={14} className="relative z-10 opacity-80" />
+              <span className="relative z-10 flex-1">{n.label}</span>
             </button>
           );
         })}

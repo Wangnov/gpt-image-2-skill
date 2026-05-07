@@ -1,6 +1,8 @@
 import { useId, useRef, type KeyboardEvent } from "react";
+import { motion } from "motion/react";
 import { cn } from "@/lib/cn";
 import { Icon, type IconName } from "@/components/icon";
+import { useReducedMotion } from "@/hooks/use-reduced-motion";
 
 export type SegmentedOption<T extends string> =
   | T
@@ -30,6 +32,11 @@ export function Segmented<T extends string>({
   const h = size === "sm" ? "h-7" : "h-8";
   const groupId = useId();
   const btnRefs = useRef<Array<HTMLButtonElement | null>>([]);
+  const reducedMotion = useReducedMotion();
+  // Unique layoutId per Segmented instance so multiple groups on the
+  // same screen (e.g. mode switch + filter pills) don't share their
+  // sliding pill with each other.
+  const pillLayoutId = `segmented-pill-${groupId}`;
 
   const move = (from: number, delta: number) => {
     const len = options.length;
@@ -93,16 +100,33 @@ export function Segmented<T extends string>({
             onClick={() => onChange(v)}
             onKeyDown={(e) => onKey(e, index)}
             className={cn(
-              "inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap px-3 rounded text-[12.5px] font-medium transition-all cursor-pointer",
+              "relative inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap px-3 rounded text-[12.5px] font-medium transition-colors cursor-pointer",
               h,
               selected
-                ? "bg-[color:var(--w-10)] text-foreground shadow-[inset_0_1px_0_var(--w-10)]"
-                : "bg-transparent text-muted hover:text-foreground hover:bg-[color:var(--w-04)]",
+                ? "text-foreground"
+                : "text-muted hover:text-foreground hover:bg-[color:var(--w-04)]",
               "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--accent-55)]",
             )}
           >
-            {icon && <Icon name={icon} size={13} aria-hidden="true" />}
-            {label}
+            {/* Shared sliding pill — same trick the top-nav uses; the
+                highlight slides between segments rather than cutting. */}
+            {selected && (
+              <motion.span
+                layoutId={pillLayoutId}
+                aria-hidden="true"
+                className="absolute inset-0 z-0 rounded"
+                style={{
+                  background: "var(--w-10)",
+                  boxShadow: "inset 0 1px 0 var(--w-10)",
+                }}
+                transition={{
+                  duration: reducedMotion ? 0 : 0.22,
+                  ease: [0.22, 1, 0.36, 1],
+                }}
+              />
+            )}
+            {icon && <Icon name={icon} size={13} aria-hidden="true" className="relative z-10" />}
+            <span className="relative z-10">{label}</span>
           </button>
         );
       })}

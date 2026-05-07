@@ -747,21 +747,37 @@ export function HistoryScreen({
       {/* filters */}
       <div className="mb-4 grid grid-cols-1 items-center gap-3 lg:grid-cols-[1fr_minmax(320px,560px)_1fr]">
         <div className="flex min-w-0 items-center gap-1 overflow-x-auto scrollbar-none">
-          {FILTERS.map((f) => (
-            <button
-              key={f.value}
-              type="button"
-              onClick={() => setFilter(f.value)}
-              className={cn(
-                "px-3.5 h-8 rounded-full text-[12.5px] font-medium transition-colors",
-                filter === f.value
-                  ? "bg-[color:var(--accent-14)] text-foreground border border-[color:var(--accent-30)]"
-                  : "border border-transparent text-muted hover:text-foreground hover:bg-[color:var(--w-04)]",
-              )}
-            >
-              {f.label}
-            </button>
-          ))}
+          {FILTERS.map((f) => {
+            const isActive = filter === f.value;
+            return (
+              <button
+                key={f.value}
+                type="button"
+                onClick={() => setFilter(f.value)}
+                className={cn(
+                  "relative px-3.5 h-8 rounded-full text-[12.5px] font-medium transition-colors",
+                  isActive
+                    ? "text-foreground"
+                    : "text-muted hover:text-foreground hover:bg-[color:var(--w-04)]",
+                )}
+              >
+                {/* Shared accent pill that slides between filter chips. */}
+                {isActive && (
+                  <motion.span
+                    layoutId="history-filter-active-pill"
+                    aria-hidden="true"
+                    className="absolute inset-0 z-0 rounded-full border border-[color:var(--accent-30)]"
+                    style={{ background: "var(--accent-14)" }}
+                    transition={{
+                      duration: reducedMotion ? 0 : 0.24,
+                      ease: [0.22, 1, 0.36, 1],
+                    }}
+                  />
+                )}
+                <span className="relative z-10">{f.label}</span>
+              </button>
+            );
+          })}
         </div>
         <label className="relative block min-w-0">
           <Search
