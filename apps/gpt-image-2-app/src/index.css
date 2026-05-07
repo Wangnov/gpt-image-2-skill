@@ -55,23 +55,49 @@
   --text-faint: rgba(245, 245, 247, 0.45);
   --text-inverted: #06060a;
 
-  /* accent — RGB triplets drive the alpha ramps below; the solid hex
-     vars (--accent / --accent-2 / --accent-3) are kept for places that
-     can't use rgba(). Theme presets at runtime overwrite all six. */
+  /* accent — three layered representations so each call site picks
+     the cheapest path:
+       1. OKLCH triplets (--accent-l / --accent-c / --accent-h):
+          the source of truth. Drive every alpha ramp via
+          `oklch(var(--accent-l) var(--accent-c) var(--accent-h) / N)`.
+          Equal alpha steps stay perceptually equal because OKLCH
+          is perceptually uniform — RGB rgba() ramps subtly
+          collapse near the dark/light extremes.
+       2. RGB triplets (--accent-rgb …): kept as a fallback channel
+          for inline strings the dynamic preset preview cards
+          assemble in TSX, where var() can't be interpolated into
+          a `rgba()` literal cleanly. These are derived from the
+          OKLCH values at preset switch time (see use-tweaks.ts).
+       3. Solid hex (--accent / --accent-2 / --accent-3): for
+          places that need a single concrete color (SVG fill,
+          gradient anchor stops written verbatim).
+     Theme presets at runtime overwrite all of these atomically
+     so a preset switch retints the entire surface in one frame. */
+  --accent-l: 67%;
+  --accent-c: 0.18;
+  --accent-h: 295;
+  --accent-2-l: 85%;
+  --accent-2-c: 0.13;
+  --accent-2-h: 207;
+  --accent-3-l: 80%;
+  --accent-3-c: 0.13;
+  --accent-3-h: 322;
   --accent-rgb: 167, 139, 250;
   --accent-2-rgb: 103, 232, 249;
   --accent-3-rgb: 240, 171, 252;
-  --accent: #a78bfa;
-  --accent-hover: #c4b5fd;
-  --accent-faint: rgba(var(--accent-rgb), 0.14);
+  --accent: oklch(var(--accent-l) var(--accent-c) var(--accent-h));
+  --accent-hover: oklch(
+    calc(var(--accent-l) + 8%) var(--accent-c) var(--accent-h)
+  );
+  --accent-faint: oklch(var(--accent-l) var(--accent-c) var(--accent-h) / 0.14);
   --accent-on: #06060a;
-  --accent-2: #67e8f9;
-  --accent-3: #f0abfc;
+  --accent-2: oklch(var(--accent-2-l) var(--accent-2-c) var(--accent-2-h));
+  --accent-3: oklch(var(--accent-3-l) var(--accent-3-c) var(--accent-3-h));
   --accent-gradient: linear-gradient(
     135deg,
-    #a78bfa 0%,
-    #67e8f9 60%,
-    #f0abfc 100%
+    oklch(var(--accent-l) var(--accent-c) var(--accent-h)) 0%,
+    oklch(var(--accent-2-l) var(--accent-2-c) var(--accent-2-h)) 60%,
+    oklch(var(--accent-3-l) var(--accent-3-c) var(--accent-3-h)) 100%
   );
 
   /* status (dark-tuned) */
@@ -100,19 +126,26 @@
 
   /* type — modular scale, fixed rem (this is a desktop tool UI, fluid
      sizing would undermine the spatial predictability of dense panels).
-     Hero/display sizes step up via media query in .t-display below.
-     Use semantic tokens, not raw px, in components. */
-  --text-display: 3.25rem;     /* 52px — hero "GPT Image 2" */
+     Hero/display sizes flex via clamp() in .t-display below.
+     Use semantic tokens, not raw px, in components.
+
+     Step ratios target ≥1.25 between display/screen/title/h2 so the
+     hierarchy reads at a glance; h3 → body sits at ~1.08 because both
+     occupy dense panel rows where weight (600 vs 400) carries the
+     contrast. The previous scale had h3 == body (both 13.5px) which
+     collapsed two layers and forced every panel row to lean entirely
+     on weight. */
+  --text-display: 3rem;        /* 48px — hero "GPT Image 2" */
   --text-screen: 1.625rem;     /* 26px — screen-level h1 */
-  --text-title: 1.375rem;      /* 22px — section title */
+  --text-title: 1.25rem;       /* 20px — section title */
   --text-h2: 1rem;             /* 16px — section h2 */
-  --text-h3: 0.84375rem;       /* 13.5px — h3 (matches body weight=600) */
-  --text-body: 0.84375rem;     /* 13.5px — body default */
-  --text-md: 0.8125rem;        /* 13px */
+  --text-h3: 0.875rem;         /* 14px — h3 (carries weight 600) */
+  --text-body: 0.8125rem;      /* 13px — body default */
+  --text-md: 0.8125rem;        /* 13px — alias kept for clarity at call sites */
   --text-sm: 0.75rem;          /* 12px */
-  --text-xs: 0.6875rem;        /* 11px */
-  --text-2xs: 0.65625rem;      /* 10.5px — caps label */
-  --text-3xs: 0.59375rem;      /* 9.5px — micro chip */
+  --text-xs: 0.6875rem;        /* 11px — smallest legible mixed-case */
+  --text-2xs: 0.65625rem;      /* 10.5px — caps-only label (uppercase letters
+                                  read taller than mixed case at the same px) */
 
   /* line-heights — tighter for display, looser for body */
   --leading-display: 1;
@@ -173,27 +206,36 @@
      literal in TSX.
      ────────────────────────────────────────────────────────── */
 
-  /* accent alpha ramp — driven by --accent-rgb so theme presets only
-     need to swap one RGB triplet to recolor every chip / hover / glow. */
-  --accent-04: rgba(var(--accent-rgb), 0.04);
-  --accent-06: rgba(var(--accent-rgb), 0.06);
-  --accent-08: rgba(var(--accent-rgb), 0.08);
-  --accent-10: rgba(var(--accent-rgb), 0.10);
-  --accent-14: rgba(var(--accent-rgb), 0.14);
-  --accent-18: rgba(var(--accent-rgb), 0.18);
-  --accent-25: rgba(var(--accent-rgb), 0.25);
-  --accent-30: rgba(var(--accent-rgb), 0.30);
-  --accent-35: rgba(var(--accent-rgb), 0.35);
-  --accent-45: rgba(var(--accent-rgb), 0.45);
-  --accent-50: rgba(var(--accent-rgb), 0.50);
-  --accent-55: rgba(var(--accent-rgb), 0.55);
-  --accent-60: rgba(var(--accent-rgb), 0.60);
-  --accent-75: rgba(var(--accent-rgb), 0.75);
+  /* accent alpha ramp — driven by the OKLCH triplet so theme presets
+     only need to swap (l, c, h) to recolor every chip / hover / glow.
+     Equal alpha steps stay perceptually equal because OKLCH is
+     perceptually uniform; the previous rgba() ramp visibly collapsed
+     contrast near the dark surfaces this UI sits on. */
+  --accent-04: oklch(var(--accent-l) var(--accent-c) var(--accent-h) / 0.04);
+  --accent-06: oklch(var(--accent-l) var(--accent-c) var(--accent-h) / 0.06);
+  --accent-08: oklch(var(--accent-l) var(--accent-c) var(--accent-h) / 0.08);
+  --accent-10: oklch(var(--accent-l) var(--accent-c) var(--accent-h) / 0.10);
+  --accent-14: oklch(var(--accent-l) var(--accent-c) var(--accent-h) / 0.14);
+  --accent-18: oklch(var(--accent-l) var(--accent-c) var(--accent-h) / 0.18);
+  --accent-25: oklch(var(--accent-l) var(--accent-c) var(--accent-h) / 0.25);
+  --accent-30: oklch(var(--accent-l) var(--accent-c) var(--accent-h) / 0.30);
+  --accent-35: oklch(var(--accent-l) var(--accent-c) var(--accent-h) / 0.35);
+  --accent-45: oklch(var(--accent-l) var(--accent-c) var(--accent-h) / 0.45);
+  --accent-50: oklch(var(--accent-l) var(--accent-c) var(--accent-h) / 0.50);
+  --accent-55: oklch(var(--accent-l) var(--accent-c) var(--accent-h) / 0.55);
+  --accent-60: oklch(var(--accent-l) var(--accent-c) var(--accent-h) / 0.60);
+  --accent-75: oklch(var(--accent-l) var(--accent-c) var(--accent-h) / 0.75);
 
   /* accent-2 alpha ramp — used sparingly */
-  --accent-2-06: rgba(var(--accent-2-rgb), 0.06);
-  --accent-2-14: rgba(var(--accent-2-rgb), 0.14);
-  --accent-2-30: rgba(var(--accent-2-rgb), 0.30);
+  --accent-2-06: oklch(
+    var(--accent-2-l) var(--accent-2-c) var(--accent-2-h) / 0.06
+  );
+  --accent-2-14: oklch(
+    var(--accent-2-l) var(--accent-2-c) var(--accent-2-h) / 0.14
+  );
+  --accent-2-30: oklch(
+    var(--accent-2-l) var(--accent-2-c) var(--accent-2-h) / 0.30
+  );
 
   /* white scrim alpha ramp (for hovers, soft fills, borders) */
   --w-02: rgba(255, 255, 255, 0.02);
@@ -448,6 +490,13 @@
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
     overflow: hidden;
+    /* Tabular numerics on every digit: counts (`0/0` queue),
+       prompt char counters, pixel sizes, percentages, stepper
+       values etc. all sit in proportional sans glyphs. Without
+       `tnum`, "1234" → "1238" reflows by a few px and chip
+       contents jitter on every state change. */
+    font-variant-numeric: tabular-nums;
+    font-feature-settings: "tnum" 1, "calt" 1;
   }
 
   button {
@@ -496,15 +545,13 @@
    semantic levels below. */
 .t-display {
   font-family: var(--f-ui);
-  font-size: var(--text-display);
+  /* hero ceremony — flex from ~36px on narrow phones up to 48px on
+     desktop. clamp() avoids the hard 640px breakpoint and keeps the
+     midpoint readable at every width. */
+  font-size: clamp(2.25rem, 5vw + 1rem, var(--text-display));
   font-weight: 600;
   letter-spacing: var(--track-display);
   line-height: var(--leading-display);
-}
-@media (max-width: 640px) {
-  .t-display {
-    font-size: 2.75rem; /* 44px on narrow viewports */
-  }
 }
 .t-screen-title {
   font-family: var(--f-ui);

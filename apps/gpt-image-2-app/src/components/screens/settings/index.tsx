@@ -514,7 +514,17 @@ function CredsPanel({ config }: { config?: ServerConfig }) {
         <Empty
           icon="providers"
           title="还没有配置凭证"
-          subtitle="点击下方「添加凭证」开始配置 OpenAI / Azure / 自定义供应商。"
+          subtitle="支持 OpenAI / Azure / 自定义供应商。"
+          action={
+            <Button
+              variant="primary"
+              size="md"
+              icon="plus"
+              onClick={() => setShowAdd(true)}
+            >
+              添加凭证
+            </Button>
+          }
         />
       ) : (
         <div className="space-y-2.5">
@@ -534,18 +544,20 @@ function CredsPanel({ config }: { config?: ServerConfig }) {
         </div>
       )}
 
-      <button
-        type="button"
-        onClick={() => setShowAdd(true)}
-        className="mt-3 w-full flex items-center justify-center gap-2 h-12 rounded-xl text-[13px] text-muted hover:text-foreground transition-colors"
-        style={{
-          background: "var(--w-02)",
-          border: "1px dashed var(--w-16)",
-        }}
-      >
-        <Plus size={15} />
-        添加凭证
-      </button>
+      {names.length > 0 && (
+        <button
+          type="button"
+          onClick={() => setShowAdd(true)}
+          className="mt-3 w-full flex items-center justify-center gap-2 h-12 rounded-xl text-[13px] text-muted hover:text-foreground transition-colors"
+          style={{
+            background: "var(--w-02)",
+            border: "1px dashed var(--w-16)",
+          }}
+        >
+          <Plus size={15} />
+          添加凭证
+        </button>
+      )}
 
       <AddProviderDialog
         open={showAdd}

@@ -158,12 +158,28 @@ export function TweaksProvider({ children }: { children: ReactNode }) {
     // Token rewrites — drive every alpha ramp + gradient + veil through
     // CSS variables so a preset switch retints the entire app in one
     // frame without re-rendering React subtrees.
+    //
+    // OKLCH triplet is the source of truth for the alpha ramp; the
+    // RGB triplet is kept current so dynamic preview cards that
+    // interpolate `${preset.accentRgb}` into an inline gradient still
+    // see the right color. `--accent / -2 / -3` resolve through OKLCH
+    // by default (see :root in index.css); we only overwrite them
+    // when a preset deviates from "match the OKLCH" (none do today).
+    const [accentL, accentC, accentH] = preset.accentOklch.split(/\s+/);
+    const [accent2L, accent2C, accent2H] = preset.accent2Oklch.split(/\s+/);
+    const [accent3L, accent3C, accent3H] = preset.accent3Oklch.split(/\s+/);
+    root.style.setProperty("--accent-l", accentL);
+    root.style.setProperty("--accent-c", accentC);
+    root.style.setProperty("--accent-h", accentH);
+    root.style.setProperty("--accent-2-l", accent2L);
+    root.style.setProperty("--accent-2-c", accent2C);
+    root.style.setProperty("--accent-2-h", accent2H);
+    root.style.setProperty("--accent-3-l", accent3L);
+    root.style.setProperty("--accent-3-c", accent3C);
+    root.style.setProperty("--accent-3-h", accent3H);
     root.style.setProperty("--accent-rgb", preset.accentRgb);
     root.style.setProperty("--accent-2-rgb", preset.accent2Rgb);
     root.style.setProperty("--accent-3-rgb", preset.accent3Rgb);
-    root.style.setProperty("--accent", preset.accentSolid);
-    root.style.setProperty("--accent-2", preset.accent2Solid);
-    root.style.setProperty("--accent-3", preset.accent3Solid);
     root.style.setProperty("--accent-gradient", preset.accentGradient);
     root.style.setProperty("--bg-veil-soft", preset.veil.soft);
     root.style.setProperty("--bg-veil-strong", preset.veil.strong);

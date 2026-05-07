@@ -1399,7 +1399,17 @@ export function EditScreen({
               <Empty
                 icon="mask"
                 title="请上传并设定目标图"
-                subtitle="拖入图片、粘贴剪贴板图片，或点击上方「参考图」按钮添加。"
+                subtitle="或拖入图片、粘贴剪贴板图片。"
+                action={
+                  <Button
+                    variant="primary"
+                    size="md"
+                    icon="plus"
+                    onClick={() => fileInputRef.current?.click()}
+                  >
+                    选择图片
+                  </Button>
+                }
               />
             )
           ) : selectedRefObj || refs[0] ? (
@@ -1412,7 +1422,17 @@ export function EditScreen({
             <Empty
               icon="image"
               title="请上传至少一张参考图"
-              subtitle="拖入图片、粘贴剪贴板图片，或点击上方「参考图」按钮添加。"
+              subtitle="或拖入图片、粘贴剪贴板图片。"
+              action={
+                <Button
+                  variant="primary"
+                  size="md"
+                  icon="plus"
+                  onClick={() => fileInputRef.current?.click()}
+                >
+                  选择图片
+                </Button>
+              }
             />
           )}
         </div>

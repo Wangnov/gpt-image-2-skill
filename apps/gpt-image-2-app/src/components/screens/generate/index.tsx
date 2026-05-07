@@ -927,26 +927,32 @@ export function GenerateScreen({
         )}
 
         {/* Queue chip — spans both columns in split mode and centers
-            itself; in default mode it's part of the centered stack. */}
-        <div
-          className={cn(
-            "mt-7 flex items-center gap-2",
-            hasSplit && "xl:col-span-2 xl:justify-self-center xl:mt-4",
-          )}
-        >
-          <button
-            type="button"
-            onClick={() => onOpenHistory?.()}
-            className="inline-flex items-center gap-1.5 px-4 h-8 rounded-full text-[12px] text-muted hover:text-foreground transition-colors"
-            style={{
-              background: "var(--w-04)",
-              border: "1px solid var(--w-10)",
-            }}
+            itself; in default mode it's part of the centered stack.
+            Hidden when there's nothing to look at: an empty queue chip
+            on the empty hero just duplicates the "任务" tab badge while
+            adding zero information. Re-emerges the moment a job is
+            queued or completed. */}
+        {queueCount > 0 && (
+          <div
+            className={cn(
+              "mt-7 flex items-center gap-2 animate-fade-up",
+              hasSplit && "xl:col-span-2 xl:justify-self-center xl:mt-4",
+            )}
           >
-            <ListChecks size={13} className="opacity-80" />
-            查看队列 ({queueCount})
-          </button>
-        </div>
+            <button
+              type="button"
+              onClick={() => onOpenHistory?.()}
+              className="inline-flex items-center gap-1.5 px-4 h-8 rounded-full text-[12px] text-muted hover:text-foreground transition-colors"
+              style={{
+                background: "var(--w-04)",
+                border: "1px solid var(--w-10)",
+              }}
+            >
+              <ListChecks size={13} className="opacity-80" />
+              查看队列 ({queueCount})
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );

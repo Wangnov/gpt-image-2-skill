@@ -160,7 +160,7 @@ export function TopNav({
                 <span className="relative z-10">{s.label}</span>
                 {isRunning && (
                   <span
-                    className="relative z-10 inline-flex items-center justify-center min-w-[16px] h-[16px] px-1 rounded-full text-[9.5px] font-mono font-semibold leading-none animate-pulse-subtle tabular-nums"
+                    className="relative z-10 inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 rounded-full text-[11px] font-mono font-semibold leading-none animate-pulse-subtle tabular-nums"
                     style={{
                       background: "var(--status-running-bg)",
                       color: "var(--status-running)",

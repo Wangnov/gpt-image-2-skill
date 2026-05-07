@@ -103,14 +103,26 @@ export interface ThemePreset {
   description: string;
   hidden?: boolean;
   background: BackgroundParams;
-  // RGB triplets — written to `--accent-rgb` etc. Drive every alpha
-  // ramp in index.css via `rgba(var(--accent-rgb), 0.NN)`.
+  // OKLCH triplets — written to `--accent-l / --accent-c / --accent-h`
+  // (and the matching -2- / -3- pairs). Drive every alpha ramp in
+  // index.css via `oklch(var(--accent-l) var(--accent-c) var(--accent-h)
+  // / N)`. Pick lightness in OKLCH space first; chroma should drop
+  // toward extremes (≥85% lightness or ≤25%) so the color does not
+  // clip into garish.
+  accentOklch: string;   // "L% C H" — e.g. "67% 0.18 295"
+  accent2Oklch: string;
+  accent3Oklch: string;
+  // RGB triplets — kept as a fallback channel for the dynamic preset
+  // preview cards that interpolate `${preset.accentRgb}` directly into
+  // an inline `linear-gradient()` in TSX. New code should NOT reach
+  // for these — use the OKLCH path or a semantic token instead.
   accentRgb: string;
   accent2Rgb: string;
   accent3Rgb: string;
-  // Solid hex written to `--accent` etc. Used by places that can't
-  // accept `rgba(var(--accent-rgb), 1)` (e.g. SVG `fill`, gradient
-  // anchor stops written verbatim).
+  // Solid hex written to nothing today (the live `--accent` resolves
+  // through OKLCH); kept here for places that need a single concrete
+  // color (SVG `fill`, gradient anchor stops written verbatim, the
+  // ClickSpark / spark color callsites that cannot accept var()).
   accentSolid: string;
   accent2Solid: string;
   accent3Solid: string;
@@ -157,6 +169,9 @@ export const THEME_PRESETS: Record<ThemePresetId, ThemePreset> = {
       centerY: 0.04,
       zoom: 1.08,
     },
+    accentOklch: "55% 0.27 270",
+    accent2Oklch: "84% 0.16 207",
+    accent3Oklch: "74% 0.18 49",
     accentRgb: "109, 92, 255",
     accent2Rgb: "32, 231, 255",
     accent3Rgb: "255, 138, 61",
@@ -185,6 +200,9 @@ export const THEME_PRESETS: Record<ThemePresetId, ThemePreset> = {
       frequencyX: 3.0,
       frequencyY: 2.2,
     },
+    accentOklch: "67% 0.18 295",
+    accent2Oklch: "85% 0.13 207",
+    accent3Oklch: "80% 0.13 322",
     accentRgb: "167, 139, 250",
     accent2Rgb: "103, 232, 249",
     accent3Rgb: "240, 171, 252",
@@ -210,6 +228,9 @@ export const THEME_PRESETS: Record<ThemePresetId, ThemePreset> = {
       speed: 1.0,
       hueShift: 0,
     },
+    accentOklch: "69% 0.20 17",
+    accent2Oklch: "81% 0.16 80",
+    accent3Oklch: "71% 0.20 0",
     accentRgb: "251, 113, 133",
     accent2Rgb: "251, 191, 36",
     accent3Rgb: "244, 114, 182",
@@ -241,6 +262,9 @@ export const THEME_PRESETS: Record<ThemePresetId, ThemePreset> = {
       scale: 0.2,
       rotation: 30,
     },
+    accentOklch: "75% 0.13 232",
+    accent2Oklch: "69% 0.16 161",
+    accent3Oklch: "81% 0.10 230",
     accentRgb: "56, 189, 248",
     accent2Rgb: "16, 185, 129",
     accent3Rgb: "132, 204, 250",
@@ -267,6 +291,9 @@ export const THEME_PRESETS: Record<ThemePresetId, ThemePreset> = {
       gap: 24,
       proximity: 0,
     },
+    accentOklch: "92% 0.005 256",
+    accent2Oklch: "69% 0.012 256",
+    accent3Oklch: "85% 0.007 256",
     accentRgb: "230, 232, 235",
     accent2Rgb: "156, 163, 175",
     accent3Rgb: "209, 213, 219",
@@ -296,6 +323,9 @@ export const THEME_PRESETS: Record<ThemePresetId, ThemePreset> = {
       centerVignette: false,
       outerVignette: true,
     },
+    accentOklch: "77% 0.17 159",
+    accent2Oklch: "85% 0.13 162",
+    accent3Oklch: "86% 0.16 145",
     accentRgb: "52, 211, 153",
     accent2Rgb: "110, 231, 183",
     accent3Rgb: "134, 239, 172",

@@ -731,6 +731,18 @@ export function HistoryScreen({
                     ? "在「生成」里写一句提示词，任务会出现在这里。"
                     : "切换筛选标签或清除条件再试。"
                 }
+                action={
+                  total === 0 && onSwitchToGenerate ? (
+                    <Button
+                      variant="primary"
+                      size="md"
+                      icon="generate"
+                      onClick={onSwitchToGenerate}
+                    >
+                      去写第一句
+                    </Button>
+                  ) : null
+                }
               />
             </div>
           ) : (
