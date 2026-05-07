@@ -1,4 +1,5 @@
 import type { Config } from "tailwindcss";
+import animate from "tailwindcss-animate";
 
 const config: Config = {
   darkMode: ["class", '[data-theme="dark"]'],
@@ -107,7 +108,12 @@ const config: Config = {
       },
     },
   },
-  plugins: [],
+  // tailwindcss-animate ships the data-[state=open]:animate-in family
+  // (fade-in-0, zoom-in-95, slide-in-from-top-1, etc.) that select.tsx,
+  // combobox.tsx, drawer.tsx and dialog.tsx already use. Without the
+  // plugin those class names would be dead utilities; add it so
+  // dropdown / popover / drawer open + close transitions actually run.
+  plugins: [animate],
 };
 
 export default config;
