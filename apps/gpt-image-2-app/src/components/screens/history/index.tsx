@@ -586,6 +586,7 @@ export function HistoryScreen({
   const cancelJob = useCancelJob();
   const retryJob = useRetryJob();
   const confirm = useConfirm();
+  const reducedMotion = useReducedMotion();
   const [filter, setFilter] = useState<FilterValue>("all");
   const [searchText, setSearchText] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
@@ -835,32 +836,50 @@ export function HistoryScreen({
             </div>
           ) : (
             <>
-              {jobs.map((j, i) => (
-                <JobRowExpandable
-                  key={j.id}
-                  index={i + 1}
-                  job={j}
-                  expanded={expandedIds.has(j.id)}
-                  onToggleExpand={() => toggleExpand(j.id)}
-                  onCancel={() => cancelJob.mutate(j.id)}
-                  onDelete={() => {
-                    deleteJob.mutate(j.id);
-                    setExpandedIds((prev) => {
-                      const next = new Set(prev);
-                      next.delete(j.id);
-                      return next;
-                    });
-                    if (detailJobId === j.id) {
-                      setDetailJobId(null);
+              <AnimatePresence initial={false}>
+                {jobs.map((j, i) => (
+                  <motion.div
+                    key={j.id}
+                    layout="position"
+                    initial={
+                      reducedMotion
+                        ? false
+                        : { opacity: 0, y: 4 }
                     }
-                  }}
-                  onOpenDetail={(outputIndex) => {
-                    setDetailJobId(j.id);
-                    setDetailIndex(outputIndex);
-                  }}
-                  onRetry={() => void handleRetry(j.id)}
-                />
-              ))}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={
+                      reducedMotion
+                        ? { opacity: 0 }
+                        : { opacity: 0, x: -16, scale: 0.98 }
+                    }
+                    transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }}
+                  >
+                    <JobRowExpandable
+                      index={i + 1}
+                      job={j}
+                      expanded={expandedIds.has(j.id)}
+                      onToggleExpand={() => toggleExpand(j.id)}
+                      onCancel={() => cancelJob.mutate(j.id)}
+                      onDelete={() => {
+                        deleteJob.mutate(j.id);
+                        setExpandedIds((prev) => {
+                          const next = new Set(prev);
+                          next.delete(j.id);
+                          return next;
+                        });
+                        if (detailJobId === j.id) {
+                          setDetailJobId(null);
+                        }
+                      }}
+                      onOpenDetail={(outputIndex) => {
+                        setDetailJobId(j.id);
+                        setDetailIndex(outputIndex);
+                      }}
+                      onRetry={() => void handleRetry(j.id)}
+                    />
+                  </motion.div>
+                ))}
+              </AnimatePresence>
               {hasMore && (
                 <div className="flex justify-center px-4 py-4">
                   <Button

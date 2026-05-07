@@ -28,7 +28,7 @@ import {
   ZoomIn,
   ZoomOut,
 } from "lucide-react";
-import { motion } from "motion/react";
+import { AnimatePresence, motion } from "motion/react";
 import { Button } from "@/components/ui/button";
 import { Empty } from "@/components/ui/empty";
 import { FieldLabel } from "@/components/ui/field";
@@ -977,12 +977,29 @@ export function EditScreen({
             </span>
           </div>
           <div className="flex min-w-0 flex-1 gap-2 overflow-x-auto scrollbar-none pb-0.5">
+            <AnimatePresence initial={false}>
             {refs.map((ref, index) => {
               const isSelected = ref.id === selectedRef;
               const isTarget = usesRegion && ref.id === targetRef?.id;
               const hasMask = Boolean(maskSnapshots[ref.id]);
               return (
-                <div key={ref.id} className="group relative shrink-0">
+                <motion.div
+                  key={ref.id}
+                  layout="position"
+                  initial={
+                    reducedMotion
+                      ? false
+                      : { opacity: 0, scale: 0.92, y: 4 }
+                  }
+                  animate={{ opacity: 1, scale: 1, y: 0 }}
+                  exit={
+                    reducedMotion
+                      ? { opacity: 0 }
+                      : { opacity: 0, scale: 0.88, x: -8 }
+                  }
+                  transition={{ duration: 0.18, ease: [0.22, 1, 0.36, 1] }}
+                  className="group relative shrink-0"
+                >
                   <button
                     type="button"
                     onClick={() => setSelectedRef(ref.id)}
@@ -1063,9 +1080,10 @@ export function EditScreen({
                       设为目标
                     </button>
                   )}
-                </div>
+                </motion.div>
               );
             })}
+            </AnimatePresence>
             <button
               type="button"
               onClick={() => fileInputRef.current?.click()}

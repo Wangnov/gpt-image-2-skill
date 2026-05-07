@@ -523,6 +523,7 @@ function CredsPanel({ config }: { config?: ServerConfig }) {
   const setDefault = useSetDefaultProvider();
   const deleteProv = useDeleteProvider();
   const test = useTestProvider();
+  const reducedMotion = useReducedMotion();
   const [showAdd, setShowAdd] = useState(false);
   const [editingName, setEditingName] = useState<string | undefined>();
   const [testMap, setTestMap] = useState<
@@ -590,19 +591,37 @@ function CredsPanel({ config }: { config?: ServerConfig }) {
         />
       ) : (
         <div className="space-y-2.5">
-          {names.map((name) => (
-            <CredCard
-              key={name}
-              name={name}
-              prov={providers[name]}
-              isDefault={name === effectiveDefault}
-              testStatus={testMap[name]?.status}
-              onEdit={() => setEditingName(name)}
-              onUse={() => makeDefault(name)}
-              onTest={() => runTest(name)}
-              onDelete={() => removeProvider(name)}
-            />
-          ))}
+          <AnimatePresence initial={false}>
+            {names.map((name) => (
+              <motion.div
+                key={name}
+                layout="position"
+                initial={
+                  reducedMotion
+                    ? false
+                    : { opacity: 0, y: 6, scale: 0.98 }
+                }
+                animate={{ opacity: 1, y: 0, scale: 1 }}
+                exit={
+                  reducedMotion
+                    ? { opacity: 0 }
+                    : { opacity: 0, scale: 0.96, x: -12 }
+                }
+                transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }}
+              >
+                <CredCard
+                  name={name}
+                  prov={providers[name]}
+                  isDefault={name === effectiveDefault}
+                  testStatus={testMap[name]?.status}
+                  onEdit={() => setEditingName(name)}
+                  onUse={() => makeDefault(name)}
+                  onTest={() => runTest(name)}
+                  onDelete={() => removeProvider(name)}
+                />
+              </motion.div>
+            ))}
+          </AnimatePresence>
         </div>
       )}
 
