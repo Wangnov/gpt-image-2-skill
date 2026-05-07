@@ -111,14 +111,16 @@
   --status-queued-bg: rgba(148, 163, 184, 0.14);
 
   /* type — families
-     Inter is intentionally still the first stop (audit notes it as a known
-     "reflex" font). Replacement is deferred to a dedicated session because
-     the project is CJK-primary: most users see PingFang / 微软雅黑 system
-     fallbacks, so the Inter swap mostly affects digits & dev strings. When
-     replacement happens, candidates live in apps/gpt-image-2-app/.impeccable.md. */
+     UI sans is General Sans (Indian Type Foundry, free for commercial
+     use). Loaded from Fontshare via index.html. Picked over Inter for
+     its single-storey digits, opener counters, and the slight crafted
+     edge that pairs better with the liquid surfaces than Inter's
+     monoculture neutrality. The fallback chain stays high-quality
+     so the offline-first Tauri build lands on SF Pro / PingFang and
+     not a generic system sans-serif. */
   --f-sans:
-    "Inter", -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue",
-    sans-serif;
+    "General Sans", -apple-system, BlinkMacSystemFont, "SF Pro Text",
+    "Helvetica Neue", sans-serif;
   --f-mono:
     "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   --f-serif: "Source Serif 4", "Iowan Old Style", "Georgia", serif;

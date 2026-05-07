@@ -5,6 +5,18 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <link rel="icon" type="image/png" href="/favicon.png" />
     <link rel="apple-touch-icon" href="/logo.png" />
+    <!-- General Sans (Indian Type Foundry, free for commercial use).
+         Replaces Inter as the UI sans. Fontshare hosts the woff2 with
+         a permissive CORS policy; preconnect cuts the first-byte
+         latency so the swap-in lands before paint on a warm cache.
+         Offline runs (Tauri) fall back to the system sans listed in
+         --f-sans, which is intentionally a good native pair. -->
+    <link rel="preconnect" href="https://api.fontshare.com" crossorigin />
+    <link rel="preconnect" href="https://cdn.fontshare.com" crossorigin />
+    <link
+      href="https://api.fontshare.com/v2/css?f[]=general-sans@400,500,600,700&display=swap"
+      rel="stylesheet"
+    />
     <title>GPT Image 2</title>
   </head>
   <body>
