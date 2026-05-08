@@ -6,7 +6,10 @@ import { ImageContextMenu } from "@/components/ui/image-context-menu";
 import { ImageHoverToolbar } from "@/components/ui/image-hover-toolbar";
 import { useReducedMotion } from "@/hooks/use-reduced-motion";
 import { imageDragProps } from "@/lib/image-actions/drag-out";
-import { setFocusedImage } from "@/lib/image-actions/focused-image";
+import {
+  clearFocusedImageIfMatches,
+  setFocusedImage,
+} from "@/lib/image-actions/focused-image";
 import type { ImageAsset } from "@/lib/image-actions/types";
 import { PlaceholderImage } from "./placeholder-image";
 
@@ -57,7 +60,16 @@ export function OutputTile({
         setHover(true);
         if (asset) setFocusedImage(asset);
       }}
-      onMouseLeave={() => setHover(false)}
+      onMouseLeave={() => {
+        setHover(false);
+        // Clear the global focused-image when the pointer leaves so global
+        // shortcuts (Space / ⌘C / ⌘⌫) don't keep targeting a stale tile.
+        // `output.selected` opts in to "sticky" focus — selected tiles
+        // remain the keyboard target after the pointer wanders off.
+        if (asset && !output.selected) {
+          clearFocusedImageIfMatches(asset.jobId, asset.outputIndex);
+        }
+      }}
       onFocusCapture={() => {
         setFocusWithin(true);
         if (asset) setFocusedImage(asset);
@@ -65,6 +77,9 @@ export function OutputTile({
       onBlurCapture={(event) => {
         if (!event.currentTarget.contains(event.relatedTarget as Node | null)) {
           setFocusWithin(false);
+          if (asset && !output.selected) {
+            clearFocusedImageIfMatches(asset.jobId, asset.outputIndex);
+          }
         }
       }}
       onClick={onSelect}

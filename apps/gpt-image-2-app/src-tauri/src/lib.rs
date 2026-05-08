@@ -2207,9 +2207,7 @@ fn resolve_within_allowed_scope(input: &Path) -> Result<PathBuf, String> {
     let canonical_target = input
         .canonicalize()
         .map_err(|error| format!("无法解析路径：{error}"))?;
-    let canonical_jobs = jobs_dir()
-        .canonicalize()
-        .unwrap_or_else(|_| jobs_dir());
+    let canonical_jobs = jobs_dir().canonicalize().unwrap_or_else(|_| jobs_dir());
     if canonical_target.starts_with(&canonical_jobs) {
         return Ok(canonical_target);
     }
@@ -2264,8 +2262,7 @@ fn soft_delete_job(job_id: String) -> Result<(), String> {
     let job_root = jobs_dir().join(&job_id);
     if job_root.exists() {
         let trash_root = jobs_trash_dir();
-        fs::create_dir_all(&trash_root)
-            .map_err(|error| format!("创建回收目录失败：{error}"))?;
+        fs::create_dir_all(&trash_root).map_err(|error| format!("创建回收目录失败：{error}"))?;
         let trash_path = trash_root.join(&job_id);
         if trash_path.exists() {
             // Defensive: a previous soft-delete may have left an entry behind.
@@ -2286,8 +2283,7 @@ fn restore_deleted_job(job_id: String) -> Result<(), String> {
         if dest.exists() {
             return Err("恢复失败：目标位置已存在同名任务。".to_string());
         }
-        fs::rename(&trash_path, &dest)
-            .map_err(|error| format!("从回收目录恢复失败：{error}"))?;
+        fs::rename(&trash_path, &dest).map_err(|error| format!("从回收目录恢复失败：{error}"))?;
     }
     restore_deleted_history_job(&job_id).map_err(app_error)?;
     Ok(())
@@ -2297,8 +2293,7 @@ fn restore_deleted_job(job_id: String) -> Result<(), String> {
 fn hard_delete_job(job_id: String) -> Result<(), String> {
     let trash_path = jobs_trash_dir().join(&job_id);
     if trash_path.exists() {
-        fs::remove_dir_all(&trash_path)
-            .map_err(|error| format!("清空回收目录失败：{error}"))?;
+        fs::remove_dir_all(&trash_path).map_err(|error| format!("清空回收目录失败：{error}"))?;
     }
     let main_path = jobs_dir().join(&job_id);
     if main_path.exists() {
@@ -2309,9 +2304,10 @@ fn hard_delete_job(job_id: String) -> Result<(), String> {
 }
 
 /// Walk `jobs_dir/.trash` and permanently remove entries older than 5 minutes.
-/// Called once at app startup so undo timeouts that were dropped by a sudden
-/// quit don't leak disk forever.
-fn cleanup_orphan_trash_on_start() {
+/// Run once on a startup tick + periodically afterward so a soft-delete made
+/// shortly before quit (entry < 5min old at the next launch) still gets
+/// finalized inside the new session, not punted to the launch after that.
+fn cleanup_orphan_trash() {
     let trash_root = jobs_trash_dir();
     if !trash_root.is_dir() {
         return;
@@ -2341,6 +2337,18 @@ fn cleanup_orphan_trash_on_start() {
             let _ = delete_history_job(name);
         }
     }
+}
+
+/// Long-lived worker that re-runs `cleanup_orphan_trash` on a fixed cadence.
+/// Started once from `setup` so undo windows that elapse mid-session also get
+/// finalized (not just the ones that elapsed across a quit/restart).
+fn spawn_trash_cleanup_worker() {
+    thread::spawn(|| {
+        loop {
+            cleanup_orphan_trash();
+            thread::sleep(std::time::Duration::from_secs(60));
+        }
+    });
 }
 
 fn output_paths_from_job(job: &Value) -> Vec<String> {
@@ -2610,8 +2618,10 @@ pub fn run() {
             }
         }))
         .setup(|_app| {
-            // Spawn off-thread so a slow filesystem walk can't delay startup.
-            thread::spawn(cleanup_orphan_trash_on_start);
+            // Off-thread so a slow filesystem walk can't delay startup, and
+            // periodic so undo windows that elapse mid-session still get
+            // finalized without waiting for the next app launch.
+            spawn_trash_cleanup_worker();
             Ok(())
         })
         .manage(JobQueueState::default())

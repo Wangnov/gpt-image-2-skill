@@ -4668,11 +4668,8 @@ pub fn restore_deleted_history_job(job_id: &str) -> Result<usize, AppError> {
         params![job_id],
     )
     .map_err(|error| {
-        AppError::new(
-            "history_restore_failed",
-            "Unable to restore history job.",
-        )
-        .with_detail(json!({"error": error.to_string()}))
+        AppError::new("history_restore_failed", "Unable to restore history job.")
+            .with_detail(json!({"error": error.to_string()}))
     })
 }
 
