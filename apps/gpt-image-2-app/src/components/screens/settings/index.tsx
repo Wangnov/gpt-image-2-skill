@@ -1,5 +1,5 @@
 import { type ReactNode, useEffect, useRef, useState } from "react";
-import { AnimatePresence, motion } from "motion/react";
+import { AnimatePresence, motion, useAnimationControls } from "motion/react";
 import { useQuery } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { useReducedMotion } from "@/hooks/use-reduced-motion";
@@ -356,6 +356,21 @@ function CredCard({
       setResultPulseKey((k) => k + 1);
     }
   }, [testStatus]);
+  // Imperative shake on each "err" transition. Previously the button
+  // got `key={\`err-${resultPulseKey}\`}` so React would unmount and
+  // remount it on every failure, which is the standard "remount to
+  // replay" trick — but it dropped keyboard focus mid-retry. Using
+  // animation controls keeps the DOM stable and replays the keyframes
+  // on resultPulseKey bumps so consecutive failures still cue.
+  const shakeControls = useAnimationControls();
+  useEffect(() => {
+    if (testStatus === "err" && !reducedMotion) {
+      void shakeControls.start({
+        x: [0, -2, 2, -1.5, 1.5, 0],
+        transition: { duration: 0.32, ease: [0.22, 1, 0.36, 1] },
+      });
+    }
+  }, [resultPulseKey, testStatus, reducedMotion, shakeControls]);
   // Surface a key value if any credential exposes a literal value.
   const apiKeyCredential = Object.values(prov.credentials ?? {}).find(
     (c) =>
@@ -429,16 +444,12 @@ function CredCard({
             type="button"
             onClick={onTest}
             disabled={testStatus === "running"}
-            // Failure shake — three small horizontal nudges, only on the
-            // err pulse. Success path leaves the button still and lets
-            // the ring carry the news.
-            animate={
-              !reducedMotion && testStatus === "err"
-                ? { x: [0, -2, 2, -1.5, 1.5, 0] }
-                : { x: 0 }
-            }
-            transition={{ duration: 0.32, ease: [0.22, 1, 0.36, 1] }}
-            key={testStatus === "err" ? `err-${resultPulseKey}` : "idle"}
+            // Failure shake — three small horizontal nudges, only on
+            // the err pulse. Success path leaves the button still and
+            // lets the ring carry the news. Driven by shakeControls
+            // (see effect above) so the DOM node stays stable across
+            // retries — `key`-based remount drops keyboard focus.
+            animate={shakeControls}
             className="relative h-8 w-8 inline-flex items-center justify-center rounded-md text-muted hover:text-foreground hover:bg-[color:var(--w-06)] transition-colors disabled:opacity-50"
             aria-label={`测试 ${name} 的连接`}
           >
