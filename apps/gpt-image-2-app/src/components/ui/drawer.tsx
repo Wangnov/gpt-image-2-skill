@@ -44,7 +44,7 @@ export function Drawer({
     <Radix.Root open={open} onOpenChange={onOpenChange}>
       <Radix.Portal>
         <Radix.Overlay
-          className="fixed inset-0 z-40 data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=closed]:animate-out data-[state=closed]:fade-out-0"
+          className="drawer-overlay-blur fixed inset-0 z-40"
           style={{
             background: "var(--k-45)",
             backdropFilter: "blur(12px)",

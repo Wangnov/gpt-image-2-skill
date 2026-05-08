@@ -789,6 +789,48 @@
   animation: theme-pulse-out 360ms ease-out forwards;
 }
 
+/* Drawer overlay — fade opacity AND ramp backdrop-filter blur in tandem
+   so the background doesn't snap from clear to fully blurred on open.
+   CSS `transition` can't tween backdrop-filter on most engines, so we
+   own the keyframe ourselves. Reduce-motion users get an instant cut
+   via the prefers-reduced-motion override at the bottom. */
+@keyframes drawer-overlay-in {
+  from {
+    opacity: 0;
+    backdrop-filter: blur(0);
+    -webkit-backdrop-filter: blur(0);
+  }
+  to {
+    opacity: 1;
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+  }
+}
+@keyframes drawer-overlay-out {
+  from {
+    opacity: 1;
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+  }
+  to {
+    opacity: 0;
+    backdrop-filter: blur(0);
+    -webkit-backdrop-filter: blur(0);
+  }
+}
+.drawer-overlay-blur[data-state="open"] {
+  animation: drawer-overlay-in 240ms cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+.drawer-overlay-blur[data-state="closed"] {
+  animation: drawer-overlay-out 180ms cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+@media (prefers-reduced-motion: reduce) {
+  .drawer-overlay-blur[data-state="open"],
+  .drawer-overlay-blur[data-state="closed"] {
+    animation-duration: 1ms;
+  }
+}
+
 .image-overlay {
   background: var(--image-overlay);
   color: var(--image-overlay-text);
