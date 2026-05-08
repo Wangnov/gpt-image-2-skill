@@ -19,10 +19,10 @@ use gpt_image_2_core::{
     AppConfig, CONFIG_DIR_NAME, CredentialRef, HistoryListOptions, KEYCHAIN_SERVICE,
     NotificationConfig, ProviderConfig, default_config_path, default_keychain_account,
     delete_history_job, dispatch_task_notifications, history_db_path, jobs_dir,
-    list_active_history_jobs, list_history_jobs_page, load_app_config,
-    notification_status_allowed, preserve_notification_secrets, read_keychain_secret,
-    redact_app_config, run_json, save_app_config, shared_config_dir, show_history_job,
-    upsert_history_job, write_keychain_secret,
+    list_active_history_jobs, list_history_jobs_page, load_app_config, notification_status_allowed,
+    preserve_notification_secrets, read_keychain_secret, redact_app_config, run_json,
+    save_app_config, shared_config_dir, show_history_job, upsert_history_job,
+    write_keychain_secret,
 };
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
@@ -1514,10 +1514,7 @@ async fn test_notifications(Json(body): Json<NotificationTestBody>) -> ApiResult
         && notification_status_allowed(&config.notifications, status)
         && (config.notifications.toast.enabled || config.notifications.system.enabled);
     let (ok, reason) = if !deliveries.is_empty() {
-        (
-            deliveries.iter().all(|delivery| delivery.ok),
-            None,
-        )
+        (deliveries.iter().all(|delivery| delivery.ok), None)
     } else if local_eligible {
         (true, Some("local_only"))
     } else {

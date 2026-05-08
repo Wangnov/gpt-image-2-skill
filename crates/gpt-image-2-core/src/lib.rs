@@ -1451,10 +1451,7 @@ fn ip_is_internal(ip: IpAddr) -> bool {
             // Covers 10/8, 172.16/12, 192.168/16, 169.254/16 (incl. AWS/GCP
             // metadata at 169.254.169.254), broadcast 255.255.255.255, and
             // the 0.0.0.0/8 "this network" block.
-            v4.is_private()
-                || v4.is_link_local()
-                || v4.is_broadcast()
-                || v4.octets()[0] == 0
+            v4.is_private() || v4.is_link_local() || v4.is_broadcast() || v4.octets()[0] == 0
         }
         IpAddr::V6(v6) => {
             let segs = v6.segments();

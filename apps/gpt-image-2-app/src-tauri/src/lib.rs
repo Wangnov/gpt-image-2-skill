@@ -1285,10 +1285,7 @@ fn test_notifications(input: NotificationTestInput) -> Result<Value, String> {
         && notification_status_allowed(&config.notifications, status)
         && (config.notifications.toast.enabled || config.notifications.system.enabled);
     let (ok, reason) = if !deliveries.is_empty() {
-        (
-            deliveries.iter().all(|delivery| delivery.ok),
-            None,
-        )
+        (deliveries.iter().all(|delivery| delivery.ok), None)
     } else if local_eligible {
         (true, Some("local_only"))
     } else {
