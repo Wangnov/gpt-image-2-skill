@@ -5,6 +5,7 @@ import { openJobInHistory, sendImageToEdit } from "@/lib/job-navigation";
 import { actionsConfirm } from "./confirm-action";
 import { copyImageToClipboard } from "./copy-image";
 import { softDeleteJobWithUndo } from "./delete-job";
+import { inferImageExtension, inferImageMime } from "./mime";
 import { navigateToScreen } from "./navigation";
 import { invalidateJobsQueries } from "./query-client";
 import type { ImageAction } from "./types";
@@ -219,9 +220,15 @@ const shareAction: ImageAction = {
     if (!response.ok) {
       throw new Error(`无法读取图片：HTTP ${response.status}`);
     }
-    const blob = await response.blob();
-    const filename = `${asset.jobId}-${asset.outputIndex}.png`;
-    const file = new File([blob], filename, { type: "image/png" });
+    // Match the share payload's mime + filename extension to the actual
+    // image format so JPEG/WEBP/GIF jobs don't get sent to native share
+    // sheets advertised as PNG (some targets reject the mismatch outright).
+    const mime = inferImageMime(asset);
+    const ext = inferImageExtension(asset);
+    const raw = await response.blob();
+    const blob = raw.type === mime ? raw : new Blob([await raw.arrayBuffer()], { type: mime });
+    const filename = `${asset.jobId}-${asset.outputIndex}.${ext}`;
+    const file = new File([blob], filename, { type: mime });
     const shareData: ShareData = { files: [file] };
     if (asset.prompt) shareData.text = asset.prompt;
     // Some platforms (older Safari) don't support file shares — fall back

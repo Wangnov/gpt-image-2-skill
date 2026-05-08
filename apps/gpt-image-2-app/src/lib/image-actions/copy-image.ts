@@ -1,4 +1,5 @@
 import { api } from "@/lib/api";
+import { inferImageMime } from "./mime";
 import type { ImageAsset } from "./types";
 
 /**
@@ -62,48 +63,3 @@ async function fetchAsBlob(src: string, expectedMime: string): Promise<Blob> {
   return new Blob([await raw.arrayBuffer()], { type: expectedMime });
 }
 
-/**
- * Infer the image mime type for an asset. Used by the web path to declare
- * the right ClipboardItem key (which must match the blob's mime, otherwise
- * paste targets receive an unrecognized payload).
- *
- * Order of preference:
- *   1. `metadata.format` from the originating GenerateRequest (most
- *      authoritative — that's what the backend actually rendered as)
- *   2. URL extension (`.jpg`, `.webp`, ...)
- *   3. Default to `image/png`
- */
-function inferImageMime(asset: ImageAsset): string {
-  const meta = asset.job?.metadata as { format?: unknown } | undefined;
-  if (typeof meta?.format === "string") {
-    const fromMeta = formatToMime(meta.format);
-    if (fromMeta) return fromMeta;
-  }
-  const ext = asset.src
-    .toLowerCase()
-    .split("?")[0]
-    .split("#")[0]
-    .split(".")
-    .pop();
-  if (ext) {
-    const fromExt = formatToMime(ext);
-    if (fromExt) return fromExt;
-  }
-  return "image/png";
-}
-
-function formatToMime(value: string): string | null {
-  switch (value.toLowerCase()) {
-    case "png":
-      return "image/png";
-    case "jpg":
-    case "jpeg":
-      return "image/jpeg";
-    case "webp":
-      return "image/webp";
-    case "gif":
-      return "image/gif";
-    default:
-      return null;
-  }
-}

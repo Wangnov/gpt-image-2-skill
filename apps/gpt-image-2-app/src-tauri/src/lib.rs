@@ -12,10 +12,10 @@ use gpt_image_2_core::{
     AppConfig, CredentialRef, HistoryListOptions, KEYCHAIN_SERVICE, NotificationConfig,
     ProviderConfig, default_config_path, default_keychain_account, delete_history_job,
     dispatch_task_notifications, history_db_path, jobs_dir, list_active_history_jobs,
-    list_history_jobs_page, load_app_config, notification_status_allowed,
-    preserve_notification_secrets, read_keychain_secret, redact_app_config,
-    restore_deleted_history_job, run_json, save_app_config, shared_config_dir, show_history_job,
-    soft_delete_history_job, upsert_history_job, write_keychain_secret,
+    list_expired_deleted_history_jobs, list_history_jobs_page, load_app_config,
+    notification_status_allowed, preserve_notification_secrets, read_keychain_secret,
+    redact_app_config, restore_deleted_history_job, run_json, save_app_config, shared_config_dir,
+    show_history_job, soft_delete_history_job, upsert_history_job, write_keychain_secret,
 };
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
@@ -2310,39 +2310,35 @@ fn hard_delete_job(job_id: String) -> Result<(), String> {
     Ok(())
 }
 
-/// Walk `jobs_dir/.trash` and permanently remove entries older than 5 minutes.
-/// Run once on a startup tick + periodically afterward so a soft-delete made
-/// shortly before quit (entry < 5min old at the next launch) still gets
-/// finalized inside the new session, not punted to the launch after that.
+/// Permanently remove soft-deleted history rows whose 5-minute undo window
+/// has elapsed, deleting both the database row and the corresponding
+/// `jobs_dir/.trash/<id>` directory.
+///
+/// Cutoff is anchored to the SQLite `deleted_at` column (set by
+/// `soft_delete_history_job`), NOT the trash directory's filesystem mtime
+/// — `fs::rename` doesn't update mtime, so a long-lived job soft-deleted
+/// just now would otherwise look ancient and get hard-deleted immediately,
+/// completely defeating the undo window.
 fn cleanup_orphan_trash() {
-    let trash_root = jobs_trash_dir();
-    if !trash_root.is_dir() {
-        return;
-    }
-    let cutoff = std::time::Duration::from_secs(5 * 60);
-    let now = SystemTime::now();
-    let entries = match fs::read_dir(&trash_root) {
-        Ok(e) => e,
+    const RETENTION_SECS: u64 = 5 * 60;
+    let now_secs = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_secs();
+    let threshold = now_secs.saturating_sub(RETENTION_SECS);
+
+    let expired = match list_expired_deleted_history_jobs(threshold) {
+        Ok(ids) => ids,
         Err(_) => return,
     };
-    for entry in entries.flatten() {
-        let Ok(metadata) = entry.metadata() else {
-            continue;
-        };
-        let Ok(modified) = metadata.modified() else {
-            continue;
-        };
-        let Ok(elapsed) = now.duration_since(modified) else {
-            continue;
-        };
-        if elapsed <= cutoff {
-            continue;
+
+    let trash_root = jobs_trash_dir();
+    for job_id in expired {
+        let trash_path = trash_root.join(&job_id);
+        if trash_path.exists() {
+            let _ = fs::remove_dir_all(&trash_path);
         }
-        let path = entry.path();
-        let _ = fs::remove_dir_all(&path);
-        if let Some(name) = path.file_name().and_then(|n| n.to_str()) {
-            let _ = delete_history_job(name);
-        }
+        let _ = delete_history_job(&job_id);
     }
 }
 

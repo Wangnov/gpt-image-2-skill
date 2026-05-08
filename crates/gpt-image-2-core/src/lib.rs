@@ -4673,6 +4673,46 @@ pub fn restore_deleted_history_job(job_id: &str) -> Result<usize, AppError> {
     })
 }
 
+/// Return the IDs of soft-deleted history jobs whose `deleted_at` epoch
+/// timestamp is at or before `threshold_epoch_secs` (i.e. their undo window
+/// has elapsed). Used by the trash GC worker so the cutoff is anchored to
+/// when the row was soft-deleted, not to the trash directory's filesystem
+/// mtime (which `fs::rename` doesn't update).
+pub fn list_expired_deleted_history_jobs(
+    threshold_epoch_secs: u64,
+) -> Result<Vec<String>, AppError> {
+    let conn = open_history_db()?;
+    let mut stmt = conn
+        .prepare(
+            "SELECT id FROM jobs WHERE deleted_at IS NOT NULL AND CAST(deleted_at AS INTEGER) <= ?1",
+        )
+        .map_err(|error| {
+            AppError::new(
+                "history_expired_query_failed",
+                "Unable to query expired trash entries.",
+            )
+            .with_detail(json!({"error": error.to_string()}))
+        })?;
+    let rows = stmt
+        .query_map(params![threshold_epoch_secs as i64], |row| {
+            row.get::<_, String>(0)
+        })
+        .map_err(|error| {
+            AppError::new(
+                "history_expired_query_failed",
+                "Unable to query expired trash entries.",
+            )
+            .with_detail(json!({"error": error.to_string()}))
+        })?;
+    rows.collect::<Result<Vec<_>, _>>().map_err(|error| {
+        AppError::new(
+            "history_expired_query_failed",
+            "Unable to read expired trash rows.",
+        )
+        .with_detail(json!({"error": error.to_string()}))
+    })
+}
+
 #[derive(Debug, Clone, Default)]
 pub struct HistoryListOptions {
     pub limit: Option<usize>,
