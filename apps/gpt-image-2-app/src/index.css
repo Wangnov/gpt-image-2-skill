@@ -962,6 +962,11 @@
    tone (default / success / error / info / warning) as a translucent
    glass surface so toasts feel native to the liquid app. */
 [data-sonner-toaster] {
+  /* Stay above drawers and the Quick Look overlay so action feedback
+     (copy success, delete + undo, etc.) isn't hidden behind the surface
+     that triggered the action. */
+  z-index: 9999 !important;
+
   --normal-bg: rgba(14, 14, 20, 0.78);
   --normal-text: var(--text);
   --normal-border: rgba(255, 255, 255, 0.12);

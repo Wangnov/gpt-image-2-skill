@@ -15,13 +15,6 @@ import { IMAGE_ACTION_TRIGGER_ATTR } from "@/hooks/use-disable-webview-contextme
 type Props = {
   asset: ImageAsset;
   children: ReactNode;
-  /**
-   * When true, the wrapper does not render a Trigger element of its own and
-   * relies on a parent element marked with `data-image-action-trigger` to
-   * absorb the right-click. Useful when wrapping bare `<img>` tags that
-   * already have a positioned overlay parent.
-   */
-  inlineTrigger?: boolean;
 };
 
 /**
@@ -34,7 +27,7 @@ type Props = {
  * neither the webview's native menu nor the text-selection menu shows up
  * when the user right-clicks an image.
  */
-export function ImageContextMenu({ asset, children, inlineTrigger }: Props) {
+export function ImageContextMenu({ asset, children }: Props) {
   const { ctx, groups, run } = useImageActions({
     asset,
     surface: "context-menu",
@@ -59,8 +52,18 @@ export function ImageContextMenu({ asset, children, inlineTrigger }: Props) {
 
   return (
     <ContextMenu>
-      <ContextMenuTrigger asChild={!inlineTrigger} {...triggerProps}>
-        {children}
+      {/*
+        Wrap children in a `display: contents` div instead of using
+        asChild-into-the-actual-child. Radix's `asChild` Slot merges its
+        own onContextMenu/onMouseDown/onPointerDown handlers into the
+        immediate child — when that child is a `<button onClick>` (e.g.
+        the detail drawer's "click big image to zoom" button), the merged
+        pointer-down handlers can swallow the primary-click activation.
+        Wrapping in a `display: contents` <div> keeps the right-click
+        bubbling working and leaves the inner button's click flow alone.
+      */}
+      <ContextMenuTrigger asChild {...triggerProps}>
+        <div style={{ display: "contents" }}>{children}</div>
       </ContextMenuTrigger>
       <ContextMenuContent>
         {groups.map((bucket, index) => (

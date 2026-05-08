@@ -179,9 +179,13 @@ export function TextSelectionContextMenu() {
 }
 
 /**
- * React-friendly value mutation: triggers React's onChange handler by
- * dispatching a native `input` event after using the prototype's value
- * setter (otherwise React's synthetic-event tracking ignores the change).
+ * Insert / replace text inside an input or textarea.
+ *
+ * Uses `document.execCommand("insertText")` so the mutation participates in
+ * the webview's native undo stack — ⌘Z after our menu's paste/cut should
+ * undo the menu's change, just like a native paste/cut would. The
+ * prototype-setter fallback (synthetic) only runs if execCommand fails,
+ * which on modern WebKit is essentially never for plain inputs.
  */
 function replaceInputRange(
   element: HTMLInputElement | HTMLTextAreaElement,
@@ -189,9 +193,24 @@ function replaceInputRange(
   end: number,
   insert: string,
 ) {
-  const before = element.value.slice(0, start);
-  const after = element.value.slice(end);
-  const next = before + insert + after;
+  element.focus();
+  try {
+    element.setSelectionRange(start, end);
+  } catch {
+    /* some input types (number, color) don't support setSelectionRange */
+  }
+  let nativeOk = false;
+  try {
+    nativeOk = document.execCommand("insertText", false, insert);
+  } catch {
+    nativeOk = false;
+  }
+  if (nativeOk) return;
+
+  // Fallback for environments where execCommand is gone — synthetic value
+  // mutation. This bypasses the undo stack but at least leaves the input
+  // and React state consistent.
+  const next = element.value.slice(0, start) + insert + element.value.slice(end);
   const proto = Object.getPrototypeOf(element);
   const setter = Object.getOwnPropertyDescriptor(proto, "value")?.set;
   if (setter) {
@@ -201,11 +220,10 @@ function replaceInputRange(
   }
   element.dispatchEvent(new Event("input", { bubbles: true }));
   const caret = start + insert.length;
-  element.focus();
   try {
     element.setSelectionRange(caret, caret);
   } catch {
-    /* some input types (number, color) don't support setSelectionRange */
+    /* */
   }
 }
 

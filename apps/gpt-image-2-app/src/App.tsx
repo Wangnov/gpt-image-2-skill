@@ -331,10 +331,6 @@ export default function App() {
             theme={legacyInterface ? tweaks.theme : "dark"}
             closeButton
             richColors
-            // Stay above drawers (z-50) and Quick Look overlay (z-[60]) so
-            // action feedback isn't hidden behind the surface that triggered
-            // the action.
-            style={{ zIndex: 200 }}
           />
           <TextSelectionContextMenu />
           <QuickLookHost />

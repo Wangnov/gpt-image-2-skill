@@ -26,22 +26,57 @@ const TRIGGER_OPT_OUT_ATTR = "data-image-action-trigger";
  */
 export function useDisableWebviewContextMenu() {
   useEffect(() => {
-    const handler = (event: MouseEvent) => {
-      // Dev escape hatch: ⌥ + right-click = native inspect menu.
-      if (import.meta.env.DEV && event.altKey) return;
+    // WebKit will auto-select the word under the cursor when you right-click
+    // an input/textarea. By the time the `contextmenu` event fires, the
+    // input's `selectionStart`/`selectionEnd` already point at that word
+    // — which is wrong for paste (we want to insert at the user-set caret,
+    // not replace a word). Stash the selection on capture-phase mousedown
+    // *before* the user agent gets to mutate it.
+    let stashed: SelectionCapture | null = null;
 
+    const onMouseDownCapture = (event: MouseEvent) => {
+      if (event.button !== 2) {
+        stashed = null;
+        return;
+      }
       const target = event.target as HTMLElement | null;
       if (!target) return;
+      if (target.closest(`[${TRIGGER_OPT_OUT_ATTR}]`)) {
+        stashed = null;
+        return;
+      }
+      stashed = captureSelection(target);
+    };
+
+    const onContextMenu = (event: MouseEvent) => {
+      // Dev escape hatch: ⌥ + right-click = native inspect menu.
+      if (import.meta.env.DEV && event.altKey) {
+        stashed = null;
+        return;
+      }
+
+      const target = event.target as HTMLElement | null;
+      if (!target) {
+        stashed = null;
+        return;
+      }
 
       // Surfaces that opt out (Radix ContextMenu Trigger over an image,
       // or anything else marked with `data-image-action-trigger`) handle
       // the event themselves.
-      if (target.closest(`[${TRIGGER_OPT_OUT_ATTR}]`)) return;
-      if (event.defaultPrevented) return;
+      if (target.closest(`[${TRIGGER_OPT_OUT_ATTR}]`)) {
+        stashed = null;
+        return;
+      }
+      if (event.defaultPrevented) {
+        stashed = null;
+        return;
+      }
 
       event.preventDefault();
 
-      const capture = captureSelection(target);
+      const capture = stashed ?? captureSelection(target);
+      stashed = null;
       if (capture) {
         openTextSelectionMenu({
           x: event.clientX,
@@ -51,10 +86,12 @@ export function useDisableWebviewContextMenu() {
       }
     };
 
-    // Run on the bubbling phase so Radix-style stopPropagation has a chance
-    // to suppress our handler when an image trigger is hit.
-    window.addEventListener("contextmenu", handler);
-    return () => window.removeEventListener("contextmenu", handler);
+    window.addEventListener("mousedown", onMouseDownCapture, true);
+    window.addEventListener("contextmenu", onContextMenu);
+    return () => {
+      window.removeEventListener("mousedown", onMouseDownCapture, true);
+      window.removeEventListener("contextmenu", onContextMenu);
+    };
   }, []);
 }
 
