@@ -1,9 +1,10 @@
 import { useEffect, useRef } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { useTweaks } from "@/hooks/use-tweaks";
+import { useConfig } from "@/hooks/use-config";
 import { api } from "@/lib/api";
 import { promptSummary } from "@/lib/prompt-display";
+import { sendSystemJobNotification } from "@/lib/system-notifications";
 import type { Job, JobStatus } from "@/lib/types";
 
 type OpenJob = (jobId: string) => void;
@@ -111,9 +112,33 @@ export function useJobNotifications(jobs: Job[] | undefined, onOpen: OpenJob) {
   const qc = useQueryClient();
   const known = useRef(new Map<string, JobStatus>());
   const initialized = useRef(false);
-  const { tweaks } = useTweaks();
-  const notifyOnComplete = tweaks.notifyOnComplete;
-  const notifyOnFailure = tweaks.notifyOnFailure;
+  const { data: config } = useConfig();
+  const notificationConfig = config?.notifications;
+  const notificationsEnabled = notificationConfig?.enabled ?? true;
+  const notifyOnComplete =
+    notificationsEnabled && (notificationConfig?.on_completed ?? true);
+  const notifyOnFailure =
+    notificationsEnabled && (notificationConfig?.on_failed ?? true);
+  const notifyOnCancelled =
+    notificationsEnabled && (notificationConfig?.on_cancelled ?? true);
+  const toastEnabled =
+    !notificationsEnabled || (notificationConfig?.toast.enabled ?? true);
+  const systemEnabled = notificationsEnabled
+    ? (notificationConfig?.system.enabled ?? false)
+    : false;
+
+  const notifyAllowed = (job: Job) =>
+    job.status === "completed"
+      ? notifyOnComplete
+      : job.status === "failed"
+        ? notifyOnFailure
+        : notifyOnCancelled;
+
+  const notify = (job: Job) => {
+    if (!notifyAllowed(job)) return;
+    if (toastEnabled) notifyTerminal(job, onOpen);
+    if (systemEnabled) void sendSystemJobNotification(job);
+  };
 
   useEffect(() => {
     return api.subscribeJobUpdates((_, event) => {
@@ -123,14 +148,20 @@ export function useJobNotifications(jobs: Job[] | undefined, onOpen: OpenJob) {
       const previous = known.current.get(job.id);
       if (previous !== job.status) {
         if (previous && terminalStatuses.has(job.status)) {
-          const allowed =
-            job.status === "completed" ? notifyOnComplete : notifyOnFailure;
-          if (allowed) notifyTerminal(job, onOpen);
+          notify(job);
         }
         known.current.set(job.id, job.status);
       }
     });
-  }, [notifyOnComplete, notifyOnFailure, onOpen, qc]);
+  }, [
+    notifyOnComplete,
+    notifyOnFailure,
+    notifyOnCancelled,
+    toastEnabled,
+    systemEnabled,
+    onOpen,
+    qc,
+  ]);
 
   useEffect(() => {
     if (!jobs) return;
@@ -145,16 +176,18 @@ export function useJobNotifications(jobs: Job[] | undefined, onOpen: OpenJob) {
       const previous = known.current.get(job.id);
       if (previous !== job.status) {
         if (previous && terminalStatuses.has(job.status)) {
-          const allowed =
-            job.status === "completed"
-              ? notifyOnComplete
-              : job.status === "failed"
-                ? notifyOnFailure
-                : notifyOnFailure;
-          if (allowed) notifyTerminal(job, onOpen);
+          notify(job);
         }
         known.current.set(job.id, job.status);
       }
     }
-  }, [jobs, onOpen, notifyOnComplete, notifyOnFailure]);
+  }, [
+    jobs,
+    onOpen,
+    notifyOnComplete,
+    notifyOnFailure,
+    notifyOnCancelled,
+    toastEnabled,
+    systemEnabled,
+  ]);
 }

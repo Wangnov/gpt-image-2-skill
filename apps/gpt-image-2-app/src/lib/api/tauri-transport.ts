@@ -4,6 +4,10 @@ import type {
   GenerateRequest,
   Job,
   JobEvent,
+  JobStatus,
+  NotificationCapabilities,
+  NotificationConfig,
+  NotificationTestResult,
   ProviderConfig,
   QueueStatus,
   ServerConfig,
@@ -91,6 +95,19 @@ export const tauriApi: ApiClient = {
   },
   async configPaths() {
     return invoke<ConfigPaths>("config_path");
+  },
+  async updateNotifications(config: NotificationConfig) {
+    return normalizeConfig(
+      await invoke<ServerConfig>("update_notifications", { config }),
+    );
+  },
+  async testNotifications(status?: JobStatus) {
+    return invoke<NotificationTestResult>("test_notifications", {
+      input: { status: status ?? "completed" },
+    });
+  },
+  async notificationCapabilities() {
+    return invoke<NotificationCapabilities>("notification_capabilities");
   },
   async setDefault(name: string) {
     return normalizeConfig(

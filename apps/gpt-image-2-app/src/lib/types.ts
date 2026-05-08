@@ -25,10 +25,78 @@ export interface ProviderConfig {
   set_default?: boolean;
 }
 
+export type EmailTlsMode = "start-tls" | "smtps" | "none";
+
+export interface ToastNotificationConfig {
+  enabled: boolean;
+}
+
+export interface SystemNotificationConfig {
+  enabled: boolean;
+  mode: "auto" | "tauri" | "browser" | string;
+}
+
+export interface EmailNotificationConfig {
+  enabled: boolean;
+  smtp_host: string;
+  smtp_port: number;
+  tls: EmailTlsMode;
+  username?: string | null;
+  password?: CredentialRef | null;
+  from: string;
+  to: string[];
+  timeout_seconds: number;
+}
+
+export interface WebhookNotificationConfig {
+  id: string;
+  name: string;
+  enabled: boolean;
+  url: string;
+  method: string;
+  headers: Record<string, CredentialRef>;
+  timeout_seconds: number;
+}
+
+export interface NotificationConfig {
+  enabled: boolean;
+  on_completed: boolean;
+  on_failed: boolean;
+  on_cancelled: boolean;
+  toast: ToastNotificationConfig;
+  system: SystemNotificationConfig;
+  email: EmailNotificationConfig;
+  webhooks: WebhookNotificationConfig[];
+}
+
+export interface NotificationDelivery {
+  channel: string;
+  name?: string;
+  ok: boolean;
+  message: string;
+}
+
+export interface NotificationTestResult {
+  ok: boolean;
+  deliveries: NotificationDelivery[];
+}
+
+export interface NotificationCapabilities {
+  system: {
+    tauri_native: boolean;
+    browser: boolean;
+  };
+  server: {
+    email: boolean;
+    webhook: boolean;
+  };
+}
+
 export interface ServerConfig {
   version: 1;
   default_provider?: string;
   providers: Record<string, ProviderConfig>;
+  notifications: NotificationConfig;
 }
 
 export type JobStatus =

@@ -9,9 +9,10 @@ use std::{
 };
 
 use gpt_image_2_core::{
-    AppConfig, CredentialRef, HistoryListOptions, KEYCHAIN_SERVICE, ProviderConfig,
-    default_config_path, default_keychain_account, delete_history_job, history_db_path, jobs_dir,
-    list_active_history_jobs, list_history_jobs_page, load_app_config, read_keychain_secret,
+    AppConfig, CredentialRef, HistoryListOptions, KEYCHAIN_SERVICE, NotificationConfig,
+    ProviderConfig, default_config_path, default_keychain_account, delete_history_job,
+    dispatch_task_notifications, history_db_path, jobs_dir, list_active_history_jobs,
+    list_history_jobs_page, load_app_config, preserve_notification_secrets, read_keychain_secret,
     redact_app_config, run_json, save_app_config, shared_config_dir, show_history_job,
     upsert_history_job, write_keychain_secret,
 };
@@ -61,6 +62,36 @@ fn config_for_ui(config: &AppConfig) -> Value {
         });
     }
     payload
+}
+
+fn dispatch_notifications_for_job(job: &Value) -> Vec<Value> {
+    let config = match load_config() {
+        Ok(config) => config,
+        Err(error) => {
+            eprintln!("notification config load failed: {error}");
+            return Vec::new();
+        }
+    };
+    let deliveries = dispatch_task_notifications(&config, job);
+    for delivery in &deliveries {
+        if !delivery.ok {
+            eprintln!(
+                "notification delivery failed: channel={} name={} message={}",
+                delivery.channel, delivery.name, delivery.message
+            );
+        }
+    }
+    deliveries
+        .into_iter()
+        .map(|delivery| {
+            json!({
+                "channel": delivery.channel,
+                "name": delivery.name,
+                "ok": delivery.ok,
+                "message": delivery.message,
+            })
+        })
+        .collect()
 }
 
 fn cli_json(args: &[String]) -> Value {
@@ -1213,6 +1244,65 @@ fn get_config() -> Result<Value, String> {
 }
 
 #[tauri::command]
+fn update_notifications(mut config: NotificationConfig) -> Result<Value, String> {
+    let mut app_config = load_config()?;
+    preserve_notification_secrets(&mut config, &app_config.notifications);
+    app_config.notifications = config;
+    save_config(&app_config)?;
+    Ok(config_for_ui(&app_config))
+}
+
+#[derive(Deserialize)]
+struct NotificationTestInput {
+    #[serde(default)]
+    status: Option<String>,
+}
+
+#[tauri::command]
+fn test_notifications(input: NotificationTestInput) -> Result<Value, String> {
+    let config = load_config()?;
+    let status = input.status.as_deref().unwrap_or("completed");
+    let job = json!({
+        "id": "notification-test",
+        "command": "images generate",
+        "provider": config.default_provider.as_deref().unwrap_or("test"),
+        "status": status,
+        "created_at": chrono_like_now(),
+        "updated_at": chrono_like_now(),
+        "metadata": {"prompt": "Notification test"},
+        "outputs": [],
+        "output_path": Value::Null,
+        "error": if status == "failed" { json!({"message": "Notification test failure"}) } else { Value::Null },
+    });
+    let deliveries = dispatch_task_notifications(&config, &job);
+    Ok(json!({
+        "ok": deliveries.iter().all(|delivery| delivery.ok),
+        "deliveries": deliveries.into_iter().map(|delivery| {
+            json!({
+                "channel": delivery.channel,
+                "name": delivery.name,
+                "ok": delivery.ok,
+                "message": delivery.message,
+            })
+        }).collect::<Vec<_>>(),
+    }))
+}
+
+#[tauri::command]
+fn notification_capabilities() -> Value {
+    json!({
+        "system": {
+            "tauri_native": true,
+            "browser": true,
+        },
+        "server": {
+            "email": true,
+            "webhook": true,
+        }
+    })
+}
+
+#[tauri::command]
 fn config_inspect() -> Result<Value, String> {
     let path = default_config_path();
     let config = load_app_config(&path).map_err(app_error)?;
@@ -1484,12 +1574,17 @@ fn finish_queued_job(
         }
     };
     let _ = persist_job(&job);
+    let notification_deliveries = dispatch_notifications_for_job(&job);
     let event = {
         let mut inner = match state.inner.lock() {
             Ok(inner) => inner,
             Err(_) => return,
         };
         inner.running = inner.running.saturating_sub(1);
+        let mut event_data = event_data;
+        if let Some(object) = event_data.as_object_mut() {
+            object.insert("notifications".to_string(), json!(notification_deliveries));
+        }
         append_queue_event(&mut inner, &queued.id, "local", event_type, event_data)
     };
     emit_queue_event(&app, &queued.id, &event);
@@ -1675,11 +1770,20 @@ fn cancel_job(
         error: Value::Null,
     });
     persist_job(&job)?;
+    let notification_deliveries = dispatch_notifications_for_job(&job);
     emit_queue_event(&app, &job_id, &event);
     Ok(json!({
         "job_id": job_id,
         "job": job,
-        "events": [event],
+        "events": [{
+            "seq": event.get("seq").cloned().unwrap_or(Value::Null),
+            "kind": event.get("kind").cloned().unwrap_or(Value::Null),
+            "type": event.get("type").cloned().unwrap_or(Value::Null),
+            "data": {
+                "status": "canceled",
+                "notifications": notification_deliveries,
+            }
+        }],
         "canceled": true,
     }))
 }
@@ -2302,6 +2406,7 @@ mod tests {
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_updater::Builder::new().build())
+        .plugin(tauri_plugin_notification::init())
         .plugin(tauri_plugin_process::init())
         .plugin(tauri_plugin_single_instance::init(|app, _argv, _cwd| {
             let window = app
@@ -2317,6 +2422,9 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             config_path,
             get_config,
+            update_notifications,
+            test_notifications,
+            notification_capabilities,
             config_inspect,
             config_save,
             set_default_provider,

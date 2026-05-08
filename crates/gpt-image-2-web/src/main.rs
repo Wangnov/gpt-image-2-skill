@@ -17,10 +17,12 @@ use axum::{
 };
 use gpt_image_2_core::{
     AppConfig, CONFIG_DIR_NAME, CredentialRef, HistoryListOptions, KEYCHAIN_SERVICE,
-    ProviderConfig, default_config_path, default_keychain_account, delete_history_job,
-    history_db_path, jobs_dir, list_active_history_jobs, list_history_jobs_page, load_app_config,
-    read_keychain_secret, redact_app_config, run_json, save_app_config, shared_config_dir,
-    show_history_job, upsert_history_job, write_keychain_secret,
+    NotificationConfig, ProviderConfig, default_config_path, default_keychain_account,
+    delete_history_job, dispatch_task_notifications, history_db_path, jobs_dir,
+    list_active_history_jobs, list_history_jobs_page, load_app_config,
+    preserve_notification_secrets, read_keychain_secret, redact_app_config, run_json,
+    save_app_config, shared_config_dir, show_history_job, upsert_history_job,
+    write_keychain_secret,
 };
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
@@ -125,6 +127,36 @@ fn config_for_ui(config: &AppConfig) -> Value {
         });
     }
     payload
+}
+
+fn dispatch_notifications_for_job(job: &Value) -> Vec<Value> {
+    let config = match load_config() {
+        Ok(config) => config,
+        Err(error) => {
+            eprintln!("notification config load failed: {error}");
+            return Vec::new();
+        }
+    };
+    let deliveries = dispatch_task_notifications(&config, job);
+    for delivery in &deliveries {
+        if !delivery.ok {
+            eprintln!(
+                "notification delivery failed: channel={} name={} message={}",
+                delivery.channel, delivery.name, delivery.message
+            );
+        }
+    }
+    deliveries
+        .into_iter()
+        .map(|delivery| {
+            json!({
+                "channel": delivery.channel,
+                "name": delivery.name,
+                "ok": delivery.ok,
+                "message": delivery.message,
+            })
+        })
+        .collect()
 }
 
 fn cli_json(args: &[String]) -> Value {
@@ -1279,12 +1311,17 @@ fn finish_queued_job(state: JobQueueState, queued: QueuedJob, result: Result<Val
         }
     };
     let _ = persist_job(&job);
+    let notification_deliveries = dispatch_notifications_for_job(&job);
     {
         let mut inner = match state.inner.lock() {
             Ok(inner) => inner,
             Err(_) => return,
         };
         inner.running = inner.running.saturating_sub(1);
+        let mut event_data = event_data;
+        if let Some(object) = event_data.as_object_mut() {
+            object.insert("notifications".to_string(), json!(notification_deliveries));
+        }
         append_queue_event(&mut inner, &queued.id, "local", event_type, event_data);
     }
     start_queued_jobs(state);
@@ -1420,6 +1457,62 @@ async fn get_config() -> ApiResult {
     load_config()
         .map(|config| Json(config_for_ui(&config)))
         .map_err(ApiError::internal)
+}
+
+async fn update_notifications(Json(mut body): Json<NotificationConfig>) -> ApiResult {
+    let mut config = load_config().map_err(ApiError::internal)?;
+    preserve_notification_secrets(&mut body, &config.notifications);
+    config.notifications = body;
+    save_config(&config).map_err(ApiError::internal)?;
+    Ok(Json(config_for_ui(&config)))
+}
+
+#[derive(Deserialize)]
+struct NotificationTestBody {
+    #[serde(default)]
+    status: Option<String>,
+}
+
+async fn test_notifications(Json(body): Json<NotificationTestBody>) -> ApiResult {
+    let config = load_config().map_err(ApiError::internal)?;
+    let status = body.status.as_deref().unwrap_or("completed");
+    let job = json!({
+        "id": "notification-test",
+        "command": "images generate",
+        "provider": config.default_provider.as_deref().unwrap_or("test"),
+        "status": status,
+        "created_at": chrono_like_now(),
+        "updated_at": chrono_like_now(),
+        "metadata": {"prompt": "Notification test"},
+        "outputs": [],
+        "output_path": Value::Null,
+        "error": if status == "failed" { json!({"message": "Notification test failure"}) } else { Value::Null },
+    });
+    let deliveries = dispatch_task_notifications(&config, &job);
+    Ok(Json(json!({
+        "ok": deliveries.iter().all(|delivery| delivery.ok),
+        "deliveries": deliveries.into_iter().map(|delivery| {
+            json!({
+                "channel": delivery.channel,
+                "name": delivery.name,
+                "ok": delivery.ok,
+                "message": delivery.message,
+            })
+        }).collect::<Vec<_>>(),
+    })))
+}
+
+async fn notification_capabilities() -> Json<Value> {
+    Json(json!({
+        "system": {
+            "tauri_native": false,
+            "browser": true,
+        },
+        "server": {
+            "email": true,
+            "webhook": true,
+        }
+    }))
 }
 
 async fn set_default_provider(Json(body): Json<DefaultProviderBody>) -> ApiResult {
@@ -1661,10 +1754,19 @@ async fn cancel_job(Path(job_id): Path<String>, State(state): State<JobQueueStat
         Value::Null,
     );
     persist_job(&job).map_err(ApiError::internal)?;
+    let notification_deliveries = dispatch_notifications_for_job(&job);
     Ok(Json(json!({
         "job_id": job_id,
         "job": job,
-        "events": [event],
+        "events": [{
+            "seq": event.get("seq").cloned().unwrap_or(Value::Null),
+            "kind": event.get("kind").cloned().unwrap_or(Value::Null),
+            "type": event.get("type").cloned().unwrap_or(Value::Null),
+            "data": {
+                "status": "canceled",
+                "notifications": notification_deliveries,
+            }
+        }],
         "canceled": true,
     })))
 }
@@ -2019,6 +2121,12 @@ fn api_router(state: JobQueueState) -> Router {
     Router::new()
         .route("/config", get(get_config))
         .route("/config-paths", get(config_paths))
+        .route("/notifications", put(update_notifications))
+        .route("/notifications/test", post(test_notifications))
+        .route(
+            "/notifications/capabilities",
+            get(notification_capabilities),
+        )
         .route("/providers/default", post(set_default_provider))
         .route(
             "/providers/{name}",

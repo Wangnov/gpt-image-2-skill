@@ -1,4 +1,9 @@
-import type { Job, OutputRef, ServerConfig } from "../types";
+import type {
+  Job,
+  NotificationConfig,
+  OutputRef,
+  ServerConfig,
+} from "../types";
 import type { TauriJobResponse } from "./types";
 
 export const outputPaths = new Map<string, string>();
@@ -76,6 +81,61 @@ export function normalizeJobResponse(raw: TauriJobResponse): TauriJobResponse {
   return { ...raw, job };
 }
 
+export function defaultNotificationConfig(): NotificationConfig {
+  return {
+    enabled: true,
+    on_completed: true,
+    on_failed: true,
+    on_cancelled: true,
+    toast: { enabled: true },
+    system: { enabled: false, mode: "auto" },
+    email: {
+      enabled: false,
+      smtp_host: "",
+      smtp_port: 587,
+      tls: "start-tls",
+      username: undefined,
+      password: null,
+      from: "",
+      to: [],
+      timeout_seconds: 10,
+    },
+    webhooks: [],
+  };
+}
+
+export function normalizeNotificationConfig(
+  config?: Partial<NotificationConfig> | null,
+): NotificationConfig {
+  const defaults = defaultNotificationConfig();
+  return {
+    ...defaults,
+    ...(config ?? {}),
+    toast: { ...defaults.toast, ...(config?.toast ?? {}) },
+    system: { ...defaults.system, ...(config?.system ?? {}) },
+    email: {
+      ...defaults.email,
+      ...(config?.email ?? {}),
+      to: Array.isArray(config?.email?.to) ? config.email.to : [],
+      smtp_port: Number(config?.email?.smtp_port ?? defaults.email.smtp_port),
+      timeout_seconds: Number(
+        config?.email?.timeout_seconds ?? defaults.email.timeout_seconds,
+      ),
+    },
+    webhooks: Array.isArray(config?.webhooks)
+      ? config.webhooks.map((webhook) => ({
+          id: webhook.id,
+          name: webhook.name ?? "",
+          enabled: webhook.enabled !== false,
+          url: webhook.url,
+          method: webhook.method || "POST",
+          headers: webhook.headers ?? {},
+          timeout_seconds: Number(webhook.timeout_seconds ?? 10),
+        }))
+      : [],
+  };
+}
+
 export function normalizeConfig(config: ServerConfig): ServerConfig {
   return {
     version: config.version,
@@ -89,6 +149,7 @@ export function normalizeConfig(config: ServerConfig): ServerConfig {
         },
       ]),
     ),
+    notifications: normalizeNotificationConfig(config.notifications),
   };
 }
 

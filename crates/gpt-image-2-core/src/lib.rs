@@ -8,10 +8,13 @@ use std::{collections::BTreeMap, process::Command};
 use base64::Engine;
 use base64::engine::general_purpose::{STANDARD, URL_SAFE_NO_PAD};
 use clap::{ArgAction, Args, Parser, Subcommand, ValueEnum};
+use lettre::message::{Mailbox, header::ContentType};
+use lettre::transport::smtp::authentication::Credentials;
+use lettre::{Message, SmtpTransport, Transport};
 use reqwest::StatusCode;
 use reqwest::blocking::multipart::{Form, Part};
 use reqwest::blocking::{Client, Response};
-use reqwest::header::{ACCEPT, AUTHORIZATION, CONTENT_TYPE};
+use reqwest::header::{ACCEPT, AUTHORIZATION, CONTENT_TYPE, HeaderMap, HeaderName, HeaderValue};
 use rusqlite::types::Value as SqlValue;
 use rusqlite::{Connection, Row, params, params_from_iter};
 use serde::{Deserialize, Serialize};
@@ -189,6 +192,190 @@ pub struct ProviderConfig {
     pub edit_region_mode: Option<String>,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, Eq, PartialEq)]
+#[serde(rename_all = "kebab-case")]
+pub enum EmailTlsMode {
+    StartTls,
+    Smtps,
+    None,
+}
+
+impl Default for EmailTlsMode {
+    fn default() -> Self {
+        Self::StartTls
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Eq, PartialEq)]
+pub struct ToastNotificationConfig {
+    #[serde(default = "default_true")]
+    pub enabled: bool,
+}
+
+impl Default for ToastNotificationConfig {
+    fn default() -> Self {
+        Self { enabled: true }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Eq, PartialEq)]
+pub struct SystemNotificationConfig {
+    #[serde(default)]
+    pub enabled: bool,
+    #[serde(default = "default_system_notification_mode")]
+    pub mode: String,
+}
+
+fn default_system_notification_mode() -> String {
+    "auto".to_string()
+}
+
+impl Default for SystemNotificationConfig {
+    fn default() -> Self {
+        Self {
+            enabled: false,
+            mode: default_system_notification_mode(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Eq, PartialEq)]
+pub struct EmailNotificationConfig {
+    #[serde(default)]
+    pub enabled: bool,
+    #[serde(default)]
+    pub smtp_host: String,
+    #[serde(default = "default_smtp_port")]
+    pub smtp_port: u16,
+    #[serde(default)]
+    pub tls: EmailTlsMode,
+    #[serde(default)]
+    pub username: Option<String>,
+    #[serde(default)]
+    pub password: Option<CredentialRef>,
+    #[serde(default)]
+    pub from: String,
+    #[serde(default)]
+    pub to: Vec<String>,
+    #[serde(default = "default_notification_timeout_seconds")]
+    pub timeout_seconds: u64,
+}
+
+fn default_smtp_port() -> u16 {
+    587
+}
+
+impl Default for EmailNotificationConfig {
+    fn default() -> Self {
+        Self {
+            enabled: false,
+            smtp_host: String::new(),
+            smtp_port: default_smtp_port(),
+            tls: EmailTlsMode::StartTls,
+            username: None,
+            password: None,
+            from: String::new(),
+            to: Vec::new(),
+            timeout_seconds: default_notification_timeout_seconds(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Eq, PartialEq)]
+pub struct WebhookNotificationConfig {
+    pub id: String,
+    #[serde(default)]
+    pub name: String,
+    #[serde(default = "default_true")]
+    pub enabled: bool,
+    pub url: String,
+    #[serde(default = "default_webhook_method")]
+    pub method: String,
+    #[serde(default)]
+    pub headers: BTreeMap<String, CredentialRef>,
+    #[serde(default = "default_notification_timeout_seconds")]
+    pub timeout_seconds: u64,
+}
+
+fn default_webhook_method() -> String {
+    "POST".to_string()
+}
+
+fn default_notification_timeout_seconds() -> u64 {
+    10
+}
+
+fn default_true() -> bool {
+    true
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Eq, PartialEq)]
+pub struct NotificationConfig {
+    #[serde(default = "default_true")]
+    pub enabled: bool,
+    #[serde(default = "default_true")]
+    pub on_completed: bool,
+    #[serde(default = "default_true")]
+    pub on_failed: bool,
+    #[serde(default = "default_true")]
+    pub on_cancelled: bool,
+    #[serde(default)]
+    pub toast: ToastNotificationConfig,
+    #[serde(default)]
+    pub system: SystemNotificationConfig,
+    #[serde(default)]
+    pub email: EmailNotificationConfig,
+    #[serde(default)]
+    pub webhooks: Vec<WebhookNotificationConfig>,
+}
+
+impl Default for NotificationConfig {
+    fn default() -> Self {
+        Self {
+            enabled: true,
+            on_completed: true,
+            on_failed: true,
+            on_cancelled: true,
+            toast: ToastNotificationConfig::default(),
+            system: SystemNotificationConfig::default(),
+            email: EmailNotificationConfig::default(),
+            webhooks: Vec::new(),
+        }
+    }
+}
+
+fn preserve_empty_file_credential(next: &mut CredentialRef, existing: Option<&CredentialRef>) {
+    if let CredentialRef::File { value: next_value } = next {
+        if next_value.is_empty()
+            && let Some(CredentialRef::File {
+                value: existing_value,
+            }) = existing
+        {
+            *next_value = existing_value.clone();
+        }
+    }
+}
+
+pub fn preserve_notification_secrets(next: &mut NotificationConfig, existing: &NotificationConfig) {
+    if let Some(next_password) = next.email.password.as_mut() {
+        preserve_empty_file_credential(next_password, existing.email.password.as_ref());
+    }
+
+    let existing_webhooks = existing
+        .webhooks
+        .iter()
+        .map(|webhook| (webhook.id.as_str(), webhook))
+        .collect::<BTreeMap<_, _>>();
+    for webhook in &mut next.webhooks {
+        let existing_webhook = existing_webhooks.get(webhook.id.as_str()).copied();
+        for (header, credential) in &mut webhook.headers {
+            let existing_credential =
+                existing_webhook.and_then(|webhook| webhook.headers.get(header));
+            preserve_empty_file_credential(credential, existing_credential);
+        }
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AppConfig {
     pub version: u32,
@@ -196,6 +383,8 @@ pub struct AppConfig {
     pub default_provider: Option<String>,
     #[serde(default)]
     pub providers: BTreeMap<String, ProviderConfig>,
+    #[serde(default)]
+    pub notifications: NotificationConfig,
 }
 
 impl Default for AppConfig {
@@ -204,6 +393,7 @@ impl Default for AppConfig {
             version: 1,
             default_provider: None,
             providers: BTreeMap::new(),
+            notifications: NotificationConfig::default(),
         }
     }
 }
@@ -795,6 +985,53 @@ fn redact_credential_ref(value: &CredentialRef) -> Value {
     }
 }
 
+fn redact_optional_credential(value: &Option<CredentialRef>) -> Value {
+    value
+        .as_ref()
+        .map(redact_credential_ref)
+        .unwrap_or(Value::Null)
+}
+
+fn redact_notification_config(config: &NotificationConfig) -> Value {
+    json!({
+        "enabled": config.enabled,
+        "on_completed": config.on_completed,
+        "on_failed": config.on_failed,
+        "on_cancelled": config.on_cancelled,
+        "toast": {
+            "enabled": config.toast.enabled,
+        },
+        "system": {
+            "enabled": config.system.enabled,
+            "mode": config.system.mode,
+        },
+        "email": {
+            "enabled": config.email.enabled,
+            "smtp_host": config.email.smtp_host,
+            "smtp_port": config.email.smtp_port,
+            "tls": config.email.tls,
+            "username": config.email.username,
+            "password": redact_optional_credential(&config.email.password),
+            "from": config.email.from,
+            "to": config.email.to,
+            "timeout_seconds": config.email.timeout_seconds,
+        },
+        "webhooks": config.webhooks.iter().map(|webhook| {
+            json!({
+                "id": webhook.id,
+                "name": webhook.name,
+                "enabled": webhook.enabled,
+                "url": webhook.url,
+                "method": webhook.method,
+                "headers": webhook.headers.iter().map(|(key, credential)| {
+                    (key.clone(), redact_credential_ref(credential))
+                }).collect::<Map<String, Value>>(),
+                "timeout_seconds": webhook.timeout_seconds,
+            })
+        }).collect::<Vec<_>>(),
+    })
+}
+
 pub fn redact_app_config(config: &AppConfig) -> Value {
     let providers = config
         .providers
@@ -822,6 +1059,7 @@ pub fn redact_app_config(config: &AppConfig) -> Value {
         "version": config.version,
         "default_provider": config.default_provider,
         "providers": providers,
+        "notifications": redact_notification_config(&config.notifications),
     })
 }
 
@@ -928,6 +1166,462 @@ fn get_provider_credential(
                 .with_detail(json!({"provider": provider_name, "credential": key}))
         })
         .and_then(resolve_credential)
+}
+
+#[derive(Debug, Clone)]
+pub struct NotificationJob {
+    pub id: String,
+    pub command: String,
+    pub provider: String,
+    pub status: String,
+    pub created_at: String,
+    pub updated_at: String,
+    pub output_path: Option<String>,
+    pub outputs: Vec<Value>,
+    pub metadata: Value,
+    pub error_message: Option<String>,
+}
+
+impl NotificationJob {
+    pub fn from_job_value(job: &Value) -> Self {
+        let metadata = job.get("metadata").cloned().unwrap_or_else(|| json!({}));
+        let outputs = job
+            .get("outputs")
+            .and_then(Value::as_array)
+            .cloned()
+            .or_else(|| {
+                metadata
+                    .get("output")
+                    .and_then(|output| output.get("files"))
+                    .and_then(Value::as_array)
+                    .cloned()
+            })
+            .unwrap_or_default();
+        let output_path = job
+            .get("output_path")
+            .and_then(Value::as_str)
+            .or_else(|| {
+                metadata
+                    .get("output")
+                    .and_then(|output| output.get("path"))
+                    .and_then(Value::as_str)
+            })
+            .map(ToString::to_string);
+        let error_message = job
+            .get("error")
+            .and_then(|error| error.get("message"))
+            .and_then(Value::as_str)
+            .map(ToString::to_string);
+        Self {
+            id: string_json_field(job, "id").unwrap_or_default(),
+            command: string_json_field(job, "command")
+                .unwrap_or_else(|| "images generate".to_string()),
+            provider: string_json_field(job, "provider").unwrap_or_else(|| "auto".to_string()),
+            status: normalize_notification_status(
+                &string_json_field(job, "status").unwrap_or_else(|| "completed".to_string()),
+            ),
+            created_at: string_json_field(job, "created_at").unwrap_or_default(),
+            updated_at: string_json_field(job, "updated_at")
+                .unwrap_or_else(|| string_json_field(job, "created_at").unwrap_or_default()),
+            output_path,
+            outputs,
+            metadata,
+            error_message,
+        }
+    }
+
+    pub fn event_name(&self) -> String {
+        format!("job.{}", self.status)
+    }
+
+    pub fn title(&self) -> String {
+        let action = if self.command == "images edit" {
+            "编辑"
+        } else {
+            "生成"
+        };
+        match self.status.as_str() {
+            "completed" => format!("{action}完成"),
+            "failed" => format!("{action}失败"),
+            "cancelled" => "任务已取消".to_string(),
+            _ => format!("任务{}", self.status),
+        }
+    }
+
+    pub fn summary(&self) -> String {
+        let mut parts = vec![self.provider.clone()];
+        if let Some(size) = self.metadata.get("size").and_then(Value::as_str)
+            && !size.trim().is_empty()
+        {
+            parts.push(size.to_string());
+        }
+        if self.status == "completed" {
+            let count = if self.outputs.is_empty() {
+                usize::from(self.output_path.is_some())
+            } else {
+                self.outputs.len()
+            };
+            if count > 0 {
+                parts.push(if count > 1 {
+                    format!("{count} 张图片")
+                } else {
+                    "1 张图片".to_string()
+                });
+            }
+        } else if let Some(message) = &self.error_message {
+            parts.push(message.clone());
+        }
+        parts.join(" · ")
+    }
+}
+
+fn string_json_field(value: &Value, key: &str) -> Option<String> {
+    value
+        .get(key)
+        .and_then(Value::as_str)
+        .filter(|value| !value.trim().is_empty())
+        .map(ToString::to_string)
+}
+
+fn normalize_notification_status(status: &str) -> String {
+    if status == "canceled" {
+        "cancelled".to_string()
+    } else {
+        status.to_string()
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct NotificationDelivery {
+    pub channel: String,
+    pub name: String,
+    pub ok: bool,
+    pub message: String,
+}
+
+#[derive(Debug, Clone)]
+pub struct WebhookRequest {
+    pub method: String,
+    pub url: String,
+    pub headers: BTreeMap<String, String>,
+    pub body: Value,
+    pub timeout_seconds: u64,
+}
+
+#[derive(Debug, Clone)]
+pub struct EmailNotificationMessage {
+    pub smtp_host: String,
+    pub smtp_port: u16,
+    pub tls: EmailTlsMode,
+    pub username: Option<String>,
+    pub password: Option<String>,
+    pub from: String,
+    pub to: Vec<String>,
+    pub subject: String,
+    pub body: String,
+    pub timeout_seconds: u64,
+}
+
+pub fn build_webhook_request(
+    webhook: &WebhookNotificationConfig,
+    job: &NotificationJob,
+) -> Result<WebhookRequest, AppError> {
+    if webhook.url.trim().is_empty() {
+        return Err(AppError::new(
+            "notification_webhook_invalid",
+            "Webhook URL is required.",
+        ));
+    }
+    let mut headers = BTreeMap::new();
+    for (name, credential) in &webhook.headers {
+        let trimmed = name.trim();
+        if trimmed.is_empty() {
+            continue;
+        }
+        let (value, _) = resolve_credential(credential)?;
+        if !value.trim().is_empty() {
+            headers.insert(trimmed.to_string(), value);
+        }
+    }
+    Ok(WebhookRequest {
+        method: webhook.method.trim().to_ascii_uppercase(),
+        url: webhook.url.trim().to_string(),
+        headers,
+        body: notification_payload(job),
+        timeout_seconds: webhook.timeout_seconds.max(1),
+    })
+}
+
+fn notification_payload(job: &NotificationJob) -> Value {
+    json!({
+        "event": job.event_name(),
+        "title": job.title(),
+        "summary": job.summary(),
+        "job": {
+            "id": job.id,
+            "command": job.command,
+            "provider": job.provider,
+            "status": job.status,
+            "created_at": job.created_at,
+            "updated_at": job.updated_at,
+            "output_path": job.output_path,
+            "outputs": job.outputs,
+            "metadata": job.metadata,
+            "error": job.error_message.as_ref().map(|message| json!({"message": message})).unwrap_or(Value::Null),
+        }
+    })
+}
+
+pub fn notification_status_allowed(config: &NotificationConfig, status: &str) -> bool {
+    match normalize_notification_status(status).as_str() {
+        "completed" => config.on_completed,
+        "failed" => config.on_failed,
+        "cancelled" => config.on_cancelled,
+        _ => false,
+    }
+}
+
+pub fn dispatch_task_notifications(
+    config: &AppConfig,
+    job_value: &Value,
+) -> Vec<NotificationDelivery> {
+    let notification_config = &config.notifications;
+    let job = NotificationJob::from_job_value(job_value);
+    if !notification_config.enabled
+        || !notification_status_allowed(notification_config, &job.status)
+    {
+        return Vec::new();
+    }
+    let mut deliveries = Vec::new();
+    if notification_config.email.enabled {
+        deliveries.push(send_email_notification(&notification_config.email, &job));
+    }
+    for webhook in notification_config
+        .webhooks
+        .iter()
+        .filter(|webhook| webhook.enabled)
+    {
+        deliveries.push(send_webhook_notification(webhook, &job));
+    }
+    deliveries
+}
+
+fn send_webhook_notification(
+    webhook: &WebhookNotificationConfig,
+    job: &NotificationJob,
+) -> NotificationDelivery {
+    let name = if webhook.name.trim().is_empty() {
+        webhook.id.clone()
+    } else {
+        webhook.name.clone()
+    };
+    let request = match build_webhook_request(webhook, job) {
+        Ok(request) => request,
+        Err(error) => {
+            return NotificationDelivery {
+                channel: "webhook".to_string(),
+                name,
+                ok: false,
+                message: error.message,
+            };
+        }
+    };
+    match execute_webhook_request(&request) {
+        Ok(message) => NotificationDelivery {
+            channel: "webhook".to_string(),
+            name,
+            ok: true,
+            message,
+        },
+        Err(error) => NotificationDelivery {
+            channel: "webhook".to_string(),
+            name,
+            ok: false,
+            message: error.message,
+        },
+    }
+}
+
+fn execute_webhook_request(request: &WebhookRequest) -> Result<String, AppError> {
+    let client = Client::builder()
+        .timeout(Duration::from_secs(request.timeout_seconds.max(1)))
+        .build()
+        .map_err(|error| {
+            AppError::new(
+                "notification_webhook_failed",
+                "Unable to create webhook client.",
+            )
+            .with_detail(json!({"error": error.to_string()}))
+        })?;
+    let method = reqwest::Method::from_bytes(request.method.as_bytes()).map_err(|error| {
+        AppError::new("notification_webhook_invalid", "Webhook method is invalid.")
+            .with_detail(json!({"method": request.method, "error": error.to_string()}))
+    })?;
+    let mut headers = HeaderMap::new();
+    for (name, value) in &request.headers {
+        let header_name = HeaderName::from_bytes(name.as_bytes()).map_err(|error| {
+            AppError::new(
+                "notification_webhook_invalid",
+                "Webhook header name is invalid.",
+            )
+            .with_detail(json!({"header": name, "error": error.to_string()}))
+        })?;
+        let header_value = HeaderValue::from_str(value).map_err(|error| {
+            AppError::new(
+                "notification_webhook_invalid",
+                "Webhook header value is invalid.",
+            )
+            .with_detail(json!({"header": name, "error": error.to_string()}))
+        })?;
+        headers.insert(header_name, header_value);
+    }
+    let response = client
+        .request(method, &request.url)
+        .headers(headers)
+        .json(&request.body)
+        .send()
+        .map_err(|error| {
+            AppError::new("notification_webhook_failed", "Webhook request failed.")
+                .with_detail(json!({"error": error.to_string()}))
+        })?;
+    let status = response.status();
+    if status.is_success() {
+        Ok(format!("Webhook delivered with HTTP {status}."))
+    } else {
+        Err(AppError::new(
+            "notification_webhook_failed",
+            format!("Webhook returned HTTP {status}."),
+        ))
+    }
+}
+
+fn send_email_notification(
+    email: &EmailNotificationConfig,
+    job: &NotificationJob,
+) -> NotificationDelivery {
+    match build_email_notification_message(email, job)
+        .and_then(|message| send_email_message(&message))
+    {
+        Ok(message) => NotificationDelivery {
+            channel: "email".to_string(),
+            name: "smtp".to_string(),
+            ok: true,
+            message,
+        },
+        Err(error) => NotificationDelivery {
+            channel: "email".to_string(),
+            name: "smtp".to_string(),
+            ok: false,
+            message: error.message,
+        },
+    }
+}
+
+pub fn build_email_notification_message(
+    email: &EmailNotificationConfig,
+    job: &NotificationJob,
+) -> Result<EmailNotificationMessage, AppError> {
+    if email.smtp_host.trim().is_empty() {
+        return Err(AppError::new(
+            "notification_email_invalid",
+            "SMTP host is required.",
+        ));
+    }
+    if email.from.trim().is_empty() {
+        return Err(AppError::new(
+            "notification_email_invalid",
+            "Email sender is required.",
+        ));
+    }
+    let to = email
+        .to
+        .iter()
+        .map(|value| value.trim().to_string())
+        .filter(|value| !value.is_empty())
+        .collect::<Vec<_>>();
+    if to.is_empty() {
+        return Err(AppError::new(
+            "notification_email_invalid",
+            "At least one email recipient is required.",
+        ));
+    }
+    let password = email
+        .password
+        .as_ref()
+        .map(resolve_credential)
+        .transpose()?
+        .map(|(value, _)| value);
+    let subject = format!("GPT Image 2 · {}", job.title());
+    let output_path = job.output_path.as_deref().unwrap_or("无");
+    let body = format!(
+        "任务：{}\n状态：{}\n供应商：{}\n摘要：{}\n输出：{}\n任务 ID：{}\n",
+        job.command,
+        job.status,
+        job.provider,
+        job.summary(),
+        output_path,
+        job.id,
+    );
+    Ok(EmailNotificationMessage {
+        smtp_host: email.smtp_host.trim().to_string(),
+        smtp_port: email.smtp_port,
+        tls: email.tls.clone(),
+        username: email
+            .username
+            .as_ref()
+            .map(|value| value.trim().to_string())
+            .filter(|value| !value.is_empty()),
+        password,
+        from: email.from.trim().to_string(),
+        to,
+        subject,
+        body,
+        timeout_seconds: email.timeout_seconds.max(1),
+    })
+}
+
+fn send_email_message(message: &EmailNotificationMessage) -> Result<String, AppError> {
+    let from = message.from.parse::<Mailbox>().map_err(|error| {
+        AppError::new("notification_email_invalid", "Email sender is invalid.")
+            .with_detail(json!({"error": error.to_string()}))
+    })?;
+    let mut builder = Message::builder()
+        .from(from)
+        .subject(&message.subject)
+        .header(ContentType::TEXT_PLAIN);
+    for recipient in &message.to {
+        builder = builder.to(recipient.parse::<Mailbox>().map_err(|error| {
+            AppError::new("notification_email_invalid", "Email recipient is invalid.")
+                .with_detail(json!({"recipient": recipient, "error": error.to_string()}))
+        })?);
+    }
+    let email = builder.body(message.body.clone()).map_err(|error| {
+        AppError::new("notification_email_invalid", "Email message is invalid.")
+            .with_detail(json!({"error": error.to_string()}))
+    })?;
+    let mut transport_builder = match message.tls {
+        EmailTlsMode::Smtps => SmtpTransport::relay(&message.smtp_host),
+        EmailTlsMode::StartTls => SmtpTransport::starttls_relay(&message.smtp_host),
+        EmailTlsMode::None => Ok(SmtpTransport::builder_dangerous(&message.smtp_host)),
+    }
+    .map_err(|error| {
+        AppError::new(
+            "notification_email_invalid",
+            "Unable to create SMTP transport.",
+        )
+        .with_detail(json!({"error": error.to_string()}))
+    })?
+    .port(message.smtp_port)
+    .timeout(Some(Duration::from_secs(message.timeout_seconds)));
+    if let (Some(username), Some(password)) = (&message.username, &message.password) {
+        transport_builder =
+            transport_builder.credentials(Credentials::new(username.clone(), password.clone()));
+    }
+    transport_builder.build().send(&email).map_err(|error| {
+        AppError::new("notification_email_failed", "SMTP email delivery failed.")
+            .with_detail(json!({"error": error.to_string()}))
+    })?;
+    Ok("Email delivered.".to_string())
 }
 
 fn build_user_agent() -> String {
@@ -5174,5 +5868,200 @@ mod tests {
 
         assert_eq!(auth.api_key, "sk-test");
         assert_eq!(auth.source, "file");
+    }
+
+    #[test]
+    fn notification_config_redacts_webhook_headers_and_email_password() {
+        let config = AppConfig {
+            notifications: NotificationConfig {
+                enabled: false,
+                email: EmailNotificationConfig {
+                    enabled: true,
+                    smtp_host: "smtp.example.com".to_string(),
+                    smtp_port: 465,
+                    tls: EmailTlsMode::Smtps,
+                    username: Some("robot@example.com".to_string()),
+                    password: Some(CredentialRef::File {
+                        value: "smtp-secret".to_string(),
+                    }),
+                    from: "robot@example.com".to_string(),
+                    to: vec!["owner@example.com".to_string()],
+                    timeout_seconds: 5,
+                },
+                webhooks: vec![WebhookNotificationConfig {
+                    id: "ops".to_string(),
+                    name: "Ops".to_string(),
+                    enabled: true,
+                    url: "https://hooks.example.com/task".to_string(),
+                    method: "POST".to_string(),
+                    headers: BTreeMap::from([(
+                        "Authorization".to_string(),
+                        CredentialRef::File {
+                            value: "Bearer secret".to_string(),
+                        },
+                    )]),
+                    timeout_seconds: 5,
+                }],
+                ..Default::default()
+            },
+            ..Default::default()
+        };
+
+        let redacted = redact_app_config(&config);
+
+        assert_eq!(
+            redacted["notifications"]["email"]["password"]["value"]["_omitted"],
+            "secret"
+        );
+        assert_eq!(
+            redacted["notifications"]["webhooks"][0]["headers"]["Authorization"]["value"]["_omitted"],
+            "secret"
+        );
+        assert_eq!(redacted["notifications"]["enabled"], false);
+    }
+
+    #[test]
+    fn webhook_notification_request_resolves_custom_headers() {
+        let webhook = WebhookNotificationConfig {
+            id: "ops".to_string(),
+            name: "Ops".to_string(),
+            enabled: true,
+            url: "https://hooks.example.com/task".to_string(),
+            method: "POST".to_string(),
+            headers: BTreeMap::from([(
+                "Authorization".to_string(),
+                CredentialRef::File {
+                    value: "Bearer secret".to_string(),
+                },
+            )]),
+            timeout_seconds: 5,
+        };
+        let job = NotificationJob::from_job_value(&json!({
+            "id": "job-1",
+            "command": "images generate",
+            "provider": "openai",
+            "status": "completed",
+            "created_at": "2026-05-08T10:00:00Z",
+            "updated_at": "2026-05-08T10:01:00Z",
+            "output_path": "/tmp/out.png",
+            "outputs": [{"index": 0, "path": "/tmp/out.png", "bytes": 12}],
+            "metadata": {"prompt": "hello"}
+        }));
+
+        let request = build_webhook_request(&webhook, &job).unwrap();
+
+        assert_eq!(request.method, "POST");
+        assert_eq!(request.url, "https://hooks.example.com/task");
+        assert_eq!(
+            request.headers.get("Authorization").map(String::as_str),
+            Some("Bearer secret")
+        );
+        assert_eq!(request.body["event"], "job.completed");
+        assert_eq!(request.body["job"]["id"], "job-1");
+    }
+
+    #[test]
+    fn email_notification_message_resolves_password_and_recipients() {
+        let email = EmailNotificationConfig {
+            enabled: true,
+            smtp_host: "smtp.example.com".to_string(),
+            smtp_port: 587,
+            tls: EmailTlsMode::StartTls,
+            username: Some("robot".to_string()),
+            password: Some(CredentialRef::File {
+                value: "smtp-secret".to_string(),
+            }),
+            from: "GPT Image 2 <robot@example.com>".to_string(),
+            to: vec![
+                "Owner <owner@example.com>".to_string(),
+                "ops@example.com".to_string(),
+            ],
+            timeout_seconds: 5,
+        };
+        let job = NotificationJob::from_job_value(&json!({
+            "id": "job-1",
+            "command": "images edit",
+            "provider": "openai",
+            "status": "failed",
+            "created_at": "2026-05-08T10:00:00Z",
+            "updated_at": "2026-05-08T10:01:00Z",
+            "metadata": {"prompt": "hello"},
+            "error": {"message": "boom"}
+        }));
+
+        let message = build_email_notification_message(&email, &job).unwrap();
+
+        assert_eq!(message.smtp_host, "smtp.example.com");
+        assert_eq!(message.smtp_port, 587);
+        assert_eq!(message.username.as_deref(), Some("robot"));
+        assert_eq!(message.password.as_deref(), Some("smtp-secret"));
+        assert_eq!(message.to.len(), 2);
+        assert!(message.subject.contains("编辑失败"));
+        assert!(message.body.contains("boom"));
+    }
+
+    #[test]
+    fn notification_secret_preservation_keeps_empty_file_values() {
+        let existing = NotificationConfig {
+            email: EmailNotificationConfig {
+                password: Some(CredentialRef::File {
+                    value: "smtp-secret".to_string(),
+                }),
+                ..Default::default()
+            },
+            webhooks: vec![WebhookNotificationConfig {
+                id: "ops".to_string(),
+                name: "Ops".to_string(),
+                enabled: true,
+                url: "https://hooks.example.com/task".to_string(),
+                method: "POST".to_string(),
+                headers: BTreeMap::from([(
+                    "Authorization".to_string(),
+                    CredentialRef::File {
+                        value: "Bearer secret".to_string(),
+                    },
+                )]),
+                timeout_seconds: 10,
+            }],
+            ..Default::default()
+        };
+        let mut next = NotificationConfig {
+            email: EmailNotificationConfig {
+                password: Some(CredentialRef::File {
+                    value: String::new(),
+                }),
+                ..Default::default()
+            },
+            webhooks: vec![WebhookNotificationConfig {
+                id: "ops".to_string(),
+                name: "Ops".to_string(),
+                enabled: true,
+                url: "https://hooks.example.com/task".to_string(),
+                method: "POST".to_string(),
+                headers: BTreeMap::from([(
+                    "Authorization".to_string(),
+                    CredentialRef::File {
+                        value: String::new(),
+                    },
+                )]),
+                timeout_seconds: 10,
+            }],
+            ..Default::default()
+        };
+
+        preserve_notification_secrets(&mut next, &existing);
+
+        assert_eq!(
+            next.email.password,
+            Some(CredentialRef::File {
+                value: "smtp-secret".to_string()
+            })
+        );
+        assert_eq!(
+            next.webhooks[0].headers.get("Authorization"),
+            Some(&CredentialRef::File {
+                value: "Bearer secret".to_string()
+            })
+        );
     }
 }

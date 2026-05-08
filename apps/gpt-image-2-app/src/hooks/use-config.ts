@@ -1,6 +1,11 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/lib/api";
-import type { ProviderConfig, ServerConfig } from "@/lib/types";
+import type {
+  JobStatus,
+  NotificationConfig,
+  ProviderConfig,
+  ServerConfig,
+} from "@/lib/types";
 
 export function useConfig() {
   return useQuery<ServerConfig>({
@@ -36,4 +41,26 @@ export function useDeleteProvider() {
 
 export function useTestProvider() {
   return useMutation({ mutationFn: (name: string) => api.testProvider(name) });
+}
+
+export function useUpdateNotifications() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (config: NotificationConfig) => api.updateNotifications(config),
+    onSuccess: (data) => qc.setQueryData(["config"], data),
+  });
+}
+
+export function useNotificationCapabilities() {
+  return useQuery({
+    queryKey: ["notification-capabilities"],
+    queryFn: api.notificationCapabilities,
+    staleTime: 60_000,
+  });
+}
+
+export function useTestNotifications() {
+  return useMutation({
+    mutationFn: (status?: JobStatus) => api.testNotifications(status),
+  });
 }
