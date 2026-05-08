@@ -1,6 +1,5 @@
 import {
   type DragEvent,
-  type ReactNode,
   useCallback,
   useEffect,
   useId,
@@ -9,50 +8,26 @@ import {
   useState,
 } from "react";
 import { toast } from "sonner";
-import {
-  Brush,
-  Circle,
-  Eraser,
-  Image as ImageIcon,
-  Loader2,
-  Maximize2,
-  Move,
-  Plus,
-  Redo2,
-  SlidersHorizontal,
-  Sparkles,
-  Square,
-  Trash2,
-  Undo2,
-  X,
-  ZoomIn,
-  ZoomOut,
-} from "lucide-react";
-import { AnimatePresence, motion } from "motion/react";
-import { Button } from "@/components/ui/button";
-import { Empty } from "@/components/ui/empty";
-import { FieldLabel } from "@/components/ui/field";
 import { Segmented } from "@/components/ui/segmented";
-import { Textarea } from "@/components/ui/textarea";
 import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "@/components/ui/popover";
-import * as RadixDialog from "@radix-ui/react-dialog";
-import { Icon } from "@/components/icon";
-import { OutputTile } from "@/components/screens/shared/output-tile";
-import { PromptTemplatePicker } from "@/components/screens/shared/prompt-template-picker";
-import { CreationParamsBar } from "@/components/screens/shared/creation-params-bar";
-import {
-  MaskCanvas,
   type MaskExport,
   type MaskHistoryState,
   type MaskMode,
   type MaskTool,
 } from "./mask-canvas";
-import { type RefImage } from "./reference-card";
+import { EditCanvasStage } from "./edit-canvas-stage";
+import { EditFooter } from "./edit-footer";
 import { LocalEditOnboarding } from "./local-edit-onboarding";
+import { ReferenceStrip } from "./reference-strip";
+import {
+  blobFile,
+  clampZoom,
+  MAX_INPUT_IMAGES,
+  regionModeLabel,
+  transferredImageFile,
+  type EditMode,
+  type RefWithFile,
+} from "./shared";
 import { useCreateEdit } from "@/hooks/use-jobs";
 import { useJobEvents } from "@/hooks/use-job-events";
 import { useReducedMotion } from "@/hooks/use-reduced-motion";
@@ -68,9 +43,6 @@ import {
 } from "@/lib/job-feedback";
 import {
   normalizeOutputCount,
-  OUTPUT_COUNT_OPTIONS,
-  POPULAR_SIZE_OPTIONS,
-  QUALITY_OPTIONS,
   validateImageSize,
   validateOutputCount,
 } from "@/lib/image-options";
@@ -85,157 +57,27 @@ import {
   reconcileProviderSelection,
 } from "@/lib/providers";
 import {
-  openPath,
-  revealPath,
   saveImages,
   saveJobImages,
 } from "@/lib/user-actions";
 import { runtimeCopy } from "@/lib/runtime-copy";
 import {
   SEND_TO_EDIT_EVENT,
-  sendImageToEdit,
   type SendToEditPayload,
 } from "@/lib/job-navigation";
 import { insertPromptAtCursor } from "@/lib/prompt-templates";
-import { imageAssetFromOutput } from "@/lib/image-actions/asset";
 import {
   isTauriRuntime,
   useGlobalImagePaste,
   useTauriImageDrop,
 } from "@/hooks/use-image-ingest";
-import type { ProviderConfig, ServerConfig } from "@/lib/types";
-import { cn } from "@/lib/cn";
+import type { ServerConfig } from "@/lib/types";
 import {
   dataTransferHasImage,
   imageFilesFromDataTransfer,
   normalizeImageFiles,
   type ImageFileSource,
 } from "@/lib/image-input";
-
-type EditMode = "reference" | "region";
-type RefWithFile = RefImage & { file: File };
-type EditRegionMode = NonNullable<ProviderConfig["edit_region_mode"]>;
-const MAX_INPUT_IMAGES = 16;
-const IMAGE_EXTENSION_BY_TYPE: Record<string, string> = {
-  "image/avif": "avif",
-  "image/bmp": "bmp",
-  "image/gif": "gif",
-  "image/heic": "heic",
-  "image/heif": "heif",
-  "image/jpeg": "jpg",
-  "image/png": "png",
-  "image/tiff": "tiff",
-  "image/webp": "webp",
-};
-const TRANSFER_IMAGE_EXTENSION_RE =
-  /\.(avif|bmp|gif|heic|heif|jpe?g|png|tiff?|webp)$/i;
-
-function blobFile(blob: Blob, name: string) {
-  return new File([blob], name, { type: "image/png" });
-}
-
-function basename(value?: string | null) {
-  if (!value) return "";
-  const clean = value.split(/[?#]/)[0] ?? "";
-  return clean.split(/[\\/]/).pop()?.trim() ?? "";
-}
-
-function imageExtensionForBlob(blob: Blob, fallbackName: string) {
-  const fromType = blob.type ? IMAGE_EXTENSION_BY_TYPE[blob.type] : undefined;
-  if (fromType) return fromType;
-  const fromName = TRANSFER_IMAGE_EXTENSION_RE.exec(fallbackName)?.[1];
-  if (!fromName) return "png";
-  const normalized = fromName.toLowerCase();
-  return normalized === "jpeg" ? "jpg" : normalized;
-}
-
-function imageMimeFromExtension(extension: string) {
-  if (extension === "jpg") return "image/jpeg";
-  if (extension === "tif") return "image/tiff";
-  return `image/${extension}`;
-}
-
-function transferFileName(payload: SendToEditPayload, blob: Blob) {
-  const raw =
-    basename(payload.name) || basename(payload.path) || basename(payload.url);
-  if (raw && TRANSFER_IMAGE_EXTENSION_RE.test(raw)) return raw;
-  const base =
-    raw ||
-    [
-      "sent-to-edit",
-      payload.jobId,
-      payload.outputIndex == null ? undefined : payload.outputIndex + 1,
-    ]
-      .filter(Boolean)
-      .join("-");
-  return `${base}.${imageExtensionForBlob(blob, raw)}`;
-}
-
-function transferSourceUrl(payload: SendToEditPayload) {
-  const pathUrl = payload.path ? api.fileUrl(payload.path) : "";
-  return pathUrl || payload.url || "";
-}
-
-async function transferredImageFile(payload: SendToEditPayload) {
-  const url = transferSourceUrl(payload);
-  if (!url) throw new Error("这张图没有可读取的文件路径或预览地址。");
-  const response = await fetch(url);
-  if (!response.ok) {
-    throw new Error(`读取图片失败：${response.status} ${response.statusText}`);
-  }
-  const blob = await response.blob();
-  if (blob.size <= 0) throw new Error("读取到的图片为空。");
-  if (blob.type && !blob.type.startsWith("image/")) {
-    throw new Error("读取到的文件不是图片。");
-  }
-  const name = transferFileName(payload, blob);
-  const extension = imageExtensionForBlob(blob, name);
-  return new File([blob], name, {
-    type: blob.type || imageMimeFromExtension(extension),
-    lastModified: Date.now(),
-  });
-}
-
-function regionModeLabel(mode: EditRegionMode) {
-  if (mode === "native-mask") return "精确遮罩";
-  if (mode === "reference-hint") return "软选区参考";
-  return "不支持局部编辑";
-}
-
-const FORMAT_OPTIONS = [
-  { value: "png", label: "PNG" },
-  { value: "jpeg", label: "JPEG" },
-  { value: "webp", label: "WEBP" },
-];
-
-const COUNT_OPTIONS = OUTPUT_COUNT_OPTIONS.map((n) => ({
-  value: String(n),
-  label: String(n),
-}));
-
-function clampZoom(value: number) {
-  return Math.min(4, Math.max(0.08, value));
-}
-
-function MaskToolbarTip({
-  label,
-  children,
-}: {
-  label: string;
-  children: ReactNode;
-}) {
-  return (
-    <span className="group/masktip relative inline-flex shrink-0">
-      {children}
-      <span
-        role="tooltip"
-        className="pointer-events-none absolute bottom-full left-1/2 z-50 mb-2 -translate-x-1/2 whitespace-nowrap rounded-md border border-border-faint bg-[color:var(--bg-popover)] px-2 py-1 text-[11px] font-medium text-foreground opacity-0 shadow-popover backdrop-blur transition-opacity group-focus-within/masktip:opacity-100 group-hover/masktip:opacity-100"
-      >
-        {label}
-      </span>
-    </span>
-  );
-}
 
 export function EditScreen({
   config,
@@ -960,757 +802,104 @@ export function EditScreen({
         }}
       />
 
-      <section className="shrink-0 px-4 pb-2" aria-label="参考图缩略图">
-        <div className="surface-panel flex min-w-0 items-center gap-2 px-2.5 py-2">
-          <div className="flex w-12 shrink-0 flex-col items-start justify-center gap-0.5 px-1 leading-none">
-            <span className="t-caps">参考图</span>
-            <span
-              className={cn(
-                "font-mono text-[10.5px] leading-none",
-                referenceCountError
-                  ? "text-[color:var(--status-err)]"
-                  : "text-faint",
-              )}
-            >
-              {refs.length}/{maxReferenceImages}
-            </span>
-          </div>
-          <div className="flex min-w-0 flex-1 gap-2 overflow-x-auto scrollbar-none pb-0.5">
-            <AnimatePresence initial={false}>
-            {refs.map((ref, index) => {
-              const isSelected = ref.id === selectedRef;
-              const isTarget = usesRegion && ref.id === targetRef?.id;
-              const hasMask = Boolean(maskSnapshots[ref.id]);
-              return (
-                <motion.div
-                  key={ref.id}
-                  layout="position"
-                  initial={
-                    reducedMotion
-                      ? false
-                      : { opacity: 0, scale: 0.92, y: 4 }
-                  }
-                  animate={{ opacity: 1, scale: 1, y: 0 }}
-                  exit={
-                    reducedMotion
-                      ? { opacity: 0 }
-                      : { opacity: 0, scale: 0.88, x: -8 }
-                  }
-                  transition={{ duration: 0.18, ease: [0.22, 1, 0.36, 1] }}
-                  className="group relative shrink-0"
-                >
-                  <button
-                    type="button"
-                    onClick={() => setSelectedRef(ref.id)}
-                    className={cn(
-                      "relative h-14 w-14 overflow-hidden rounded-md border transition-[border-color,box-shadow,transform,opacity]",
-                      isSelected
-                        ? "border-[color:var(--accent)] shadow-[0_0_0_2px_var(--accent-faint)]"
-                        : "border-border opacity-75 hover:opacity-100",
-                    )}
-                    title={ref.name}
-                    aria-label={`查看参考图 ${index + 1}: ${ref.name}`}
-                  >
-                    <img
-                      src={ref.url}
-                      alt=""
-                      loading="lazy"
-                      decoding="async"
-                      draggable={false}
-                      className="h-full w-full object-cover"
-                    />
-                    <span
-                      aria-hidden
-                      className="pointer-events-none absolute inset-x-0 bottom-0 h-7 opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100"
-                      style={{
-                        background:
-                          "linear-gradient(to top, rgba(7, 9, 18, 0.82), transparent)",
-                      }}
-                    />
-                    <span
-                      className="absolute bottom-0 left-0 right-0 flex h-4 items-center justify-center text-[8.5px] font-mono text-foreground"
-                      style={{
-                        background:
-                          "linear-gradient(to top, var(--k-72), transparent)",
-                      }}
-                    >
-                      {index + 1}
-                    </span>
-                  </button>
-                  <div className="pointer-events-none absolute left-1 top-1 flex max-w-[calc(100%-8px)] flex-col items-start gap-0.5">
-                    {isTarget && (
-                      <span
-                        className="max-w-full truncate rounded px-1 py-px text-[8px] font-semibold leading-none"
-                        style={{
-                          background: "var(--accent)",
-                          color: "var(--accent-on)",
-                        }}
-                      >
-                        目标
-                      </span>
-                    )}
-                    {hasMask && (
-                      <span className="max-w-full truncate rounded bg-[color:var(--k-65)] px-1 py-px text-[8px] font-semibold leading-none text-foreground">
-                        遮罩
-                      </span>
-                    )}
-                  </div>
-                  <button
-                    type="button"
-                    onClick={(event) => {
-                      event.stopPropagation();
-                      removeRef(ref.id);
-                    }}
-                    className="pointer-events-none absolute right-1 top-1 inline-flex h-5 w-5 translate-y-[-2px] items-center justify-center rounded-full border border-white/30 bg-black/70 text-white opacity-0 shadow-[0_2px_10px_rgba(0,0,0,0.42)] backdrop-blur transition-[opacity,transform,background-color] hover:bg-black/85 focus-visible:pointer-events-auto focus-visible:translate-y-0 focus-visible:opacity-100 group-hover:pointer-events-auto group-hover:translate-y-0 group-hover:opacity-100"
-                    aria-label={`删除第 ${index + 1} 张参考图`}
-                  >
-                    <X size={11} />
-                  </button>
-                  {usesRegion && !isTarget && (
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setTargetRefId(ref.id);
-                        setSelectedRef(ref.id);
-                      }}
-                      className="pointer-events-none absolute inset-x-1 bottom-1 inline-flex h-5 translate-y-1 items-center justify-center rounded border border-white/35 bg-black/75 px-1 text-[8.5px] font-semibold leading-none text-white opacity-0 shadow-[0_2px_12px_rgba(0,0,0,0.45)] backdrop-blur transition-[opacity,transform,background-color] hover:bg-black/90 focus-visible:pointer-events-auto focus-visible:translate-y-0 focus-visible:opacity-100 group-hover:pointer-events-auto group-hover:translate-y-0 group-hover:opacity-100"
-                      aria-label={`把第 ${index + 1} 张设为目标图`}
-                    >
-                      设为目标
-                    </button>
-                  )}
-                </motion.div>
-              );
-            })}
-            </AnimatePresence>
-            <button
-              type="button"
-              onClick={() => fileInputRef.current?.click()}
-              disabled={refs.length >= maxReferenceImages}
-              className="flex h-14 w-14 shrink-0 items-center justify-center rounded-md border border-dashed border-border-strong bg-[color:var(--w-03)] text-muted transition-colors hover:text-foreground disabled:cursor-not-allowed disabled:opacity-45"
-              aria-label="添加参考图"
-              title="添加参考图"
-            >
-              <Plus size={15} />
-            </button>
-          </div>
-        </div>
-      </section>
+      <ReferenceStrip
+        refs={refs}
+        selectedRef={selectedRef}
+        setSelectedRef={setSelectedRef}
+        targetRefId={targetRefId}
+        setTargetRefId={setTargetRefId}
+        targetRef={targetRef}
+        usesRegion={usesRegion}
+        maskSnapshots={maskSnapshots}
+        maxReferenceImages={maxReferenceImages}
+        referenceCountError={referenceCountError}
+        fileInputRef={fileInputRef}
+        removeRef={removeRef}
+        reducedMotion={reducedMotion}
+      />
 
-      {/* CANVAS — full bleed, responsive */}
-      <main className="flex-1 min-h-0 px-4 py-2 flex items-center justify-center overflow-hidden">
-        <div
-          className="surface-panel relative flex h-full w-full items-center justify-center overflow-hidden p-0"
-          onDragEnter={handleCanvasDragEnter}
-          onDragOver={handleCanvasDragOver}
-          onDragLeave={handleCanvasDragLeave}
-          onDrop={handleCanvasDrop}
-        >
-          <motion.div
-            aria-hidden="true"
-            className={cn(
-              "pointer-events-none absolute inset-2 z-20 flex items-center justify-center rounded-[inherit] border border-dashed",
-              "bg-[color:var(--w-08)] backdrop-blur-md transition-[border-color,box-shadow] duration-200 ease-out",
-              isDraggingImages
-                ? "border-[color:var(--accent)] shadow-[0_0_0_1px_var(--accent-faint),var(--shadow-accent-glow)]"
-                : "border-transparent",
-            )}
-            animate={
-              reducedMotion
-                ? { opacity: isDraggingImages ? 1 : 0 }
-                : {
-                    opacity: isDraggingImages ? 1 : 0,
-                    scale: isDraggingImages ? 1 : 0.985,
-                    y: isDraggingImages ? 0 : 2,
-                  }
-            }
-            transition={{ duration: 0.2, ease: [0.22, 1, 0.36, 1] }}
-          >
-            <motion.div
-              className="flex flex-col items-center gap-2 rounded-xl border border-border-faint bg-[color:var(--w-08)] px-4 py-3 text-center shadow-popover"
-              animate={
-                reducedMotion
-                  ? undefined
-                  : { scale: isDraggingImages ? 1.02 : 1 }
-              }
-              transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }}
-            >
-              <ImageIcon size={20} style={{ color: "var(--accent)" }} />
-              <div className="text-[13px] font-semibold text-foreground">
-                松开添加参考图
-              </div>
-              <div className="text-[11px] text-muted">
-                支持拖拽图片，也支持直接粘贴剪贴板图片
-              </div>
-            </motion.div>
-          </motion.div>
-          {usesRegion ? (
-            targetRef ? (
-              <div className="h-full w-full">
-                <div
-                  ref={maskToolbarHostRef}
-                  className="pointer-events-none absolute inset-x-4 bottom-4 z-10 flex justify-center overflow-visible"
-                >
-                  <div
-                    ref={maskToolbarRef}
-                    className="pointer-events-auto flex w-max flex-nowrap items-center justify-start gap-1.5 rounded-2xl border border-[color:var(--accent-25)] px-2 py-1.5 backdrop-blur-xl"
-                    style={{
-                      background:
-                        "linear-gradient(135deg, rgba(var(--accent-rgb), 0.22), rgba(var(--accent-2-rgb), 0.14)), var(--bg-raised)",
-                      boxShadow:
-                        "var(--shadow-floating), inset 0 1px 0 var(--w-12)",
-                      transform: `scale(${maskToolbarScale})`,
-                      transformOrigin: "bottom center",
-                      transition:
-                        "transform 140ms cubic-bezier(0.22, 1, 0.36, 1)",
-                    }}
-                  >
-                    <div className="flex shrink-0 items-center gap-0.5">
-                      <MaskToolbarTip label="画笔">
-                        <button
-                          type="button"
-                          onClick={() => setMaskTool("brush")}
-                          className={cn(
-                            "inline-flex h-8 w-8 items-center justify-center rounded-lg text-muted transition-colors hover:bg-[color:var(--w-08)] hover:text-foreground",
-                            maskTool === "brush" &&
-                              "bg-[color:var(--accent-18)] text-foreground",
-                          )}
-                          aria-label="画笔"
-                          aria-pressed={maskTool === "brush"}
-                        >
-                          <Brush size={15} />
-                        </button>
-                      </MaskToolbarTip>
-                      <MaskToolbarTip label="橡皮">
-                        <button
-                          type="button"
-                          onClick={() => setMaskTool("erase")}
-                          className={cn(
-                            "inline-flex h-8 w-8 items-center justify-center rounded-lg text-muted transition-colors hover:bg-[color:var(--w-08)] hover:text-foreground",
-                            maskTool === "erase" &&
-                              "bg-[color:var(--accent-18)] text-foreground",
-                          )}
-                          aria-label="橡皮"
-                          aria-pressed={maskTool === "erase"}
-                        >
-                          <Eraser size={15} />
-                        </button>
-                      </MaskToolbarTip>
-                      <MaskToolbarTip label="方形选区">
-                        <button
-                          type="button"
-                          onClick={() => setMaskTool("rect")}
-                          className={cn(
-                            "inline-flex h-8 w-8 items-center justify-center rounded-lg text-muted transition-colors hover:bg-[color:var(--w-08)] hover:text-foreground",
-                            maskTool === "rect" &&
-                              "bg-[color:var(--accent-18)] text-foreground",
-                          )}
-                          aria-label="方形选区"
-                          aria-pressed={maskTool === "rect"}
-                        >
-                          <Square size={15} />
-                        </button>
-                      </MaskToolbarTip>
-                      <MaskToolbarTip label="圆形选区">
-                        <button
-                          type="button"
-                          onClick={() => setMaskTool("ellipse")}
-                          className={cn(
-                            "inline-flex h-8 w-8 items-center justify-center rounded-lg text-muted transition-colors hover:bg-[color:var(--w-08)] hover:text-foreground",
-                            maskTool === "ellipse" &&
-                              "bg-[color:var(--accent-18)] text-foreground",
-                          )}
-                          aria-label="圆形选区"
-                          aria-pressed={maskTool === "ellipse"}
-                        >
-                          <Circle size={15} />
-                        </button>
-                      </MaskToolbarTip>
-                      <MaskToolbarTip label="清空选区">
-                        <button
-                          type="button"
-                          onClick={() => setClearKey((k) => k + 1)}
-                          className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-muted transition-colors hover:bg-[color:var(--status-err-10)] hover:text-[color:var(--status-err)]"
-                          aria-label="清空选区"
-                        >
-                          <Trash2 size={15} />
-                        </button>
-                      </MaskToolbarTip>
-                    </div>
-                    <div
-                      className="h-5 w-px shrink-0 bg-border-faint"
-                      aria-hidden
-                    />
-                    <div className="flex shrink-0 items-center gap-0.5">
-                      <MaskToolbarTip label="撤回">
-                        <button
-                          type="button"
-                          onClick={triggerMaskUndo}
-                          disabled={!maskHistory.canUndo}
-                          className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-muted transition-colors hover:bg-[color:var(--w-08)] hover:text-foreground disabled:cursor-not-allowed disabled:opacity-35"
-                          aria-label="撤回"
-                        >
-                          <Undo2 size={15} />
-                        </button>
-                      </MaskToolbarTip>
-                      <MaskToolbarTip label="重做">
-                        <button
-                          type="button"
-                          onClick={triggerMaskRedo}
-                          disabled={!maskHistory.canRedo}
-                          className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-muted transition-colors hover:bg-[color:var(--w-08)] hover:text-foreground disabled:cursor-not-allowed disabled:opacity-35"
-                          aria-label="重做"
-                        >
-                          <Redo2 size={15} />
-                        </button>
-                      </MaskToolbarTip>
-                    </div>
-                    <div
-                      className="h-5 w-px shrink-0 bg-border-faint"
-                      aria-hidden
-                    />
-                    <Popover>
-                      <MaskToolbarTip label="调整粗细">
-                        <PopoverTrigger asChild>
-                          <button
-                            type="button"
-                            className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-foreground transition-colors hover:bg-[color:var(--w-08)]"
-                            aria-label="调整粗细"
-                          >
-                            <SlidersHorizontal size={14} />
-                          </button>
-                        </PopoverTrigger>
-                      </MaskToolbarTip>
-                      <PopoverContent
-                        side="top"
-                        align="center"
-                        className="w-[210px]"
-                      >
-                        <div className="flex items-center justify-between gap-3">
-                          <span className="t-caps">粗细</span>
-                          <span className="font-mono text-[11px] text-muted">
-                            {brushSize}
-                          </span>
-                        </div>
-                        <div className="mt-3 flex items-center gap-3">
-                          <span
-                            aria-hidden
-                            className="shrink-0 rounded-full border border-[color:var(--accent-45)] bg-[color:var(--accent-18)]"
-                            style={{
-                              width: Math.max(6, Math.min(28, brushSize / 2)),
-                              height: Math.max(6, Math.min(28, brushSize / 2)),
-                            }}
-                          />
-                          <input
-                            type="range"
-                            min={2}
-                            max={72}
-                            step={1}
-                            value={brushSize}
-                            onChange={(event) =>
-                              setBrushSize(Number(event.target.value))
-                            }
-                            className="h-5 flex-1 accent-[color:var(--accent)]"
-                            aria-label="选区工具粗细"
-                          />
-                        </div>
-                      </PopoverContent>
-                    </Popover>
-                    <MaskToolbarTip label="适应窗口">
-                      <button
-                        type="button"
-                        onClick={fitCanvasToViewport}
-                        className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-foreground hover:bg-[color:var(--w-08)]"
-                        aria-label="适应窗口"
-                      >
-                        <Maximize2 size={13} />
-                      </button>
-                    </MaskToolbarTip>
-                    <MaskToolbarTip label="缩小">
-                      <button
-                        type="button"
-                        onClick={() =>
-                          setZoom((current) => clampZoom(current * 0.88))
-                        }
-                        className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-foreground hover:bg-[color:var(--w-08)]"
-                        aria-label="缩小"
-                      >
-                        <ZoomOut size={13} />
-                      </button>
-                    </MaskToolbarTip>
-                    <MaskToolbarTip label="放大">
-                      <button
-                        type="button"
-                        onClick={() =>
-                          setZoom((current) => clampZoom(current * 1.14))
-                        }
-                        className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-foreground hover:bg-[color:var(--w-08)]"
-                        aria-label="放大"
-                      >
-                        <ZoomIn size={13} />
-                      </button>
-                    </MaskToolbarTip>
-                    <MaskToolbarTip label="平移">
-                      <button
-                        type="button"
-                        onClick={() => setPanPinned((current) => !current)}
-                        className={cn(
-                          "inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-foreground hover:bg-[color:var(--w-08)]",
-                          panPinned && "bg-[color:var(--accent-18)]",
-                        )}
-                        aria-label="平移"
-                        aria-pressed={panPinned}
-                      >
-                        <Move size={13} />
-                      </button>
-                    </MaskToolbarTip>
-                    <span className="shrink-0 px-1 font-mono text-[10.5px] text-faint">
-                      {Math.round(zoom * 100)}%
-                    </span>
-                  </div>
-                </div>
-                <div
-                  ref={canvasViewportRef}
-                  className="h-full w-full overflow-auto p-4 scrollbar-thin"
-                  onWheel={(event) => {
-                    if (!event.metaKey && !event.ctrlKey) return;
-                    event.preventDefault();
-                    const next = event.deltaY < 0 ? 1.08 : 0.92;
-                    setZoom((current) => clampZoom(current * next));
-                  }}
-                >
-                  <div className="flex min-h-full min-w-full items-center justify-center">
-                    <MaskCanvas
-                      imageUrl={targetRef.url}
-                      seed={0}
-                      brushSize={brushSize}
-                      mode={maskMode}
-                      tool={maskTool}
-                      clearKey={clearKey}
-                      undoKey={undoKey}
-                      redoKey={redoKey}
-                      snapshot={maskSnapshots[targetRef.id]}
-                      snapshotKey={targetRef.id}
-                      zoom={zoom}
-                      interactionMode={panMode ? "pan" : "paint"}
-                      scrollContainerRef={canvasViewportRef}
-                      onImageSizeChange={handleMaskImageSize}
-                      onHistoryChange={setMaskHistory}
-                      onSnapshotChange={(snapshot) => {
-                        setMaskSnapshots((current) => {
-                          if (snapshot)
-                            return { ...current, [targetRef.id]: snapshot };
-                          const { [targetRef.id]: _removed, ...rest } = current;
-                          return rest;
-                        });
-                      }}
-                      exportKey={exportKey ?? undefined}
-                      onExport={(payload) => {
-                        void submit(payload);
-                      }}
-                    />
-                  </div>
-                </div>
-              </div>
-            ) : (
-              <Empty
-                icon="mask"
-                title="请上传并设定目标图"
-                subtitle="或拖入图片、粘贴剪贴板图片。"
-                action={
-                  <Button
-                    variant="primary"
-                    size="md"
-                    icon="plus"
-                    onClick={() => fileInputRef.current?.click()}
-                  >
-                    选择图片
-                  </Button>
-                }
-              />
-            )
-          ) : selectedRefObj || refs[0] ? (
-            <img
-              src={(selectedRefObj ?? refs[0]).url}
-              alt={(selectedRefObj ?? refs[0]).name}
-              className="max-h-full max-w-full object-contain rounded-md"
-            />
-          ) : (
-            <Empty
-              icon="image"
-              title="请上传至少一张参考图"
-              subtitle="或拖入图片、粘贴剪贴板图片。"
-              action={
-                <Button
-                  variant="primary"
-                  size="md"
-                  icon="plus"
-                  onClick={() => fileInputRef.current?.click()}
-                >
-                  选择图片
-                </Button>
-              }
-            />
-          )}
-        </div>
-      </main>
+      <EditCanvasStage
+        usesRegion={usesRegion}
+        targetRef={targetRef}
+        selectedRefObj={selectedRefObj}
+        refs={refs}
+        fileInputRef={fileInputRef}
+        isDraggingImages={isDraggingImages}
+        reducedMotion={reducedMotion}
+        onDragEnter={handleCanvasDragEnter}
+        onDragOver={handleCanvasDragOver}
+        onDragLeave={handleCanvasDragLeave}
+        onDrop={handleCanvasDrop}
+        maskToolbarHostRef={maskToolbarHostRef}
+        maskToolbarRef={maskToolbarRef}
+        maskToolbarScale={maskToolbarScale}
+        maskTool={maskTool}
+        setMaskTool={setMaskTool}
+        brushSize={brushSize}
+        setBrushSize={setBrushSize}
+        maskHistory={maskHistory}
+        onMaskHistoryChange={setMaskHistory}
+        triggerMaskUndo={triggerMaskUndo}
+        triggerMaskRedo={triggerMaskRedo}
+        setClearKey={setClearKey}
+        fitCanvasToViewport={fitCanvasToViewport}
+        zoom={zoom}
+        setZoom={setZoom}
+        panPinned={panPinned}
+        setPanPinned={setPanPinned}
+        canvasViewportRef={canvasViewportRef}
+        maskMode={maskMode}
+        clearKey={clearKey}
+        undoKey={undoKey}
+        redoKey={redoKey}
+        maskSnapshots={maskSnapshots}
+        setMaskSnapshots={setMaskSnapshots}
+        exportKey={exportKey}
+        onExport={(payload) => {
+          void submit(payload);
+        }}
+        panMode={panMode}
+        handleMaskImageSize={handleMaskImageSize}
+      />
 
-      {/* BOTTOM — prompt + floating output drawer + error */}
-      <footer className="relative shrink-0 px-4 pb-3 space-y-2">
-        {runError && !isWorking && (
-          <div className="surface-panel flex items-center gap-2 px-3 py-2 border border-[color:var(--status-err)]/40 animate-fade-up">
-            <Icon
-              name="warn"
-              size={13}
-              style={{ color: "var(--status-err)" }}
-            />
-            <span
-              className="text-[12px] flex-1"
-              style={{ color: "var(--status-err)" }}
-            >
-              {runError}
-            </span>
-            <Button variant="ghost" size="sm" icon="reload" onClick={handleRun}>
-              重试
-            </Button>
-          </div>
-        )}
-
-        {runNotice && !isWorking && (
-          <div className="surface-panel px-3 py-1.5 text-[11.5px] leading-relaxed text-muted animate-fade-up">
-            {runNotice} 已保留收到的图片；如果需要补齐，可以点「应用」重试。
-          </div>
-        )}
-
-        {showOutputsLauncher && (
-          <RadixDialog.Root
-            open={outputsDrawerOpen}
-            onOpenChange={setOutputsDrawerOpen}
-          >
-            <RadixDialog.Trigger asChild>
-              <button
-                type="button"
-                className="absolute right-5 -top-12 z-20 inline-flex h-9 items-center gap-2 rounded-full border border-[color:var(--accent-35)] px-3 text-[12px] font-semibold text-foreground shadow-floating backdrop-blur-xl transition-[background-color,opacity,transform] hover:-translate-y-0.5 hover:bg-[color:var(--w-09)]"
-                style={{
-                  background:
-                    "linear-gradient(135deg, rgba(var(--accent-rgb), 0.2), rgba(var(--accent-2-rgb), 0.14)), var(--bg-raised)",
-                }}
-                aria-label="打开输出抽屉"
-              >
-                {isWorking ? (
-                  <Loader2 size={13} className="animate-spin" />
-                ) : (
-                  <ImageIcon size={13} />
-                )}
-                <span>
-                  {isWorking
-                    ? `生成中 · ${displayN} 张`
-                    : `输出 · ${outputs.length} 张`}
-                </span>
-              </button>
-            </RadixDialog.Trigger>
-            <RadixDialog.Portal>
-              <RadixDialog.Overlay
-                className="fixed inset-0 z-40 bg-black/35 backdrop-blur-sm data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:animate-in data-[state=open]:fade-in-0"
-                aria-hidden
-              />
-              <RadixDialog.Content
-                className="fixed inset-x-4 bottom-4 z-50 grid max-h-[min(46vh,420px)] grid-rows-[auto_minmax(0,1fr)] overflow-hidden rounded-2xl border border-border-faint shadow-popover outline-none data-[state=closed]:animate-out data-[state=closed]:slide-out-to-bottom-4 data-[state=open]:animate-in data-[state=open]:slide-in-from-bottom-4"
-                style={{
-                  background: "var(--surface-floating)",
-                  backdropFilter: "blur(28px) saturate(150%)",
-                  WebkitBackdropFilter: "blur(28px) saturate(150%)",
-                }}
-              >
-                <div className="flex min-w-0 items-center gap-2 border-b border-[color:var(--w-06)] px-4 py-3">
-                  <RadixDialog.Title className="shrink-0 text-[13px] font-semibold text-foreground">
-                    {isWorking
-                      ? `生成中 · ${displayN} 张`
-                      : `输出 · ${outputs.length} 张`}
-                  </RadixDialog.Title>
-                  <div className="min-w-0 flex-1" />
-                  {hasOutputs && (
-                    <>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        icon="download"
-                        onClick={saveSelected}
-                      >
-                        {copy.saveSelectedLabel}
-                      </Button>
-                      {outputs.length > 1 && (
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          icon="download"
-                          onClick={saveAll}
-                        >
-                          {copy.saveJobLabel}
-                        </Button>
-                      )}
-                      {api.canRevealFiles && (
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          icon="folder"
-                          onClick={() => revealPath(selectedPath)}
-                        >
-                          位置
-                        </Button>
-                      )}
-                    </>
-                  )}
-                  <RadixDialog.Close asChild>
-                    <button
-                      type="button"
-                      className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-muted transition-colors hover:bg-[color:var(--w-06)] hover:text-foreground"
-                      aria-label="关闭输出抽屉"
-                    >
-                      <X size={14} />
-                    </button>
-                  </RadixDialog.Close>
-                </div>
-                <div className="min-h-0 overflow-x-auto overflow-y-hidden p-3 scrollbar-thin">
-                  <div className="flex min-w-max gap-2 pb-1">
-                    {isWorking &&
-                      !hasOutputs &&
-                      Array.from({ length: displayN }).map((_, i) => (
-                        <div
-                          key={i}
-                          className="shrink-0 animate-fade-up"
-                          style={{ animationDelay: `${i * 65}ms` }}
-                        >
-                          <div
-                            className="flex h-20 w-20 items-center justify-center rounded-md border border-border bg-[color:var(--w-04)] font-mono text-[10px] text-faint animate-shimmer"
-                            style={{
-                              background: "var(--skeleton-gradient-soft)",
-                              backgroundSize: "200% 100%",
-                            }}
-                          >
-                            {String.fromCharCode(65 + i)}
-                          </div>
-                        </div>
-                      ))}
-                    {hasOutputs &&
-                      outputs.map((output) => (
-                        <div
-                          key={output.index}
-                          className="w-20 shrink-0 animate-fade-up"
-                          style={{
-                            animationDelay: `${output.index * 45}ms`,
-                          }}
-                        >
-                          <OutputTile
-                            output={output}
-                            asset={imageAssetFromOutput({
-                              jobId: jobId!,
-                              outputIndex: output.index,
-                              src: output.url ?? "",
-                              path:
-                                api.outputPath(jobId!, output.index) ?? null,
-                              prompt: prompt || undefined,
-                              command: "images edit",
-                            })}
-                            downloadLabel={copy.saveImageLabel}
-                            onSelect={() => setSelectedOutput(output.index)}
-                            onDownload={() =>
-                              saveImages(
-                                [api.outputPath(jobId!, output.index)],
-                                "图片",
-                              )
-                            }
-                            onOpen={() =>
-                              openPath(api.outputPath(jobId!, output.index))
-                            }
-                            onSendToEdit={() =>
-                              sendImageToEdit({
-                                jobId: jobId!,
-                                outputIndex: output.index,
-                                path: api.outputPath(jobId!, output.index),
-                                url: output.url,
-                              })
-                            }
-                          />
-                        </div>
-                      ))}
-                  </div>
-                </div>
-              </RadixDialog.Content>
-            </RadixDialog.Portal>
-          </RadixDialog.Root>
-        )}
-
-        <div className="surface-panel p-2.5">
-          <div className="flex items-center gap-2 mb-1.5">
-            <FieldLabel htmlFor={promptId}>
-              {usesRegion ? "目标图选区里要变成什么" : "提示词"}
-            </FieldLabel>
-            <div className="flex-1" />
-            <PromptTemplatePicker
-              scope={usesRegion ? "region" : "edit"}
-              onInsert={insertPromptTemplate}
-            />
-            <span className="text-[10.5px] font-mono text-faint">
-              {prompt.length} / 4000
-            </span>
-          </div>
-          <Textarea
-            ref={promptTextareaRef}
-            id={promptId}
-            value={prompt}
-            onChange={(event) => setPrompt(event.target.value)}
-            minHeight={104}
-            maxLength={4000}
-            placeholder={
-              usesRegion
-                ? "描述目标图选区里要变成什么..."
-                : "描述如何参考这些图片进行编辑..."
-            }
-            onKeyDown={(event) => {
-              if (event.key === "Enter" && (event.metaKey || event.ctrlKey))
-                handleRun();
-            }}
-          />
-          <CreationParamsBar
-            size={size}
-            onSizeChange={setSize}
-            sizeOptions={POPULAR_SIZE_OPTIONS}
-            sizeInvalid={!sizeValidation.ok}
-            quality={quality}
-            onQualityChange={setQuality}
-            qualityOptions={QUALITY_OPTIONS}
-            format={format}
-            onFormatChange={setFormat}
-            formatOptions={FORMAT_OPTIONS}
-            count={String(n)}
-            onCountChange={(value) => setN(Number(value) || 1)}
-            countOptions={COUNT_OPTIONS}
-            countDisabled={!supportsMultipleOutputs}
-            countInvalid={supportsMultipleOutputs && !outputCountValidation.ok}
-            action={
-              <button
-                type="button"
-                onClick={handleRun}
-                disabled={submitDisabled}
-                className="inline-flex h-10 w-full items-center justify-center gap-1.5 rounded-full px-5 text-[13px] font-semibold text-foreground transition-[background,opacity,transform] hover:opacity-95 active:translate-y-[0.5px] disabled:cursor-not-allowed disabled:opacity-45"
-                style={{
-                  backgroundImage: "var(--accent-gradient-fill)",
-                  border: "1px solid var(--accent-50)",
-                  boxShadow: "var(--shadow-accent-glow)",
-                }}
-              >
-                {isSubmitting ? (
-                  <Loader2 size={13} className="animate-spin" />
-                ) : (
-                  <Sparkles size={13} />
-                )}
-                {isSubmitting ? "提交中…" : isTracking ? "再提交" : "应用"}
-              </button>
-            }
-          />
-        </div>
-      </footer>
+      <EditFooter
+        runError={runError}
+        runNotice={runNotice}
+        isWorking={isWorking}
+        handleRun={handleRun}
+        showOutputsLauncher={showOutputsLauncher}
+        outputsDrawerOpen={outputsDrawerOpen}
+        setOutputsDrawerOpen={setOutputsDrawerOpen}
+        displayN={displayN}
+        outputs={outputs}
+        hasOutputs={hasOutputs}
+        copy={copy}
+        saveSelected={saveSelected}
+        saveAll={saveAll}
+        selectedPath={selectedPath}
+        jobId={jobId}
+        prompt={prompt}
+        setSelectedOutput={setSelectedOutput}
+        promptId={promptId}
+        usesRegion={usesRegion}
+        insertPromptTemplate={insertPromptTemplate}
+        promptTextareaRef={promptTextareaRef}
+        setPrompt={setPrompt}
+        size={size}
+        setSize={setSize}
+        sizeValidation={sizeValidation}
+        quality={quality}
+        setQuality={setQuality}
+        format={format}
+        setFormat={setFormat}
+        n={n}
+        setN={setN}
+        supportsMultipleOutputs={supportsMultipleOutputs}
+        outputCountValidation={outputCountValidation}
+        submitDisabled={submitDisabled}
+        isSubmitting={isSubmitting}
+        isTracking={isTracking}
+      />
     </div>
   );
 }
