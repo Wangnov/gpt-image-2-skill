@@ -1,4 +1,4 @@
-import type { CSSProperties, MouseEvent } from "react";
+import { useState, type CSSProperties, type MouseEvent } from "react";
 import { AnimatePresence, motion } from "motion/react";
 import { Icon } from "@/components/icon";
 import { useReducedMotion } from "@/hooks/use-reduced-motion";
@@ -37,6 +37,13 @@ const DEFAULT_SLOTS: ImageActionId[] = [
  * a contextmenu event to open the same `ImageContextMenu` Trigger that the
  * tile is wrapped in, so users always have a path to the full action set.
  */
+const FLASH_DURATION_MS = 600;
+const FLASHABLE_ACTIONS = new Set<ImageActionId>([
+  "copy-image",
+  "copy-image-with-prompt",
+  "save-as",
+]);
+
 export function ImageHoverToolbar({
   asset,
   visible = true,
@@ -49,6 +56,9 @@ export function ImageHoverToolbar({
     asset,
     surface: "hover-toolbar",
   });
+  const [flashedActionId, setFlashedActionId] = useState<ImageActionId | null>(
+    null,
+  );
 
   const slotActions = slots
     .map((id) => available.find((action) => action.id === id))
@@ -72,25 +82,71 @@ export function ImageHoverToolbar({
           }
           transition={{ duration: 0.16, ease: [0.22, 1, 0.36, 1] }}
         >
-          {slotActions.map((action) => (
-            <button
-              key={action.id}
-              type="button"
-              title={action.label(ctx)}
-              aria-label={action.label(ctx)}
-              disabled={
-                action.isEnabled ? !action.isEnabled(ctx) : false
-              }
-              onClick={(event) => {
-                event.stopPropagation();
-                event.preventDefault();
-                void run(action.id);
-              }}
-              className="touch-target image-overlay flex h-8 w-8 items-center justify-center rounded-[4px] border-none disabled:opacity-40"
-            >
-              <Icon name={action.icon} size={13} />
-            </button>
-          ))}
+          {slotActions.map((action) => {
+            const isFlashing = flashedActionId === action.id;
+            return (
+              <button
+                key={action.id}
+                type="button"
+                title={action.label(ctx)}
+                aria-label={action.label(ctx)}
+                disabled={
+                  action.isEnabled ? !action.isEnabled(ctx) : false
+                }
+                onClick={async (event) => {
+                  event.stopPropagation();
+                  event.preventDefault();
+                  await run(action.id);
+                  // Flash a ✓ + a brief outline pulse on actions that
+                  // benefit from a "yes, that worked" beat — copy/save —
+                  // otherwise sonner's toast is already enough.
+                  if (FLASHABLE_ACTIONS.has(action.id)) {
+                    setFlashedActionId(action.id);
+                    window.setTimeout(
+                      () =>
+                        setFlashedActionId((current) =>
+                          current === action.id ? null : current,
+                        ),
+                      FLASH_DURATION_MS,
+                    );
+                  }
+                }}
+                className="touch-target image-overlay flex h-8 w-8 items-center justify-center rounded-[4px] border-none disabled:opacity-40 relative"
+                style={
+                  isFlashing
+                    ? {
+                        boxShadow:
+                          "0 0 0 2px var(--accent), 0 0 12px var(--accent-faint)",
+                      }
+                    : undefined
+                }
+              >
+                <AnimatePresence mode="wait" initial={false}>
+                  <motion.span
+                    key={isFlashing ? "check" : "icon"}
+                    initial={
+                      reducedMotion
+                        ? false
+                        : { scale: 0.7, opacity: 0 }
+                    }
+                    animate={{ scale: 1, opacity: 1 }}
+                    exit={
+                      reducedMotion
+                        ? { opacity: 0 }
+                        : { scale: 1.2, opacity: 0 }
+                    }
+                    transition={{ duration: 0.18, ease: [0.22, 1, 0.36, 1] }}
+                    className="inline-flex items-center justify-center"
+                  >
+                    <Icon
+                      name={isFlashing ? "check" : action.icon}
+                      size={13}
+                    />
+                  </motion.span>
+                </AnimatePresence>
+              </button>
+            );
+          })}
           <button
             type="button"
             title="更多"
