@@ -17,11 +17,12 @@ use axum::{
 };
 use gpt_image_2_core::{
     AppConfig, CONFIG_DIR_NAME, CredentialRef, HistoryListOptions, KEYCHAIN_SERVICE,
-    NotificationConfig, ProviderConfig, default_config_path, default_keychain_account,
-    delete_history_job, dispatch_task_notifications, history_db_path, jobs_dir,
-    list_active_history_jobs, list_history_jobs_page, load_app_config, notification_status_allowed,
-    preserve_notification_secrets, read_keychain_secret, redact_app_config, run_json,
-    save_app_config, shared_config_dir, show_history_job, upsert_history_job,
+    NotificationConfig, ProviderConfig, StorageConfig, StorageTargetConfig, StorageUploadOverrides,
+    default_config_path, default_keychain_account, delete_history_job, dispatch_task_notifications,
+    history_db_path, jobs_dir, list_active_history_jobs, list_history_jobs_page, load_app_config,
+    notification_status_allowed, preserve_notification_secrets, preserve_storage_secrets,
+    read_keychain_secret, redact_app_config, run_json, save_app_config, shared_config_dir,
+    show_history_job, test_storage_target, upload_job_outputs_to_storage, upsert_history_job,
     write_keychain_secret,
 };
 use serde::{Deserialize, Serialize};
@@ -243,6 +244,10 @@ struct GenerateRequest {
     compression: Option<u8>,
     #[serde(default)]
     moderation: Option<String>,
+    #[serde(default)]
+    storage_targets: Option<Vec<String>>,
+    #[serde(default)]
+    fallback_targets: Option<Vec<String>>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -272,6 +277,10 @@ struct EditRequest {
     input_fidelity: Option<String>,
     #[serde(default)]
     moderation: Option<String>,
+    #[serde(default)]
+    storage_targets: Option<Vec<String>>,
+    #[serde(default)]
+    fallback_targets: Option<Vec<String>>,
     refs: Vec<UploadFile>,
     #[serde(default)]
     mask: Option<UploadFile>,
@@ -1149,6 +1158,8 @@ fn edit_request_metadata(request: &EditRequest) -> Value {
         "compression": request.compression,
         "input_fidelity": request.input_fidelity,
         "moderation": request.moderation,
+        "storage_targets": request.storage_targets,
+        "fallback_targets": request.fallback_targets,
         "ref_count": request.refs.len(),
         "has_mask": request.mask.is_some(),
         "selection_hint": request.selection_hint.is_some(),
@@ -1311,6 +1322,7 @@ fn finish_queued_job(state: JobQueueState, queued: QueuedJob, result: Result<Val
         }
     };
     let _ = persist_job(&job);
+    let dispatch_after_storage = job.get("status").and_then(Value::as_str) == Some("completed");
     {
         let mut inner = match state.inner.lock() {
             Ok(inner) => inner,
@@ -1319,8 +1331,78 @@ fn finish_queued_job(state: JobQueueState, queued: QueuedJob, result: Result<Val
         inner.running = inner.running.saturating_sub(1);
         append_queue_event(&mut inner, &queued.id, "local", event_type, event_data);
     }
-    spawn_notification_dispatch(state.clone(), queued.id, job);
+    if dispatch_after_storage {
+        spawn_storage_upload_then_notify(state.clone(), queued.id, job);
+    } else {
+        spawn_notification_dispatch(state.clone(), queued.id, job);
+    }
     start_queued_jobs(state);
+}
+
+fn storage_overrides_from_job(job: &Value) -> StorageUploadOverrides {
+    let metadata = job.get("metadata").cloned().unwrap_or_else(|| json!({}));
+    StorageUploadOverrides {
+        targets: metadata.get("storage_targets").and_then(|targets| {
+            targets.as_array().map(|items| {
+                items
+                    .iter()
+                    .filter_map(Value::as_str)
+                    .map(ToString::to_string)
+                    .collect::<Vec<_>>()
+            })
+        }),
+        fallback_targets: metadata.get("fallback_targets").and_then(|targets| {
+            targets.as_array().map(|items| {
+                items
+                    .iter()
+                    .filter_map(Value::as_str)
+                    .map(ToString::to_string)
+                    .collect::<Vec<_>>()
+            })
+        }),
+    }
+}
+
+fn upload_completed_job_outputs(job: &Value) -> Result<Value, String> {
+    let config = load_config()?;
+    let overrides = storage_overrides_from_job(job);
+    upload_job_outputs_to_storage(&config.storage, job, overrides)
+        .map_err(app_error)
+        .map(|_| ())
+        .map_err(|error| format!("Storage upload failed: {error}"))?;
+    let job_id = job
+        .get("id")
+        .and_then(Value::as_str)
+        .ok_or_else(|| "Job id is missing.".to_string())?;
+    show_history_job(job_id).map_err(app_error)
+}
+
+fn spawn_storage_upload_then_notify(state: JobQueueState, job_id: String, job: Value) {
+    thread::spawn(move || {
+        let notify_job = match upload_completed_job_outputs(&job) {
+            Ok(job) => job,
+            Err(error) => {
+                eprintln!("storage upload failed before notification dispatch: {error}");
+                job.clone()
+            }
+        };
+        if let Ok(mut inner) = state.inner.lock() {
+            append_queue_event(
+                &mut inner,
+                &job_id,
+                "local",
+                "job.storage",
+                json!({
+                    "status": notify_job
+                        .get("storage_status")
+                        .cloned()
+                        .unwrap_or_else(|| json!("not_configured")),
+                    "job": notify_job,
+                }),
+            );
+        }
+        spawn_notification_dispatch(state, job_id, notify_job);
+    });
 }
 
 // Notification I/O (SMTP, webhooks) is blocking and may take seconds. Run it
@@ -1481,6 +1563,44 @@ async fn update_notifications(Json(mut body): Json<NotificationConfig>) -> ApiRe
     config.notifications = body;
     save_config(&config).map_err(ApiError::internal)?;
     Ok(Json(config_for_ui(&config)))
+}
+
+async fn update_storage(Json(mut body): Json<StorageConfig>) -> ApiResult {
+    let mut config = load_config().map_err(ApiError::internal)?;
+    preserve_storage_secrets(&mut body, &config.storage);
+    config.storage = body;
+    save_config(&config).map_err(ApiError::internal)?;
+    Ok(Json(config_for_ui(&config)))
+}
+
+#[derive(Deserialize)]
+struct StorageTestBody {
+    #[serde(default)]
+    target: Option<StorageTargetConfig>,
+}
+
+async fn test_storage(Path(name): Path<String>, Json(body): Json<StorageTestBody>) -> ApiResult {
+    let config = load_config().map_err(ApiError::internal)?;
+    let owned_target;
+    let target = if let Some(target) = body.target {
+        let mut storage = StorageConfig {
+            targets: BTreeMap::from([(name.clone(), target)]),
+            ..StorageConfig::default()
+        };
+        preserve_storage_secrets(&mut storage, &config.storage);
+        owned_target = storage
+            .targets
+            .remove(&name)
+            .ok_or_else(|| ApiError::bad_request(format!("Unknown storage target: {name}")))?;
+        &owned_target
+    } else {
+        config
+            .storage
+            .targets
+            .get(&name)
+            .ok_or_else(|| ApiError::bad_request(format!("Unknown storage target: {name}")))?
+    };
+    Ok(Json(json!(test_storage_target(&name, target))))
 }
 
 #[derive(Deserialize)]
@@ -1970,6 +2090,24 @@ fn edit_request_from_job(job_id: &str, job: &Value) -> Result<EditRequest, Strin
         compression: u8_field(&metadata, "compression"),
         input_fidelity: string_field(&metadata, "input_fidelity"),
         moderation: string_field(&metadata, "moderation"),
+        storage_targets: metadata.get("storage_targets").and_then(|targets| {
+            targets.as_array().map(|items| {
+                items
+                    .iter()
+                    .filter_map(Value::as_str)
+                    .map(ToString::to_string)
+                    .collect::<Vec<_>>()
+            })
+        }),
+        fallback_targets: metadata.get("fallback_targets").and_then(|targets| {
+            targets.as_array().map(|items| {
+                items
+                    .iter()
+                    .filter_map(Value::as_str)
+                    .map(ToString::to_string)
+                    .collect::<Vec<_>>()
+            })
+        }),
         refs,
         mask,
         selection_hint,
@@ -2160,6 +2298,8 @@ fn api_router(state: JobQueueState) -> Router {
             "/notifications/capabilities",
             get(notification_capabilities),
         )
+        .route("/storage", put(update_storage))
+        .route("/storage/{name}/test", post(test_storage))
         .route("/providers/default", post(set_default_provider))
         .route(
             "/providers/{name}",

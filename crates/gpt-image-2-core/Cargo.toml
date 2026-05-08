@@ -16,12 +16,16 @@ clap = { version = "4.5.51", features = ["derive"] }
 dirs = "6.0.0"
 keyring = "3.6.3"
 image = { version = "0.25.8", default-features = false, features = ["jpeg", "png", "webp"] }
+chrono = { version = "0.4.44", default-features = false, features = ["clock"] }
+hmac = "0.12.1"
 lettre = { version = "0.11.21", default-features = false, features = ["builder", "hostname", "pool", "ring", "rustls", "smtp-transport", "webpki-roots"] }
 mime_guess = "2.0.5"
 reqwest = { version = "0.12.24", default-features = false, features = ["blocking", "charset", "http2", "json", "multipart", "rustls-tls"] }
 rusqlite = { version = "0.37.0", features = ["bundled"] }
 serde = { version = "1.0.228", features = ["derive"] }
 serde_json = "1.0.145"
+sha2 = "0.10.9"
+ssh2 = "0.9.5"
 url = "2.5.7"
 
 [dev-dependencies]

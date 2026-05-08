@@ -38,6 +38,16 @@ function plannedCount(job: Job) {
   return outputs > 0 ? outputs : 1;
 }
 
+function storageStatusLabel(status?: string) {
+  if (status === "completed") return "已上传";
+  if (status === "fallback_completed") return "已回退";
+  if (status === "partial_failed") return "部分失败";
+  if (status === "failed") return "上传失败";
+  if (status === "running") return "上传中";
+  if (status === "pending") return "待上传";
+  return "";
+}
+
 function firstAvailablePath(job: Job) {
   return (
     job.outputs
@@ -240,6 +250,8 @@ export function JobRow({
   const planned = plannedCount(job);
   const doneCount = api.jobOutputPaths(job).length;
   const grouped = planned > 1;
+  const storageLabel =
+    job.status === "completed" ? storageStatusLabel(job.storage_status) : "";
 
   return (
     <Fragment>
@@ -323,6 +335,9 @@ export function JobRow({
             />
             {statusLabel(job.status)}
           </Badge>
+          {storageLabel && (
+            <div className="mt-1 text-[10.5px] text-faint">{storageLabel}</div>
+          )}
         </div>
         <div className="flex justify-end gap-0.5">
           {grouped && (

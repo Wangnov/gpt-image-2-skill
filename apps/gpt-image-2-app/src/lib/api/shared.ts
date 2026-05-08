@@ -1,8 +1,12 @@
 import type {
   Job,
   NotificationConfig,
+  OutputUploadRef,
   OutputRef,
   ServerConfig,
+  StorageConfig,
+  StorageFallbackPolicy,
+  StorageTargetConfig,
 } from "../types";
 import type { TauriJobResponse } from "./types";
 
@@ -45,9 +49,9 @@ export function normalizeJob(raw: Record<string, unknown>): Job {
     path?: string | null;
   };
   const outputs = Array.isArray(raw.outputs)
-    ? (raw.outputs as OutputRef[])
+    ? normalizeOutputs(raw.outputs)
     : Array.isArray(output.files)
-      ? output.files
+      ? normalizeOutputs(output.files)
       : [];
   const outputPath =
     typeof raw.output_path === "string"
@@ -67,10 +71,67 @@ export function normalizeJob(raw: Record<string, unknown>): Job {
     metadata,
     outputs,
     output_path: outputPath,
+    storage_status:
+      typeof raw.storage_status === "string"
+        ? raw.storage_status
+        : "not_configured",
     error: (raw.error as Job["error"]) ?? null,
   };
   rememberJobOutputs(job);
   return job;
+}
+
+function safeHttpUrl(value: unknown) {
+  if (typeof value !== "string") return null;
+  try {
+    const parsed = new URL(value);
+    return parsed.protocol === "http:" || parsed.protocol === "https:"
+      ? value
+      : null;
+  } catch {
+    return null;
+  }
+}
+
+function normalizeOutputs(value: unknown[]): OutputRef[] {
+  return value.map((item, index) => {
+    const raw =
+      item && typeof item === "object"
+        ? (item as Record<string, unknown>)
+        : {};
+    return {
+      index: Number.isFinite(Number(raw.index)) ? Number(raw.index) : index,
+      path: String(raw.path ?? ""),
+      bytes: Number.isFinite(Number(raw.bytes)) ? Number(raw.bytes) : 0,
+      uploads: Array.isArray(raw.uploads)
+        ? raw.uploads.map(normalizeOutputUpload)
+        : [],
+    };
+  });
+}
+
+function normalizeOutputUpload(value: unknown): OutputUploadRef {
+  const raw =
+    value && typeof value === "object"
+      ? (value as Record<string, unknown>)
+      : {};
+  return {
+    target: String(raw.target ?? ""),
+    target_type: String(raw.target_type ?? "unknown"),
+    status: String(raw.status ?? "pending"),
+    url: safeHttpUrl(raw.url),
+    error: typeof raw.error === "string" ? raw.error : null,
+    bytes: Number.isFinite(Number(raw.bytes)) ? Number(raw.bytes) : null,
+    attempts: Number.isFinite(Number(raw.attempts))
+      ? Number(raw.attempts)
+      : 0,
+    updated_at:
+      typeof raw.updated_at === "string" ? raw.updated_at : undefined,
+    metadata:
+      raw.metadata && typeof raw.metadata === "object"
+        ? (raw.metadata as Record<string, unknown>)
+        : null,
+  };
 }
 
 export function normalizeJobResponse(raw: TauriJobResponse): TauriJobResponse {
@@ -101,6 +162,141 @@ export function defaultNotificationConfig(): NotificationConfig {
       timeout_seconds: 10,
     },
     webhooks: [],
+  };
+}
+
+export function defaultStorageConfig(): StorageConfig {
+  return {
+    targets: {
+      "local-default": {
+        type: "local",
+        directory: "",
+        public_base_url: null,
+      },
+    },
+    default_targets: [],
+    fallback_targets: ["local-default"],
+    fallback_policy: "on_failure",
+    upload_concurrency: 4,
+    target_concurrency: 2,
+  };
+}
+
+export function storageTargetType(target?: StorageTargetConfig | null) {
+  if (!target) return "local";
+  if (target.type) return target.type;
+  if ("bucket" in target) return "s3";
+  if ("remote_dir" in target) return "sftp";
+  if ("method" in target || "public_url_json_pointer" in target) return "http";
+  if ("url" in target) return "webdav";
+  return "local";
+}
+
+function normalizeStorageTarget(target: StorageTargetConfig): StorageTargetConfig {
+  const type = storageTargetType(target);
+  if (type === "s3") {
+    return {
+      type,
+      bucket: "bucket" in target ? target.bucket : "",
+      region: "region" in target ? (target.region ?? null) : null,
+      endpoint: "endpoint" in target ? (target.endpoint ?? null) : null,
+      prefix: "prefix" in target ? (target.prefix ?? null) : null,
+      access_key_id:
+        "access_key_id" in target ? (target.access_key_id ?? null) : null,
+      secret_access_key:
+        "secret_access_key" in target
+          ? (target.secret_access_key ?? null)
+          : null,
+      session_token:
+        "session_token" in target ? (target.session_token ?? null) : null,
+      public_base_url:
+        "public_base_url" in target ? (target.public_base_url ?? null) : null,
+    };
+  }
+  if (type === "webdav") {
+    return {
+      type,
+      url: "url" in target ? target.url : "",
+      username: "username" in target ? (target.username ?? null) : null,
+      password: "password" in target ? (target.password ?? null) : null,
+      public_base_url:
+        "public_base_url" in target ? (target.public_base_url ?? null) : null,
+    };
+  }
+  if (type === "http") {
+    return {
+      type,
+      url: "url" in target ? target.url : "",
+      method: "method" in target ? target.method || "POST" : "POST",
+      headers: "headers" in target ? (target.headers ?? {}) : {},
+      public_url_json_pointer:
+        "public_url_json_pointer" in target
+          ? (target.public_url_json_pointer ?? null)
+          : null,
+    };
+  }
+  if (type === "sftp") {
+    return {
+      type,
+      host: "host" in target ? target.host : "",
+      port: "port" in target ? Number(target.port || 22) : 22,
+      host_key_sha256:
+        "host_key_sha256" in target ? (target.host_key_sha256 ?? null) : null,
+      username:
+        "username" in target && typeof target.username === "string"
+          ? target.username
+          : "",
+      password: "password" in target ? (target.password ?? null) : null,
+      private_key:
+        "private_key" in target ? (target.private_key ?? null) : null,
+      remote_dir:
+        "remote_dir" in target && typeof target.remote_dir === "string"
+          ? target.remote_dir
+          : "",
+      public_base_url:
+        "public_base_url" in target ? (target.public_base_url ?? null) : null,
+    };
+  }
+  return {
+    type: "local",
+    directory: "directory" in target ? target.directory : "",
+    public_base_url:
+      "public_base_url" in target ? (target.public_base_url ?? null) : null,
+  };
+}
+
+export function normalizeStorageConfig(
+  config?: Partial<StorageConfig> | null,
+): StorageConfig {
+  const defaults = defaultStorageConfig();
+  const targets = Object.fromEntries(
+    Object.entries(config?.targets ?? defaults.targets).map(([name, target]) => [
+      name,
+      normalizeStorageTarget(target as StorageTargetConfig),
+    ]),
+  );
+  const fallbackPolicy = String(
+    config?.fallback_policy ?? defaults.fallback_policy,
+  ) as StorageFallbackPolicy;
+  return {
+    targets,
+    default_targets: Array.isArray(config?.default_targets)
+      ? config.default_targets
+      : defaults.default_targets,
+    fallback_targets: Array.isArray(config?.fallback_targets)
+      ? config.fallback_targets
+      : defaults.fallback_targets,
+    fallback_policy: ["never", "on_failure", "always"].includes(fallbackPolicy)
+      ? fallbackPolicy
+      : defaults.fallback_policy,
+    upload_concurrency: Math.max(
+      1,
+      Math.round(Number(config?.upload_concurrency ?? defaults.upload_concurrency)),
+    ),
+    target_concurrency: Math.max(
+      1,
+      Math.round(Number(config?.target_concurrency ?? defaults.target_concurrency)),
+    ),
   };
 }
 
@@ -150,6 +346,7 @@ export function normalizeConfig(config: ServerConfig): ServerConfig {
       ]),
     ),
     notifications: normalizeNotificationConfig(config.notifications),
+    storage: normalizeStorageConfig(config.storage),
   };
 }
 
