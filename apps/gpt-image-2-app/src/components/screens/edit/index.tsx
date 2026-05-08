@@ -1,13 +1,18 @@
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
-import { Segmented } from "@/components/ui/segmented";
 import { type MaskExport } from "./mask-canvas";
 import { EditCanvasStage } from "./edit-canvas-stage";
 import { EditFooter } from "./edit-footer";
+import { EditModeHeader } from "./edit-mode-header";
+import {
+  appendEditMetadata,
+  appendNativeMaskPayload,
+  appendReferenceImages,
+  appendSoftRegionPayload,
+} from "./edit-submit-payload";
 import { LocalEditOnboarding } from "./local-edit-onboarding";
 import { ReferenceStrip } from "./reference-strip";
 import {
-  blobFile,
   clampZoom,
   MAX_INPUT_IMAGES,
   regionModeLabel,
@@ -16,12 +21,12 @@ import {
 } from "./shared";
 import { useMaskWorkspace } from "./use-mask-workspace";
 import { useEditDraft } from "./use-edit-draft";
+import { useEditOutputs } from "./use-edit-outputs";
 import { useReferenceImages } from "./use-reference-images";
 import { useCreateEdit } from "@/hooks/use-jobs";
 import { useJobEvents } from "@/hooks/use-job-events";
 import { useReducedMotion } from "@/hooks/use-reduced-motion";
 import { useTweaks } from "@/hooks/use-tweaks";
-import { api } from "@/lib/api";
 import { isActiveJobStatus } from "@/lib/api/types";
 import {
   errorMessage,
@@ -44,11 +49,6 @@ import {
   providerNames as readProviderNames,
   reconcileProviderSelection,
 } from "@/lib/providers";
-import {
-  saveImages,
-  saveJobImages,
-} from "@/lib/user-actions";
-import { runtimeCopy } from "@/lib/runtime-copy";
 import { insertPromptAtCursor } from "@/lib/prompt-templates";
 import type { ServerConfig } from "@/lib/types";
 
@@ -82,8 +82,6 @@ export function EditScreen({
   const [exportKey, setExportKey] = useState<number | null>(null);
   const [jobId, setJobId] = useState<string | null>(null);
   const [outputCount, setOutputCount] = useState(0);
-  const [selectedOutput, setSelectedOutput] = useState(0);
-  const [outputsDrawerOpen, setOutputsDrawerOpen] = useState(false);
   const [pendingOutputCount, setPendingOutputCount] = useState<number | null>(
     null,
   );
@@ -253,7 +251,7 @@ export function EditScreen({
     setRunError(null);
     setJobId(null);
     setOutputCount(0);
-    setSelectedOutput(0);
+    resetSelectedOutput();
     setRunNotice(null);
   };
 
@@ -289,17 +287,6 @@ export function EditScreen({
     const normalizedSize = sizeValidation.normalized ?? size;
     const plannedN = effectiveOutputCount(config, provider, safeN);
     const requestedN = requestOutputCount(config, provider, safeN);
-    const meta = {
-      prompt,
-      provider,
-      size: normalizedSize,
-      format,
-      quality,
-      n: requestedN,
-      edit_mode: editMode,
-      edit_region_mode: usesRegion ? editRegionMode : "none",
-      target_name: usesRegion ? targetRef?.name : undefined,
-    };
 
     if (usesRegion) {
       if (!maskPayload) {
@@ -321,42 +308,28 @@ export function EditScreen({
         return;
       }
       if (usesNativeMask) {
-        form.append("ref_00", blobFile(maskPayload.targetImage, "target.png"));
-        refs
-          .filter((ref) => ref.id !== targetRef.id)
-          .forEach((ref, index) => {
-            form.append(
-              `ref_${String(index + 1).padStart(2, "0")}`,
-              ref.file,
-              ref.name,
-            );
-          });
-        form.append("mask", blobFile(maskPayload.nativeMask, "mask.png"));
+        appendNativeMaskPayload({ form, maskPayload, refs, targetRef });
       }
       if (usesSoftRegion) {
-        refs.forEach((ref, index) => {
-          form.append(
-            `ref_${String(index).padStart(2, "0")}`,
-            ref.file,
-            ref.name,
-          );
-        });
-        form.append(
-          "selection_hint",
-          blobFile(maskPayload.selectionHint, "selection-hint.png"),
-        );
+        appendSoftRegionPayload({ form, maskPayload, refs });
       }
     } else {
-      refs.forEach((ref, index) => {
-        form.append(
-          `ref_${String(index).padStart(2, "0")}`,
-          ref.file,
-          ref.name,
-        );
-      });
+      appendReferenceImages(form, refs);
     }
 
-    form.append("meta", JSON.stringify(meta));
+    appendEditMetadata({
+      editMode,
+      editRegionMode,
+      format,
+      form,
+      normalizedSize,
+      prompt,
+      provider,
+      quality,
+      requestedN,
+      targetRef,
+      usesRegion,
+    });
     const modeText = usesRegion ? regionModeLabel(editRegionMode) : "多图参考";
     const toastId = toast.loading("正在提交任务", {
       description: `${modeText} · ${refs.length} 张图片 · ${provider}`,
@@ -396,31 +369,24 @@ export function EditScreen({
     }
   };
 
-  const outputRefreshKey = events.length;
-  const outputs = useMemo(() => {
-    if (!jobId || outputCount < 1) return [];
-    return Array.from({ length: outputCount }).map((_, index) => ({
-      index,
-      url: api.outputUrl(jobId, index),
-      selected: index === selectedOutput,
-    }));
-  }, [jobId, outputCount, selectedOutput, outputRefreshKey]);
-  const outputPaths = useMemo(() => {
-    if (!jobId || outputCount < 1) return [];
-    return Array.from({ length: outputCount })
-      .map((_, index) => api.outputPath(jobId, index))
-      .filter((path): path is string => Boolean(path));
-  }, [jobId, outputCount, outputRefreshKey]);
-  const selectedPath = jobId
-    ? (api.outputPath(jobId, selectedOutput) ?? outputPaths[0])
-    : undefined;
-  const copy = runtimeCopy();
-  const saveSelected = () => saveImages([selectedPath], "图片");
-  const saveAll = () =>
-    jobId ? saveJobImages(jobId, "任务图片") : saveImages(outputPaths, "图片");
-  const hasOutputs =
-    outputs.some((output) => output.url) || outputPaths.length > 0;
-  const showOutputsLauncher = isWorking || hasOutputs;
+  const {
+    copy,
+    hasOutputs,
+    outputs,
+    outputsDrawerOpen,
+    saveAll,
+    saveSelected,
+    selectedPath,
+    resetSelectedOutput,
+    setOutputsDrawerOpen,
+    setSelectedOutput,
+    showOutputsLauncher,
+  } = useEditOutputs({
+    eventsLength: events.length,
+    isWorking,
+    jobId,
+    outputCount,
+  });
 
   const submitDisabled =
     isSubmitting ||
@@ -432,25 +398,14 @@ export function EditScreen({
   return (
     <div className="relative h-full w-full overflow-hidden flex flex-col">
       <LocalEditOnboarding active={usesRegion} />
-      {/* TOOLBAR — wraps when narrow, never clips */}
-      <header className="shrink-0 px-4 pt-3 pb-2 flex items-center gap-2 flex-wrap">
-        <Segmented
-          value={editMode}
-          onChange={(mode) => {
+      <EditModeHeader
+        editMode={editMode}
+        onChange={(mode) => {
             setEditMode(mode);
             setRunError(null);
             setRunNotice(null);
-          }}
-          ariaLabel="编辑模式"
-          size="sm"
-          options={[
-            { value: "reference", label: "多图参考", icon: "image" },
-            { value: "region", label: "局部编辑", icon: "mask" },
-          ]}
-        />
-
-        <div className="flex-1" />
-      </header>
+        }}
+      />
 
       <input
         ref={fileInputRef}
