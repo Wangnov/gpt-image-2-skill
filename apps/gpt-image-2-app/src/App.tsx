@@ -25,6 +25,7 @@ import { useGlobalShortcuts } from "@/hooks/use-shortcuts";
 import { useTweaks } from "@/hooks/use-tweaks";
 import { TextSelectionContextMenu } from "@/components/ui/text-selection-context-menu";
 import { QuickLookHost } from "@/components/ui/quick-look";
+import { setActionsNavigator } from "@/lib/image-actions/navigation";
 import {
   checkForAppUpdate,
   installAppUpdate,
@@ -127,6 +128,13 @@ export default function App() {
   useJobNotifications(jobs, openJob);
   useDisableWebviewContextMenu();
   useImageShortcuts();
+
+  // Hand the screen setter to image-action executors so "Use as Reference"
+  // / "Edit with Prompt" / "Reveal Job in History" can navigate after their
+  // backend bookkeeping completes.
+  useEffect(() => {
+    setActionsNavigator(setScreen);
+  }, [setScreen]);
 
   useEffect(() => {
     if (!shouldAutoCheckForUpdates()) return;

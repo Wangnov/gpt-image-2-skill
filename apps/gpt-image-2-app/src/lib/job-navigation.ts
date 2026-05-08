@@ -7,6 +7,11 @@ export type SendToEditPayload = {
   path?: string | null;
   url?: string | null;
   name?: string;
+  /**
+   * Optional prompt to prefill in the edit screen's textarea after the image
+   * is added as a reference. Used by the "Edit with Prompt" image action.
+   */
+  prompt?: string;
 };
 
 export function openJobInHistory(jobId: string) {

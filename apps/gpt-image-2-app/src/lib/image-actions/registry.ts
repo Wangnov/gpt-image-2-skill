@@ -1,6 +1,7 @@
 import {
   C2_TRANSFER_EXPORT_MANAGE_ACTIONS,
   C3_PREVIEW_ACTIONS,
+  C4_GENERATE_ACTIONS,
 } from "./executors";
 import type {
   ImageAction,
@@ -23,6 +24,7 @@ import type {
 export const IMAGE_ACTIONS: ImageAction[] = [
   ...C3_PREVIEW_ACTIONS,
   ...C2_TRANSFER_EXPORT_MANAGE_ACTIONS,
+  ...C4_GENERATE_ACTIONS,
 ];
 
 const GROUP_ORDER: ImageActionGroup[] = [

@@ -649,6 +649,9 @@ export function EditScreen({
           return;
         }
         addRefFiles([file], "picker");
+        if (payload.prompt && payload.prompt.trim().length > 0) {
+          setPrompt(payload.prompt);
+        }
         toast.success("已发送到编辑", {
           id: toastId,
           description: "已作为新的参考图添加。",

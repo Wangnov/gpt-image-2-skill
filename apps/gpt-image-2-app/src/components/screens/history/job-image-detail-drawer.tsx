@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { Drawer } from "@/components/ui/drawer";
 import { Button } from "@/components/ui/button";
+import { ImageContextMenu } from "@/components/ui/image-context-menu";
 import { openQuickLook } from "@/components/ui/quick-look";
 import TiltedCard from "@/components/reactbits/components/TiltedCard";
 import { copyText, openPath, revealPath, saveImages } from "@/lib/user-actions";
@@ -305,27 +306,29 @@ export function JobImageDetailDrawer({
           {/* Big image — TiltedCard for the brand "liquid" hover-tilt feel,
             wrapped in a button so click still escalates to fullscreen zoom. */}
           <div className="relative flex min-w-0 items-center justify-center overflow-hidden">
-            {url && !imageFailed ? (
-              <button
-                type="button"
-                onClick={openZoom}
-                className="mx-auto block w-full max-w-[340px] cursor-zoom-in rounded-[15px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--accent-55)] focus-visible:ring-offset-2 focus-visible:ring-offset-[color:var(--bg)]"
-                aria-label={`查看第 ${letter} 张大图`}
-              >
-                <TiltedCard
-                  imageSrc={url}
-                  altText={`第 ${letter} 张`}
-                  containerWidth="100%"
-                  containerHeight={DETAIL_IMAGE_SIZE}
-                  imageWidth={DETAIL_IMAGE_SIZE}
-                  imageHeight={DETAIL_IMAGE_SIZE}
-                  rotateAmplitude={8}
-                  scaleOnHover={1.04}
-                  showMobileWarning={false}
-                  showTooltip={false}
-                  onImageError={() => setImageFailed(true)}
-                />
-              </button>
+            {url && !imageFailed && activeAsset ? (
+              <ImageContextMenu asset={activeAsset}>
+                <button
+                  type="button"
+                  onClick={openZoom}
+                  className="mx-auto block w-full max-w-[340px] cursor-zoom-in rounded-[15px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--accent-55)] focus-visible:ring-offset-2 focus-visible:ring-offset-[color:var(--bg)]"
+                  aria-label={`查看第 ${letter} 张大图`}
+                >
+                  <TiltedCard
+                    imageSrc={url}
+                    altText={`第 ${letter} 张`}
+                    containerWidth="100%"
+                    containerHeight={DETAIL_IMAGE_SIZE}
+                    imageWidth={DETAIL_IMAGE_SIZE}
+                    imageHeight={DETAIL_IMAGE_SIZE}
+                    rotateAmplitude={8}
+                    scaleOnHover={1.04}
+                    showMobileWarning={false}
+                    showTooltip={false}
+                    onImageError={() => setImageFailed(true)}
+                  />
+                </button>
+              </ImageContextMenu>
             ) : (
               <div className="h-[340px] w-full overflow-hidden rounded-lg border border-[color:var(--w-08)] bg-[color:var(--w-02)]">
                 <PlaceholderImage
@@ -363,7 +366,8 @@ export function JobImageDetailDrawer({
               {outputIndexes.map((outputIndex, i) => {
                 const tUrl = jobOutputUrl(job, outputIndex);
                 const isActive = outputIndex === activeOutputIndex;
-                return (
+                const thumbAsset = peerAssets[i] ?? activeAsset;
+                const button = (
                   <button
                     key={outputIndex}
                     type="button"
@@ -407,6 +411,13 @@ export function JobImageDetailDrawer({
                       {String.fromCharCode(65 + i)}
                     </span>
                   </button>
+                );
+                return thumbAsset ? (
+                  <ImageContextMenu key={outputIndex} asset={thumbAsset}>
+                    {button}
+                  </ImageContextMenu>
+                ) : (
+                  button
                 );
               })}
             </div>

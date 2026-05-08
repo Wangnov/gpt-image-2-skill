@@ -1,8 +1,10 @@
 import { toast } from "sonner";
 import { api } from "@/lib/api";
 import { openQuickLook } from "@/components/ui/quick-look";
+import { openJobInHistory, sendImageToEdit } from "@/lib/job-navigation";
 import { copyImageToClipboard } from "./copy-image";
 import { softDeleteJobWithUndo } from "./delete-job";
+import { navigateToScreen } from "./navigation";
 import { invalidateJobsQueries } from "./query-client";
 import type { ImageAction } from "./types";
 
@@ -132,6 +134,58 @@ const openWithDefault: ImageAction = {
   },
 };
 
+const useAsReference: ImageAction = {
+  id: "use-as-reference",
+  label: () => "用作参考图",
+  icon: "arrowin",
+  group: "generate",
+  isAvailable: ({ asset }) => Boolean(asset.path || asset.src),
+  execute: ({ asset }) => {
+    sendImageToEdit({
+      jobId: asset.jobId,
+      outputIndex: asset.outputIndex,
+      path: asset.path ?? null,
+      url: asset.src,
+    });
+    navigateToScreen("edit");
+  },
+};
+
+const editWithPrompt: ImageAction = {
+  id: "edit-with-prompt",
+  label: () => "用提示词编辑",
+  icon: "edit",
+  group: "generate",
+  isAvailable: ({ asset }) => Boolean(asset.path || asset.src),
+  isEnabled: ({ asset }) => Boolean(asset.prompt?.trim()),
+  disabledReason: () => "这个任务没有保存提示词",
+  execute: ({ asset }) => {
+    sendImageToEdit({
+      jobId: asset.jobId,
+      outputIndex: asset.outputIndex,
+      path: asset.path ?? null,
+      url: asset.src,
+      prompt: asset.prompt,
+    });
+    navigateToScreen("edit");
+  },
+};
+
+const revealJobInHistory: ImageAction = {
+  id: "reveal-job-in-history",
+  label: () => "在历史中查看任务",
+  icon: "history",
+  group: "manage",
+  isAvailable: ({ asset }) => Boolean(asset.jobId),
+  execute: ({ asset }) => {
+    navigateToScreen("history");
+    // openJobInHistory's listener is mounted on the History screen which
+    // is always rendered (just hidden). The event is delivered immediately;
+    // the history drawer opens once navigation lands.
+    openJobInHistory(asset.jobId);
+  },
+};
+
 const deleteAction: ImageAction = {
   id: "delete",
   label: () => "删除",
@@ -156,6 +210,12 @@ export const C2_TRANSFER_EXPORT_MANAGE_ACTIONS: ImageAction[] = [
 ];
 
 export const C3_PREVIEW_ACTIONS: ImageAction[] = [quickLook];
+
+export const C4_GENERATE_ACTIONS: ImageAction[] = [
+  useAsReference,
+  editWithPrompt,
+  revealJobInHistory,
+];
 
 function inferDownloadName(
   src: string,

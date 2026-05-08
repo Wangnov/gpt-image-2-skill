@@ -32,7 +32,9 @@ import {
 import { Empty } from "@/components/ui/empty";
 import { Button } from "@/components/ui/button";
 import { RevealImage } from "@/components/ui/reveal-image";
+import { ImageContextMenu } from "@/components/ui/image-context-menu";
 import SpotlightCard from "@/components/reactbits/components/SpotlightCard";
+import { imageAssetFromOutput } from "@/lib/image-actions/asset";
 import { useConfirm } from "@/hooks/use-confirm";
 import { useReducedMotion } from "@/hooks/use-reduced-motion";
 import type { Job, JobStatus } from "@/lib/types";
@@ -447,19 +449,29 @@ function JobRowExpandable({
                   >
                     {outputIndexes.map((outputIndex, i) => {
                       const url = jobOutputUrl(job, outputIndex);
+                      const path = jobOutputPath(job, outputIndex);
                       const letter = String.fromCharCode(65 + i);
+                      const asset = imageAssetFromOutput({
+                        jobId: job.id,
+                        outputIndex,
+                        src: url ?? "",
+                        path: path ?? null,
+                        prompt: prompt || undefined,
+                        command: job.command,
+                        job,
+                      });
                       return (
-                        <button
-                          key={outputIndex}
-                          type="button"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            onOpenDetail(outputIndex);
-                          }}
-                          className="group relative aspect-square w-full rounded-lg overflow-hidden ring-1 ring-[color:var(--w-08)] hover:ring-[color:var(--accent-45)] transition-all hover:scale-[1.015]"
-                          title={`查看第 ${letter} 张`}
-                          aria-label={`查看第 ${letter} 张`}
-                        >
+                        <ImageContextMenu key={outputIndex} asset={asset}>
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              onOpenDetail(outputIndex);
+                            }}
+                            className="group relative aspect-square w-full rounded-lg overflow-hidden ring-1 ring-[color:var(--w-08)] hover:ring-[color:var(--accent-45)] transition-all hover:scale-[1.015]"
+                            title={`查看第 ${letter} 张`}
+                            aria-label={`查看第 ${letter} 张`}
+                          >
                           <SpotlightCard
                             spotlightColor="rgba(var(--accent-rgb), 0.30)"
                             className="!rounded-lg !p-0 !bg-transparent !border-0 !w-full !h-full absolute inset-0"
@@ -482,7 +494,8 @@ function JobRowExpandable({
                               {letter}
                             </span>
                           </SpotlightCard>
-                        </button>
+                          </button>
+                        </ImageContextMenu>
                       );
                     })}
                   </div>
