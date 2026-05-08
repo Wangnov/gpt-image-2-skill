@@ -7,6 +7,7 @@ import { JobRow } from "@/components/screens/history/job-row";
 import { useCancelJob, useDeleteJob, useJobs } from "@/hooks/use-jobs";
 import { useConfirm } from "@/hooks/use-confirm";
 import { cn } from "@/lib/cn";
+import { isActiveJobStatus } from "@/lib/api/types";
 import { OPEN_JOB_EVENT } from "@/lib/job-navigation";
 import type { Job } from "@/lib/types";
 
@@ -20,7 +21,7 @@ const FILTERS = [
 ] as const;
 
 function matchesFilter(job: Job, filter: FilterValue) {
-  if (filter === "running") return job.status === "running" || job.status === "queued";
+  if (filter === "running") return isActiveJobStatus(job.status);
   if (filter === "completed") return job.status === "completed";
   if (filter === "failed") return job.status === "failed" || job.status === "cancelled";
   return true;

@@ -37,6 +37,7 @@ export function formatDuration(ms?: number): string {
 export function statusLabel(status: string): string {
   const map: Record<string, string> = {
     running: "运行中",
+    uploading: "上传中",
     completed: "已完成",
     failed: "失败",
     queued: "排队中",

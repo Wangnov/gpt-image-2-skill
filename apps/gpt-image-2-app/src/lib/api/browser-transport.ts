@@ -8,6 +8,7 @@ import type {
   NotificationConfig,
   NotificationTestResult,
   OutputRef,
+  PathConfig,
   ProviderConfig,
   QueueStatus,
   ServerConfig,
@@ -17,11 +18,13 @@ import type {
 } from "../types";
 import {
   defaultNotificationConfig,
+  defaultPathConfig,
   defaultStorageConfig,
   jobOutputPath,
   jobOutputPaths,
   normalizeConfig,
   normalizeNotificationConfig,
+  normalizePathConfig,
   normalizeJob,
   normalizeJobResponse,
   normalizeStorageConfig,
@@ -39,7 +42,7 @@ import type {
   JobUpdateHandler,
   TauriJobResponse,
 } from "./types";
-import { isTerminalJobStatus } from "./types";
+import { isActiveJobStatus, isTerminalJobStatus } from "./types";
 import { jobExportBaseName, outputFileName } from "@/lib/job-export";
 import { createStoredZip } from "@/lib/zip";
 
@@ -171,14 +174,14 @@ async function readConfigRecord() {
   const record = await requestToPromise<KvRecord<ServerConfig> | undefined>(
     tx.objectStore("kv").get(CONFIG_KEY),
   );
-  return (
-    record?.value ??
-    ({
+  return normalizeConfig(
+    record?.value ?? {
       version: 1,
       providers: {},
       notifications: defaultNotificationConfig(),
       storage: defaultStorageConfig(),
-    } satisfies ServerConfig)
+      paths: defaultPathConfig(),
+    },
   );
 }
 
@@ -244,9 +247,7 @@ function filterJobs(
 ) {
   let filtered = jobs;
   if (filter === "running") {
-    filtered = filtered.filter(
-      (job) => job.status === "queued" || job.status === "running",
-    );
+    filtered = filtered.filter((job) => isActiveJobStatus(job.status));
   }
   if (filter === "completed") {
     filtered = filtered.filter((job) => job.status === "completed");
@@ -551,8 +552,19 @@ function sanitizeStorageTargetConfig(
 
 function sanitizeStorageConfig(config: StorageConfig): StorageConfig {
   const normalized = normalizeStorageConfig(config);
+  const localTargetNames = new Set(
+    Object.entries(normalized.targets)
+      .filter(([, target]) => storageTargetType(target) === "local")
+      .map(([name]) => name),
+  );
   return {
     ...normalized,
+    default_targets: normalized.default_targets.filter((name) =>
+      localTargetNames.has(name),
+    ),
+    fallback_targets: normalized.fallback_targets.filter((name) =>
+      localTargetNames.has(name),
+    ),
     targets: Object.fromEntries(
       Object.entries(normalized.targets).map(([name, target]) => [
         name,
@@ -638,6 +650,7 @@ function browserConfigForUi(config: ServerConfig): ServerConfig {
       normalizeNotificationConfig(config.notifications),
     ),
     storage: sanitizeStorageConfig(config.storage),
+    paths: normalizePathConfig(config.paths),
   });
 }
 
@@ -652,6 +665,7 @@ function browserStoredConfig(config: ServerConfig): ServerConfig {
     providers,
     notifications: normalizeNotificationConfig(config.notifications),
     storage: normalizeStorageConfig(config.storage),
+    paths: normalizePathConfig(config.paths),
   };
 }
 
@@ -1290,7 +1304,7 @@ function browserJobId() {
 async function markInterruptedJobs() {
   const jobs = await readStoredJobs();
   const interrupted = jobs.filter(
-    (job) => job.status === "queued" || job.status === "running",
+    (job) => isActiveJobStatus(job.status),
   );
   for (const job of interrupted) {
     await writeJob({
@@ -1397,6 +1411,9 @@ export const browserApi: ApiClient = {
   canUseSystemCredentials: false,
   canUseCodexProvider: false,
   canExportToDownloadsFolder: false,
+  canExportToConfiguredFolder: false,
+  canChooseExportFolder: false,
+  canUsePersistentResultLibrary: false,
   async getConfig() {
     await prepareBrowserRuntime();
     return browserConfigForUi(await readConfigRecord());
@@ -1408,6 +1425,19 @@ export const browserApi: ApiClient = {
       config_file: "IndexedDB: kv/config",
       history_file: "IndexedDB: jobs",
       jobs_dir: "IndexedDB: outputs",
+      app_data_dir: "IndexedDB: gpt-image-2-web",
+      result_library_dir: "IndexedDB: outputs",
+      default_export_dir: "浏览器默认下载位置",
+      default_export_dirs: {
+        browser_default: "浏览器默认下载位置",
+        downloads: "浏览器默认下载位置",
+        documents: "浏览器默认下载位置",
+        pictures: "浏览器默认下载位置",
+        result_library: "IndexedDB: outputs",
+      },
+      storage_fallback_dir: "IndexedDB: outputs",
+      legacy_codex_config_dir: "",
+      legacy_jobs_dir: "",
     };
   },
   async updateNotifications(config: NotificationConfig) {
@@ -1485,13 +1515,27 @@ export const browserApi: ApiClient = {
       server: { email: false, webhook: false },
     };
   },
+  async updatePaths(config: PathConfig) {
+    await prepareBrowserRuntime();
+    const current = await readConfigRecord();
+    current.paths = normalizePathConfig(config);
+    current.paths.default_export_dir = {
+      mode: "browser_default",
+      path: null,
+    };
+    await writeStoredConfig(browserStoredConfig(current));
+    return browserConfigForUi(current);
+  },
   async updateStorage(config: StorageConfig) {
     await prepareBrowserRuntime();
     const current = await readConfigRecord();
     const normalized = normalizeStorageConfig(config);
     current.storage = {
       ...normalized,
-      default_targets: [],
+      default_targets: normalized.default_targets.filter((name) => {
+        const target = normalized.targets[name];
+        return target && storageTargetType(target) === "local";
+      }),
       fallback_targets: normalized.fallback_targets.filter((name) => {
         const target = normalized.targets[name];
         return target && storageTargetType(target) === "local";
@@ -1725,6 +1769,12 @@ export const browserApi: ApiClient = {
     throw new Error("Web 不能打开文件夹，请使用桌面 App 查看文件位置。");
   },
   async exportFilesToDownloads(paths: string[]) {
+    return browserApi.exportFilesToConfiguredFolder(paths);
+  },
+  async exportJobToDownloads(jobId: string) {
+    return browserApi.exportJobToConfiguredFolder(jobId);
+  },
+  async exportFilesToConfiguredFolder(paths: string[]) {
     await prepareBrowserRuntime();
     const saved: string[] = [];
     for (const [index, path] of paths.entries()) {
@@ -1736,7 +1786,7 @@ export const browserApi: ApiClient = {
     }
     return saved;
   },
-  async exportJobToDownloads(jobId: string) {
+  async exportJobToConfiguredFolder(jobId: string) {
     await prepareBrowserRuntime();
     const { job } = await browserApi.getJob(jobId);
     return downloadJobZip(job);

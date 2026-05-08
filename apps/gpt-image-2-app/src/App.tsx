@@ -27,6 +27,7 @@ import { useGlobalShortcuts } from "@/hooks/use-shortcuts";
 import { useTweaks } from "@/hooks/use-tweaks";
 import { TextSelectionContextMenu } from "@/components/ui/text-selection-context-menu";
 import { QuickLookHost } from "@/components/ui/quick-look";
+import { isActiveJobStatus } from "@/lib/api/types";
 import { setActionsConfirm } from "@/lib/image-actions/confirm-action";
 import { setActionsNavigator } from "@/lib/image-actions/navigation";
 import {
@@ -204,8 +205,7 @@ export default function App() {
     };
   }, []);
 
-  const active = (job: { status: string }) =>
-    job.status === "running" || job.status === "queued";
+  const active = (job: { status: string }) => isActiveJobStatus(job.status);
   const generateCount =
     jobs?.filter((job) => active(job) && job.command === "images generate")
       .length ?? 0;

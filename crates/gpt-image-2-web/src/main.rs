@@ -17,13 +17,15 @@ use axum::{
 };
 use gpt_image_2_core::{
     AppConfig, CONFIG_DIR_NAME, CredentialRef, HistoryListOptions, KEYCHAIN_SERVICE,
-    NotificationConfig, ProviderConfig, StorageConfig, StorageTargetConfig, StorageUploadOverrides,
-    default_config_path, default_keychain_account, delete_history_job, dispatch_task_notifications,
-    history_db_path, jobs_dir, list_active_history_jobs, list_history_jobs_page, load_app_config,
+    NotificationConfig, PathConfig, ProductRuntime, ProviderConfig, StorageConfig,
+    StorageTargetConfig, StorageUploadOverrides, default_config_path, default_keychain_account,
+    delete_history_job, dispatch_task_notifications, history_db_path, legacy_jobs_dir,
+    legacy_shared_codex_dir, list_active_history_jobs, list_history_jobs_page, load_app_config,
     notification_status_allowed, preserve_notification_secrets, preserve_storage_secrets,
-    read_keychain_secret, redact_app_config, run_json, save_app_config, shared_config_dir,
-    show_history_job, test_storage_target, upload_job_outputs_to_storage, upsert_history_job,
-    write_keychain_secret,
+    product_app_data_dir, product_default_export_dir, product_default_export_dirs,
+    product_result_library_dir, product_storage_fallback_dir, read_keychain_secret,
+    redact_app_config, run_json, save_app_config, shared_config_dir, show_history_job,
+    test_storage_target, upload_job_outputs_to_storage, upsert_history_job, write_keychain_secret,
 };
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
@@ -85,12 +87,35 @@ fn app_error(error: gpt_image_2_core::AppError) -> String {
     format!("{}: {}", error.code, error.message)
 }
 
+fn load_config_or_default() -> AppConfig {
+    load_config().unwrap_or_default()
+}
+
+fn normalize_product_storage_defaults(config: &mut AppConfig) {
+    let fallback_dir = product_storage_fallback_dir(Some(config), ProductRuntime::DockerWeb);
+    if let Some(StorageTargetConfig::Local { directory, .. }) =
+        config.storage.targets.get_mut("local-default")
+    {
+        if *directory == shared_config_dir().join("storage").join("fallback")
+            || directory.as_os_str().is_empty()
+        {
+            *directory = fallback_dir;
+        }
+    }
+}
+
 fn load_config() -> Result<AppConfig, String> {
-    load_app_config(&default_config_path()).map_err(app_error)
+    let mut config = load_app_config(&default_config_path()).map_err(app_error)?;
+    normalize_product_storage_defaults(&mut config);
+    Ok(config)
 }
 
 fn save_config(config: &AppConfig) -> Result<(), String> {
     save_app_config(&default_config_path(), config).map_err(app_error)
+}
+
+fn result_library_dir() -> PathBuf {
+    product_result_library_dir(Some(&load_config_or_default()), ProductRuntime::DockerWeb)
 }
 
 fn config_for_ui(config: &AppConfig) -> Value {
@@ -410,7 +435,7 @@ fn unique_job_dir() -> Result<(String, PathBuf), String> {
         .unwrap_or_default()
         .as_millis();
     let id = format!("web-{millis}-{}", std::process::id());
-    let dir = jobs_dir().join(&id);
+    let dir = result_library_dir().join(&id);
     fs::create_dir_all(&dir).map_err(|error| error.to_string())?;
     Ok((id, dir))
 }
@@ -1282,6 +1307,43 @@ fn completed_job_for_queue(queued: &QueuedJob, response: &Value) -> Value {
     )
 }
 
+fn uploading_job_for_queue(queued: &QueuedJob, response: &Value) -> Value {
+    let payload = response.get("payload").unwrap_or(response);
+    let provider = payload
+        .get("provider")
+        .and_then(Value::as_str)
+        .unwrap_or(&queued.provider);
+    let outputs = payload
+        .get("output")
+        .and_then(|output| output.get("files"))
+        .cloned()
+        .or_else(|| {
+            response
+                .get("job")
+                .and_then(|job| job.get("outputs"))
+                .cloned()
+        })
+        .unwrap_or_else(|| json!([]));
+    let output_path = output_path_from_payload(payload).or_else(|| {
+        response
+            .get("job")
+            .and_then(|job| job.get("output_path"))
+            .and_then(Value::as_str)
+            .map(ToString::to_string)
+    });
+    job_snapshot(
+        &queued.id,
+        &queued.command,
+        provider,
+        "uploading",
+        &queued.created_at,
+        queued.metadata.clone(),
+        output_path,
+        outputs,
+        Value::Null,
+    )
+}
+
 fn failed_job_for_queue(queued: &QueuedJob, message: String) -> Value {
     job_snapshot(
         &queued.id,
@@ -1296,18 +1358,38 @@ fn failed_job_for_queue(queued: &QueuedJob, message: String) -> Value {
     )
 }
 
+fn completed_event_data(job: &Value) -> Value {
+    json!({
+        "status": "completed",
+        "output": {
+            "path": job.get("output_path").cloned().unwrap_or(Value::Null),
+            "files": job.get("outputs").cloned().unwrap_or_else(|| json!([])),
+        },
+        "job": job,
+    })
+}
+
+fn append_terminal_queue_event(
+    state: &JobQueueState,
+    job_id: &str,
+    event_type: &str,
+    event_data: Value,
+) {
+    if let Ok(mut inner) = state.inner.lock() {
+        append_queue_event(&mut inner, job_id, "local", event_type, event_data);
+    }
+}
+
 fn finish_queued_job(state: JobQueueState, queued: QueuedJob, result: Result<Value, String>) {
-    let (job, event_type, event_data) = match result {
+    let (job, event_type, event_data, completed) = match result {
         Ok(response) => {
             let payload = response.get("payload").unwrap_or(&response);
             cleanup_child_history(payload, &queued.id);
             let job = completed_job_for_queue(&queued, &response);
-            let data = json!({
-                "status": "completed",
-                "output": payload.get("output").cloned().unwrap_or(Value::Null),
-                "job": job,
-            });
-            (job, "job.completed", data)
+            let uploading_job = uploading_job_for_queue(&queued, &response);
+            let _ = persist_job(&uploading_job);
+            let data = completed_event_data(&job);
+            (job, "job.completed", data, true)
         }
         Err(message) => {
             let job = failed_job_for_queue(&queued, message.clone());
@@ -1318,22 +1400,24 @@ fn finish_queued_job(state: JobQueueState, queued: QueuedJob, result: Result<Val
                     "status": "failed",
                     "error": {"message": message},
                 }),
+                false,
             )
         }
     };
-    let _ = persist_job(&job);
-    let dispatch_after_storage = job.get("status").and_then(Value::as_str) == Some("completed");
+    if !completed {
+        let _ = persist_job(&job);
+    }
     {
         let mut inner = match state.inner.lock() {
             Ok(inner) => inner,
             Err(_) => return,
         };
         inner.running = inner.running.saturating_sub(1);
-        append_queue_event(&mut inner, &queued.id, "local", event_type, event_data);
     }
-    if dispatch_after_storage {
+    if completed {
         spawn_storage_upload_then_notify(state.clone(), queued.id, job);
     } else {
+        append_terminal_queue_event(&state, &queued.id, event_type, event_data);
         spawn_notification_dispatch(state.clone(), queued.id, job);
     }
     start_queued_jobs(state);
@@ -1364,6 +1448,7 @@ fn storage_overrides_from_job(job: &Value) -> StorageUploadOverrides {
 }
 
 fn upload_completed_job_outputs(job: &Value) -> Result<Value, String> {
+    let _ = persist_job(job);
     let config = load_config()?;
     let overrides = storage_overrides_from_job(job);
     upload_job_outputs_to_storage(&config.storage, job, overrides)
@@ -1401,6 +1486,12 @@ fn spawn_storage_upload_then_notify(state: JobQueueState, job_id: String, job: V
                 }),
             );
         }
+        append_terminal_queue_event(
+            &state,
+            &job_id,
+            "job.completed",
+            completed_event_data(&notify_job),
+        );
         spawn_notification_dispatch(state, job_id, notify_job);
     });
 }
@@ -1543,11 +1634,30 @@ struct FileQuery {
 }
 
 async fn config_paths() -> Json<Value> {
+    let config = load_config_or_default();
+    let app_data_dir = product_app_data_dir(Some(&config), ProductRuntime::DockerWeb);
+    let result_library_dir = product_result_library_dir(Some(&config), ProductRuntime::DockerWeb);
+    let default_export_dir = product_default_export_dir(Some(&config), ProductRuntime::DockerWeb);
+    let default_export_dirs = product_default_export_dirs(&config, ProductRuntime::DockerWeb)
+        .into_iter()
+        .map(|(mode, path)| (mode, path.display().to_string()))
+        .collect::<BTreeMap<_, _>>();
+    let legacy_codex_config_dir = legacy_shared_codex_dir(Some(&config));
+    let legacy_jobs_dir = legacy_jobs_dir(Some(&config));
+    let storage_fallback_dir =
+        product_storage_fallback_dir(Some(&config), ProductRuntime::DockerWeb);
     Json(json!({
         "config_dir": shared_config_dir().display().to_string(),
         "config_file": default_config_path().display().to_string(),
         "history_file": history_db_path().display().to_string(),
-        "jobs_dir": jobs_dir().display().to_string(),
+        "jobs_dir": result_library_dir.display().to_string(),
+        "app_data_dir": app_data_dir.display().to_string(),
+        "result_library_dir": result_library_dir.display().to_string(),
+        "default_export_dir": default_export_dir.display().to_string(),
+        "default_export_dirs": default_export_dirs,
+        "storage_fallback_dir": storage_fallback_dir.display().to_string(),
+        "legacy_codex_config_dir": legacy_codex_config_dir.display().to_string(),
+        "legacy_jobs_dir": legacy_jobs_dir.display().to_string(),
     }))
 }
 
@@ -1561,6 +1671,13 @@ async fn update_notifications(Json(mut body): Json<NotificationConfig>) -> ApiRe
     let mut config = load_config().map_err(ApiError::internal)?;
     preserve_notification_secrets(&mut body, &config.notifications);
     config.notifications = body;
+    save_config(&config).map_err(ApiError::internal)?;
+    Ok(Json(config_for_ui(&config)))
+}
+
+async fn update_paths(Json(body): Json<PathConfig>) -> ApiResult {
+    let mut config = load_config().map_err(ApiError::internal)?;
+    config.paths = body;
     save_config(&config).map_err(ApiError::internal)?;
     Ok(Json(config_for_ui(&config)))
 }
@@ -2058,13 +2175,26 @@ fn sorted_ref_inputs(dir: &FsPath) -> Result<Vec<UploadFile>, String> {
         .collect()
 }
 
+fn edit_job_input_dir(job_id: &str) -> Result<(PathBuf, Vec<UploadFile>), String> {
+    let config = load_config_or_default();
+    let dirs = [
+        product_result_library_dir(Some(&config), ProductRuntime::DockerWeb).join(job_id),
+        legacy_jobs_dir(Some(&config)).join(job_id),
+    ];
+    let mut last_error = None;
+    for dir in dirs {
+        match sorted_ref_inputs(&dir) {
+            Ok(refs) if !refs.is_empty() => return Ok((dir, refs)),
+            Ok(_) => {}
+            Err(error) => last_error = Some(error),
+        }
+    }
+    Err(last_error.unwrap_or_else(|| "这个编辑任务缺少原始参考图，无法原样重试。".to_string()))
+}
+
 fn edit_request_from_job(job_id: &str, job: &Value) -> Result<EditRequest, String> {
     let metadata = metadata_object(job);
-    let dir = jobs_dir().join(job_id);
-    let refs = sorted_ref_inputs(&dir)?;
-    if refs.is_empty() {
-        return Err("这个编辑任务缺少原始参考图，无法原样重试。".to_string());
-    }
+    let (dir, refs) = edit_job_input_dir(job_id)?;
     let mask = {
         let path = dir.join("mask.png");
         if path.is_file() {
@@ -2197,14 +2327,23 @@ fn safe_job_file_path(path: &str) -> Result<PathBuf, ApiError> {
     if !file.is_file() {
         return Err(ApiError::not_found("文件不存在，可能已被移动或删除。"));
     }
-    fs::create_dir_all(jobs_dir()).map_err(|error| ApiError::internal(error.to_string()))?;
-    let root = jobs_dir()
+    let library = result_library_dir();
+    fs::create_dir_all(&library).map_err(|error| ApiError::internal(error.to_string()))?;
+    let root = library
         .canonicalize()
         .map_err(|error| ApiError::internal(error.to_string()))?;
-    if !file.starts_with(&root) {
-        return Err(ApiError::forbidden("只能读取当前服务生成的任务文件。"));
+    if file.starts_with(&root) {
+        return Ok(file);
     }
-    Ok(file)
+    let legacy = legacy_jobs_dir(Some(&load_config_or_default()));
+    let legacy_root = legacy.canonicalize().ok();
+    if legacy_root
+        .as_ref()
+        .is_some_and(|root| file.starts_with(root))
+    {
+        return Ok(file);
+    }
+    Err(ApiError::forbidden("只能读取当前服务生成的任务文件。"))
 }
 
 async fn file_response(Query(query): Query<FileQuery>) -> Result<Response, ApiError> {
@@ -2305,6 +2444,7 @@ fn api_router(state: JobQueueState) -> Router {
             "/notifications/capabilities",
             get(notification_capabilities),
         )
+        .route("/paths", put(update_paths))
         .route("/storage", put(update_storage))
         .route("/storage/{name}/test", post(test_storage))
         .route("/providers/default", post(set_default_provider))

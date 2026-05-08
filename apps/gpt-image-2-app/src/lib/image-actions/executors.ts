@@ -96,7 +96,8 @@ const copyPathOrLink: ImageAction = {
 
 const saveAs: ImageAction = {
   id: "save-as",
-  label: () => "保存到下载文件夹",
+  label: ({ runtime }) =>
+    runtime === "tauri" ? "导出到默认文件夹" : "下载图片",
   icon: "download",
   shortcut: "⌘S",
   group: "export",
@@ -104,10 +105,10 @@ const saveAs: ImageAction = {
   execute: async ({ asset, runtime }) => {
     if (runtime === "tauri") {
       if (asset.path) {
-        const saved = await api.exportFilesToDownloads([asset.path]);
+        const saved = await api.exportFilesToConfiguredFolder([asset.path]);
         toast.success(`已保存 ${saved.length} 张图片`, { duration: 2_000 });
       } else {
-        const saved = await api.exportJobToDownloads(asset.jobId);
+        const saved = await api.exportJobToConfiguredFolder(asset.jobId);
         toast.success(`已保存 ${saved.length} 张图片`, { duration: 2_000 });
       }
       return;

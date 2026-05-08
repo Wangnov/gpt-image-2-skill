@@ -148,6 +148,37 @@ export interface StorageConfig {
   target_concurrency: number;
 }
 
+export type PathMode = "default" | "custom";
+export type ExportDirMode =
+  | "downloads"
+  | "documents"
+  | "pictures"
+  | "result_library"
+  | "custom"
+  | "browser_default";
+
+export interface PathRef {
+  mode: PathMode;
+  path?: string | null;
+}
+
+export interface ExportDirConfig {
+  mode: ExportDirMode;
+  path?: string | null;
+}
+
+export interface LegacyPathConfig {
+  path: string;
+  enabled_for_read: boolean;
+}
+
+export interface PathConfig {
+  app_data_dir: PathRef;
+  result_library_dir: PathRef;
+  default_export_dir: ExportDirConfig;
+  legacy_shared_codex_dir: LegacyPathConfig;
+}
+
 export interface OutputUploadRef {
   target: string;
   target_type: StorageTargetKind | string;
@@ -190,11 +221,13 @@ export interface ServerConfig {
   providers: Record<string, ProviderConfig>;
   notifications: NotificationConfig;
   storage: StorageConfig;
+  paths: PathConfig;
 }
 
 export type JobStatus =
   | "queued"
   | "running"
+  | "uploading"
   | "completed"
   | "failed"
   | "cancelled";

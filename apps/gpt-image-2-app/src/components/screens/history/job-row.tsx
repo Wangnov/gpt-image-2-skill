@@ -10,6 +10,7 @@ import { Button } from "@/components/ui/button";
 import { formatTime, statusLabel } from "@/lib/format";
 import { promptSummary } from "@/lib/prompt-display";
 import { api } from "@/lib/api";
+import { isActiveJobStatus } from "@/lib/api/types";
 import type { Job } from "@/lib/types";
 
 const CMD_ICON: Record<string, IconName> = {
@@ -21,7 +22,7 @@ const CMD_ICON: Record<string, IconName> = {
 function badgeTone(status: Job["status"]) {
   if (status === "completed") return "ok" as const;
   if (status === "failed" || status === "cancelled") return "err" as const;
-  if (status === "running") return "running" as const;
+  if (status === "running" || status === "uploading") return "running" as const;
   return "queued" as const;
 }
 
@@ -69,7 +70,7 @@ function JobAvatar({ job, promptTitle }: { job: Job; promptTitle: string }) {
   }, [firstUrl]);
 
   const isFailure = job.status === "failed" || job.status === "cancelled";
-  const isRunning = job.status === "running" || job.status === "queued";
+  const isRunning = isActiveJobStatus(job.status);
   const showBadge = planned > 1 && !isFailure;
   const badgeText =
     job.status === "completed" || doneCount >= planned
@@ -331,7 +332,7 @@ export function JobRow({
           <Badge tone={badgeTone(job.status)}>
             <StatusDot
               status={job.status}
-              pulse={job.status === "running" || job.status === "queued"}
+              pulse={isActiveJobStatus(job.status)}
             />
             {statusLabel(job.status)}
           </Badge>

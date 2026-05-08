@@ -58,7 +58,8 @@ graph TB
         CDX["Codex<br/>~/.codex/auth.json"]
     end
 
-    STORE[("$CODEX_HOME/gpt-image-2-skill/<br/>config.json · history.sqlite · jobs/")]
+    LEGACY[("$CODEX_HOME/gpt-image-2-skill/<br/>config.json · history.sqlite · legacy jobs/")]
+    PRODUCT[("Product result library<br/>App data / Docker /data/gpt-image-2/jobs")]
 
     SKILL --> CLI
     CLI --> CORE
@@ -70,19 +71,21 @@ graph TB
     CORE --> OAC
     CORE --> CDX
 
-    CLI --> STORE
-    APP --> STORE
-    WEB --> STORE
+    CLI --> LEGACY
+    SKILL --> LEGACY
+    APP --> PRODUCT
+    WEB --> PRODUCT
+    PRODUCT -. "read old outputs" .-> LEGACY
 ```
 
-`gpt-image-2-core` 是单一权威实现:provider 路由、`/images/generations` 与 `/images/edits` multipart、Codex `image_generation` SSE、`401` 触发的 OAuth refresh、retry、`config.json` 解析、Keychain/file/env 三源凭据解析、SQLite history、结果存储上传、本地透明 PNG chroma + dual-background 抠图与多 profile 验证全部住在 core 里。CLI 是其薄壳,Tauri sidecar 直接复用同版本二进制,Docker Web 把 core 包成 Axum HTTP 服务,Skill 通过 Node wrapper 调到 CLI。四个入口共享 `$CODEX_HOME/gpt-image-2-skill/` 下的同一份配置、历史与 jobs 目录。
+`gpt-image-2-core` 是单一权威实现:provider 路由、`/images/generations` 与 `/images/edits` multipart、Codex `image_generation` SSE、`401` 触发的 OAuth refresh、retry、`config.json` 解析、Keychain/file/env 三源凭据解析、SQLite history、结果存储上传、本地透明 PNG chroma + dual-background 抠图与多 profile 验证全部住在 core 里。CLI 是其薄壳,Tauri sidecar 直接复用同版本二进制,Docker Web 把 core 包成 Axum HTTP 服务,Skill 通过 Node wrapper 调到 CLI。CLI/Skill 继续使用 `$CODEX_HOME/gpt-image-2-skill/`;桌面 App 和 Docker Web 的新生成结果进入产品结果库,旧 jobs 目录仅作为兼容读取来源。
 
 ## 项目定位
 
 - **Agent-first 协议** — 每条命令都返回统一 JSON envelope (`ok` / `error.code` / `data`),进度事件以 JSONL 形式走 stderr,错误码可机读。包括 `request create` raw 转发出口,允许 agent 在协议没覆盖的场景下直接打 OpenAI 或 Codex 上游。
 - **三 provider 同接口** — `OPENAI_API_KEY` / OpenAI-compatible base URL / Codex `auth.json` 走完全相同的命令面;切 provider 不改命令形状,只换 `--provider`,Codex `401` 自动 refresh 一次再重试。
 - **透明 PNG 是终端交付** — `transparent generate` / `transparent extract` / `transparent verify` 把 controlled-matte 生成、本地 chroma 与 dual-background 抠图、9 种 profile 化质量门绑成完整流水线;不依赖 provider native `--background transparent`。
-- **共享存储 / 一码多端** — CLI 跑出来的 history 在桌面 App 里能看到,Docker Web 装载同一目录就接上 Tauri 的所有数据,Skill 调出来的产物落到同一个 `jobs/`。服务端运行时还可以把生成结果异步上传到多个存储目标,再带着 `outputs[].uploads[]` 触发通知。
+- **结果库 / 一码多端** — CLI/Skill 保持轻工具形态,输出路径由命令控制;桌面 App 和 Docker Web 管理自己的产品结果库,同时保留旧 `$CODEX_HOME/gpt-image-2-skill/jobs` 的兼容读取。服务端运行时还可以把生成结果异步上传到多个存储目标,再带着 `outputs[].uploads[]` 触发通知。
 
 ## 快速开始
 
@@ -120,8 +123,13 @@ npx skills add https://github.com/Wangnov/gpt-image-2-skill --skill gpt-image-2-
 
 # 或者起一个本地 Docker Web 服务
 docker build -t gpt-image-2-web .
+mkdir -p "$HOME/.local/share/gpt-image-2" \
+  "$HOME/.local/share/gpt-image-2-codex/gpt-image-2-skill" \
+  "$HOME/.codex/gpt-image-2-skill/jobs"
 docker run --rm -p 8787:8787 \
-  -v "$HOME/.codex/gpt-image-2-skill:/data/codex/gpt-image-2-skill" \
+  -v "$HOME/.local/share/gpt-image-2:/data/gpt-image-2" \
+  -v "$HOME/.local/share/gpt-image-2-codex:/data/codex" \
+  -v "$HOME/.codex/gpt-image-2-skill/jobs:/data/codex/gpt-image-2-skill/jobs:ro" \
   -v "$HOME/.codex/auth.json:/data/codex/auth.json:ro" \
   gpt-image-2-web
 ```
@@ -133,16 +141,16 @@ docker run --rm -p 8787:8787 \
 | 入口 | 安装命令 | 配置 / 数据位置 | 适用场景 |
 |---|---|---|---|
 | **CLI** (Rust binary) | `cargo install gpt-image-2-skill --locked`<br/>`brew install wangnov/tap/gpt-image-2-skill`<br/>`npm install -g gpt-image-2-skill`<br/>`cargo binstall gpt-image-2-skill` | `$CODEX_HOME/gpt-image-2-skill/` | agent 直调、CI、脚本编排 |
-| **桌面 App** (Tauri) | `brew install --cask wangnov/tap/gpt-image-2`<br/>或 GitHub Releases DMG / NSIS / AppImage / deb / rpm | `$CODEX_HOME/gpt-image-2-skill/` | 桌面用户;sidecar 调本地 CLI,可切换 HTTP 后端模式 |
-| **Docker Web** (Axum) | `docker build -t gpt-image-2-web .` | 容器内 `/data/codex/gpt-image-2-skill/`,挂载本机目录后与 CLI/App 共享 | 自托管、远程访问、内网共享 |
+| **桌面 App** (Tauri) | `brew install --cask wangnov/tap/gpt-image-2`<br/>或 GitHub Releases DMG / NSIS / AppImage / deb / rpm | 配置/历史暂用 `$CODEX_HOME/gpt-image-2-skill/`;新结果默认进系统 App 数据目录;导出默认到 `~/Downloads/GPT Image 2` | 桌面用户;sidecar 调本地 CLI,可切换 HTTP 后端模式 |
+| **Docker Web** (Axum) | `docker build -t gpt-image-2-web .` | 新结果默认 `/data/gpt-image-2/jobs`;旧 `/data/codex/gpt-image-2-skill/jobs` 可只读兼容 | 自托管、远程访问、内网共享 |
 | **Skill** | `npx skills add https://github.com/Wangnov/gpt-image-2-skill --skill gpt-image-2-skill` | 复用调到的 CLI 的 `$CODEX_HOME` | Claude Code、Anthropic skills CLI |
 | **Rust crate** | `gpt-image-2-core = "0.4"` | 调用方决定 | 嵌入第三方 Rust 工程,自定义 surface |
 
-`$CODEX_HOME` 默认为 `~/.codex/`,可由环境变量覆盖。四个入口共享存储意味着 CLI 跑的任务出现在桌面 App 历史里,Docker Web 挂载同一目录后可继续接同一份历史。
+`$CODEX_HOME` 默认为 `~/.codex/`,可由环境变量覆盖。CLI/Skill 继续按命令参数输出;桌面 App 和 Docker Web 把“结果库”和“导出文件夹”分开,避免把内部 jobs 目录误当作用户下载目录。
 
 ## 结果存储与第三方集成
 
-桌面 App(Tauri sidecar)和 Docker Web 会在生图成功后异步上传结果文件,再派发通知/webhook。上传状态写入同一份 `history.sqlite`,任务历史会返回 `storage_status` 以及每个输出的 `uploads[]` 记录,第三方服务可以在 webhook 收到 `job.outputs[].uploads[]` 后按配置的公开 URL 或存储侧 key 获取图片。
+桌面 App(Tauri sidecar)和 Docker Web 会在生图成功后先写入产品结果库,再异步上传结果文件,最后派发通知/webhook。上传状态写入 `history.sqlite`,任务历史会返回 `storage_status` 以及每个输出的 `uploads[]` 记录,第三方服务可以在 webhook 收到 `job.outputs[].uploads[]` 后按配置的公开 URL 或存储侧 key 获取图片。静态 Web 只保存当前浏览器数据,不会保存远端存储密钥,也不会执行服务端上传。
 
 支持的目标类型:
 
@@ -315,9 +323,12 @@ gpt-image-2-skill --json \
 |---|---|
 | 配置 | `$CODEX_HOME/gpt-image-2-skill/config.json` |
 | 历史 | `$CODEX_HOME/gpt-image-2-skill/history.sqlite` |
-| 任务产物 | `$CODEX_HOME/gpt-image-2-skill/jobs/` |
+| CLI/Skill 任务产物 | `$CODEX_HOME/gpt-image-2-skill/jobs/` |
+| 桌面 App 结果库 | 系统 App 数据目录下的 `com.wangnov.gpt-image-2/jobs` |
+| Docker Web 结果库 | `/data/gpt-image-2/jobs` |
+| 默认导出文件夹 | 桌面 App 默认 `~/Downloads/GPT Image 2` |
 
-`$CODEX_HOME` 默认 `~/.codex/`。CLI、桌面 App、Docker Web、Skill 共用同一份。
+`$CODEX_HOME` 默认 `~/.codex/`。CLI/Skill 继续使用这套轻工具目录;桌面 App 和 Docker Web 的新结果进入产品结果库,旧 jobs 路径保留为兼容读取。
 
 `config.json` 示例:
 
@@ -370,13 +381,13 @@ macOS DMG 通过 Developer ID 签名并完成 Apple notarization。App 内置 Ta
 **HTTP 后端模式** — 桌面 App 默认走 Tauri sidecar 调本地 CLI,但 `npm run build:http` 可以构建一份直连 `/api` 的版本,被 Docker Web 复用。这同时也是本仓库前端开发的推荐模式:
 
 ```bash
-just dev-http-backend     # 起一个共享 ~/.codex/gpt-image-2-skill 的本地 Docker 后端
+just dev-http-backend     # 起本地 Docker 后端:新结果写入 ~/.local/share/gpt-image-2,旧 ~/.codex jobs 只读
 just dev-http-frontend    # 起 Vite dev server,API 走 :8787
 ```
 
 ## Docker Web 自托管
 
-`gpt-image-2-web`(`crates/gpt-image-2-web`,基于 Axum + tower-http)把 core 包成 HTTP 服务,前端是同一份 React UI,通过 `/api` 调到后端。容器复用本机的 `$CODEX_HOME/gpt-image-2-skill/` 后,即与桌面 App 与 CLI 共享 SQLite 历史与 `jobs/` 目录。
+`gpt-image-2-web`(`crates/gpt-image-2-web`,基于 Axum + tower-http)把 core 包成 HTTP 服务,前端是同一份 React UI,通过 `/api` 调到后端。Docker Web 的新生成结果默认写入 `/data/gpt-image-2/jobs`;旧 `$CODEX_HOME/gpt-image-2-skill/jobs` 可作为只读兼容目录,避免把产品结果库继续和 CLI/Skill jobs 混在一起。
 
 **构建与运行**:
 
@@ -389,9 +400,14 @@ docker run --rm -p 8787:8787 \
   -e OPENAI_API_KEY=sk-... \
   gpt-image-2-web
 
-# 与本机 Tauri / CLI 共享数据(开发推荐)
+# Docker Web 可写配置/历史，本机旧 jobs 只读兼容(开发推荐)
+mkdir -p "$HOME/.local/share/gpt-image-2" \
+  "$HOME/.local/share/gpt-image-2-codex/gpt-image-2-skill" \
+  "$HOME/.codex/gpt-image-2-skill/jobs"
 docker run --rm -p 8787:8787 \
-  -v "$HOME/.codex/gpt-image-2-skill:/data/codex/gpt-image-2-skill" \
+  -v "$HOME/.local/share/gpt-image-2:/data/gpt-image-2" \
+  -v "$HOME/.local/share/gpt-image-2-codex:/data/codex" \
+  -v "$HOME/.codex/gpt-image-2-skill/jobs:/data/codex/gpt-image-2-skill/jobs:ro" \
   -v "$HOME/.codex/auth.json:/data/codex/auth.json:ro" \
   gpt-image-2-web
 ```
@@ -487,7 +503,7 @@ just app-build             # Tauri 前端打包
 just app-build-http        # HTTP 模式前端打包(给 Docker Web 用)
 just app-test-browser      # 浏览器 transport vitest
 just dev-tauri             # 起 Tauri 开发服务器(仅在需要验证桌面专属能力时用)
-just dev-http-backend      # 起本地 Docker 后端,共享 ~/.codex/gpt-image-2-skill
+just dev-http-backend      # 起本地 Docker 后端,配置/历史可写,旧 jobs 只读
 just dev-http-frontend     # 起 Vite dev server,API 走 :8787
 
 just relay-test            # Cloudflare Worker vitest + tsc
@@ -591,7 +607,8 @@ graph TB
         CDX["Codex<br/>~/.codex/auth.json"]
     end
 
-    STORE[("$CODEX_HOME/gpt-image-2-skill/<br/>config.json · history.sqlite · jobs/")]
+    LEGACY[("$CODEX_HOME/gpt-image-2-skill/<br/>config.json · history.sqlite · legacy jobs/")]
+    PRODUCT[("Product result library<br/>App data / Docker /data/gpt-image-2/jobs")]
 
     SKILL --> CLI
     CLI --> CORE
@@ -603,19 +620,21 @@ graph TB
     CORE --> OAC
     CORE --> CDX
 
-    CLI --> STORE
-    APP --> STORE
-    WEB --> STORE
+    CLI --> LEGACY
+    SKILL --> LEGACY
+    APP --> PRODUCT
+    WEB --> PRODUCT
+    PRODUCT -. "read old outputs" .-> LEGACY
 ```
 
-`gpt-image-2-core` is the single source of truth: provider routing, `/images/generations` and `/images/edits` multipart, Codex `image_generation` SSE, OAuth refresh on `401`, retries, `config.json` parsing, three-source (Keychain / file / env) credential resolution, SQLite history, result-storage uploads, and the local transparent-PNG chroma + dual-background extraction with multi-profile verification all live in core. The CLI is a thin shell, the Tauri sidecar reuses the matching binary, the Docker Web wraps core in an Axum HTTP service, and the Skill calls the CLI through a Node wrapper. The four surfaces share configuration, history, and the `jobs/` directory under `$CODEX_HOME/gpt-image-2-skill/`.
+`gpt-image-2-core` is the single source of truth: provider routing, `/images/generations` and `/images/edits` multipart, Codex `image_generation` SSE, OAuth refresh on `401`, retries, `config.json` parsing, three-source (Keychain / file / env) credential resolution, SQLite history, result-storage uploads, and the local transparent-PNG chroma + dual-background extraction with multi-profile verification all live in core. The CLI is a thin shell, the Tauri sidecar reuses the matching binary, the Docker Web wraps core in an Axum HTTP service, and the Skill calls the CLI through a Node wrapper. CLI/Skill keep using `$CODEX_HOME/gpt-image-2-skill/`; the desktop app and Docker Web write new outputs into a product result library while keeping old jobs readable for compatibility.
 
 ## Why this project
 
 - **Agent-first protocol** — every command returns a uniform JSON envelope (`ok` / `error.code` / `data`). Progress events stream as JSONL on stderr. Error codes are machine-readable. A `request create` raw escape hatch lets agents hit OpenAI or Codex upstream directly when the protocol does not cover a use case.
 - **Three providers, one surface** — `OPENAI_API_KEY`, an OpenAI-compatible base URL, and Codex `auth.json` go through identical command shapes; switching providers means changing `--provider`, not the command. Codex `401` triggers exactly one OAuth refresh and a single retry.
 - **Transparent PNG as a deliverable** — `transparent generate` / `transparent extract` / `transparent verify` bundle controlled-matte generation, local chroma and dual-background extraction, and nine profile-based quality gates into a complete pipeline. It does not depend on provider-native `--background transparent`.
-- **Shared storage, one codebase, many surfaces** — history written from the CLI shows up in the desktop app; Docker Web mounting the same directory inherits all of it; Skill outputs land in the same `jobs/`. Server-side runtimes can also upload generated outputs to multiple storage targets and then notify integrations with `outputs[].uploads[]`.
+- **Result library, one codebase, many surfaces** — CLI/Skill stay lightweight and command-directed; the desktop app and Docker Web manage a product result library and can still read legacy `$CODEX_HOME/gpt-image-2-skill/jobs` outputs. Server-side runtimes can also upload generated outputs to multiple storage targets and then notify integrations with `outputs[].uploads[]`.
 
 ## Quickstart
 
@@ -653,8 +672,13 @@ npx skills add https://github.com/Wangnov/gpt-image-2-skill --skill gpt-image-2-
 
 # Or run a local Docker Web service
 docker build -t gpt-image-2-web .
+mkdir -p "$HOME/.local/share/gpt-image-2" \
+  "$HOME/.local/share/gpt-image-2-codex/gpt-image-2-skill" \
+  "$HOME/.codex/gpt-image-2-skill/jobs"
 docker run --rm -p 8787:8787 \
-  -v "$HOME/.codex/gpt-image-2-skill:/data/codex/gpt-image-2-skill" \
+  -v "$HOME/.local/share/gpt-image-2:/data/gpt-image-2" \
+  -v "$HOME/.local/share/gpt-image-2-codex:/data/codex" \
+  -v "$HOME/.codex/gpt-image-2-skill/jobs:/data/codex/gpt-image-2-skill/jobs:ro" \
   -v "$HOME/.codex/auth.json:/data/codex/auth.json:ro" \
   gpt-image-2-web
 ```
@@ -666,16 +690,16 @@ See [Skill integration](#skill-integration) and [Self-hosted Docker Web](#self-h
 | Surface | Install | Config / data location | Use case |
 |---|---|---|---|
 | **CLI** (Rust binary) | `cargo install gpt-image-2-skill --locked`<br/>`brew install wangnov/tap/gpt-image-2-skill`<br/>`npm install -g gpt-image-2-skill`<br/>`cargo binstall gpt-image-2-skill` | `$CODEX_HOME/gpt-image-2-skill/` | Agent calls, CI, scripted pipelines |
-| **Desktop app** (Tauri) | `brew install --cask wangnov/tap/gpt-image-2`<br/>or GitHub Releases DMG / NSIS / AppImage / deb / rpm | `$CODEX_HOME/gpt-image-2-skill/` | Desktop users; sidecar invokes the local CLI, switchable to HTTP backend mode |
-| **Docker Web** (Axum) | `docker build -t gpt-image-2-web .` | `/data/codex/gpt-image-2-skill/` inside the container; mount a host directory to share with CLI/App | Self-hosted, remote access, intranet sharing |
+| **Desktop app** (Tauri) | `brew install --cask wangnov/tap/gpt-image-2`<br/>or GitHub Releases DMG / NSIS / AppImage / deb / rpm | Config/history currently use `$CODEX_HOME/gpt-image-2-skill/`; new results default to the system app data directory; exports default to `~/Downloads/GPT Image 2` | Desktop users; sidecar invokes the local CLI, switchable to HTTP backend mode |
+| **Docker Web** (Axum) | `docker build -t gpt-image-2-web .` | New results default to `/data/gpt-image-2/jobs`; old `/data/codex/gpt-image-2-skill/jobs` can be mounted read-only for compatibility | Self-hosted, remote access, intranet sharing |
 | **Skill** | `npx skills add https://github.com/Wangnov/gpt-image-2-skill --skill gpt-image-2-skill` | Reuses the resolved CLI's `$CODEX_HOME` | Claude Code, Anthropic skills CLI |
 | **Rust crate** | `gpt-image-2-core = "0.4"` | Caller chooses | Embed into another Rust project, build a custom surface |
 
-`$CODEX_HOME` defaults to `~/.codex/` and can be overridden via the environment variable. Shared storage means a CLI-produced job appears in the desktop app history, and Docker Web mounting the same directory continues against the same history.
+`$CODEX_HOME` defaults to `~/.codex/` and can be overridden via the environment variable. CLI/Skill keep command-directed output behavior; the desktop app and Docker Web separate the internal result library from the user-facing export/download folder.
 
 ## Result Storage And Integrations
 
-The desktop app(Tauri sidecar)and Docker Web upload result files asynchronously after a generation job succeeds, then dispatch notifications/webhooks. Upload state is stored in the shared `history.sqlite`; history and webhook payloads include job-level `storage_status` and per-output `uploads[]`, so third-party services can fetch images through the configured public URL or storage-side key.
+The desktop app(Tauri sidecar)and Docker Web first write completed images into the product result library, then upload result files asynchronously, then dispatch notifications/webhooks. Upload state is stored in `history.sqlite`; history and webhook payloads include job-level `storage_status` and per-output `uploads[]`, so third-party services can fetch images through the configured public URL or storage-side key. Static Web only stores results in the current browser data and does not persist remote storage secrets or run server-side uploads.
 
 Supported target types:
 
@@ -848,9 +872,12 @@ Shared config paths:
 |---|---|
 | Config | `$CODEX_HOME/gpt-image-2-skill/config.json` |
 | History | `$CODEX_HOME/gpt-image-2-skill/history.sqlite` |
-| Job artifacts | `$CODEX_HOME/gpt-image-2-skill/jobs/` |
+| CLI/Skill job artifacts | `$CODEX_HOME/gpt-image-2-skill/jobs/` |
+| Desktop app result library | `com.wangnov.gpt-image-2/jobs` under the system app data directory |
+| Docker Web result library | `/data/gpt-image-2/jobs` |
+| Default export folder | Desktop app default: `~/Downloads/GPT Image 2` |
 
-`$CODEX_HOME` defaults to `~/.codex/`. CLI, desktop app, Docker Web, and Skill all share the same paths.
+`$CODEX_HOME` defaults to `~/.codex/`. CLI/Skill keep using this lightweight tool directory; the desktop app and Docker Web write new outputs to the product result library and keep the old jobs path as a compatibility read source.
 
 Example `config.json`:
 
@@ -903,13 +930,13 @@ macOS DMGs are signed with Developer ID and notarized by Apple. The app embeds t
 **HTTP backend mode** — by default the desktop app calls the CLI through the Tauri sidecar, but `npm run build:http` produces a build that talks to `/api`, which is also what Docker Web ships. This is also the recommended frontend dev mode in this repo:
 
 ```bash
-just dev-http-backend     # Local Docker backend that shares ~/.codex/gpt-image-2-skill
+just dev-http-backend     # Local Docker backend with writable config/history and read-only legacy jobs
 just dev-http-frontend    # Vite dev server, API points at :8787
 ```
 
 ## Self-hosted Docker Web
 
-`gpt-image-2-web` ([`crates/gpt-image-2-web`](crates/gpt-image-2-web), Axum + tower-http) wraps core in an HTTP service. The frontend is the same React UI talking to `/api`. Mount the host's `$CODEX_HOME/gpt-image-2-skill/` and the container shares SQLite history and `jobs/` with the desktop app and CLI.
+`gpt-image-2-web` ([`crates/gpt-image-2-web`](crates/gpt-image-2-web), Axum + tower-http) wraps core in an HTTP service. The frontend is the same React UI talking to `/api`. New Docker Web results default to `/data/gpt-image-2/jobs`; the old `$CODEX_HOME/gpt-image-2-skill/jobs` path can be mounted read-only as a legacy compatibility directory.
 
 **Build and run**:
 
@@ -922,9 +949,14 @@ docker run --rm -p 8787:8787 \
   -e OPENAI_API_KEY=sk-... \
   gpt-image-2-web
 
-# Share data with local Tauri / CLI (recommended for development)
+# Writable Docker Web config/history, plus read-only local legacy jobs (recommended for development)
+mkdir -p "$HOME/.local/share/gpt-image-2" \
+  "$HOME/.local/share/gpt-image-2-codex/gpt-image-2-skill" \
+  "$HOME/.codex/gpt-image-2-skill/jobs"
 docker run --rm -p 8787:8787 \
-  -v "$HOME/.codex/gpt-image-2-skill:/data/codex/gpt-image-2-skill" \
+  -v "$HOME/.local/share/gpt-image-2:/data/gpt-image-2" \
+  -v "$HOME/.local/share/gpt-image-2-codex:/data/codex" \
+  -v "$HOME/.codex/gpt-image-2-skill/jobs:/data/codex/gpt-image-2-skill/jobs:ro" \
   -v "$HOME/.codex/auth.json:/data/codex/auth.json:ro" \
   gpt-image-2-web
 ```
@@ -1022,7 +1054,7 @@ just app-build             # Tauri frontend build
 just app-build-http        # HTTP-mode frontend build (used by Docker Web)
 just app-test-browser      # Browser transport vitest
 just dev-tauri             # Tauri dev server (only when validating desktop-only behavior)
-just dev-http-backend      # Local Docker backend that shares ~/.codex/gpt-image-2-skill
+just dev-http-backend      # Local Docker backend with writable config/history and read-only legacy jobs
 just dev-http-frontend     # Vite dev server, API points at :8787
 
 just relay-test            # Cloudflare Worker vitest + tsc

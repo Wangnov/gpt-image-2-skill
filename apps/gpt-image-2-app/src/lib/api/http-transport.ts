@@ -6,6 +6,7 @@ import type {
   NotificationCapabilities,
   NotificationConfig,
   NotificationTestResult,
+  PathConfig,
   ProviderConfig,
   QueueStatus,
   ServerConfig,
@@ -217,6 +218,9 @@ export const httpApi: ApiClient = {
   canUseSystemCredentials: true,
   canUseCodexProvider: true,
   canExportToDownloadsFolder: false,
+  canExportToConfiguredFolder: false,
+  canChooseExportFolder: false,
+  canUsePersistentResultLibrary: true,
   async getConfig() {
     return normalizeConfig(await requestJson<ServerConfig>("/config"));
   },
@@ -239,6 +243,14 @@ export const httpApi: ApiClient = {
   },
   async notificationCapabilities() {
     return requestJson<NotificationCapabilities>("/notifications/capabilities");
+  },
+  async updatePaths(config: PathConfig) {
+    return normalizeConfig(
+      await requestJson<ServerConfig>("/paths", {
+        method: "PUT",
+        body: jsonBody(config),
+      }),
+    );
   },
   async updateStorage(config: StorageConfig) {
     return normalizeConfig(
@@ -380,6 +392,12 @@ export const httpApi: ApiClient = {
     throw new Error("Web 页面不能打开服务端文件夹，请在服务器环境中查看。");
   },
   async exportFilesToDownloads(paths: string[]) {
+    return httpApi.exportFilesToConfiguredFolder(paths);
+  },
+  async exportJobToDownloads(jobId: string) {
+    return httpApi.exportJobToConfiguredFolder(jobId);
+  },
+  async exportFilesToConfiguredFolder(paths: string[]) {
     for (const [index, path] of paths.entries()) {
       const url = httpApi.fileUrl(path);
       if (!url) throw new Error("没有可下载的图片。");
@@ -387,7 +405,7 @@ export const httpApi: ApiClient = {
     }
     return paths;
   },
-  async exportJobToDownloads(jobId: string) {
+  async exportJobToConfiguredFolder(jobId: string) {
     const { job } = await httpApi.getJob(jobId);
     return downloadJobZip(job);
   },

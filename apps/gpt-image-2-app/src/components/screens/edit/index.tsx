@@ -58,6 +58,7 @@ import { useJobEvents } from "@/hooks/use-job-events";
 import { useReducedMotion } from "@/hooks/use-reduced-motion";
 import { useTweaks } from "@/hooks/use-tweaks";
 import { api } from "@/lib/api";
+import { isActiveJobStatus } from "@/lib/api/types";
 import { loadEditDraft, saveEditDraft } from "@/lib/drafts";
 import {
   errorMessage,
@@ -866,8 +867,7 @@ export function EditScreen({
       const res = await mutate.mutateAsync(form);
       const queued =
         res.queued ||
-        res.job?.status === "queued" ||
-        res.job?.status === "running";
+        Boolean(res.job && isActiveJobStatus(res.job.status));
       const count = queued ? plannedN : responseOutputCount(res);
       setOutputCount(count);
       setJobId(res.job_id);

@@ -13,7 +13,7 @@ const pendingHardDeletes = new Map<string, number>();
 /**
  * Trigger the soft-delete + 5s undo flow for a job.
  *
- * Tauri runtime: moves the job dir into `jobs_dir/.thrash/<id>` and stamps
+ * Tauri runtime: moves the job dir into `result_library_dir/.trash/<id>` and stamps
  * `deleted_at` in the history DB; if the user clicks "撤回" within 5s the
  * folder is moved back and the row is unmarked. Otherwise after 5s the row
  * and folder are permanently removed.

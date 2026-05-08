@@ -55,6 +55,9 @@ pub const CONFIG_DIR_NAME: &str = "gpt-image-2-skill";
 pub const CONFIG_FILE_NAME: &str = "config.json";
 pub const HISTORY_FILE_NAME: &str = "history.sqlite";
 pub const JOBS_DIR_NAME: &str = "jobs";
+pub const PRODUCT_DIR_NAME: &str = "gpt-image-2";
+pub const RESULTS_DIR_NAME: &str = "results";
+pub const EXPORTS_DIR_NAME: &str = "exports";
 pub const KEYCHAIN_SERVICE: &str = "gpt-image-2-skill";
 pub const DEFAULT_HISTORY_PAGE_LIMIT: usize = 100;
 pub const MAX_HISTORY_PAGE_LIMIT: usize = 200;
@@ -445,6 +448,27 @@ fn storage_secret_identity_matches(
     }
 }
 
+fn storage_secret_source<'a>(
+    name: &str,
+    target: &StorageTargetConfig,
+    existing: &'a StorageConfig,
+) -> Option<&'a StorageTargetConfig> {
+    if let Some(existing_target) = existing.targets.get(name) {
+        return storage_secret_identity_matches(target, existing_target).then_some(existing_target);
+    }
+
+    let mut matches = existing
+        .targets
+        .values()
+        .filter(|existing_target| storage_secret_identity_matches(target, existing_target));
+    let first = matches.next()?;
+    if matches.next().is_none() {
+        Some(first)
+    } else {
+        None
+    }
+}
+
 pub fn preserve_notification_secrets(next: &mut NotificationConfig, existing: &NotificationConfig) {
     if let Some(next_password) = next.email.password.as_mut() {
         preserve_empty_file_credential(next_password, existing.email.password.as_ref());
@@ -467,10 +491,7 @@ pub fn preserve_notification_secrets(next: &mut NotificationConfig, existing: &N
 
 pub fn preserve_storage_secrets(next: &mut StorageConfig, existing: &StorageConfig) {
     for (name, target) in &mut next.targets {
-        let existing_target = existing
-            .targets
-            .get(name)
-            .filter(|existing_target| storage_secret_identity_matches(target, existing_target));
+        let existing_target = storage_secret_source(name, target, existing);
         match target {
             StorageTargetConfig::S3 {
                 access_key_id,
@@ -664,7 +685,7 @@ impl Default for StorageConfig {
             targets: BTreeMap::from([(
                 "local-default".to_string(),
                 StorageTargetConfig::Local {
-                    directory: shared_config_dir().join("storage").join("fallback"),
+                    directory: default_storage_fallback_dir(),
                     public_base_url: None,
                 },
             )]),
@@ -675,6 +696,99 @@ impl Default for StorageConfig {
             target_concurrency: default_storage_target_concurrency(),
         }
     }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Eq, PartialEq)]
+#[serde(rename_all = "snake_case")]
+pub enum PathMode {
+    Default,
+    Custom,
+}
+
+impl Default for PathMode {
+    fn default() -> Self {
+        Self::Default
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Eq, PartialEq)]
+pub struct PathRef {
+    #[serde(default)]
+    pub mode: PathMode,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub path: Option<PathBuf>,
+}
+
+impl Default for PathRef {
+    fn default() -> Self {
+        Self {
+            mode: PathMode::Default,
+            path: None,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Eq, Ord, PartialEq, PartialOrd)]
+#[serde(rename_all = "snake_case")]
+pub enum ExportDirMode {
+    Downloads,
+    Documents,
+    Pictures,
+    ResultLibrary,
+    Custom,
+    BrowserDefault,
+}
+
+impl Default for ExportDirMode {
+    fn default() -> Self {
+        Self::Downloads
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Eq, PartialEq)]
+pub struct ExportDirConfig {
+    #[serde(default)]
+    pub mode: ExportDirMode,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub path: Option<PathBuf>,
+}
+
+impl Default for ExportDirConfig {
+    fn default() -> Self {
+        Self {
+            mode: ExportDirMode::Downloads,
+            path: None,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Eq, PartialEq)]
+pub struct LegacyPathConfig {
+    #[serde(default = "default_legacy_shared_codex_path")]
+    pub path: PathBuf,
+    #[serde(default = "default_true")]
+    pub enabled_for_read: bool,
+}
+
+impl Default for LegacyPathConfig {
+    fn default() -> Self {
+        Self {
+            path: default_legacy_shared_codex_path(),
+            enabled_for_read: true,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Eq, PartialEq, Default)]
+pub struct PathConfig {
+    #[serde(default)]
+    pub app_data_dir: PathRef,
+    #[serde(default)]
+    pub result_library_dir: PathRef,
+    #[serde(default)]
+    pub default_export_dir: ExportDirConfig,
+    #[serde(default)]
+    pub legacy_shared_codex_dir: LegacyPathConfig,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -688,6 +802,8 @@ pub struct AppConfig {
     pub notifications: NotificationConfig,
     #[serde(default)]
     pub storage: StorageConfig,
+    #[serde(default)]
+    pub paths: PathConfig,
 }
 
 impl Default for AppConfig {
@@ -698,6 +814,7 @@ impl Default for AppConfig {
             providers: BTreeMap::new(),
             notifications: NotificationConfig::default(),
             storage: StorageConfig::default(),
+            paths: PathConfig::default(),
         }
     }
 }
@@ -1173,6 +1290,139 @@ pub fn jobs_dir() -> PathBuf {
     shared_config_dir().join(JOBS_DIR_NAME)
 }
 
+fn default_storage_fallback_dir() -> PathBuf {
+    shared_config_dir().join("storage").join("fallback")
+}
+
+fn default_legacy_shared_codex_path() -> PathBuf {
+    shared_config_dir()
+}
+
+#[derive(Debug, Clone, Copy, Eq, PartialEq)]
+pub enum ProductRuntime {
+    Tauri,
+    DockerWeb,
+}
+
+pub fn product_default_export_dirs(
+    config: &AppConfig,
+    runtime: ProductRuntime,
+) -> BTreeMap<ExportDirMode, PathBuf> {
+    [
+        ExportDirMode::Downloads,
+        ExportDirMode::Documents,
+        ExportDirMode::Pictures,
+        ExportDirMode::ResultLibrary,
+        ExportDirMode::BrowserDefault,
+    ]
+    .into_iter()
+    .map(|mode| {
+        let mut preview_config = config.clone();
+        preview_config.paths.default_export_dir.mode = mode.clone();
+        preview_config.paths.default_export_dir.path = None;
+        (
+            mode,
+            product_default_export_dir(Some(&preview_config), runtime),
+        )
+    })
+    .collect()
+}
+
+fn default_product_app_data_dir(runtime: ProductRuntime) -> PathBuf {
+    match runtime {
+        ProductRuntime::Tauri => dirs::data_dir()
+            .or_else(dirs::home_dir)
+            .unwrap_or_else(|| PathBuf::from("."))
+            .join("com.wangnov.gpt-image-2"),
+        ProductRuntime::DockerWeb => std::env::var_os("GPT_IMAGE_2_DATA_DIR")
+            .filter(|value| !value.is_empty())
+            .map(PathBuf::from)
+            .unwrap_or_else(|| PathBuf::from("/data").join(PRODUCT_DIR_NAME)),
+    }
+}
+
+fn default_product_export_dir(runtime: ProductRuntime, app_data_dir: &Path) -> PathBuf {
+    match runtime {
+        ProductRuntime::Tauri => dirs::download_dir()
+            .or_else(dirs::document_dir)
+            .unwrap_or_else(|| app_data_dir.join(EXPORTS_DIR_NAME))
+            .join("GPT Image 2"),
+        ProductRuntime::DockerWeb => app_data_dir.join(EXPORTS_DIR_NAME),
+    }
+}
+
+fn resolve_path_ref(default: PathBuf, path_ref: &PathRef) -> PathBuf {
+    match path_ref.mode {
+        PathMode::Custom => path_ref
+            .path
+            .as_ref()
+            .filter(|path| !path.as_os_str().is_empty())
+            .cloned()
+            .unwrap_or(default),
+        PathMode::Default => default,
+    }
+}
+
+pub fn product_app_data_dir(config: Option<&AppConfig>, runtime: ProductRuntime) -> PathBuf {
+    let default = default_product_app_data_dir(runtime);
+    config
+        .map(|config| resolve_path_ref(default.clone(), &config.paths.app_data_dir))
+        .unwrap_or(default)
+}
+
+pub fn product_result_library_dir(config: Option<&AppConfig>, runtime: ProductRuntime) -> PathBuf {
+    let app_data_dir = product_app_data_dir(config, runtime);
+    let default = app_data_dir.join(JOBS_DIR_NAME);
+    config
+        .map(|config| resolve_path_ref(default.clone(), &config.paths.result_library_dir))
+        .unwrap_or(default)
+}
+
+pub fn product_default_export_dir(config: Option<&AppConfig>, runtime: ProductRuntime) -> PathBuf {
+    let app_data_dir = product_app_data_dir(config, runtime);
+    let result_library_dir = product_result_library_dir(config, runtime);
+    let Some(export_dir) = config.map(|config| &config.paths.default_export_dir) else {
+        return default_product_export_dir(runtime, &app_data_dir);
+    };
+    match export_dir.mode {
+        ExportDirMode::Custom => export_dir
+            .path
+            .as_ref()
+            .filter(|path| !path.as_os_str().is_empty())
+            .cloned()
+            .unwrap_or_else(|| default_product_export_dir(runtime, &app_data_dir)),
+        ExportDirMode::Documents => dirs::document_dir()
+            .unwrap_or_else(|| app_data_dir.join(EXPORTS_DIR_NAME))
+            .join("GPT Image 2"),
+        ExportDirMode::Pictures => dirs::picture_dir()
+            .unwrap_or_else(|| app_data_dir.join(EXPORTS_DIR_NAME))
+            .join("GPT Image 2"),
+        ExportDirMode::ResultLibrary => result_library_dir,
+        ExportDirMode::BrowserDefault | ExportDirMode::Downloads => {
+            default_product_export_dir(runtime, &app_data_dir)
+        }
+    }
+}
+
+pub fn product_storage_fallback_dir(
+    config: Option<&AppConfig>,
+    runtime: ProductRuntime,
+) -> PathBuf {
+    product_app_data_dir(config, runtime)
+        .join("storage")
+        .join("fallback")
+}
+
+pub fn legacy_shared_codex_dir(config: Option<&AppConfig>) -> PathBuf {
+    config
+        .map(|config| config.paths.legacy_shared_codex_dir.path.clone())
+        .unwrap_or_else(default_legacy_shared_codex_path)
+}
+
+pub fn legacy_jobs_dir(config: Option<&AppConfig>) -> PathBuf {
+    legacy_shared_codex_dir(config).join(JOBS_DIR_NAME)
+}
+
 fn cli_config_path(cli: &Cli) -> PathBuf {
     cli.config
         .as_deref()
@@ -1457,6 +1707,7 @@ pub fn redact_app_config(config: &AppConfig) -> Value {
         "providers": providers,
         "notifications": redact_notification_config(&config.notifications),
         "storage": redact_storage_config(&config.storage),
+        "paths": config.paths,
     })
 }
 
@@ -5741,6 +5992,25 @@ fn storage_error_message(error: AppError) -> String {
     }
 }
 
+fn storage_credential_present_and_resolvable(
+    credential: Option<&CredentialRef>,
+) -> Result<(), AppError> {
+    let credential = credential.ok_or_else(|| {
+        AppError::new(
+            "storage_credentials_missing",
+            "Storage credential is missing.",
+        )
+    })?;
+    let (resolved, _) = resolve_credential(credential)?;
+    if resolved.trim().is_empty() {
+        return Err(AppError::new(
+            "storage_credentials_missing",
+            "Storage credential is empty.",
+        ));
+    }
+    Ok(())
+}
+
 fn upload_to_local(
     directory: &Path,
     public_base_url: Option<&str>,
@@ -6921,16 +7191,11 @@ pub fn test_storage_target(name: &str, target: &StorageTargetConfig) -> StorageT
             secret_access_key,
             ..
         } => {
-            let credential_ready = access_key_id
-                .as_ref()
-                .map(resolve_credential)
-                .transpose()
-                .is_ok()
-                && secret_access_key
-                    .as_ref()
-                    .map(resolve_credential)
-                    .transpose()
-                    .is_ok();
+            let access_key_ready =
+                storage_credential_present_and_resolvable(access_key_id.as_ref()).is_ok();
+            let secret_key_ready =
+                storage_credential_present_and_resolvable(secret_access_key.as_ref()).is_ok();
+            let credential_ready = access_key_ready && secret_key_ready;
             let endpoint_url = s3_endpoint_and_host(
                 bucket,
                 region.as_deref(),
@@ -6956,6 +7221,8 @@ pub fn test_storage_target(name: &str, target: &StorageTargetConfig) -> StorageT
                 detail: Some(json!({
                     "bucket": bucket,
                     "region": region,
+                    "access_key_ready": access_key_ready,
+                    "secret_key_ready": secret_key_ready,
                     "endpoint_ready": endpoint_ready,
                 })),
                 unsupported: false,
@@ -7127,7 +7394,7 @@ fn normalize_history_limit(limit: Option<usize>) -> usize {
 
 fn history_status_values(status: Option<&str>) -> Vec<&'static str> {
     match status.unwrap_or("all") {
-        "active" | "running" => vec!["queued", "running"],
+        "active" | "running" => vec!["queued", "running", "uploading"],
         "completed" => vec!["completed"],
         "failed" => vec!["failed", "cancelled", "canceled"],
         "queued" => vec!["queued"],
@@ -8572,6 +8839,113 @@ mod tests {
         ));
     }
 
+    fn s3_test_target(
+        access_key_id: Option<CredentialRef>,
+        secret_access_key: Option<CredentialRef>,
+    ) -> StorageTargetConfig {
+        StorageTargetConfig::S3 {
+            bucket: "images".to_string(),
+            region: Some("us-east-1".to_string()),
+            endpoint: Some("http://127.0.0.1:9000".to_string()),
+            prefix: None,
+            access_key_id,
+            secret_access_key,
+            session_token: None,
+            public_base_url: None,
+        }
+    }
+
+    #[test]
+    fn s3_storage_test_requires_access_key() {
+        let target = s3_test_target(
+            None,
+            Some(CredentialRef::File {
+                value: "secret".to_string(),
+            }),
+        );
+
+        let result = test_storage_target("s3", &target);
+
+        assert!(!result.ok);
+        assert_eq!(result.detail.unwrap()["access_key_ready"], false);
+    }
+
+    #[test]
+    fn s3_storage_test_requires_secret_key() {
+        let target = s3_test_target(
+            Some(CredentialRef::File {
+                value: "access".to_string(),
+            }),
+            None,
+        );
+
+        let result = test_storage_target("s3", &target);
+
+        assert!(!result.ok);
+        assert_eq!(result.detail.unwrap()["secret_key_ready"], false);
+    }
+
+    #[test]
+    fn s3_storage_test_rejects_empty_file_credentials() {
+        let target = s3_test_target(
+            Some(CredentialRef::File {
+                value: String::new(),
+            }),
+            Some(CredentialRef::File {
+                value: "secret".to_string(),
+            }),
+        );
+
+        let result = test_storage_target("s3", &target);
+
+        assert!(!result.ok);
+        assert_eq!(result.detail.unwrap()["access_key_ready"], false);
+    }
+
+    #[test]
+    fn s3_storage_test_rejects_missing_env_credentials() {
+        unsafe {
+            std::env::remove_var("GPT_IMAGE_2_MISSING_S3_ACCESS_KEY");
+        }
+        let target = s3_test_target(
+            Some(CredentialRef::Env {
+                env: "GPT_IMAGE_2_MISSING_S3_ACCESS_KEY".to_string(),
+            }),
+            Some(CredentialRef::File {
+                value: "secret".to_string(),
+            }),
+        );
+
+        let result = test_storage_target("s3", &target);
+
+        assert!(!result.ok);
+        assert_eq!(result.detail.unwrap()["access_key_ready"], false);
+    }
+
+    #[test]
+    fn product_paths_default_by_runtime() {
+        let config = AppConfig::default();
+
+        assert!(
+            product_app_data_dir(Some(&config), ProductRuntime::Tauri)
+                .ends_with("com.wangnov.gpt-image-2")
+        );
+        assert!(
+            product_result_library_dir(Some(&config), ProductRuntime::Tauri)
+                .ends_with(JOBS_DIR_NAME)
+        );
+        assert_eq!(
+            product_app_data_dir(Some(&config), ProductRuntime::DockerWeb),
+            PathBuf::from("/data").join(PRODUCT_DIR_NAME)
+        );
+        assert_eq!(
+            product_result_library_dir(Some(&config), ProductRuntime::DockerWeb),
+            PathBuf::from("/data")
+                .join(PRODUCT_DIR_NAME)
+                .join(JOBS_DIR_NAME)
+        );
+    }
+
     #[test]
     fn storage_config_redacts_target_credentials() {
         let config = AppConfig {
@@ -8783,6 +9157,73 @@ mod tests {
             secret_access_key,
             &Some(CredentialRef::File {
                 value: String::new()
+            })
+        );
+    }
+
+    #[test]
+    fn storage_secret_preservation_survives_target_rename() {
+        let existing = StorageConfig {
+            targets: BTreeMap::from([(
+                "s3-main".to_string(),
+                StorageTargetConfig::S3 {
+                    bucket: "images".to_string(),
+                    region: Some("us-east-1".to_string()),
+                    endpoint: Some("https://s3.example.com".to_string()),
+                    prefix: Some("out".to_string()),
+                    access_key_id: Some(CredentialRef::File {
+                        value: "ak".to_string(),
+                    }),
+                    secret_access_key: Some(CredentialRef::File {
+                        value: "sk".to_string(),
+                    }),
+                    session_token: None,
+                    public_base_url: None,
+                },
+            )]),
+            ..StorageConfig::default()
+        };
+        let mut renamed_target = StorageConfig {
+            targets: BTreeMap::from([(
+                "s3-archive".to_string(),
+                StorageTargetConfig::S3 {
+                    bucket: "images".to_string(),
+                    region: Some("us-east-1".to_string()),
+                    endpoint: Some("https://s3.example.com".to_string()),
+                    prefix: Some("out".to_string()),
+                    access_key_id: Some(CredentialRef::File {
+                        value: String::new(),
+                    }),
+                    secret_access_key: Some(CredentialRef::File {
+                        value: String::new(),
+                    }),
+                    session_token: None,
+                    public_base_url: None,
+                },
+            )]),
+            ..StorageConfig::default()
+        };
+
+        preserve_storage_secrets(&mut renamed_target, &existing);
+
+        let StorageTargetConfig::S3 {
+            access_key_id,
+            secret_access_key,
+            ..
+        } = renamed_target.targets.get("s3-archive").unwrap()
+        else {
+            panic!("expected s3 target");
+        };
+        assert_eq!(
+            access_key_id,
+            &Some(CredentialRef::File {
+                value: "ak".to_string()
+            })
+        );
+        assert_eq!(
+            secret_access_key,
+            &Some(CredentialRef::File {
+                value: "sk".to_string()
             })
         );
     }

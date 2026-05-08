@@ -23,6 +23,7 @@ import { OPEN_JOB_EVENT, sendImageToEdit } from "@/lib/job-navigation";
 import { revealPath, saveImages, saveJobImages } from "@/lib/user-actions";
 import { isDesktopRuntime, runtimeCopy } from "@/lib/runtime-copy";
 import { formatTime } from "@/lib/format";
+import { isActiveJobStatus } from "@/lib/api/types";
 import {
   jobOutputCount,
   jobOutputIndexes,
@@ -133,7 +134,7 @@ function StatusChip({ status }: { status: JobStatus }) {
       </span>
     );
   }
-  if (status === "running") {
+  if (status === "running" || status === "uploading") {
     return (
       <span className="inline-flex items-center gap-1.5 text-[12px] text-[color:var(--status-running)]">
         <Loader2 size={13} className="animate-spin" />
@@ -231,10 +232,10 @@ function JobRowExpandable({
   const ratio = jobRatio(job);
   const prompt = jobPrompt(job);
   const status = job.status;
-  const showCancel = status === "running" || status === "queued";
+  const showCancel = isActiveJobStatus(status);
   const showRetry = status === "failed" || status === "cancelled";
   const isQueueing = status === "queued";
-  const isRunning = status === "running";
+  const isRunning = status === "running" || status === "uploading";
   const outputIndexes = jobOutputIndexes(job);
   const outputCount = outputIndexes.length;
   const extraCount = Math.max(0, outputCount - 1);

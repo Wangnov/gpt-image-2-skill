@@ -12,6 +12,7 @@ import { OutputTile } from "@/components/screens/shared/output-tile";
 import { useCreateGenerate } from "@/hooks/use-jobs";
 import { useJobEvents } from "@/hooks/use-job-events";
 import { api } from "@/lib/api";
+import { isActiveJobStatus } from "@/lib/api/types";
 import {
   errorMessage,
   outputCountMismatchMessage,
@@ -144,8 +145,7 @@ export function ClassicGenerateScreen({
       });
       const queued =
         res.queued ||
-        res.job?.status === "queued" ||
-        res.job?.status === "running";
+        Boolean(res.job && isActiveJobStatus(res.job.status));
       const actualCount = queued ? plannedN : responseOutputCount(res);
       setJobId(res.job_id);
       setOutputCount(Math.max(1, actualCount));

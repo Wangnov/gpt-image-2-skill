@@ -1,7 +1,7 @@
 import "fake-indexeddb/auto";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { browserApi, __resetBrowserApiForTests } from "./browser-transport";
-import type { ProviderConfig } from "../types";
+import type { ProviderConfig, StorageConfig } from "../types";
 
 type CapturedRequest = {
   url: string;
@@ -162,6 +162,63 @@ describe("browserApi", () => {
     expect(test.ok).toBe(true);
     expect(test.reason).toBe("local_only");
     expect(test.deliveries[0].channel).toBe("browser");
+  });
+
+  it("keeps static Web remote storage as draft-only and never stores plaintext target secrets", async () => {
+    const storage: StorageConfig = {
+      targets: {
+        "local-default": {
+          type: "local",
+          directory: "",
+          public_base_url: null,
+        },
+        archive: {
+          type: "s3",
+          bucket: "images",
+          region: "us-east-1",
+          endpoint: "https://s3.example.com",
+          prefix: "generated",
+          access_key_id: { source: "file", value: "ak-test" },
+          secret_access_key: { source: "file", value: "sk-test" },
+          session_token: { source: "file", value: "session-test" },
+          public_base_url: "https://cdn.example.com",
+        },
+      },
+      default_targets: ["archive"],
+      fallback_targets: ["archive", "local-default"],
+      fallback_policy: "on_failure",
+      upload_concurrency: 4,
+      target_concurrency: 2,
+    };
+
+    expect(browserApi.updateStorage).toBeDefined();
+    expect(browserApi.testStorageTarget).toBeDefined();
+
+    const saved = await browserApi.updateStorage!(storage);
+
+    expect(saved.storage.default_targets).toEqual([]);
+    expect(saved.storage.fallback_targets).toEqual(["local-default"]);
+    expect(saved.storage.targets.archive).toMatchObject({
+      type: "s3",
+      bucket: "images",
+      access_key_id: { source: "file", present: false },
+      secret_access_key: { source: "file", present: false },
+      session_token: { source: "file", present: false },
+    });
+
+    const reloaded = await browserApi.getConfig();
+    expect(reloaded.storage.default_targets).toEqual([]);
+    expect(reloaded.storage.fallback_targets).toEqual(["local-default"]);
+    expect(JSON.stringify(reloaded.storage)).not.toContain("ak-test");
+    expect(JSON.stringify(reloaded.storage)).not.toContain("sk-test");
+    expect(JSON.stringify(reloaded.storage)).not.toContain("session-test");
+
+    const test = await browserApi.testStorageTarget!(
+      "archive",
+      storage.targets.archive,
+    );
+    expect(test.ok).toBe(false);
+    expect(test.unsupported).toBe(true);
   });
 
   it("uses native n for providers that support multiple outputs", async () => {

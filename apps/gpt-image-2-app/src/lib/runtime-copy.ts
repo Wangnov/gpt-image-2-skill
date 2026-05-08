@@ -30,10 +30,10 @@ const COPIES: Record<RuntimeKind, RuntimeCopy> = {
     saveJobLabel: "保存全部",
     savingImages: () => "正在保存图片…",
     savedImagesTitle: (count) => (count > 1 ? "已保存全部图片" : "图片已保存"),
-    savedImagesDescription: "已保存到「下载/GPT Image 2」。",
+    savedImagesDescription: "已保存到你设置的文件夹。",
     savingJob: "正在保存任务图片",
     savedJobTitle: "已保存全部图片",
-    savedJobDescription: "已保存到「下载/GPT Image 2」的任务目录。",
+    savedJobDescription: "已保存到你设置的文件夹。",
   },
   http: {
     kind: "http",

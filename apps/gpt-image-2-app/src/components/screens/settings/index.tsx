@@ -50,6 +50,7 @@ import {
   useTestStorageTarget,
   useTestNotifications,
   useUpdateNotifications,
+  useUpdatePaths,
   useUpdateStorage,
 } from "@/hooks/use-config";
 import {
@@ -61,6 +62,7 @@ import { api, type ConfigPaths } from "@/lib/api";
 import {
   defaultNotificationConfig,
   defaultStorageConfig,
+  normalizePathConfig,
   normalizeNotificationConfig,
   normalizeStorageConfig,
   storageTargetType,
@@ -77,6 +79,7 @@ import type {
   EmailTlsMode,
   JobStatus,
   NotificationConfig,
+  PathConfig,
   ProviderConfig,
   ServerConfig,
   StorageConfig,
@@ -176,9 +179,17 @@ const STORAGE_FALLBACK_POLICY_OPTIONS = [
 ] as const;
 
 const CREDENTIAL_SOURCE_OPTIONS = [
-  { value: "file", label: "保存值" },
+  { value: "file", label: "直接填写" },
   { value: "env", label: "环境变量" },
-  { value: "keychain", label: "Keychain" },
+  { value: "keychain", label: "系统钥匙串" },
+] as const;
+
+const EXPORT_DIR_MODE_OPTIONS = [
+  { value: "downloads", label: "下载" },
+  { value: "documents", label: "文稿" },
+  { value: "pictures", label: "图片" },
+  { value: "result_library", label: "应用内结果库" },
+  { value: "custom", label: "其他文件夹" },
 ] as const;
 
 const TAB_TITLES: Record<SettingsTab, { title: string; subtitle: string }> = {
@@ -192,11 +203,11 @@ const TAB_TITLES: Record<SettingsTab, { title: string; subtitle: string }> = {
   },
   runtime: {
     title: "任务",
-    subtitle: "并发上限和任务结束提示",
+    subtitle: "同时执行几个任务、结束后怎么提醒",
   },
   storage: {
-    title: "结果存储",
-    subtitle: "配置上传目标、默认投递和失败回退",
+    title: "保存与上传",
+    subtitle: "保存到本机的位置，以及是否自动上传",
   },
   prompts: {
     title: "提示词模板",
@@ -213,10 +224,12 @@ const TAB_TITLES: Record<SettingsTab, { title: string; subtitle: string }> = {
 function Section({
   title,
   description,
+  headerAction,
   children,
 }: {
   title: string;
   description?: string;
+  headerAction?: ReactNode;
   children: ReactNode;
 }) {
   return (
@@ -224,12 +237,15 @@ function Section({
       className="rounded-xl overflow-hidden border border-border-faint"
       style={{ background: "var(--w-02)" }}
     >
-      {(title || description) && (
-        <header className="border-b border-border-faint px-4 py-3 sm:px-5">
-          <div className="t-h3">{title}</div>
-          {description && (
-            <div className="mt-0.5 text-[12px] text-muted">{description}</div>
-          )}
+      {(title || description || headerAction) && (
+        <header className="flex items-start gap-3 border-b border-border-faint px-4 py-3 sm:px-5">
+          <div className="min-w-0 flex-1">
+            <div className="t-h3">{title}</div>
+            {description && (
+              <div className="mt-0.5 text-[12px] text-muted">{description}</div>
+            )}
+          </div>
+          {headerAction && <div className="shrink-0">{headerAction}</div>}
         </header>
       )}
       <div className="divide-y divide-border-faint">{children}</div>
@@ -263,10 +279,12 @@ function PathRow({
   title,
   path,
   isFolder,
+  dim = false,
 }: {
   title: string;
   path?: string;
   isFolder?: boolean;
+  dim?: boolean;
 }) {
   // Bumping this trigger replays the ScrambleText reveal — used as a
   // visual receipt that "the value you just copied is the value you
@@ -274,9 +292,22 @@ function PathRow({
   // path text in their clipboard.
   const [copyTrigger, setCopyTrigger] = useState(0);
   return (
-    <div className="flex flex-col gap-3 px-4 py-3 sm:flex-row sm:items-center sm:gap-4 sm:px-5">
+    <div
+      className={cn(
+        "flex flex-col gap-3 sm:flex-row sm:items-center sm:gap-4 sm:px-5",
+        dim ? "px-4 py-2" : "px-4 py-3",
+      )}
+    >
       <div className="min-w-0 flex-1">
-        <div className="text-[13px] font-semibold text-foreground">{title}</div>
+        <div
+          className={cn(
+            dim
+              ? "text-[11.5px] font-medium text-muted"
+              : "text-[13px] font-semibold text-foreground",
+          )}
+        >
+          {title}
+        </div>
         <div
           className="mt-0.5 truncate font-mono text-[11px] text-faint"
           title={path ?? undefined}
@@ -1016,7 +1047,6 @@ function AppearancePanel() {
 
 function RuntimePanel() {
   const { tweaks, setTweaks } = useTweaks();
-  const copy = runtimeCopy();
   const { data: queue } = useQueueStatus();
   const { data: config } = useQuery<ServerConfig>({
     queryKey: ["config"],
@@ -1046,17 +1076,17 @@ function RuntimePanel() {
     <div className="flex-1 min-h-0 overflow-auto p-4 sm:p-5 space-y-4">
       <Section
         title="队列"
-        description="控制可以同时在跑的任务数量，避免一次性吃掉网络或 CPU。"
+        description="一次最多并行几个，避免占满网络或 CPU。"
       >
         <Row
-          title="并发上限"
-          description={`同时最多跑几个任务。${queueSummary}。`}
+          title="同时执行数"
+          description={`${queueSummary}。`}
           control={
             <Segmented
               value={String(tweaks.maxParallel)}
               onChange={(v) => setTweaks({ maxParallel: Number(v) })}
               size="sm"
-              ariaLabel="并发上限"
+              ariaLabel="同时执行数"
               options={PARALLEL_OPTIONS}
             />
           }
@@ -1065,15 +1095,11 @@ function RuntimePanel() {
 
       <Section
         title="草稿"
-        description="保留现代生成和编辑页的创作参数、参考图与遮罩。"
+        description="保留生成 / 编辑页未提交的内容（参数、参考图、遮罩）。"
       >
         <Row
           title="保留创作草稿"
-          description={
-            copy.kind === "tauri"
-              ? "开启后刷新页面或重启 App 仍会恢复现代页草稿；关闭会清理已保存草稿。"
-              : "开启后刷新页面或重新打开同一浏览器仍会恢复现代页草稿；关闭会清理已保存草稿。"
-          }
+          description="刷新或重启后仍能恢复未提交的内容；关闭会清空。"
           control={
             <Toggle
               checked={tweaks.persistCreativeDrafts}
@@ -1204,6 +1230,47 @@ function cloneStorageConfig(value?: StorageConfig) {
       ? (JSON.parse(JSON.stringify(value)) as StorageConfig)
       : defaultStorageConfig(),
   );
+}
+
+function clonePathConfig(value?: PathConfig) {
+  return {
+    ...normalizePathConfig(
+      value
+        ? (JSON.parse(JSON.stringify(value)) as PathConfig)
+        : undefined,
+    ),
+  };
+}
+
+function preparePathConfigForSave(config: PathConfig): PathConfig {
+  return {
+    ...config,
+    app_data_dir: {
+      mode: config.app_data_dir.mode,
+      path:
+        config.app_data_dir.mode === "custom"
+          ? config.app_data_dir.path?.trim() || null
+          : null,
+    },
+    result_library_dir: {
+      mode: config.result_library_dir.mode,
+      path:
+        config.result_library_dir.mode === "custom"
+          ? config.result_library_dir.path?.trim() || null
+          : null,
+    },
+    default_export_dir: {
+      mode: config.default_export_dir.mode,
+      path:
+        config.default_export_dir.mode === "custom"
+          ? config.default_export_dir.path?.trim() || null
+          : null,
+    },
+    legacy_shared_codex_dir: {
+      ...config.legacy_shared_codex_dir,
+      path: config.legacy_shared_codex_dir.path.trim(),
+    },
+  };
 }
 
 function storageTargetLabel(target: StorageTargetConfig) {
@@ -1411,7 +1478,7 @@ function CredentialEditor({
           onChange={(event) =>
             onChange({ source: "env", env: event.target.value })
           }
-          placeholder="ENV_NAME"
+          placeholder="如 OPENAI_API_KEY"
           size="sm"
           monospace
           aria-label={ariaLabel}
@@ -1484,11 +1551,6 @@ function NotificationCenterPanel({
   const canUseServerNotifications = Boolean(
     capabilities?.server.email || capabilities?.server.webhook,
   );
-  const systemMode = capabilities?.system.tauri_native
-    ? "Tauri 原生"
-    : capabilities?.system.browser
-      ? "浏览器通知"
-      : "当前环境不可用";
 
   const patch = (next: Partial<NotificationConfig>) => {
     setDraft((current) => ({ ...current, ...next }));
@@ -1590,9 +1652,8 @@ function NotificationCenterPanel({
         failed[0]?.message ||
         result.deliveries.map((item) => item.message).filter(Boolean)[0];
       if (result.reason === "no_eligible_channel") {
-        toast.info("当前没有可发送的通道", {
-          description:
-            "通知中心未启用，或当前状态/通道未开启，所以什么都不会发出。",
+        toast.info("没有可发送的方式", {
+          description: "通知中心已关或未选任何状态 / 方式，不会发出。",
         });
         return;
       }
@@ -1600,14 +1661,14 @@ function NotificationCenterPanel({
         const description =
           message ||
           (result.reason === "local_only"
-            ? "服务端未配置 server-side 通道；toast 和系统通知会在真实任务完成时由客户端发出。"
+            ? "未配置邮件 / 回调；真实任务结束时仍会弹应用内 / 系统通知。"
             : undefined);
-        toast.success("测试通知已发送", { description });
+        toast.success("试发已完成", { description });
       } else {
-        toast.warning("测试通知未全部成功", { description: message });
+        toast.warning("试发未全部成功", { description: message });
       }
     } catch (error) {
-      toast.error("测试通知失败", {
+      toast.error("试发失败", {
         description: error instanceof Error ? error.message : String(error),
       });
     }
@@ -1616,35 +1677,27 @@ function NotificationCenterPanel({
   return (
     <Section
       title="通知中心"
-      description="配置任务完成、失败或取消后的 toast、系统通知、邮件和 webhook。"
+      description="任务结束时提醒你 — 应用内、系统、邮件或回调。"
+      headerAction={
+        <Toggle
+          checked={draft.enabled}
+          onChange={(enabled) => patch({ enabled })}
+        />
+      }
     >
       {capabilities && !canUseServerNotifications && (
         <div className="flex items-start gap-2 px-4 py-3 text-[12px] text-muted sm:px-5">
           <Info size={14} className="mt-0.5 shrink-0" />
           <div>
-            当前运行环境仅支持本地通道（toast 与系统通知）。邮件和 Webhook 需要桌面 App 或服务端 Web 才会真正发送。
+            当前环境只能弹应用内 / 系统通知；邮件和回调需要桌面 App 或自建后端。
           </div>
         </div>
       )}
       <Row
-        title="启用通知中心"
-        description={
-          canUseServerNotifications
-            ? `系统通知：${systemMode}；邮件和 webhook 由当前服务端发送。`
-            : `系统通知：${systemMode}；邮件和 webhook 需要桌面 App 或服务端 Web。`
-        }
-        control={
-          <Toggle
-            checked={draft.enabled}
-            onChange={(enabled) => patch({ enabled })}
-          />
-        }
-      />
-      <Row
         title="触发状态"
-        description="选择哪些终态任务会触发通知。"
+        description="哪些结果会通知。"
         control={
-          <div className="grid w-full gap-2 sm:w-[420px] sm:grid-cols-3">
+          <div className="grid w-full gap-2 sm:w-[600px] sm:grid-cols-3">
             <label className="flex items-center justify-between gap-3 rounded-md border border-border bg-[color:var(--w-04)] px-3 py-2 text-[12px]">
               <span>完成</span>
               <Toggle
@@ -1671,13 +1724,13 @@ function NotificationCenterPanel({
       />
       <Row
         title="本地提示"
-        description="Toast 在应用右上角显示；系统通知会请求系统权限。"
+        description="右上角弹提示；系统通知首次会请求权限。"
         control={
-          <div className="grid w-full gap-2 sm:w-[420px] sm:grid-cols-2">
+          <div className="grid w-full gap-2 sm:w-[600px] sm:grid-cols-2">
             <label className="flex items-center justify-between gap-3 rounded-md border border-border bg-[color:var(--w-04)] px-3 py-2 text-[12px]">
               <span className="inline-flex items-center gap-2">
                 <Bell size={13} />
-                Toast
+                应用内
               </span>
               <Toggle
                 checked={draft.toast.enabled}
@@ -1689,7 +1742,7 @@ function NotificationCenterPanel({
             <label className="flex items-center justify-between gap-3 rounded-md border border-border bg-[color:var(--w-04)] px-3 py-2 text-[12px]">
               <span className="inline-flex items-center gap-2">
                 <Bell size={13} />
-                系统
+                系统通知
               </span>
               <Toggle
                 checked={draft.system.enabled}
@@ -1704,9 +1757,9 @@ function NotificationCenterPanel({
       {capabilities?.server.email && (
       <Row
         title="邮件通知"
-        description="SMTP 密码可直接保存、引用环境变量，或引用 Keychain 条目。"
+        description="密码支持直接填写 / 环境变量 / 系统钥匙串。"
         control={
-          <div className="w-full space-y-2 sm:w-[520px]">
+          <div className="w-full space-y-2 sm:w-[600px]">
             <div className="flex items-center justify-between gap-3">
               <span className="inline-flex items-center gap-2 text-[12px] text-muted">
                 <Mail size={13} />
@@ -1786,9 +1839,9 @@ function NotificationCenterPanel({
       {capabilities?.server.webhook && (
       <Row
         title="Webhook"
-        description="每个 webhook 可配置自定义请求头，适配 Bearer Token、签名密钥等鉴权方式。"
+        description="转发到你自己的服务地址，可加请求头鉴权。"
         control={
-          <div className="w-full space-y-3 sm:w-[620px]">
+          <div className="w-full space-y-3 sm:w-[600px]">
             {draft.webhooks.length === 0 && (
               <div className="rounded-md border border-dashed border-border px-3 py-3 text-[12px] text-muted">
                 暂无 webhook。
@@ -1917,17 +1970,17 @@ function NotificationCenterPanel({
       />
       )}
       <Row
-        title="保存与测试"
-        description="测试会按当前已保存配置发送一条模拟任务通知。"
+        title="保存与试发"
+        description="试发一条假数据，使用已保存的配置。"
         control={
-          <div className="flex w-full flex-wrap justify-end gap-2 sm:w-[520px]">
+          <div className="flex w-full flex-wrap justify-end gap-2 sm:w-[600px]">
             <Button
               variant="secondary"
               size="sm"
               disabled={testNotifications.isPending}
               onClick={() => void test("completed")}
             >
-              测试完成
+              试发完成
             </Button>
             <Button
               variant="secondary"
@@ -1935,7 +1988,7 @@ function NotificationCenterPanel({
               disabled={testNotifications.isPending}
               onClick={() => void test("failed")}
             >
-              测试失败
+              试发失败
             </Button>
             <Button
               variant="secondary"
@@ -1943,7 +1996,7 @@ function NotificationCenterPanel({
               disabled={testNotifications.isPending}
               onClick={() => void test("cancelled")}
             >
-              测试取消
+              试发取消
             </Button>
             <Button
               variant="primary"
@@ -1960,17 +2013,157 @@ function NotificationCenterPanel({
   );
 }
 
-function StoragePanel({ storage }: { storage?: StorageConfig }) {
+function ResultFoldersSection({
+  paths,
+  configPaths,
+}: {
+  paths?: PathConfig;
+  configPaths?: ConfigPaths;
+}) {
+  const [draft, setDraft] = useState(() => clonePathConfig(paths));
+  const updatePaths = useUpdatePaths();
+  const customExport = draft.default_export_dir.mode === "custom";
+  const previewExportDir = customExport
+    ? (draft.default_export_dir.path ?? "")
+    : (configPaths?.default_export_dirs?.[draft.default_export_dir.mode] ??
+      configPaths?.default_export_dir ??
+      "");
+  const canSave = Boolean(api.updatePaths) && api.canExportToConfiguredFolder;
+
+  useEffect(() => {
+    setDraft(clonePathConfig(paths));
+  }, [paths]);
+
+  const patchExportDir = (next: Partial<PathConfig["default_export_dir"]>) => {
+    setDraft((current) => ({
+      ...current,
+      default_export_dir: {
+        ...current.default_export_dir,
+        ...next,
+      },
+    }));
+  };
+
+  const save = async () => {
+    try {
+      const saved = await updatePaths.mutateAsync(
+        preparePathConfigForSave(draft),
+      );
+      setDraft(clonePathConfig(saved.paths));
+      toast.success("保存位置已更新");
+    } catch (error) {
+      toast.error("保存位置更新失败", {
+        description: error instanceof Error ? error.message : String(error),
+      });
+    }
+  };
+
+  return (
+    <Section
+      title="保存到本机"
+      description={
+        canSave
+          ? "点「保存图片」时，会复制到哪个文件夹。"
+          : "网页版会用浏览器下载位置，无法指定本机文件夹。"
+      }
+      headerAction={
+        <Button
+          variant="primary"
+          size="sm"
+          disabled={!canSave || updatePaths.isPending}
+          onClick={() => void save()}
+        >
+          保存设置
+        </Button>
+      }
+    >
+      <Row
+        title="默认文件夹"
+        description="App 历史保留所有图；这里只决定「保存图片」复制到哪里。"
+        control={
+          <div className="grid w-full gap-2 sm:w-[520px] sm:grid-cols-[170px_minmax(0,1fr)]">
+            <GlassSelect
+              value={draft.default_export_dir.mode}
+              onValueChange={(mode) => {
+                const nextMode = mode as PathConfig["default_export_dir"]["mode"];
+                patchExportDir({
+                  mode: nextMode,
+                  path:
+                    nextMode === "custom"
+                      ? (draft.default_export_dir.path ??
+                        configPaths?.default_export_dir ??
+                        "")
+                      : null,
+                });
+              }}
+              options={EXPORT_DIR_MODE_OPTIONS}
+              size="sm"
+              ariaLabel="默认保存文件夹"
+              disabled={!canSave}
+            />
+            <Input
+              value={previewExportDir}
+              onChange={(event) =>
+                patchExportDir({ path: event.target.value })
+              }
+              placeholder={
+                customExport
+                  ? "/Users/you/Pictures/GPT Image 2"
+                  : "按所选模式自动决定"
+              }
+              disabled={!canSave || !customExport}
+              size="sm"
+              aria-label="自定义保存文件夹"
+            />
+          </div>
+        }
+      />
+      <PathRow
+        title="当前保存位置"
+        path={configPaths?.default_export_dir}
+        isFolder
+        dim
+      />
+      <PathRow
+        title="App 历史目录"
+        path={configPaths?.result_library_dir ?? configPaths?.jobs_dir}
+        isFolder
+        dim
+      />
+    </Section>
+  );
+}
+
+function StoragePanel({
+  storage,
+  paths,
+}: {
+  storage?: StorageConfig;
+  paths?: PathConfig;
+}) {
   const [draft, setDraft] = useState(() => cloneStorageConfig(storage));
   const updateStorage = useUpdateStorage();
   const testStorage = useTestStorageTarget();
   const copy = runtimeCopy();
+  const { data: configPaths } = useQuery<ConfigPaths>({
+    queryKey: ["config-paths"],
+    queryFn: api.configPaths,
+    staleTime: 60_000,
+  });
 
   useEffect(() => {
     setDraft(cloneStorageConfig(storage));
   }, [storage]);
 
   const targetEntries = Object.entries(draft.targets);
+  const strategyTargetEntries =
+    copy.kind === "browser"
+      ? targetEntries.filter(([, target]) => storageTargetType(target) === "local")
+      : targetEntries;
+  const remoteDraftCount =
+    copy.kind === "browser"
+      ? targetEntries.length - strategyTargetEntries.length
+      : 0;
   const targetOptions = targetEntries.map(([name, target]) => ({
     value: name,
     label: `${name} · ${storageTargetLabel(target)}`,
@@ -2087,9 +2280,9 @@ function StoragePanel({ storage }: { storage?: StorageConfig }) {
         prepareStorageConfigForSave(draft),
       );
       setDraft(cloneStorageConfig(saved.storage));
-      toast.success("结果存储已保存");
+      toast.success("自动上传设置已保存");
     } catch (error) {
-      toast.error("保存结果存储失败", {
+      toast.error("保存自动上传设置失败", {
         description: error instanceof Error ? error.message : String(error),
       });
     }
@@ -2102,12 +2295,12 @@ function StoragePanel({ storage }: { storage?: StorageConfig }) {
         target: normalizeStorageTargetForSave(draft.targets[name]),
       });
       if (result.ok) {
-        toast.success("存储目标可用", { description: result.message });
+        toast.success("上传位置可用", { description: result.message });
       } else {
-        toast.warning("存储目标不可用", { description: result.message });
+        toast.warning("上传位置不可用", { description: result.message });
       }
     } catch (error) {
-      toast.error("测试存储目标失败", {
+      toast.error("测试上传位置失败", {
         description: error instanceof Error ? error.message : String(error),
       });
     }
@@ -2115,20 +2308,26 @@ function StoragePanel({ storage }: { storage?: StorageConfig }) {
 
   return (
     <div className="flex-1 min-h-0 overflow-auto p-4 sm:p-5 space-y-4">
+      <ResultFoldersSection paths={paths} configPaths={configPaths} />
+
       <Section
-        title="投递策略"
+        title="自动上传"
         description={
           copy.kind === "browser"
-            ? "静态 Web 只保留浏览器本地结果；远端上传需要桌面 App 或服务端 Web。"
-            : "任务仍会先写入本地结果目录，再按这里的目标上传或回退。"
+            ? "网页版只存在浏览器本地，要上传云端请用桌面 App 或自建后端。"
+            : "先存进 App 历史，再按下方设置自动上传。"
         }
       >
         <Row
-          title="默认目标"
-          description="每个完成任务优先投递到这些目标。"
+          title="主上传目标"
+          description={
+            copy.kind === "browser"
+              ? "网页版不上传云端，只留浏览器本地。"
+              : "任务完成后优先上传到这里。"
+          }
           control={
             <div className="flex w-full flex-wrap gap-2 sm:w-[520px]">
-              {targetEntries.map(([name]) => (
+              {strategyTargetEntries.map(([name]) => (
                 <label
                   key={`default-${name}`}
                   className="flex items-center gap-2 rounded-md border border-border bg-[color:var(--w-04)] px-2.5 py-1.5 text-[12px]"
@@ -2147,18 +2346,27 @@ function StoragePanel({ storage }: { storage?: StorageConfig }) {
                   <span>{name}</span>
                 </label>
               ))}
-              {targetEntries.length === 0 && (
-                <span className="text-[12px] text-muted">暂无目标。</span>
+              {strategyTargetEntries.length === 0 && (
+                <span className="text-[12px] text-muted">暂无上传位置。</span>
+              )}
+              {remoteDraftCount > 0 && (
+                <span className="text-[12px] text-faint">
+                  {remoteDraftCount} 个云端位置已配置但不启用。
+                </span>
               )}
             </div>
           }
         />
         <Row
-          title="回退目标"
-          description="主目标失败后使用；默认本地回退适合保底留存。"
+          title="备用位置"
+          description={
+            copy.kind === "browser"
+              ? "网页版备用位置只在浏览器本地。"
+              : "上传失败时改存到这里，建议保留一个本机位置。"
+          }
           control={
             <div className="flex w-full flex-wrap gap-2 sm:w-[520px]">
-              {targetEntries.map(([name]) => (
+              {strategyTargetEntries.map(([name]) => (
                 <label
                   key={`fallback-${name}`}
                   className="flex items-center gap-2 rounded-md border border-border bg-[color:var(--w-04)] px-2.5 py-1.5 text-[12px]"
@@ -2177,54 +2385,69 @@ function StoragePanel({ storage }: { storage?: StorageConfig }) {
                   <span>{name}</span>
                 </label>
               ))}
+              {strategyTargetEntries.length === 0 && (
+                <span className="text-[12px] text-muted">暂无备用位置。</span>
+              )}
             </div>
           }
         />
         <Row
-          title="回退策略 / 并发"
-          description="上传并发控制输出级任务；目标并发控制单张图同时打几个目标。"
+          title="备用启用时机"
+          description="主位置不可用时改用备用。"
           control={
-            <div className="grid w-full gap-2 sm:w-[520px] sm:grid-cols-3">
-              <GlassSelect
-                value={draft.fallback_policy}
-                onValueChange={(fallback_policy) =>
-                  patch({
-                    fallback_policy:
-                      fallback_policy as StorageFallbackPolicy,
-                  })
-                }
-                options={STORAGE_FALLBACK_POLICY_OPTIONS}
-                size="sm"
-                ariaLabel="存储回退策略"
-              />
-              <Input
-                value={String(draft.upload_concurrency)}
-                onChange={(event) =>
-                  patch({
-                    upload_concurrency: Number(event.target.value) || 1,
-                  })
-                }
-                inputMode="numeric"
-                size="sm"
-                aria-label="上传并发"
-              />
-              <Input
-                value={String(draft.target_concurrency)}
-                onChange={(event) =>
-                  patch({
-                    target_concurrency: Number(event.target.value) || 1,
-                  })
-                }
-                inputMode="numeric"
-                size="sm"
-                aria-label="目标并发"
-              />
-            </div>
+            <GlassSelect
+              value={draft.fallback_policy}
+              onValueChange={(fallback_policy) =>
+                patch({
+                  fallback_policy: fallback_policy as StorageFallbackPolicy,
+                })
+              }
+              options={STORAGE_FALLBACK_POLICY_OPTIONS}
+              size="sm"
+              ariaLabel="备用启用时机"
+              className="w-full sm:w-[160px]"
+            />
+          }
+        />
+        <Row
+          title="并行上传图片数"
+          description="一次最多同时上传几张图。"
+          control={
+            <Input
+              value={String(draft.upload_concurrency)}
+              onChange={(event) =>
+                patch({
+                  upload_concurrency: Number(event.target.value) || 1,
+                })
+              }
+              inputMode="numeric"
+              size="sm"
+              aria-label="并行上传图片数"
+              className="w-full sm:w-[100px]"
+            />
+          }
+        />
+        <Row
+          title="同图并行位置数"
+          description="同一张图最多同时传到几个位置。"
+          control={
+            <Input
+              value={String(draft.target_concurrency)}
+              onChange={(event) =>
+                patch({
+                  target_concurrency: Number(event.target.value) || 1,
+                })
+              }
+              inputMode="numeric"
+              size="sm"
+              aria-label="同图并行位置数"
+              className="w-full sm:w-[100px]"
+            />
           }
         />
       </Section>
 
-      <Section title="目标">
+      <Section title="位置列表">
         <div className="space-y-3 px-4 py-3.5 sm:px-5">
           {targetEntries.map(([name, target]) => {
             const type = storageTargetType(target);
@@ -2245,7 +2468,7 @@ function StoragePanel({ storage }: { storage?: StorageConfig }) {
                   <input
                     defaultValue={name}
                     onBlur={(event) => renameTarget(name, event.target.value)}
-                    aria-label="存储目标名称"
+                    aria-label="上传位置名称"
                     className="h-7 w-full rounded-md border border-border bg-[color:var(--w-04)] px-2.5 font-mono text-[13px] outline-none transition-colors placeholder:text-faint focus:border-[color:var(--accent-55)] focus:bg-[color:var(--accent-06)] focus:shadow-[0_0_0_3px_var(--accent-14)] sm:w-[160px]"
                   />
                   <GlassSelect
@@ -2255,7 +2478,7 @@ function StoragePanel({ storage }: { storage?: StorageConfig }) {
                     }
                     options={STORAGE_TARGET_TYPE_OPTIONS}
                     size="sm"
-                    ariaLabel="存储目标类型"
+                    ariaLabel="上传位置类型"
                   />
                   <div className="ml-auto flex gap-1">
                     <Button
@@ -2272,7 +2495,7 @@ function StoragePanel({ storage }: { storage?: StorageConfig }) {
                       size="iconSm"
                       icon="trash"
                       onClick={() => removeTarget(name)}
-                      aria-label="删除存储目标"
+                      aria-label="删除上传位置"
                     />
                   </div>
                 </div>
@@ -2294,9 +2517,9 @@ function StoragePanel({ storage }: { storage?: StorageConfig }) {
                           public_base_url: event.target.value,
                         })
                       }
-                      placeholder="https://cdn.example.com"
+                      placeholder="对外访问前缀（可选）"
                       size="sm"
-                      aria-label="公开基础 URL"
+                      aria-label="对外访问前缀"
                     />
                   </div>
                 )}
@@ -2348,9 +2571,9 @@ function StoragePanel({ storage }: { storage?: StorageConfig }) {
                             public_base_url: event.target.value,
                           })
                         }
-                        placeholder="公开基础 URL"
+                        placeholder="对外访问前缀（可选）"
                         size="sm"
-                        aria-label="S3 public base URL"
+                        aria-label="S3 对外访问前缀"
                       />
                     </div>
                     <CredentialEditor
@@ -2390,9 +2613,9 @@ function StoragePanel({ storage }: { storage?: StorageConfig }) {
                             public_base_url: event.target.value,
                           })
                         }
-                        placeholder="公开基础 URL"
+                        placeholder="对外访问前缀（可选）"
                         size="sm"
-                        aria-label="WebDAV public base URL"
+                        aria-label="WebDAV 对外访问前缀"
                       />
                     </div>
                     <Input
@@ -2440,9 +2663,9 @@ function StoragePanel({ storage }: { storage?: StorageConfig }) {
                             public_url_json_pointer: event.target.value,
                           })
                         }
-                        placeholder="/url"
+                        placeholder="/data/url"
                         size="sm"
-                        aria-label="URL JSON pointer"
+                        aria-label="JSON 中公开 URL 的字段路径"
                       />
                     </div>
                     {Object.entries(httpTarget.headers ?? {}).map(
@@ -2551,9 +2774,9 @@ function StoragePanel({ storage }: { storage?: StorageConfig }) {
                             public_base_url: event.target.value,
                           })
                         }
-                        placeholder="公开基础 URL"
+                        placeholder="对外访问前缀（可选）"
                         size="sm"
-                        aria-label="SFTP public base URL"
+                        aria-label="SFTP 对外访问前缀"
                       />
                     </div>
                     <Input
@@ -2563,9 +2786,9 @@ function StoragePanel({ storage }: { storage?: StorageConfig }) {
                           host_key_sha256: event.target.value,
                         })
                       }
-                      placeholder="SHA256 host key fingerprint"
+                      placeholder="SHA256 指纹（可选，用于校验）"
                       size="sm"
-                      aria-label="SFTP host key SHA256"
+                      aria-label="SFTP 服务器 SHA256 指纹"
                     />
                     <CredentialEditor
                       credential={sftpTarget.password}
@@ -2588,7 +2811,7 @@ function StoragePanel({ storage }: { storage?: StorageConfig }) {
           })}
           <div className="flex items-center justify-between gap-2">
             <Button variant="secondary" size="sm" icon="plus" onClick={addTarget}>
-              添加目标
+              添加上传位置
             </Button>
             <Button
               variant="primary"
@@ -2601,7 +2824,7 @@ function StoragePanel({ storage }: { storage?: StorageConfig }) {
           </div>
           {targetOptions.length > 0 && (
             <div className="text-[11px] text-faint">
-              当前目标：{targetOptions.map((item) => item.label).join(" / ")}
+              当前上传位置：{targetOptions.map((item) => item.label).join(" / ")}
             </div>
           )}
         </div>
@@ -2811,11 +3034,25 @@ function AboutPanel() {
 
           <Section
             title="数据位置"
-            description="本地存放配置、历史和生成结果的路径。只读信息。"
+            description="本地配置、历史、应用内结果库和保存位置。只读信息。"
           >
             <PathRow title="配置文件" path={paths?.config_file} />
             <PathRow title="历史数据库" path={paths?.history_file} />
-            <PathRow title="任务输出目录" path={paths?.jobs_dir} isFolder />
+            <PathRow
+              title="应用内结果库"
+              path={paths?.result_library_dir ?? paths?.jobs_dir}
+              isFolder
+            />
+            <PathRow
+              title="当前保存位置"
+              path={paths?.default_export_dir}
+              isFolder
+            />
+            <PathRow
+              title="旧共享目录"
+              path={paths?.legacy_jobs_dir}
+              isFolder
+            />
             <PathRow title="配置目录" path={paths?.config_dir} isFolder />
           </Section>
         </>
@@ -2908,7 +3145,9 @@ export function SettingsScreen({ config }: { config?: ServerConfig } = {}) {
             {tab === "creds" && <CredsPanel config={config} />}
             {tab === "appearance" && <AppearancePanel />}
             {tab === "runtime" && <RuntimePanel />}
-            {tab === "storage" && <StoragePanel storage={config?.storage} />}
+            {tab === "storage" && (
+              <StoragePanel storage={config?.storage} paths={config?.paths} />
+            )}
             {tab === "prompts" && <PromptTemplatesPanel />}
             {tab === "about" && <AboutPanel />}
           </motion.div>

@@ -33,7 +33,7 @@ export async function saveImages(paths: Array<string | undefined | null>, label 
 
   const toastId = toast.loading(copy.savingImages(validPaths.length));
   try {
-    const saved = await api.exportFilesToDownloads(validPaths);
+    const saved = await api.exportFilesToConfiguredFolder(validPaths);
     toast.success(copy.savedImagesTitle(validPaths.length), {
       id: toastId,
       description: copy.savedImagesDescription,
@@ -57,7 +57,7 @@ export async function saveJobImages(jobId: string, label = "任务图片") {
 
   const toastId = toast.loading(copy.savingJob);
   try {
-    const saved = await api.exportJobToDownloads(jobId);
+    const saved = await api.exportJobToConfiguredFolder(jobId);
     toast.success(copy.savedJobTitle, {
       id: toastId,
       description: copy.savedJobDescription,

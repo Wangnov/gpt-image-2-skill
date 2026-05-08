@@ -33,6 +33,7 @@ import { loadGenerateDraft, saveGenerateDraft } from "@/lib/drafts";
 import { useCreateGenerate, useJobs } from "@/hooks/use-jobs";
 import { useJobEvents } from "@/hooks/use-job-events";
 import { api } from "@/lib/api";
+import { isActiveJobStatus } from "@/lib/api/types";
 import { cn } from "@/lib/cn";
 import {
   jobOutputIndexes,
@@ -281,9 +282,7 @@ export function GenerateScreen({
   const { running } = useJobEvents(jobId);
   const mutate = useCreateGenerate();
   const { data: jobs = [] } = useJobs();
-  const queueCount = jobs.filter(
-    (j) => j.status === "queued" || j.status === "running",
-  ).length;
+  const queueCount = jobs.filter((j) => isActiveJobStatus(j.status)).length;
   const insertPromptTemplate = useCallback(
     (text: string) => {
       const textarea = promptTextareaRef.current;
@@ -383,7 +382,7 @@ export function GenerateScreen({
   // metadata.n slots so a "n=4" submission shows 4 placeholders at once.
   const pendingPlaceholders = useMemo(() => {
     return jobs
-      .filter((j) => j.status === "queued" || j.status === "running")
+      .filter((j) => isActiveJobStatus(j.status))
       .flatMap((job) => {
         const meta = (job.metadata ?? {}) as Record<string, unknown>;
         const n = typeof meta.n === "number" && meta.n > 0 ? meta.n : 1;
@@ -517,8 +516,7 @@ export function GenerateScreen({
       });
       const queued =
         res.queued ||
-        res.job?.status === "queued" ||
-        res.job?.status === "running";
+        Boolean(res.job && isActiveJobStatus(res.job.status));
       const count = queued ? plannedN : responseOutputCount(res);
       setJobId(res.job_id);
       const mismatchNotice = queued

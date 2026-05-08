@@ -5,7 +5,7 @@ import {
   useQueryClient,
 } from "@tanstack/react-query";
 import { api } from "@/lib/api";
-import type { JobListFilter } from "@/lib/api/types";
+import { isActiveJobStatus, type JobListFilter } from "@/lib/api/types";
 import type { GenerateRequest, Job, QueueStatus } from "@/lib/types";
 
 export function useJobs() {
@@ -14,9 +14,7 @@ export function useJobs() {
     queryFn: api.listJobs,
     refetchInterval: (query) => {
       const jobs = query.state.data as Job[] | undefined;
-      return jobs?.some(
-        (job) => job.status === "queued" || job.status === "running",
-      )
+      return jobs?.some((job) => isActiveJobStatus(job.status))
         ? 1_500
         : 8_000;
     },

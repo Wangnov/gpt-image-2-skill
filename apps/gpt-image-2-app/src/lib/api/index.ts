@@ -69,6 +69,15 @@ export const api: ApiClient = {
   get canExportToDownloadsFolder() {
     return activeClient.canExportToDownloadsFolder;
   },
+  get canExportToConfiguredFolder() {
+    return activeClient.canExportToConfiguredFolder;
+  },
+  get canChooseExportFolder() {
+    return activeClient.canChooseExportFolder;
+  },
+  get canUsePersistentResultLibrary() {
+    return activeClient.canUsePersistentResultLibrary;
+  },
   getConfig: () =>
     invokeClient("getConfig") as ReturnType<ApiClient["getConfig"]>,
   configPaths: () =>
@@ -85,6 +94,13 @@ export const api: ApiClient = {
     invokeClient("notificationCapabilities") as ReturnType<
       ApiClient["notificationCapabilities"]
     >,
+  updatePaths: (config) =>
+    loadClient().then((client) => {
+      if (!client.updatePaths) {
+        throw new Error("当前运行环境不支持修改本机路径。");
+      }
+      return client.updatePaths(config);
+    }),
   setDefault: (name) =>
     invokeClient("setDefault", name) as ReturnType<ApiClient["setDefault"]>,
   upsertProvider: (name, cfg) =>
@@ -142,6 +158,14 @@ export const api: ApiClient = {
   exportJobToDownloads: (jobId) =>
     invokeClient("exportJobToDownloads", jobId) as ReturnType<
       ApiClient["exportJobToDownloads"]
+    >,
+  exportFilesToConfiguredFolder: (paths) =>
+    invokeClient("exportFilesToConfiguredFolder", paths) as ReturnType<
+      ApiClient["exportFilesToConfiguredFolder"]
+    >,
+  exportJobToConfiguredFolder: (jobId) =>
+    invokeClient("exportJobToConfiguredFolder", jobId) as ReturnType<
+      ApiClient["exportJobToConfiguredFolder"]
     >,
   createGenerate: (body) =>
     invokeClient("createGenerate", body) as ReturnType<

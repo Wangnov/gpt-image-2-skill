@@ -29,6 +29,7 @@ import {
   useTauriImageDrop,
 } from "@/hooks/use-image-ingest";
 import { api } from "@/lib/api";
+import { isActiveJobStatus } from "@/lib/api/types";
 import { cn } from "@/lib/cn";
 import {
   dataTransferHasImage,
@@ -559,8 +560,7 @@ export function ClassicEditScreen({ config }: { config?: ServerConfig }) {
       const res = await mutate.mutateAsync(form);
       const queued =
         res.queued ||
-        res.job?.status === "queued" ||
-        res.job?.status === "running";
+        Boolean(res.job && isActiveJobStatus(res.job.status));
       const count = queued ? plannedN : responseOutputCount(res);
       setOutputCount(Math.max(1, count));
       setJobId(res.job_id);

@@ -6,6 +6,7 @@ import { tauriApi } from "@/lib/api/tauri-transport";
 import type {
   JobStatus,
   NotificationConfig,
+  PathConfig,
   ProviderConfig,
   ServerConfig,
   StorageConfig,
@@ -78,6 +79,22 @@ export function useNotificationCapabilities() {
 export function useTestNotifications() {
   return useMutation({
     mutationFn: (status?: JobStatus) => api.testNotifications(status),
+  });
+}
+
+export function useUpdatePaths() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (config: PathConfig) => {
+      if (!api.updatePaths) {
+        throw new Error("当前运行环境不支持修改本机路径。");
+      }
+      return api.updatePaths(config);
+    },
+    onSuccess: (data) => {
+      qc.setQueryData(["config"], data);
+      void qc.invalidateQueries({ queryKey: ["config-paths"] });
+    },
   });
 }
 

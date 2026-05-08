@@ -17,12 +17,13 @@ import {
   saveJobImages,
 } from "@/lib/user-actions";
 import { resultLocationText, runtimeCopy } from "@/lib/runtime-copy";
+import { isActiveJobStatus } from "@/lib/api/types";
 import type { Job, OutputUploadRef } from "@/lib/types";
 
 function badgeTone(status: Job["status"]) {
   if (status === "completed") return "ok" as const;
   if (status === "failed" || status === "cancelled") return "err" as const;
-  if (status === "running") return "running" as const;
+  if (status === "running" || status === "uploading") return "running" as const;
   return "queued" as const;
 }
 
@@ -140,7 +141,7 @@ export function JobMetadataDrawer({
 
   const selectedLabel = String.fromCharCode(65 + selectedOutput);
   const canSave = job.status === "completed" && Boolean(previewPath);
-  const canCancel = job.status === "queued";
+  const canCancel = isActiveJobStatus(job.status);
   const copy = runtimeCopy();
 
   return (

@@ -30,7 +30,11 @@
       "csp": null,
       "assetProtocol": {
         "enable": true,
-        "scope": ["$HOME/.codex/gpt-image-2-skill/**", "$TEMP/**"]
+        "scope": [
+          "$APPDATA/**",
+          "$HOME/.codex/gpt-image-2-skill/**",
+          "$TEMP/**"
+        ]
       }
     }
   },

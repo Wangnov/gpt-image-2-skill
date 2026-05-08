@@ -3,6 +3,7 @@ import type {
   NotificationConfig,
   OutputUploadRef,
   OutputRef,
+  PathConfig,
   ServerConfig,
   StorageConfig,
   StorageFallbackPolicy,
@@ -182,6 +183,18 @@ export function defaultStorageConfig(): StorageConfig {
   };
 }
 
+export function defaultPathConfig(): PathConfig {
+  return {
+    app_data_dir: { mode: "default", path: null },
+    result_library_dir: { mode: "default", path: null },
+    default_export_dir: { mode: "downloads", path: null },
+    legacy_shared_codex_dir: {
+      path: "~/.codex/gpt-image-2-skill",
+      enabled_for_read: true,
+    },
+  };
+}
+
 export function storageTargetType(target?: StorageTargetConfig | null) {
   if (!target) return "local";
   if (target.type) return target.type;
@@ -300,6 +313,50 @@ export function normalizeStorageConfig(
   };
 }
 
+export function normalizePathConfig(
+  config?: Partial<PathConfig> | null,
+): PathConfig {
+  const defaults = defaultPathConfig();
+  const pathRef = (
+    value: Partial<PathConfig["app_data_dir"]> | undefined,
+  ): PathConfig["app_data_dir"] => ({
+    mode: value?.mode === "custom" ? "custom" : "default",
+    path: typeof value?.path === "string" && value.path ? value.path : null,
+  });
+  const exportDir = (
+    value: Partial<PathConfig["default_export_dir"]> | undefined,
+  ): PathConfig["default_export_dir"] => {
+    const allowed = new Set([
+      "downloads",
+      "documents",
+      "pictures",
+      "result_library",
+      "custom",
+      "browser_default",
+    ]);
+    return {
+      mode: allowed.has(String(value?.mode))
+        ? (value?.mode as PathConfig["default_export_dir"]["mode"])
+        : defaults.default_export_dir.mode,
+      path: typeof value?.path === "string" && value.path ? value.path : null,
+    };
+  };
+  return {
+    app_data_dir: pathRef(config?.app_data_dir),
+    result_library_dir: pathRef(config?.result_library_dir),
+    default_export_dir: exportDir(config?.default_export_dir),
+    legacy_shared_codex_dir: {
+      path:
+        typeof config?.legacy_shared_codex_dir?.path === "string" &&
+        config.legacy_shared_codex_dir.path
+          ? config.legacy_shared_codex_dir.path
+          : defaults.legacy_shared_codex_dir.path,
+      enabled_for_read:
+        config?.legacy_shared_codex_dir?.enabled_for_read !== false,
+    },
+  };
+}
+
 export function normalizeNotificationConfig(
   config?: Partial<NotificationConfig> | null,
 ): NotificationConfig {
@@ -347,6 +404,7 @@ export function normalizeConfig(config: ServerConfig): ServerConfig {
     ),
     notifications: normalizeNotificationConfig(config.notifications),
     storage: normalizeStorageConfig(config.storage),
+    paths: normalizePathConfig(config.paths),
   };
 }
 
