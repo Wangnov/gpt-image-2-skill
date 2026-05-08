@@ -1,19 +1,7 @@
-import {
-  useCallback,
-  useEffect,
-  useId,
-  useMemo,
-  useRef,
-  useState,
-} from "react";
+import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { Segmented } from "@/components/ui/segmented";
-import {
-  type MaskExport,
-  type MaskHistoryState,
-  type MaskMode,
-  type MaskTool,
-} from "./mask-canvas";
+import { type MaskExport } from "./mask-canvas";
 import { EditCanvasStage } from "./edit-canvas-stage";
 import { EditFooter } from "./edit-footer";
 import { LocalEditOnboarding } from "./local-edit-onboarding";
@@ -26,6 +14,7 @@ import {
   type EditMode,
   type RefWithFile,
 } from "./shared";
+import { useMaskWorkspace } from "./use-mask-workspace";
 import { useReferenceImages } from "./use-reference-images";
 import { useCreateEdit } from "@/hooks/use-jobs";
 import { useJobEvents } from "@/hooks/use-job-events";
@@ -75,9 +64,6 @@ export function EditScreen({
   const providerNames = useMemo(() => readProviderNames(config), [config]);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const promptTextareaRef = useRef<HTMLTextAreaElement>(null);
-  const canvasViewportRef = useRef<HTMLDivElement>(null);
-  const maskToolbarHostRef = useRef<HTMLDivElement>(null);
-  const maskToolbarRef = useRef<HTMLDivElement>(null);
   const refsRef = useRef<RefWithFile[]>([]);
   const dragDepthRef = useRef(0);
   const [editMode, setEditMode] = useState<EditMode>("reference");
@@ -93,15 +79,6 @@ export function EditScreen({
   const [maskSnapshots, setMaskSnapshots] = useState<Record<string, string>>(
     {},
   );
-  const [brushSize, setBrushSize] = useState(12);
-  const [maskTool, setMaskTool] = useState<MaskTool>("brush");
-  const [clearKey, setClearKey] = useState(0);
-  const [undoKey, setUndoKey] = useState(0);
-  const [redoKey, setRedoKey] = useState(0);
-  const [maskHistory, setMaskHistory] = useState<MaskHistoryState>({
-    canUndo: false,
-    canRedo: false,
-  });
   const [exportKey, setExportKey] = useState<number | null>(null);
   const [jobId, setJobId] = useState<string | null>(null);
   const [outputCount, setOutputCount] = useState(0);
@@ -114,16 +91,7 @@ export function EditScreen({
   const [runNotice, setRunNotice] = useState<string | null>(null);
   const [isDraggingImages, setIsDraggingImages] = useState(false);
   const [draftLoaded, setDraftLoaded] = useState(false);
-  const [imageSize, setImageSize] = useState({ width: 1024, height: 1024 });
-  const [zoom, setZoom] = useState(1);
-  const [maskToolbarScale, setMaskToolbarScale] = useState(1);
-  const [panPinned, setPanPinned] = useState(false);
-  const [spacePanning, setSpacePanning] = useState(false);
   const promptId = useId();
-  const panMode = panPinned || spacePanning;
-  const maskMode: MaskMode = maskTool === "erase" ? "erase" : "paint";
-  const triggerMaskUndo = useCallback(() => setUndoKey((key) => key + 1), []);
-  const triggerMaskRedo = useCallback(() => setRedoKey((key) => key + 1), []);
   const insertPromptTemplate = useCallback(
     (text: string) => {
       const textarea = promptTextareaRef.current;
@@ -141,18 +109,6 @@ export function EditScreen({
     },
     [prompt],
   );
-  const updateMaskToolbarScale = useCallback(() => {
-    const host = maskToolbarHostRef.current;
-    const toolbar = maskToolbarRef.current;
-    if (!host || !toolbar) return;
-    const naturalWidth = toolbar.scrollWidth;
-    const availableWidth = host.clientWidth;
-    if (naturalWidth <= 0 || availableWidth <= 0) return;
-    const next = Math.min(1, Math.max(0.45, availableWidth / naturalWidth));
-    setMaskToolbarScale((current) =>
-      Math.abs(current - next) < 0.005 ? current : next,
-    );
-  }, []);
 
   useEffect(() => {
     const nextProvider = reconcileProviderSelection(config, provider);
@@ -204,106 +160,42 @@ export function EditScreen({
     isWorking && pendingOutputCount != null ? pendingOutputCount : actualN;
   const selectedRefObj = refs.find((ref) => ref.id === selectedRef);
   const targetRef = refs.find((ref) => ref.id === targetRefId) ?? refs[0];
-
-  const fitCanvasToViewport = useCallback(() => {
-    const viewport = canvasViewportRef.current;
-    if (!viewport) return;
-    const padding = 32;
-    const fit = Math.min(
-      (viewport.clientWidth - padding) / imageSize.width,
-      (viewport.clientHeight - padding) / imageSize.height,
-    );
-    setZoom(clampZoom(Number.isFinite(fit) && fit > 0 ? fit : 1));
-    window.requestAnimationFrame(() => {
-      viewport.scrollLeft = Math.max(
-        0,
-        (viewport.scrollWidth - viewport.clientWidth) / 2,
-      );
-      viewport.scrollTop = Math.max(
-        0,
-        (viewport.scrollHeight - viewport.clientHeight) / 2,
-      );
-    });
-  }, [imageSize.height, imageSize.width]);
-  const handleMaskImageSize = useCallback(
-    (size: { width: number; height: number }) => setImageSize(size),
-    [],
-  );
+  const {
+    brushSize,
+    canvasViewportRef,
+    clearKey,
+    fitCanvasToViewport,
+    handleMaskImageSize,
+    maskHistory,
+    maskMode,
+    maskTool,
+    maskToolbarHostRef,
+    maskToolbarRef,
+    maskToolbarScale,
+    panMode,
+    panPinned,
+    redoKey,
+    setBrushSize,
+    setClearKey,
+    setMaskHistory,
+    setMaskTool,
+    setPanPinned,
+    setZoom,
+    triggerMaskRedo,
+    triggerMaskUndo,
+    undoKey,
+    zoom,
+  } = useMaskWorkspace({
+    active,
+    targetRefId: targetRef?.id,
+    usesRegion,
+  });
 
   useEffect(() => {
     if (!supportsMultipleOutputs && n !== 1) {
       setN(1);
     }
   }, [n, supportsMultipleOutputs]);
-
-  useEffect(() => {
-    if (!active || !usesRegion) return;
-    const timer = window.setTimeout(fitCanvasToViewport, 60);
-    return () => window.clearTimeout(timer);
-  }, [active, fitCanvasToViewport, targetRef?.id, usesRegion]);
-
-  useEffect(() => {
-    if (!active || !usesRegion || !targetRef) {
-      setMaskToolbarScale(1);
-      return;
-    }
-    const host = maskToolbarHostRef.current;
-    const toolbar = maskToolbarRef.current;
-    if (!host || !toolbar) return;
-    updateMaskToolbarScale();
-    const observer = new ResizeObserver(updateMaskToolbarScale);
-    observer.observe(host);
-    observer.observe(toolbar);
-    window.addEventListener("resize", updateMaskToolbarScale);
-    return () => {
-      observer.disconnect();
-      window.removeEventListener("resize", updateMaskToolbarScale);
-    };
-  }, [active, targetRef, updateMaskToolbarScale, usesRegion]);
-
-  useEffect(() => {
-    if (!active || !usesRegion || !targetRef) return;
-    updateMaskToolbarScale();
-  }, [active, targetRef, updateMaskToolbarScale, usesRegion, zoom]);
-
-  useEffect(() => {
-    if (!usesRegion) return;
-    const isEditableTarget = (target: EventTarget | null) => {
-      if (!(target instanceof HTMLElement)) return false;
-      return Boolean(
-        target.closest("input, textarea, select, [contenteditable='true']"),
-      );
-    };
-    const onKeyDown = (event: globalThis.KeyboardEvent) => {
-      if (isEditableTarget(event.target)) return;
-      const key = event.key.toLowerCase();
-      const isModifierShortcut = event.metaKey || event.ctrlKey;
-      const isUndo = isModifierShortcut && key === "z" && !event.shiftKey;
-      const isRedo =
-        isModifierShortcut && ((key === "z" && event.shiftKey) || key === "y");
-      if (isUndo || isRedo) {
-        event.preventDefault();
-        if (isRedo) triggerMaskRedo();
-        else triggerMaskUndo();
-        return;
-      }
-      if (event.key !== " " || event.metaKey || event.ctrlKey || event.altKey) {
-        return;
-      }
-      event.preventDefault();
-      setSpacePanning(true);
-    };
-    const onKeyUp = (event: globalThis.KeyboardEvent) => {
-      if (event.key === " ") setSpacePanning(false);
-    };
-    window.addEventListener("keydown", onKeyDown);
-    window.addEventListener("keyup", onKeyUp);
-    return () => {
-      window.removeEventListener("keydown", onKeyDown);
-      window.removeEventListener("keyup", onKeyUp);
-      setSpacePanning(false);
-    };
-  }, [active, triggerMaskRedo, triggerMaskUndo, usesRegion]);
 
   useEffect(() => {
     if (!tweaks.persistCreativeDrafts) {
