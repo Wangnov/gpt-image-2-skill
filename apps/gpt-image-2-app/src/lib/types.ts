@@ -69,6 +69,97 @@ export interface NotificationConfig {
   webhooks: WebhookNotificationConfig[];
 }
 
+export type StorageTargetKind = "local" | "s3" | "webdav" | "http" | "sftp";
+export type StorageFallbackPolicy = "never" | "on_failure" | "always";
+export type StorageStatus =
+  | "not_configured"
+  | "pending"
+  | "running"
+  | "completed"
+  | "partial_failed"
+  | "failed"
+  | "fallback_completed";
+export type OutputUploadStatus =
+  | "pending"
+  | "running"
+  | "completed"
+  | "failed"
+  | "unsupported";
+
+export interface LocalStorageTargetConfig {
+  type?: "local";
+  directory: string;
+  public_base_url?: string | null;
+}
+
+export interface S3StorageTargetConfig {
+  type?: "s3";
+  bucket: string;
+  region?: string | null;
+  endpoint?: string | null;
+  prefix?: string | null;
+  access_key_id?: CredentialRef | null;
+  secret_access_key?: CredentialRef | null;
+  session_token?: CredentialRef | null;
+  public_base_url?: string | null;
+}
+
+export interface WebDavStorageTargetConfig {
+  type?: "webdav";
+  url: string;
+  username?: string | null;
+  password?: CredentialRef | null;
+  public_base_url?: string | null;
+}
+
+export interface HttpStorageTargetConfig {
+  type?: "http";
+  url: string;
+  method: string;
+  headers: Record<string, CredentialRef>;
+  public_url_json_pointer?: string | null;
+}
+
+export interface SftpStorageTargetConfig {
+  type?: "sftp";
+  host: string;
+  port: number;
+  host_key_sha256?: string | null;
+  username: string;
+  password?: CredentialRef | null;
+  private_key?: CredentialRef | null;
+  remote_dir: string;
+  public_base_url?: string | null;
+}
+
+export type StorageTargetConfig =
+  | LocalStorageTargetConfig
+  | S3StorageTargetConfig
+  | WebDavStorageTargetConfig
+  | HttpStorageTargetConfig
+  | SftpStorageTargetConfig;
+
+export interface StorageConfig {
+  targets: Record<string, StorageTargetConfig>;
+  default_targets: string[];
+  fallback_targets: string[];
+  fallback_policy: StorageFallbackPolicy;
+  upload_concurrency: number;
+  target_concurrency: number;
+}
+
+export interface OutputUploadRef {
+  target: string;
+  target_type: StorageTargetKind | string;
+  status: OutputUploadStatus | string;
+  url?: string | null;
+  error?: string | null;
+  bytes?: number | null;
+  attempts?: number;
+  updated_at?: string;
+  metadata?: Record<string, unknown> | null;
+}
+
 export interface NotificationDelivery {
   channel: string;
   name?: string;
@@ -98,6 +189,7 @@ export interface ServerConfig {
   default_provider?: string;
   providers: Record<string, ProviderConfig>;
   notifications: NotificationConfig;
+  storage: StorageConfig;
 }
 
 export type JobStatus =
@@ -118,6 +210,7 @@ export interface OutputRef {
   index: number;
   path: string;
   bytes: number;
+  uploads?: OutputUploadRef[];
 }
 
 export interface Job {
@@ -130,6 +223,7 @@ export interface Job {
   metadata: Record<string, unknown>;
   outputs: OutputRef[];
   output_path?: string;
+  storage_status?: StorageStatus | string;
   error?: Record<string, unknown> | null;
 }
 

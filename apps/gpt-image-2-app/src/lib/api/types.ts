@@ -10,6 +10,8 @@ import type {
   ProviderConfig,
   QueueStatus,
   ServerConfig,
+  StorageConfig,
+  StorageTargetConfig,
   TestProviderResult,
 } from "../types";
 
@@ -64,12 +66,28 @@ export type JobListPage = {
   total: number;
 };
 
+export type StorageTestResult = {
+  ok: boolean;
+  target: string;
+  target_type?: string;
+  message: string;
+  latency_ms?: number;
+  detail?: Record<string, unknown>;
+  unsupported?: boolean;
+  local_only?: boolean;
+};
+
 export type ApiClient = RuntimeCapabilities & {
   getConfig(): Promise<ServerConfig>;
   configPaths(): Promise<ConfigPaths>;
   updateNotifications(config: NotificationConfig): Promise<ServerConfig>;
   testNotifications(status?: JobStatus): Promise<NotificationTestResult>;
   notificationCapabilities(): Promise<NotificationCapabilities>;
+  updateStorage?(config: StorageConfig): Promise<ServerConfig>;
+  testStorageTarget?(
+    name: string,
+    target?: StorageTargetConfig,
+  ): Promise<StorageTestResult>;
   setDefault(name: string): Promise<ServerConfig>;
   upsertProvider(name: string, cfg: ProviderConfig): Promise<ServerConfig>;
   revealProviderCredential(

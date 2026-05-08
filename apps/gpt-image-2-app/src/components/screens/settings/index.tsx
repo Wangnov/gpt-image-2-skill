@@ -27,6 +27,7 @@ import {
   Bell,
   Mail,
   Webhook,
+  HardDrive,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { Segmented } from "@/components/ui/segmented";
@@ -46,8 +47,10 @@ import {
   useNotificationCapabilities,
   useSetDefaultProvider,
   useTestProvider,
+  useTestStorageTarget,
   useTestNotifications,
   useUpdateNotifications,
+  useUpdateStorage,
 } from "@/hooks/use-config";
 import {
   checkForAppUpdate,
@@ -57,7 +60,10 @@ import {
 import { api, type ConfigPaths } from "@/lib/api";
 import {
   defaultNotificationConfig,
+  defaultStorageConfig,
   normalizeNotificationConfig,
+  normalizeStorageConfig,
+  storageTargetType,
 } from "@/lib/api/shared";
 import { clearCreativeDrafts } from "@/lib/drafts";
 import { copyText, openPath, revealPath } from "@/lib/user-actions";
@@ -73,6 +79,13 @@ import type {
   NotificationConfig,
   ProviderConfig,
   ServerConfig,
+  StorageConfig,
+  StorageFallbackPolicy,
+  HttpStorageTargetConfig,
+  SftpStorageTargetConfig,
+  StorageTargetConfig,
+  StorageTargetKind,
+  WebDavStorageTargetConfig,
   WebhookNotificationConfig,
 } from "@/lib/types";
 import {
@@ -114,12 +127,19 @@ const DENSITY_LABEL: Record<ThemePreset["suggestedDensity"], string> = {
  *  without prop-drilling or context. */
 const UNLOCK_EVENT = "gpt2:unlocks";
 
-type SettingsTab = "creds" | "appearance" | "runtime" | "prompts" | "about";
+type SettingsTab =
+  | "creds"
+  | "appearance"
+  | "runtime"
+  | "storage"
+  | "prompts"
+  | "about";
 
 const NAV: { id: SettingsTab; label: string; icon: LucideIcon }[] = [
   { id: "creds", label: "凭证", icon: KeyRound },
   { id: "appearance", label: "外观", icon: Sparkles },
   { id: "runtime", label: "任务", icon: ListChecks },
+  { id: "storage", label: "存储", icon: HardDrive },
   { id: "prompts", label: "模板", icon: FileText },
   { id: "about", label: "关于", icon: Info },
 ];
@@ -141,6 +161,20 @@ const METHOD_OPTIONS = [
   { value: "PATCH", label: "PATCH" },
 ] as const;
 
+const STORAGE_TARGET_TYPE_OPTIONS = [
+  { value: "local", label: "本地" },
+  { value: "http", label: "HTTP" },
+  { value: "s3", label: "S3" },
+  { value: "webdav", label: "WebDAV" },
+  { value: "sftp", label: "SFTP" },
+] as const;
+
+const STORAGE_FALLBACK_POLICY_OPTIONS = [
+  { value: "on_failure", label: "失败时" },
+  { value: "always", label: "总是" },
+  { value: "never", label: "关闭" },
+] as const;
+
 const CREDENTIAL_SOURCE_OPTIONS = [
   { value: "file", label: "保存值" },
   { value: "env", label: "环境变量" },
@@ -159,6 +193,10 @@ const TAB_TITLES: Record<SettingsTab, { title: string; subtitle: string }> = {
   runtime: {
     title: "任务",
     subtitle: "并发上限和任务结束提示",
+  },
+  storage: {
+    title: "结果存储",
+    subtitle: "配置上传目标、默认投递和失败回退",
   },
   prompts: {
     title: "提示词模板",
@@ -1160,6 +1198,171 @@ function prepareNotificationConfigForSave(
   };
 }
 
+function cloneStorageConfig(value?: StorageConfig) {
+  return normalizeStorageConfig(
+    value
+      ? (JSON.parse(JSON.stringify(value)) as StorageConfig)
+      : defaultStorageConfig(),
+  );
+}
+
+function storageTargetLabel(target: StorageTargetConfig) {
+  const type = storageTargetType(target);
+  return (
+    STORAGE_TARGET_TYPE_OPTIONS.find((option) => option.value === type)
+      ?.label ?? type
+  );
+}
+
+function blankStorageTarget(type: StorageTargetKind): StorageTargetConfig {
+  if (type === "s3") {
+    return {
+      type,
+      bucket: "",
+      region: "",
+      endpoint: "",
+      prefix: "",
+      access_key_id: null,
+      secret_access_key: null,
+      session_token: null,
+      public_base_url: "",
+    };
+  }
+  if (type === "webdav") {
+    return {
+      type,
+      url: "",
+      username: "",
+      password: null,
+      public_base_url: "",
+    };
+  }
+  if (type === "http") {
+    return {
+      type,
+      url: "",
+      method: "POST",
+      headers: {},
+      public_url_json_pointer: "",
+    };
+  }
+  if (type === "sftp") {
+    return {
+      type,
+      host: "",
+      port: 22,
+      host_key_sha256: "",
+      username: "",
+      password: null,
+      private_key: null,
+      remote_dir: "/",
+      public_base_url: "",
+    };
+  }
+  return { type: "local", directory: "", public_base_url: "" };
+}
+
+function normalizeStorageTargetForSave(
+  target: StorageTargetConfig,
+): StorageTargetConfig {
+  const type = storageTargetType(target);
+  if (type === "s3" && "bucket" in target) {
+    return {
+      type,
+      bucket: target.bucket.trim(),
+      region: target.region?.trim() || undefined,
+      endpoint: target.endpoint?.trim() || undefined,
+      prefix: target.prefix?.trim() || undefined,
+      access_key_id: normalizeCredentialForSave(target.access_key_id),
+      secret_access_key: normalizeCredentialForSave(target.secret_access_key),
+      session_token: normalizeCredentialForSave(target.session_token),
+      public_base_url: target.public_base_url?.trim() || undefined,
+    };
+  }
+  if (type === "webdav") {
+    const webdav = target as WebDavStorageTargetConfig;
+    return {
+      type,
+      url: webdav.url.trim(),
+      username: webdav.username?.trim() || undefined,
+      password: normalizeCredentialForSave(webdav.password),
+      public_base_url: webdav.public_base_url?.trim() || undefined,
+    };
+  }
+  if (type === "http") {
+    const http = target as HttpStorageTargetConfig;
+    const headers: Record<string, CredentialRef> = {};
+    for (const [header, credential] of Object.entries(http.headers ?? {})) {
+      const key = header.trim();
+      const nextCredential = normalizeCredentialForSave(credential);
+      if (key && nextCredential) headers[key] = nextCredential;
+    }
+    return {
+      type,
+      url: http.url.trim(),
+      method: http.method.trim().toUpperCase() || "POST",
+      headers,
+      public_url_json_pointer:
+        http.public_url_json_pointer?.trim() || undefined,
+    };
+  }
+  if (type === "sftp") {
+    const sftp = target as SftpStorageTargetConfig;
+    return {
+      type,
+      host: sftp.host.trim(),
+      port: Math.max(1, Math.round(sftp.port || 22)),
+      host_key_sha256: sftp.host_key_sha256?.trim() || undefined,
+      username: sftp.username.trim(),
+      password: normalizeCredentialForSave(sftp.password),
+      private_key: normalizeCredentialForSave(sftp.private_key),
+      remote_dir: sftp.remote_dir.trim() || "/",
+      public_base_url: sftp.public_base_url?.trim() || undefined,
+    };
+  }
+  return {
+    type: "local",
+    directory: "directory" in target ? target.directory.trim() : "",
+    public_base_url:
+      "public_base_url" in target
+        ? target.public_base_url?.trim() || undefined
+        : undefined,
+  };
+}
+
+function prepareStorageConfigForSave(config: StorageConfig): StorageConfig {
+  const renamedTargets = Object.fromEntries(
+    Object.entries(config.targets)
+      .map(([name, target]) => [
+        name.trim(),
+        normalizeStorageTargetForSave(target),
+      ])
+      .filter(([name]) => name),
+  );
+  const nameMap = new Map(
+    Object.keys(config.targets).map((name) => [name, name.trim()]),
+  );
+  const validNames = new Set(Object.keys(renamedTargets));
+  const normalizeTargetNames = (names: string[]) =>
+    names
+      .map((name) => nameMap.get(name) ?? name.trim())
+      .filter((name): name is string => Boolean(name) && validNames.has(name));
+  return {
+    targets: renamedTargets,
+    default_targets: normalizeTargetNames(config.default_targets),
+    fallback_targets: normalizeTargetNames(config.fallback_targets),
+    fallback_policy: config.fallback_policy,
+    upload_concurrency: Math.max(
+      1,
+      Math.round(config.upload_concurrency || 4),
+    ),
+    target_concurrency: Math.max(
+      1,
+      Math.round(config.target_concurrency || 2),
+    ),
+  };
+}
+
 function CredentialEditor({
   credential,
   onChange,
@@ -1757,6 +1960,656 @@ function NotificationCenterPanel({
   );
 }
 
+function StoragePanel({ storage }: { storage?: StorageConfig }) {
+  const [draft, setDraft] = useState(() => cloneStorageConfig(storage));
+  const updateStorage = useUpdateStorage();
+  const testStorage = useTestStorageTarget();
+  const copy = runtimeCopy();
+
+  useEffect(() => {
+    setDraft(cloneStorageConfig(storage));
+  }, [storage]);
+
+  const targetEntries = Object.entries(draft.targets);
+  const targetOptions = targetEntries.map(([name, target]) => ({
+    value: name,
+    label: `${name} · ${storageTargetLabel(target)}`,
+  }));
+
+  const patch = (next: Partial<StorageConfig>) => {
+    setDraft((current) => ({ ...current, ...next }));
+  };
+  const patchTarget = (
+    name: string,
+    next: Partial<StorageTargetConfig> | StorageTargetConfig,
+  ) => {
+    setDraft((current) => ({
+      ...current,
+      targets: {
+        ...current.targets,
+        [name]: { ...current.targets[name], ...next } as StorageTargetConfig,
+      },
+    }));
+  };
+  const setTargetType = (name: string, type: StorageTargetKind) => {
+    patchTarget(name, blankStorageTarget(type));
+  };
+  const addTarget = () => {
+    setDraft((current) => {
+      let index = Object.keys(current.targets).length + 1;
+      let name = `target-${index}`;
+      while (current.targets[name]) {
+        index += 1;
+        name = `target-${index}`;
+      }
+      return {
+        ...current,
+        targets: { ...current.targets, [name]: blankStorageTarget("local") },
+      };
+    });
+  };
+  const removeTarget = (name: string) => {
+    setDraft((current) => {
+      const { [name]: _removed, ...targets } = current.targets;
+      return {
+        ...current,
+        targets,
+        default_targets: current.default_targets.filter((item) => item !== name),
+        fallback_targets: current.fallback_targets.filter(
+          (item) => item !== name,
+        ),
+      };
+    });
+  };
+  const renameTarget = (name: string, nextName: string) => {
+    const clean = nextName.trim();
+    if (!clean || clean === name || draft.targets[clean]) return;
+    setDraft((current) => {
+      const entries = Object.entries(current.targets).map(([key, target]) =>
+        key === name ? ([clean, target] as const) : ([key, target] as const),
+      );
+      return {
+        ...current,
+        targets: Object.fromEntries(entries),
+        default_targets: current.default_targets.map((item) =>
+          item === name ? clean : item,
+        ),
+        fallback_targets: current.fallback_targets.map((item) =>
+          item === name ? clean : item,
+        ),
+      };
+    });
+  };
+  const toggleTargetList = (
+    field: "default_targets" | "fallback_targets",
+    name: string,
+    checked: boolean,
+  ) => {
+    setDraft((current) => ({
+      ...current,
+      [field]: checked
+        ? Array.from(new Set([...current[field], name]))
+        : current[field].filter((item) => item !== name),
+    }));
+  };
+  const addHttpHeader = (name: string) => {
+    const target = draft.targets[name];
+    if (!target || storageTargetType(target) !== "http" || !("headers" in target))
+      return;
+    const headers = { ...(target.headers ?? {}) };
+    let key = "Authorization";
+    let count = 1;
+    while (headers[key]) {
+      count += 1;
+      key = `X-Storage-Secret-${count}`;
+    }
+    headers[key] = { source: "file", value: "" };
+    patchTarget(name, { headers });
+  };
+  const updateHttpHeader = (
+    name: string,
+    header: string,
+    nextHeader: string,
+    credential: CredentialRef | null,
+  ) => {
+    const target = draft.targets[name];
+    if (!target || storageTargetType(target) !== "http" || !("headers" in target))
+      return;
+    const headers = { ...(target.headers ?? {}) };
+    delete headers[header];
+    if (credential && nextHeader.trim()) headers[nextHeader] = credential;
+    patchTarget(name, { headers });
+  };
+
+  const save = async () => {
+    try {
+      const saved = await updateStorage.mutateAsync(
+        prepareStorageConfigForSave(draft),
+      );
+      setDraft(cloneStorageConfig(saved.storage));
+      toast.success("结果存储已保存");
+    } catch (error) {
+      toast.error("保存结果存储失败", {
+        description: error instanceof Error ? error.message : String(error),
+      });
+    }
+  };
+
+  const runTest = async (name: string) => {
+    try {
+      const result = await testStorage.mutateAsync({
+        name,
+        target: normalizeStorageTargetForSave(draft.targets[name]),
+      });
+      if (result.ok) {
+        toast.success("存储目标可用", { description: result.message });
+      } else {
+        toast.warning("存储目标不可用", { description: result.message });
+      }
+    } catch (error) {
+      toast.error("测试存储目标失败", {
+        description: error instanceof Error ? error.message : String(error),
+      });
+    }
+  };
+
+  return (
+    <div className="flex-1 min-h-0 overflow-auto p-4 sm:p-5 space-y-4">
+      <Section
+        title="投递策略"
+        description={
+          copy.kind === "browser"
+            ? "静态 Web 只保留浏览器本地结果；远端上传需要桌面 App 或服务端 Web。"
+            : "任务仍会先写入本地结果目录，再按这里的目标上传或回退。"
+        }
+      >
+        <Row
+          title="默认目标"
+          description="每个完成任务优先投递到这些目标。"
+          control={
+            <div className="flex w-full flex-wrap gap-2 sm:w-[520px]">
+              {targetEntries.map(([name]) => (
+                <label
+                  key={`default-${name}`}
+                  className="flex items-center gap-2 rounded-md border border-border bg-[color:var(--w-04)] px-2.5 py-1.5 text-[12px]"
+                >
+                  <input
+                    type="checkbox"
+                    checked={draft.default_targets.includes(name)}
+                    onChange={(event) =>
+                      toggleTargetList(
+                        "default_targets",
+                        name,
+                        event.target.checked,
+                      )
+                    }
+                  />
+                  <span>{name}</span>
+                </label>
+              ))}
+              {targetEntries.length === 0 && (
+                <span className="text-[12px] text-muted">暂无目标。</span>
+              )}
+            </div>
+          }
+        />
+        <Row
+          title="回退目标"
+          description="主目标失败后使用；默认本地回退适合保底留存。"
+          control={
+            <div className="flex w-full flex-wrap gap-2 sm:w-[520px]">
+              {targetEntries.map(([name]) => (
+                <label
+                  key={`fallback-${name}`}
+                  className="flex items-center gap-2 rounded-md border border-border bg-[color:var(--w-04)] px-2.5 py-1.5 text-[12px]"
+                >
+                  <input
+                    type="checkbox"
+                    checked={draft.fallback_targets.includes(name)}
+                    onChange={(event) =>
+                      toggleTargetList(
+                        "fallback_targets",
+                        name,
+                        event.target.checked,
+                      )
+                    }
+                  />
+                  <span>{name}</span>
+                </label>
+              ))}
+            </div>
+          }
+        />
+        <Row
+          title="回退策略 / 并发"
+          description="上传并发控制输出级任务；目标并发控制单张图同时打几个目标。"
+          control={
+            <div className="grid w-full gap-2 sm:w-[520px] sm:grid-cols-3">
+              <GlassSelect
+                value={draft.fallback_policy}
+                onValueChange={(fallback_policy) =>
+                  patch({
+                    fallback_policy:
+                      fallback_policy as StorageFallbackPolicy,
+                  })
+                }
+                options={STORAGE_FALLBACK_POLICY_OPTIONS}
+                size="sm"
+                ariaLabel="存储回退策略"
+              />
+              <Input
+                value={String(draft.upload_concurrency)}
+                onChange={(event) =>
+                  patch({
+                    upload_concurrency: Number(event.target.value) || 1,
+                  })
+                }
+                inputMode="numeric"
+                size="sm"
+                aria-label="上传并发"
+              />
+              <Input
+                value={String(draft.target_concurrency)}
+                onChange={(event) =>
+                  patch({
+                    target_concurrency: Number(event.target.value) || 1,
+                  })
+                }
+                inputMode="numeric"
+                size="sm"
+                aria-label="目标并发"
+              />
+            </div>
+          }
+        />
+      </Section>
+
+      <Section title="目标">
+        <div className="space-y-3 px-4 py-3.5 sm:px-5">
+          {targetEntries.map(([name, target]) => {
+            const type = storageTargetType(target);
+            const webdavTarget =
+              type === "webdav"
+                ? (target as WebDavStorageTargetConfig)
+                : undefined;
+            const httpTarget =
+              type === "http" ? (target as HttpStorageTargetConfig) : undefined;
+            const sftpTarget =
+              type === "sftp" ? (target as SftpStorageTargetConfig) : undefined;
+            return (
+              <div
+                key={name}
+                className="space-y-2 rounded-lg border border-border bg-[color:var(--w-03)] p-3"
+              >
+                <div className="flex flex-wrap items-center gap-2">
+                  <input
+                    defaultValue={name}
+                    onBlur={(event) => renameTarget(name, event.target.value)}
+                    aria-label="存储目标名称"
+                    className="h-7 w-full rounded-md border border-border bg-[color:var(--w-04)] px-2.5 font-mono text-[13px] outline-none transition-colors placeholder:text-faint focus:border-[color:var(--accent-55)] focus:bg-[color:var(--accent-06)] focus:shadow-[0_0_0_3px_var(--accent-14)] sm:w-[160px]"
+                  />
+                  <GlassSelect
+                    value={type}
+                    onValueChange={(value) =>
+                      setTargetType(name, value as StorageTargetKind)
+                    }
+                    options={STORAGE_TARGET_TYPE_OPTIONS}
+                    size="sm"
+                    ariaLabel="存储目标类型"
+                  />
+                  <div className="ml-auto flex gap-1">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      icon="play"
+                      disabled={testStorage.isPending}
+                      onClick={() => void runTest(name)}
+                    >
+                      测试
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="iconSm"
+                      icon="trash"
+                      onClick={() => removeTarget(name)}
+                      aria-label="删除存储目标"
+                    />
+                  </div>
+                </div>
+                {type === "local" && "directory" in target && (
+                  <div className="grid gap-2 sm:grid-cols-2">
+                    <Input
+                      value={target.directory}
+                      onChange={(event) =>
+                        patchTarget(name, { directory: event.target.value })
+                      }
+                      placeholder="/path/to/storage"
+                      size="sm"
+                      aria-label="本地目录"
+                    />
+                    <Input
+                      value={target.public_base_url ?? ""}
+                      onChange={(event) =>
+                        patchTarget(name, {
+                          public_base_url: event.target.value,
+                        })
+                      }
+                      placeholder="https://cdn.example.com"
+                      size="sm"
+                      aria-label="公开基础 URL"
+                    />
+                  </div>
+                )}
+                {type === "s3" && "bucket" in target && (
+                  <div className="space-y-2">
+                    <div className="grid gap-2 sm:grid-cols-3">
+                      <Input
+                        value={target.bucket}
+                        onChange={(event) =>
+                          patchTarget(name, { bucket: event.target.value })
+                        }
+                        placeholder="bucket"
+                        size="sm"
+                        aria-label="S3 bucket"
+                      />
+                      <Input
+                        value={target.region ?? ""}
+                        onChange={(event) =>
+                          patchTarget(name, { region: event.target.value })
+                        }
+                        placeholder="region"
+                        size="sm"
+                        aria-label="S3 region"
+                      />
+                      <Input
+                        value={target.prefix ?? ""}
+                        onChange={(event) =>
+                          patchTarget(name, { prefix: event.target.value })
+                        }
+                        placeholder="prefix/"
+                        size="sm"
+                        aria-label="S3 prefix"
+                      />
+                    </div>
+                    <div className="grid gap-2 sm:grid-cols-2">
+                      <Input
+                        value={target.endpoint ?? ""}
+                        onChange={(event) =>
+                          patchTarget(name, { endpoint: event.target.value })
+                        }
+                        placeholder="S3 endpoint"
+                        size="sm"
+                        aria-label="S3 endpoint"
+                      />
+                      <Input
+                        value={target.public_base_url ?? ""}
+                        onChange={(event) =>
+                          patchTarget(name, {
+                            public_base_url: event.target.value,
+                          })
+                        }
+                        placeholder="公开基础 URL"
+                        size="sm"
+                        aria-label="S3 public base URL"
+                      />
+                    </div>
+                    <CredentialEditor
+                      credential={target.access_key_id}
+                      onChange={(access_key_id) =>
+                        patchTarget(name, { access_key_id })
+                      }
+                      placeholder="Access Key ID"
+                      ariaLabel="S3 Access Key ID"
+                    />
+                    <CredentialEditor
+                      credential={target.secret_access_key}
+                      onChange={(secret_access_key) =>
+                        patchTarget(name, { secret_access_key })
+                      }
+                      placeholder="Secret Access Key"
+                      ariaLabel="S3 Secret Access Key"
+                    />
+                  </div>
+                )}
+                {webdavTarget && (
+                  <div className="space-y-2">
+                    <div className="grid gap-2 sm:grid-cols-2">
+                      <Input
+                        value={webdavTarget.url}
+                        onChange={(event) =>
+                          patchTarget(name, { url: event.target.value })
+                        }
+                        placeholder="https://dav.example.com/out"
+                        size="sm"
+                        aria-label="WebDAV URL"
+                      />
+                      <Input
+                        value={webdavTarget.public_base_url ?? ""}
+                        onChange={(event) =>
+                          patchTarget(name, {
+                            public_base_url: event.target.value,
+                          })
+                        }
+                        placeholder="公开基础 URL"
+                        size="sm"
+                        aria-label="WebDAV public base URL"
+                      />
+                    </div>
+                    <Input
+                      value={webdavTarget.username ?? ""}
+                      onChange={(event) =>
+                        patchTarget(name, { username: event.target.value })
+                      }
+                      placeholder="username"
+                      size="sm"
+                      aria-label="WebDAV username"
+                    />
+                    <CredentialEditor
+                      credential={webdavTarget.password}
+                      onChange={(password) => patchTarget(name, { password })}
+                      placeholder="password"
+                      ariaLabel="WebDAV password"
+                    />
+                  </div>
+                )}
+                {httpTarget && (
+                  <div className="space-y-2">
+                    <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_110px_150px]">
+                      <Input
+                        value={httpTarget.url}
+                        onChange={(event) =>
+                          patchTarget(name, { url: event.target.value })
+                        }
+                        placeholder="https://upload.example.com"
+                        size="sm"
+                        aria-label="HTTP upload URL"
+                      />
+                      <GlassSelect
+                        value={httpTarget.method || "POST"}
+                        onValueChange={(method) =>
+                          patchTarget(name, { method })
+                        }
+                        options={METHOD_OPTIONS}
+                        size="sm"
+                        ariaLabel="HTTP method"
+                      />
+                      <Input
+                        value={httpTarget.public_url_json_pointer ?? ""}
+                        onChange={(event) =>
+                          patchTarget(name, {
+                            public_url_json_pointer: event.target.value,
+                          })
+                        }
+                        placeholder="/url"
+                        size="sm"
+                        aria-label="URL JSON pointer"
+                      />
+                    </div>
+                    {Object.entries(httpTarget.headers ?? {}).map(
+                      ([header, credential]) => (
+                        <div
+                          key={`${name}:${header}`}
+                          className="grid gap-2 sm:grid-cols-[150px_minmax(0,1fr)_32px]"
+                        >
+                          <Input
+                            value={header}
+                            onChange={(event) =>
+                              updateHttpHeader(
+                                name,
+                                header,
+                                event.target.value,
+                                credential,
+                              )
+                            }
+                            placeholder="Authorization"
+                            size="sm"
+                            monospace
+                            aria-label="HTTP header"
+                          />
+                          <CredentialEditor
+                            credential={credential}
+                            onChange={(nextCredential) =>
+                              updateHttpHeader(
+                                name,
+                                header,
+                                header,
+                                nextCredential,
+                              )
+                            }
+                            placeholder="Bearer ..."
+                            ariaLabel={`${header} 值`}
+                          />
+                          <Button
+                            variant="ghost"
+                            size="iconSm"
+                            icon="x"
+                            onClick={() =>
+                              updateHttpHeader(name, header, "", null)
+                            }
+                            aria-label="删除 HTTP header"
+                          />
+                        </div>
+                      ),
+                    )}
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      icon="plus"
+                      onClick={() => addHttpHeader(name)}
+                    >
+                      添加 Header
+                    </Button>
+                  </div>
+                )}
+                {sftpTarget && (
+                  <div className="space-y-2">
+                    <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_88px_minmax(0,1fr)]">
+                      <Input
+                        value={sftpTarget.host}
+                        onChange={(event) =>
+                          patchTarget(name, { host: event.target.value })
+                        }
+                        placeholder="host"
+                        size="sm"
+                        aria-label="SFTP host"
+                      />
+                      <Input
+                        value={String(sftpTarget.port || 22)}
+                        onChange={(event) =>
+                          patchTarget(name, {
+                            port: Number(event.target.value) || 22,
+                          })
+                        }
+                        inputMode="numeric"
+                        size="sm"
+                        aria-label="SFTP port"
+                      />
+                      <Input
+                        value={sftpTarget.username}
+                        onChange={(event) =>
+                          patchTarget(name, { username: event.target.value })
+                        }
+                        placeholder="username"
+                        size="sm"
+                        aria-label="SFTP username"
+                      />
+                    </div>
+                    <div className="grid gap-2 sm:grid-cols-2">
+                      <Input
+                        value={sftpTarget.remote_dir}
+                        onChange={(event) =>
+                          patchTarget(name, { remote_dir: event.target.value })
+                        }
+                        placeholder="/remote/out"
+                        size="sm"
+                        aria-label="SFTP remote dir"
+                      />
+                      <Input
+                        value={sftpTarget.public_base_url ?? ""}
+                        onChange={(event) =>
+                          patchTarget(name, {
+                            public_base_url: event.target.value,
+                          })
+                        }
+                        placeholder="公开基础 URL"
+                        size="sm"
+                        aria-label="SFTP public base URL"
+                      />
+                    </div>
+                    <Input
+                      value={sftpTarget.host_key_sha256 ?? ""}
+                      onChange={(event) =>
+                        patchTarget(name, {
+                          host_key_sha256: event.target.value,
+                        })
+                      }
+                      placeholder="SHA256 host key fingerprint"
+                      size="sm"
+                      aria-label="SFTP host key SHA256"
+                    />
+                    <CredentialEditor
+                      credential={sftpTarget.password}
+                      onChange={(password) => patchTarget(name, { password })}
+                      placeholder="password"
+                      ariaLabel="SFTP password"
+                    />
+                    <CredentialEditor
+                      credential={sftpTarget.private_key}
+                      onChange={(private_key) =>
+                        patchTarget(name, { private_key })
+                      }
+                      placeholder="private key"
+                      ariaLabel="SFTP private key"
+                    />
+                  </div>
+                )}
+              </div>
+            );
+          })}
+          <div className="flex items-center justify-between gap-2">
+            <Button variant="secondary" size="sm" icon="plus" onClick={addTarget}>
+              添加目标
+            </Button>
+            <Button
+              variant="primary"
+              size="sm"
+              disabled={updateStorage.isPending}
+              onClick={() => void save()}
+            >
+              保存
+            </Button>
+          </div>
+          {targetOptions.length > 0 && (
+            <div className="text-[11px] text-faint">
+              当前目标：{targetOptions.map((item) => item.label).join(" / ")}
+            </div>
+          )}
+        </div>
+      </Section>
+    </div>
+  );
+}
+
 function AboutPanel() {
   const { setTweaks } = useTweaks();
   const copy = runtimeCopy();
@@ -2055,6 +2908,7 @@ export function SettingsScreen({ config }: { config?: ServerConfig } = {}) {
             {tab === "creds" && <CredsPanel config={config} />}
             {tab === "appearance" && <AppearancePanel />}
             {tab === "runtime" && <RuntimePanel />}
+            {tab === "storage" && <StoragePanel storage={config?.storage} />}
             {tab === "prompts" && <PromptTemplatesPanel />}
             {tab === "about" && <AboutPanel />}
           </motion.div>

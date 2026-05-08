@@ -10,12 +10,12 @@ use std::{
 
 use gpt_image_2_core::{
     AppConfig, CredentialRef, HistoryListOptions, KEYCHAIN_SERVICE, NotificationConfig,
-    ProviderConfig, default_config_path, default_keychain_account, delete_history_job,
-    dispatch_task_notifications, history_db_path, jobs_dir, list_active_history_jobs,
-    list_history_jobs_page, load_app_config, notification_status_allowed,
-    preserve_notification_secrets, read_keychain_secret, redact_app_config, run_json,
-    save_app_config, shared_config_dir, show_history_job, upsert_history_job,
-    write_keychain_secret,
+    ProviderConfig, StorageConfig, StorageTargetConfig, StorageUploadOverrides,
+    default_config_path, default_keychain_account, delete_history_job, dispatch_task_notifications,
+    history_db_path, jobs_dir, list_active_history_jobs, list_history_jobs_page, load_app_config,
+    notification_status_allowed, preserve_notification_secrets, preserve_storage_secrets,
+    read_keychain_secret, redact_app_config, run_json, save_app_config, shared_config_dir,
+    show_history_job, upload_job_outputs_to_storage, upsert_history_job, write_keychain_secret,
 };
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
@@ -179,6 +179,10 @@ struct GenerateRequest {
     compression: Option<u8>,
     #[serde(default)]
     moderation: Option<String>,
+    #[serde(default)]
+    storage_targets: Option<Vec<String>>,
+    #[serde(default)]
+    fallback_targets: Option<Vec<String>>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -221,6 +225,10 @@ struct EditRequest {
     input_fidelity: Option<String>,
     #[serde(default)]
     moderation: Option<String>,
+    #[serde(default)]
+    storage_targets: Option<Vec<String>>,
+    #[serde(default)]
+    fallback_targets: Option<Vec<String>>,
     refs: Vec<UploadFile>,
     #[serde(default)]
     mask: Option<UploadFile>,
@@ -996,6 +1004,8 @@ fn edit_request_metadata(request: &EditRequest) -> Value {
         "compression": request.compression,
         "input_fidelity": request.input_fidelity,
         "moderation": request.moderation,
+        "storage_targets": request.storage_targets,
+        "fallback_targets": request.fallback_targets,
         "ref_count": request.refs.len(),
         "has_mask": request.mask.is_some(),
         "selection_hint": request.selection_hint.is_some(),
@@ -1251,6 +1261,40 @@ fn update_notifications(mut config: NotificationConfig) -> Result<Value, String>
     app_config.notifications = config;
     save_config(&app_config)?;
     Ok(config_for_ui(&app_config))
+}
+
+#[tauri::command]
+fn update_storage(mut config: StorageConfig) -> Result<Value, String> {
+    let mut app_config = load_config()?;
+    preserve_storage_secrets(&mut config, &app_config.storage);
+    app_config.storage = config;
+    save_config(&app_config)?;
+    Ok(config_for_ui(&app_config))
+}
+
+#[tauri::command]
+fn test_storage_target(name: String, target: Option<StorageTargetConfig>) -> Result<Value, String> {
+    let config = load_config()?;
+    let owned_target;
+    let target = if let Some(target) = target {
+        let mut storage = StorageConfig {
+            targets: BTreeMap::from([(name.clone(), target)]),
+            ..StorageConfig::default()
+        };
+        preserve_storage_secrets(&mut storage, &config.storage);
+        owned_target = storage
+            .targets
+            .remove(&name)
+            .ok_or_else(|| format!("Unknown storage target: {name}"))?;
+        &owned_target
+    } else {
+        config
+            .storage
+            .targets
+            .get(&name)
+            .ok_or_else(|| format!("Unknown storage target: {name}"))?
+    };
+    Ok(json!(gpt_image_2_core::test_storage_target(&name, target)))
 }
 
 #[derive(Deserialize)]
@@ -1600,8 +1644,85 @@ fn finish_queued_job(
         append_queue_event(&mut inner, &queued.id, "local", event_type, event_data)
     };
     emit_queue_event(&app, &queued.id, &event);
-    spawn_notification_dispatch(app.clone(), state.clone(), queued.id, job);
+    if job.get("status").and_then(Value::as_str) == Some("completed") {
+        spawn_storage_upload_then_notify(app.clone(), state.clone(), queued.id, job);
+    } else {
+        spawn_notification_dispatch(app.clone(), state.clone(), queued.id, job);
+    }
     start_queued_jobs(app, state);
+}
+
+fn storage_overrides_from_job(job: &Value) -> StorageUploadOverrides {
+    let metadata = job.get("metadata").cloned().unwrap_or_else(|| json!({}));
+    StorageUploadOverrides {
+        targets: metadata.get("storage_targets").and_then(|targets| {
+            targets.as_array().map(|items| {
+                items
+                    .iter()
+                    .filter_map(Value::as_str)
+                    .map(ToString::to_string)
+                    .collect::<Vec<_>>()
+            })
+        }),
+        fallback_targets: metadata.get("fallback_targets").and_then(|targets| {
+            targets.as_array().map(|items| {
+                items
+                    .iter()
+                    .filter_map(Value::as_str)
+                    .map(ToString::to_string)
+                    .collect::<Vec<_>>()
+            })
+        }),
+    }
+}
+
+fn upload_completed_job_outputs(job: &Value) -> Result<Value, String> {
+    let config = load_config()?;
+    let overrides = storage_overrides_from_job(job);
+    upload_job_outputs_to_storage(&config.storage, job, overrides)
+        .map_err(app_error)
+        .map(|_| ())
+        .map_err(|error| format!("Storage upload failed: {error}"))?;
+    let job_id = job
+        .get("id")
+        .and_then(Value::as_str)
+        .ok_or_else(|| "Job id is missing.".to_string())?;
+    show_history_job(job_id).map_err(app_error)
+}
+
+fn spawn_storage_upload_then_notify(
+    app: tauri::AppHandle,
+    state: JobQueueState,
+    job_id: String,
+    job: Value,
+) {
+    thread::spawn(move || {
+        let notify_job = match upload_completed_job_outputs(&job) {
+            Ok(job) => job,
+            Err(error) => {
+                eprintln!("storage upload failed before notification dispatch: {error}");
+                job.clone()
+            }
+        };
+        let event = match state.inner.lock() {
+            Ok(mut inner) => append_queue_event(
+                &mut inner,
+                &job_id,
+                "local",
+                "job.storage",
+                json!({
+                    "status": notify_job
+                        .get("storage_status")
+                        .cloned()
+                        .unwrap_or_else(|| json!("not_configured")),
+                    "job": notify_job,
+                }),
+            ),
+            Err(_) => return,
+        };
+        emit_queue_event(&app, &job_id, &event);
+        spawn_notification_dispatch(app, state, job_id, notify_job);
+    });
 }
 
 // Notification I/O (SMTP, webhooks) is blocking and may take seconds. Run it
@@ -2033,6 +2154,24 @@ fn edit_request_from_job(job_id: &str, job: &Value) -> Result<EditRequest, Strin
         compression: u8_field(&metadata, "compression"),
         input_fidelity: string_field(&metadata, "input_fidelity"),
         moderation: string_field(&metadata, "moderation"),
+        storage_targets: metadata.get("storage_targets").and_then(|targets| {
+            targets.as_array().map(|items| {
+                items
+                    .iter()
+                    .filter_map(Value::as_str)
+                    .map(ToString::to_string)
+                    .collect::<Vec<_>>()
+            })
+        }),
+        fallback_targets: metadata.get("fallback_targets").and_then(|targets| {
+            targets.as_array().map(|items| {
+                items
+                    .iter()
+                    .filter_map(Value::as_str)
+                    .map(ToString::to_string)
+                    .collect::<Vec<_>>()
+            })
+        }),
         refs,
         mask,
         selection_hint,
@@ -2463,7 +2602,9 @@ pub fn run() {
             config_path,
             get_config,
             update_notifications,
+            update_storage,
             test_notifications,
+            test_storage_target,
             notification_capabilities,
             config_inspect,
             config_save,

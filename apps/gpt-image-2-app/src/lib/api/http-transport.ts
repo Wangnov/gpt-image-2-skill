@@ -9,6 +9,8 @@ import type {
   ProviderConfig,
   QueueStatus,
   ServerConfig,
+  StorageConfig,
+  StorageTargetConfig,
   TestProviderResult,
 } from "../types";
 import {
@@ -28,6 +30,7 @@ import type {
   JobListOptions,
   JobListPage,
   JobUpdateHandler,
+  StorageTestResult,
   TauriJobResponse,
 } from "./types";
 import { isTerminalJobStatus } from "./types";
@@ -236,6 +239,23 @@ export const httpApi: ApiClient = {
   },
   async notificationCapabilities() {
     return requestJson<NotificationCapabilities>("/notifications/capabilities");
+  },
+  async updateStorage(config: StorageConfig) {
+    return normalizeConfig(
+      await requestJson<ServerConfig>("/storage", {
+        method: "PUT",
+        body: jsonBody(config),
+      }),
+    );
+  },
+  async testStorageTarget(name: string, target?: StorageTargetConfig) {
+    return requestJson<StorageTestResult>(
+      `/storage/${encodeURIComponent(name)}/test`,
+      {
+        method: "POST",
+        body: jsonBody({ target }),
+      },
+    );
   },
   async setDefault(name: string) {
     return normalizeConfig(
@@ -450,8 +470,32 @@ export const httpApi: ApiClient = {
     let initialized = false;
     const known = new Map<string, string>();
 
-    const signature = (job: Job) =>
-      `${job.status}:${job.updated_at}:${job.outputs.length}:${job.output_path ?? ""}`;
+    const signature = (job: Job) => {
+      const uploadState = job.outputs
+        .map((output) =>
+          [
+            output.index,
+            ...(output.uploads ?? []).map((upload) =>
+              [
+                upload.target,
+                upload.status,
+                upload.updated_at ?? "",
+                upload.url ?? "",
+                upload.error ?? "",
+              ].join("|"),
+            ),
+          ].join(":"),
+        )
+        .join(";");
+      return [
+        job.status,
+        job.updated_at,
+        job.storage_status ?? "",
+        job.outputs.length,
+        job.output_path ?? "",
+        uploadState,
+      ].join(":");
+    };
 
     const poll = async () => {
       if (closed) return;

@@ -75,14 +75,14 @@ graph TB
     WEB --> STORE
 ```
 
-`gpt-image-2-core` 是单一权威实现:provider 路由、`/images/generations` 与 `/images/edits` multipart、Codex `image_generation` SSE、`401` 触发的 OAuth refresh、retry、`config.json` 解析、Keychain/file/env 三源凭据解析、SQLite history、本地透明 PNG chroma + dual-background 抠图与多 profile 验证全部住在 core 里。CLI 是其薄壳,Tauri sidecar 直接复用同版本二进制,Docker Web 把 core 包成 Axum HTTP 服务,Skill 通过 Node wrapper 调到 CLI。四个入口共享 `$CODEX_HOME/gpt-image-2-skill/` 下的同一份配置、历史与 jobs 目录。
+`gpt-image-2-core` 是单一权威实现:provider 路由、`/images/generations` 与 `/images/edits` multipart、Codex `image_generation` SSE、`401` 触发的 OAuth refresh、retry、`config.json` 解析、Keychain/file/env 三源凭据解析、SQLite history、结果存储上传、本地透明 PNG chroma + dual-background 抠图与多 profile 验证全部住在 core 里。CLI 是其薄壳,Tauri sidecar 直接复用同版本二进制,Docker Web 把 core 包成 Axum HTTP 服务,Skill 通过 Node wrapper 调到 CLI。四个入口共享 `$CODEX_HOME/gpt-image-2-skill/` 下的同一份配置、历史与 jobs 目录。
 
 ## 项目定位
 
 - **Agent-first 协议** — 每条命令都返回统一 JSON envelope (`ok` / `error.code` / `data`),进度事件以 JSONL 形式走 stderr,错误码可机读。包括 `request create` raw 转发出口,允许 agent 在协议没覆盖的场景下直接打 OpenAI 或 Codex 上游。
 - **三 provider 同接口** — `OPENAI_API_KEY` / OpenAI-compatible base URL / Codex `auth.json` 走完全相同的命令面;切 provider 不改命令形状,只换 `--provider`,Codex `401` 自动 refresh 一次再重试。
 - **透明 PNG 是终端交付** — `transparent generate` / `transparent extract` / `transparent verify` 把 controlled-matte 生成、本地 chroma 与 dual-background 抠图、9 种 profile 化质量门绑成完整流水线;不依赖 provider native `--background transparent`。
-- **共享存储 / 一码多端** — CLI 跑出来的 history 在桌面 App 里能看到,Docker Web 装载同一目录就接上 Tauri 的所有数据,Skill 调出来的产物落到同一个 `jobs/`。
+- **共享存储 / 一码多端** — CLI 跑出来的 history 在桌面 App 里能看到,Docker Web 装载同一目录就接上 Tauri 的所有数据,Skill 调出来的产物落到同一个 `jobs/`。服务端运行时还可以把生成结果异步上传到多个存储目标,再带着 `outputs[].uploads[]` 触发通知。
 
 ## 快速开始
 
@@ -139,6 +139,22 @@ docker run --rm -p 8787:8787 \
 | **Rust crate** | `gpt-image-2-core = "0.4"` | 调用方决定 | 嵌入第三方 Rust 工程,自定义 surface |
 
 `$CODEX_HOME` 默认为 `~/.codex/`,可由环境变量覆盖。四个入口共享存储意味着 CLI 跑的任务出现在桌面 App 历史里,Docker Web 挂载同一目录后可继续接同一份历史。
+
+## 结果存储与第三方集成
+
+桌面 App(Tauri sidecar)和 Docker Web 会在生图成功后异步上传结果文件,再派发通知/webhook。上传状态写入同一份 `history.sqlite`,任务历史会返回 `storage_status` 以及每个输出的 `uploads[]` 记录,第三方服务可以在 webhook 收到 `job.outputs[].uploads[]` 后按配置的公开 URL 或存储侧 key 获取图片。
+
+支持的目标类型:
+
+| 类型 | 用途 | 关键配置 |
+|---|---|---|
+| `local` | 本地目录与默认 fallback | `directory`,可选 `public_base_url` |
+| `s3` | AWS S3 / S3-compatible PUT | `bucket`,`region`,`endpoint`,`prefix`,`access_key_id`,`secret_access_key`,`session_token`,`public_base_url` |
+| `webdav` | WebDAV PUT,自动 MKCOL 父目录 | `url`,`username`,`password`,`public_base_url` |
+| `http` | 自定义 HTTP multipart 上传 | `url`,`method`,`headers`,`public_url_json_pointer` |
+| `sftp` | SFTP 上传 | `host`,`port`,`host_key_sha256`,`username`,`password` 或 `private_key`,`remote_dir`,`public_base_url` |
+
+全局配置支持多个目标、多个默认上传目标、多个 fallback 目标、fallback 策略(`never` / `on_failure` / `always`)以及输出级/目标级并发。任务请求也可以独立传 `storage_targets` 和 `fallback_targets` 覆盖默认目标。远端 HTTP/S3/WebDAV 上传默认拒绝 loopback/private/link-local 等非公网地址并禁用重定向;SFTP 必须配置服务器 SHA256 host key 指纹。
 
 ## Provider 矩阵
 
@@ -592,14 +608,14 @@ graph TB
     WEB --> STORE
 ```
 
-`gpt-image-2-core` is the single source of truth: provider routing, `/images/generations` and `/images/edits` multipart, Codex `image_generation` SSE, OAuth refresh on `401`, retries, `config.json` parsing, three-source (Keychain / file / env) credential resolution, SQLite history, and the local transparent-PNG chroma + dual-background extraction with multi-profile verification all live in core. The CLI is a thin shell, the Tauri sidecar reuses the matching binary, the Docker Web wraps core in an Axum HTTP service, and the Skill calls the CLI through a Node wrapper. The four surfaces share configuration, history, and the `jobs/` directory under `$CODEX_HOME/gpt-image-2-skill/`.
+`gpt-image-2-core` is the single source of truth: provider routing, `/images/generations` and `/images/edits` multipart, Codex `image_generation` SSE, OAuth refresh on `401`, retries, `config.json` parsing, three-source (Keychain / file / env) credential resolution, SQLite history, result-storage uploads, and the local transparent-PNG chroma + dual-background extraction with multi-profile verification all live in core. The CLI is a thin shell, the Tauri sidecar reuses the matching binary, the Docker Web wraps core in an Axum HTTP service, and the Skill calls the CLI through a Node wrapper. The four surfaces share configuration, history, and the `jobs/` directory under `$CODEX_HOME/gpt-image-2-skill/`.
 
 ## Why this project
 
 - **Agent-first protocol** — every command returns a uniform JSON envelope (`ok` / `error.code` / `data`). Progress events stream as JSONL on stderr. Error codes are machine-readable. A `request create` raw escape hatch lets agents hit OpenAI or Codex upstream directly when the protocol does not cover a use case.
 - **Three providers, one surface** — `OPENAI_API_KEY`, an OpenAI-compatible base URL, and Codex `auth.json` go through identical command shapes; switching providers means changing `--provider`, not the command. Codex `401` triggers exactly one OAuth refresh and a single retry.
 - **Transparent PNG as a deliverable** — `transparent generate` / `transparent extract` / `transparent verify` bundle controlled-matte generation, local chroma and dual-background extraction, and nine profile-based quality gates into a complete pipeline. It does not depend on provider-native `--background transparent`.
-- **Shared storage, one codebase, many surfaces** — history written from the CLI shows up in the desktop app; Docker Web mounting the same directory inherits all of it; Skill outputs land in the same `jobs/`.
+- **Shared storage, one codebase, many surfaces** — history written from the CLI shows up in the desktop app; Docker Web mounting the same directory inherits all of it; Skill outputs land in the same `jobs/`. Server-side runtimes can also upload generated outputs to multiple storage targets and then notify integrations with `outputs[].uploads[]`.
 
 ## Quickstart
 
@@ -656,6 +672,22 @@ See [Skill integration](#skill-integration) and [Self-hosted Docker Web](#self-h
 | **Rust crate** | `gpt-image-2-core = "0.4"` | Caller chooses | Embed into another Rust project, build a custom surface |
 
 `$CODEX_HOME` defaults to `~/.codex/` and can be overridden via the environment variable. Shared storage means a CLI-produced job appears in the desktop app history, and Docker Web mounting the same directory continues against the same history.
+
+## Result Storage And Integrations
+
+The desktop app(Tauri sidecar)and Docker Web upload result files asynchronously after a generation job succeeds, then dispatch notifications/webhooks. Upload state is stored in the shared `history.sqlite`; history and webhook payloads include job-level `storage_status` and per-output `uploads[]`, so third-party services can fetch images through the configured public URL or storage-side key.
+
+Supported target types:
+
+| Type | Use case | Key config |
+|---|---|---|
+| `local` | Local directory and default fallback | `directory`, optional `public_base_url` |
+| `s3` | AWS S3 / S3-compatible PUT | `bucket`, `region`, `endpoint`, `prefix`, `access_key_id`, `secret_access_key`, `session_token`, `public_base_url` |
+| `webdav` | WebDAV PUT with parent MKCOL | `url`, `username`, `password`, `public_base_url` |
+| `http` | Custom multipart HTTP upload | `url`, `method`, `headers`, `public_url_json_pointer` |
+| `sftp` | SFTP upload | `host`, `port`, `host_key_sha256`, `username`, `password` or `private_key`, `remote_dir`, `public_base_url` |
+
+Global config can define many targets, multiple default upload targets, multiple fallback targets, fallback policy(`never` / `on_failure` / `always`), and output/target concurrency. Individual generation/edit requests can override target selection with `storage_targets` and `fallback_targets`. Remote HTTP/S3/WebDAV uploads reject loopback/private/link-local addresses by default and do not follow redirects; SFTP requires a pinned SHA256 server host-key fingerprint.
 
 ## Provider matrix
 

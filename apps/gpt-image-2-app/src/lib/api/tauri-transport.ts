@@ -11,6 +11,8 @@ import type {
   ProviderConfig,
   QueueStatus,
   ServerConfig,
+  StorageConfig,
+  StorageTargetConfig,
   TestProviderResult,
 } from "../types";
 import {
@@ -29,6 +31,7 @@ import type {
   JobListOptions,
   JobListPage,
   JobUpdateHandler,
+  StorageTestResult,
   TauriJobResponse,
 } from "./types";
 import { isTerminalJobStatus } from "./types";
@@ -108,6 +111,12 @@ export const tauriApi: ApiClient = {
   },
   async notificationCapabilities() {
     return invoke<NotificationCapabilities>("notification_capabilities");
+  },
+  async updateStorage(config: StorageConfig) {
+    return normalizeConfig(await invoke<ServerConfig>("update_storage", { config }));
+  },
+  async testStorageTarget(name: string, target?: StorageTargetConfig) {
+    return invoke<StorageTestResult>("test_storage_target", { name, target });
   },
   async setDefault(name: string) {
     return normalizeConfig(

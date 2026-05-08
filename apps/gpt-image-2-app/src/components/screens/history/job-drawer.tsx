@@ -17,7 +17,7 @@ import {
   saveJobImages,
 } from "@/lib/user-actions";
 import { resultLocationText, runtimeCopy } from "@/lib/runtime-copy";
-import type { Job } from "@/lib/types";
+import type { Job, OutputUploadRef } from "@/lib/types";
 
 function badgeTone(status: Job["status"]) {
   if (status === "completed") return "ok" as const;
@@ -33,6 +33,37 @@ function readPlannedCount(job: Job) {
   }
   const outputs = api.jobOutputPaths(job).length;
   return outputs > 0 ? outputs : 1;
+}
+
+function storageStatusLabel(status?: string) {
+  switch (status) {
+    case "completed":
+      return "已上传";
+    case "partial_failed":
+      return "部分失败";
+    case "failed":
+      return "上传失败";
+    case "fallback_completed":
+      return "已回退";
+    case "pending":
+      return "待上传";
+    case "running":
+      return "上传中";
+    default:
+      return "未配置";
+  }
+}
+
+function uploadStatusTone(status?: string) {
+  if (status === "completed") return "text-[color:var(--status-ok)]";
+  if (status === "failed" || status === "unsupported") {
+    return "text-[color:var(--status-err)]";
+  }
+  return "text-muted";
+}
+
+function outputUploadsFor(job: Job, index: number): OutputUploadRef[] {
+  return job.outputs.find((output) => output.index === index)?.uploads ?? [];
 }
 
 const SHIMMER_STYLE: React.CSSProperties = {
@@ -87,6 +118,7 @@ export function JobMetadataDrawer({
       job.output_path)
     : undefined;
   const previewUrl = previewPath ? api.fileUrl(previewPath) : "";
+  const selectedUploads = job ? outputUploadsFor(job, selectedOutput) : [];
 
   useEffect(() => {
     setImageFailed(false);
@@ -290,6 +322,70 @@ export function JobMetadataDrawer({
               </>
             )}
           </div>
+        )}
+
+        {job.status === "completed" && (
+          <section className="mb-3.5 rounded-md border border-border bg-sunken px-3 py-2.5">
+            <div className="mb-2 flex items-center gap-2">
+              <div className="text-[12px] font-semibold">存储投递</div>
+              <span className="t-tiny ml-auto">
+                {storageStatusLabel(job.storage_status)}
+              </span>
+            </div>
+            {selectedUploads.length > 0 ? (
+              <div className="space-y-1.5">
+                {selectedUploads.map((upload) => (
+                  <div
+                    key={`${upload.target}:${upload.updated_at ?? upload.status}`}
+                    className="rounded bg-raised px-2.5 py-2 text-[11.5px]"
+                  >
+                    <div className="flex items-center gap-2">
+                      <span className="font-semibold">{upload.target}</span>
+                      <span className="t-caps">{upload.target_type}</span>
+                      <span
+                        className={cn(
+                          "ml-auto text-[11px] font-semibold",
+                          uploadStatusTone(upload.status),
+                        )}
+                      >
+                        {upload.status}
+                      </span>
+                    </div>
+                    {upload.url && (
+                      <div className="mt-1 flex items-center gap-1.5">
+                        <a
+                          href={upload.url}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="min-w-0 flex-1 truncate font-mono text-[10.5px] text-accent"
+                          title={upload.url}
+                        >
+                          {upload.url}
+                        </a>
+                        <Button
+                          variant="ghost"
+                          size="iconSm"
+                          icon="copy"
+                          onClick={() => copyText(upload.url ?? "", "上传 URL")}
+                          title="复制上传 URL"
+                          aria-label="复制上传 URL"
+                        />
+                      </div>
+                    )}
+                    {upload.error && (
+                      <div className="mt-1 break-anywhere text-[11px] text-status-err">
+                        {upload.error}
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="text-[11.5px] text-muted">
+                当前候选还没有上传记录。
+              </div>
+            )}
+          </section>
         )}
 
         {job.status === "failed" && job.error && (
