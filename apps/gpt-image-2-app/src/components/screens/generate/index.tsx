@@ -10,21 +10,13 @@ import { toast } from "sonner";
 import {
   Sparkles,
   ListChecks,
-  Loader2,
-  Image as ImageIcon,
-  X,
 } from "lucide-react";
 import { motion } from "motion/react";
 import GradientText from "@/components/reactbits/text/GradientText";
 import ShinyText from "@/components/reactbits/text/ShinyText";
-import ClickSpark from "@/components/reactbits/components/ClickSpark";
 import Masonry, {
   type MasonryItem,
 } from "@/components/reactbits/components/Masonry";
-import { Icon } from "@/components/icon";
-import { PlaceholderImage } from "@/components/screens/shared/placeholder-image";
-import { PromptTemplatePicker } from "@/components/screens/shared/prompt-template-picker";
-import { CreationParamsBar } from "@/components/screens/shared/creation-params-bar";
 import logoUrl from "@/assets/logo.png";
 import { useTweaks } from "@/hooks/use-tweaks";
 import { useReducedMotion } from "@/hooks/use-reduced-motion";
@@ -49,7 +41,6 @@ import {
 } from "@/lib/job-feedback";
 import {
   normalizeOutputCount,
-  OUTPUT_COUNT_OPTIONS,
   POPULAR_SIZE_OPTIONS,
   validateImageSize,
   validateOutputCount,
@@ -63,181 +54,14 @@ import {
   providerNames as readProviderNames,
   reconcileProviderSelection,
 } from "@/lib/providers";
-import type { Job, ServerConfig } from "@/lib/types";
-
-const QUALITY_CHIP_OPTIONS = [
-  { value: "auto", label: "自动" },
-  { value: "low", label: "低" },
-  { value: "medium", label: "中" },
-  { value: "high", label: "高" },
-];
-
-const FORMAT_OPTIONS = [
-  { value: "png", label: "PNG" },
-  { value: "jpeg", label: "JPEG" },
-  { value: "webp", label: "WEBP" },
-];
-
-const COUNT_OPTIONS = OUTPUT_COUNT_OPTIONS.map((n) => ({
-  value: String(n),
-  label: String(n),
-}));
-
-function jobPlaceholderSeed(job: Job) {
-  return (
-    Array.from(job.id).reduce((sum, char) => sum + char.charCodeAt(0), 0) || 1
-  );
-}
-
-function heightRatioFromSize(size: unknown) {
-  if (typeof size !== "string") return 1;
-  const match = size.match(/^(\d{2,5})x(\d{2,5})$/i);
-  if (!match) return 1;
-  const width = Number(match[1]);
-  const height = Number(match[2]);
-  if (!width || !height) return 1;
-  return height / width;
-}
-
-type PendingGalleryTile = {
-  kind: "pending";
-  jobId: string;
-  slotIndex: number;
-  seed: number;
-};
-
-type CompletedGalleryTile = {
-  kind: "completed";
-  job: Job;
-  outputIndex: number;
-  path: string | null;
-  url: string | null;
-  promptText: string;
-};
-
-type GalleryTile = PendingGalleryTile | CompletedGalleryTile;
-
-function RecentWorkTile({
-  job,
-  outputIndex,
-  path,
-  url,
-  promptText,
-  onOpenJob,
-  onSendToEdit,
-}: {
-  job: Job;
-  outputIndex: number;
-  path: string | null;
-  url: string | null;
-  promptText: string;
-  onOpenJob?: (jobId: string) => void;
-  onSendToEdit?: () => void;
-}) {
-  const reducedMotion = useReducedMotion();
-  const [hover, setHover] = useState(false);
-  const [focusWithin, setFocusWithin] = useState(false);
-  const [imageFailed, setImageFailed] = useState(false);
-  const canSendToEdit = Boolean(onSendToEdit && (path || url));
-
-  useEffect(() => {
-    setImageFailed(false);
-  }, [url]);
-
-  return (
-    <motion.div
-      key={job.id}
-      role="button"
-      tabIndex={0}
-      onClick={() => onOpenJob?.(job.id)}
-      onMouseEnter={() => setHover(true)}
-      onMouseLeave={() => setHover(false)}
-      onFocusCapture={() => setFocusWithin(true)}
-      onBlurCapture={(event) => {
-        if (!event.currentTarget.contains(event.relatedTarget as Node | null)) {
-          setFocusWithin(false);
-        }
-      }}
-      onKeyDown={(event) => {
-        if (event.target !== event.currentTarget) return;
-        if (event.key !== "Enter" && event.key !== " ") return;
-        event.preventDefault();
-        onOpenJob?.(job.id);
-      }}
-      whileTap={reducedMotion ? undefined : { scale: 0.985 }}
-      transition={{ duration: 0.16, ease: [0.22, 1, 0.36, 1] }}
-      className="relative h-full w-full cursor-pointer rounded-md overflow-hidden ring-1 ring-[color:var(--w-10)] hover:ring-[color:var(--accent-45)] hover:scale-[1.025] transition-[box-shadow,transform] bg-[color:var(--bg-sunken)] focus-visible:outline-none focus-visible:ring-[color:var(--accent-55)]"
-      title={promptText.slice(0, 80)}
-      aria-label={`打开作品 ${outputIndex + 1}:${promptText.slice(0, 40)}`}
-    >
-      {url && !imageFailed ? (
-        <img
-          src={url}
-          alt=""
-          loading="lazy"
-          decoding="async"
-          className="h-full w-full object-cover"
-          draggable={false}
-          onError={() => setImageFailed(true)}
-        />
-      ) : (
-        <PlaceholderImage seed={jobPlaceholderSeed(job)} variant="recent" />
-      )}
-      {canSendToEdit && (hover || focusWithin) && (
-        <button
-          type="button"
-          onClick={(event) => {
-            event.stopPropagation();
-            onSendToEdit?.();
-          }}
-          className="absolute right-2 top-2 inline-flex h-8 w-8 items-center justify-center rounded-[5px] border border-[color:var(--surface-floating-border)] bg-[color:var(--surface-floating)] text-foreground shadow-[var(--shadow-floating)] backdrop-blur transition-colors hover:bg-[color:var(--surface-floating-strong)]"
-          title="发送到编辑"
-          aria-label="发送到编辑"
-        >
-          <Icon name="edit" size={13} />
-        </button>
-      )}
-    </motion.div>
-  );
-}
-
-function PendingWorkTile({
-  seed,
-  slotIndex,
-}: {
-  seed: number;
-  slotIndex: number;
-}) {
-  return (
-    <div
-      className="relative h-full w-full overflow-hidden rounded-md border border-[color:var(--w-12)] bg-[color:var(--bg-sunken)] shadow-sm"
-      aria-label="生成中"
-    >
-      <PlaceholderImage
-        seed={seed}
-        variant={`pending-${slotIndex}`}
-        style={{ opacity: 0.72 }}
-      />
-      <div
-        className="absolute inset-0 animate-shimmer"
-        style={{
-          background: "var(--skeleton-gradient-soft)",
-          backgroundSize: "200% 100%",
-          opacity: 0.55,
-          mixBlendMode: "screen",
-        }}
-      />
-      <div className="absolute inset-0 bg-[color:var(--k-18)]" />
-      <div className="absolute left-2 top-2 inline-flex items-center gap-1.5 rounded-full border border-[color:var(--w-12)] bg-[color:var(--k-35)] px-2 py-1 text-[10px] font-medium text-[color:var(--image-overlay-text)] backdrop-blur-md">
-        <Loader2
-          size={11}
-          className="animate-spin text-[color:var(--accent)]"
-        />
-        生成中
-      </div>
-    </div>
-  );
-}
+import type { ServerConfig } from "@/lib/types";
+import { GenerateForm } from "./generate-form";
+import { PendingWorkTile, RecentWorkTile } from "./gallery-tile";
+import {
+  heightRatioFromSize,
+  jobPlaceholderSeed,
+  type GalleryTile,
+} from "./shared";
 
 export function GenerateScreen({
   config,
@@ -637,223 +461,40 @@ export function GenerateScreen({
           </div>
         </motion.div>
 
-        {/* Form panel */}
-        <motion.section
-          initial={reducedMotion ? false : { opacity: 0, y: 10 }}
-          animate={{ opacity: 1, y: 0 }}
-          // FLIP layout: when hasSplit flips at xl, the form re-anchors
-          // from a centered max-w-[640px] block to the left grid column.
-          // motion.section animates that transition with transform-only,
-          // so the panel slides + resizes smoothly instead of snapping
-          // when the first job lands. Gated off when reducedMotion is on.
-          layout={reducedMotion ? false : "position"}
-          transition={{
-            duration: reducedMotion ? 0 : 0.42,
-            delay: reducedMotion ? 0 : 0.08,
-            ease: [0.22, 1, 0.36, 1],
-            layout: { duration: 0.5, ease: [0.22, 1, 0.36, 1] },
-          }}
-          className={cn(
-            "surface-panel mt-3 w-full max-w-[640px] p-4 sm:mt-9 sm:p-5",
-            // Split mode: pin to left column, drop top margin (the grid
-            // gap takes over), drop the centering max-width.
-            hasSplit && "xl:col-start-1 xl:mt-0 xl:max-w-none",
-          )}
-          aria-label="生成表单"
-        >
-          {/* tabs */}
-          <div className="flex items-center gap-1 -mt-1 mb-3">
-            <button
-              type="button"
-              className="relative px-3 py-1.5 text-[13px] font-semibold text-foreground"
-            >
-              生成
-              <span className="absolute -bottom-px left-2 right-2 h-px bg-foreground" />
-            </button>
-            {onOpenEdit && (
-              <button
-                type="button"
-                onClick={onOpenEdit}
-                className="px-3 py-1.5 text-[13px] text-muted hover:text-foreground transition-colors"
-              >
-                编辑
-              </button>
-            )}
-            <div className="flex-1" />
-            <PromptTemplatePicker
-              scope="generate"
-              onInsert={insertPromptTemplate}
-            />
-          </div>
-
-          {/* error chip (in-form) */}
-          {runError && !isWorking && (
-            <div
-              role="alert"
-              className="mb-3 inline-flex items-center gap-2 rounded-md border border-[color:var(--status-err-30)] px-3 py-1.5 text-[12px]"
-              style={{
-                background: "var(--status-err-10)",
-                color: "var(--status-err)",
-              }}
-            >
-              <X size={12} />
-              <span className="truncate max-w-[480px]">{runError}</span>
-              <button
-                type="button"
-                onClick={() => setRunError(null)}
-                className="opacity-60 hover:opacity-100 ml-2"
-                aria-label="关闭错误提示"
-              >
-                <X size={11} />
-              </button>
-            </div>
-          )}
-
-          {noProviders && !runError && (
-            onOpenSettings ? (
-              <button
-                type="button"
-                onClick={onOpenSettings}
-                className="group mb-3 inline-flex items-center gap-2 rounded-md border border-[color:var(--accent-30)] px-3 py-1.5 text-[12px] text-muted transition-colors hover:border-[color:var(--accent-55)] hover:text-foreground hover:bg-[color:var(--accent-14)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--accent-55)]"
-                style={{ background: "var(--accent-08)" }}
-              >
-                <ImageIcon size={12} className="opacity-70 transition-opacity group-hover:opacity-100" />
-                还没有凭证，
-                <span className="font-medium text-foreground underline decoration-dotted underline-offset-2">
-                  去「设置 → 凭证」添加
-                </span>
-                <Sparkles size={11} className="opacity-60" />
-              </button>
-            ) : (
-              <div
-                role="status"
-                className="mb-3 inline-flex items-center gap-2 rounded-md border border-[color:var(--accent-30)] px-3 py-1.5 text-[12px]"
-                style={{
-                  background: "var(--accent-08)",
-                  color: "var(--text-muted)",
-                }}
-              >
-                <ImageIcon size={12} className="opacity-70" />
-                先在「设置 → 凭证」里添加一个 API Key，才能开始生成。
-              </div>
-            )
-          )}
-
-          {/* textarea */}
-          <div className="relative">
-            <label htmlFor={promptId} className="sr-only">
-              生成提示词
-            </label>
-            <textarea
-              ref={promptTextareaRef}
-              id={promptId}
-              value={prompt}
-              onChange={(e) => setPrompt(e.target.value)}
-              placeholder="描述你想要生成的图像…"
-              maxLength={4000}
-              onKeyDown={(e) => {
-                if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) handleRun();
-              }}
-              className="w-full min-h-[110px] resize-none rounded-md px-3.5 py-3 text-[13.5px] leading-[1.55] outline-none transition-colors bg-[color:var(--w-04)] border border-border placeholder:text-faint focus:border-[color:var(--accent-55)] focus:bg-[color:var(--accent-06)] focus:shadow-[0_0_0_3px_var(--accent-14)]"
-            />
-            <div className="absolute right-3 bottom-2 text-[10.5px] font-mono text-faint pointer-events-none">
-              {prompt.length} / 4000
-            </div>
-          </div>
-
-          <CreationParamsBar
-            className="mt-3"
-            stackActionOnDesktop={hasSplit}
-            size={size}
-            onSizeChange={setSize}
-            sizeOptions={POPULAR_SIZE_OPTIONS}
-            sizeInvalid={!sizeValidation.ok}
-            quality={quality}
-            onQualityChange={setQuality}
-            qualityOptions={QUALITY_CHIP_OPTIONS}
-            format={format}
-            onFormatChange={setFormat}
-            formatOptions={FORMAT_OPTIONS}
-            count={String(n)}
-            onCountChange={(value) => setN(Number(value) || 1)}
-            countOptions={COUNT_OPTIONS}
-            countDisabled={!supportsMultipleOutputs}
-            countInvalid={supportsMultipleOutputs && !outputCountValidation.ok}
-            action={
-              <ClickSpark
-                sparkColor={accentHex}
-                sparkCount={10}
-                sparkRadius={22}
-                sparkSize={8}
-                duration={500}
-                className="w-full"
-              >
-                <button
-                  type="button"
-                  onClick={() => {
-                    setPulseKey((n) => n + 1);
-                    handleRun();
-                  }}
-                  disabled={submitDisabled}
-                  className="relative inline-flex h-11 w-full items-center justify-center gap-1.5 overflow-hidden rounded-full px-4 text-[14px] font-semibold text-foreground transition-[background,transform,opacity] hover:opacity-95 active:translate-y-[0.5px] disabled:cursor-not-allowed"
-                  style={
-                    submitDisabled
-                      ? {
-                          // Disabled: drop the accent gradient so the
-                          // button doesn't dissolve into the liquid
-                          // background. Neutral surface keeps a clear
-                          // edge in dark + busy preset combinations.
-                          background: "var(--w-06)",
-                          border: "1px solid var(--w-12)",
-                          boxShadow: "none",
-                          color: "var(--text-faint)",
-                        }
-                      : {
-                          backgroundImage: "var(--accent-gradient-fill)",
-                          border: "1px solid var(--accent-50)",
-                          boxShadow: "var(--shadow-accent-glow)",
-                        }
-                  }
-                >
-                  {/* Brand-accent ripple from center on each press. The
-                      remount-on-key trick replays the animation every click.
-                      pointer-events-none so the ripple never blocks the next
-                      click; aria-hidden because it's purely decorative. */}
-                  {pulseKey > 0 && (
-                    <span
-                      key={pulseKey}
-                      aria-hidden
-                      className="pointer-events-none absolute inset-0 rounded-full animate-accent-pulse-out"
-                      style={{
-                        background:
-                          "radial-gradient(circle at center, var(--accent-55), transparent 70%)",
-                      }}
-                    />
-                  )}
-                  {isSubmitting ? (
-                    <>
-                      <span
-                        className="inline-block h-3.5 w-3.5 rounded-full animate-spin"
-                        style={{
-                          border: "2px solid var(--w-40)",
-                          borderTopColor: "var(--text)",
-                        }}
-                      />
-                      提交中…
-                    </>
-                  ) : isTracking && pendingOutputCount ? (
-                    <>生成中…</>
-                  ) : (
-                    <>
-                      生成
-                      <Sparkles size={15} />
-                    </>
-                  )}
-                </button>
-              </ClickSpark>
-            }
-          />
-        </motion.section>
+        <GenerateForm
+          reducedMotion={reducedMotion}
+          hasSplit={hasSplit}
+          onOpenEdit={onOpenEdit}
+          onOpenSettings={onOpenSettings}
+          insertPromptTemplate={insertPromptTemplate}
+          runError={runError}
+          setRunError={setRunError}
+          isWorking={isWorking}
+          noProviders={noProviders}
+          promptId={promptId}
+          promptTextareaRef={promptTextareaRef}
+          prompt={prompt}
+          setPrompt={setPrompt}
+          handleRun={handleRun}
+          size={size}
+          setSize={setSize}
+          sizeValidation={sizeValidation}
+          quality={quality}
+          setQuality={setQuality}
+          format={format}
+          setFormat={setFormat}
+          n={n}
+          setN={setN}
+          supportsMultipleOutputs={supportsMultipleOutputs}
+          outputCountValidation={outputCountValidation}
+          accentHex={accentHex}
+          setPulseKey={setPulseKey}
+          submitDisabled={submitDisabled}
+          isSubmitting={isSubmitting}
+          isTracking={isTracking}
+          pendingOutputCount={pendingOutputCount}
+          pulseKey={pulseKey}
+        />
 
         {/* Inline result gallery — closes the prompt → result loop on the
             same screen. Renders whenever there's anything to show
