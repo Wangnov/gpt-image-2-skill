@@ -1600,7 +1600,14 @@ async fn test_storage(Path(name): Path<String>, Json(body): Json<StorageTestBody
             .get(&name)
             .ok_or_else(|| ApiError::bad_request(format!("Unknown storage target: {name}")))?
     };
-    Ok(Json(json!(test_storage_target(&name, target))))
+    let name_for_test = name.clone();
+    let target_for_test = target.clone();
+    let result = tokio::task::spawn_blocking(move || {
+        json!(test_storage_target(&name_for_test, &target_for_test))
+    })
+    .await
+    .map_err(|error| ApiError::internal(format!("Storage test task failed: {error}")))?;
+    Ok(Json(result))
 }
 
 #[derive(Deserialize)]
