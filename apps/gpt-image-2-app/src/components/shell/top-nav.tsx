@@ -1,6 +1,6 @@
 import type { MouseEvent } from "react";
 import { getCurrentWindow } from "@tauri-apps/api/window";
-import { motion } from "motion/react";
+import { AnimatePresence, motion } from "motion/react";
 import GlassSurface from "@/components/reactbits/components/GlassSurface";
 import CountUp from "@/components/reactbits/text/CountUp";
 import logoUrl from "@/assets/logo.png";
@@ -158,23 +158,38 @@ export function TopNav({
                   />
                 )}
                 <span className="relative z-10">{s.label}</span>
-                {isRunning && (
-                  <span
-                    className="relative z-10 inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 rounded-full text-[11px] font-mono font-semibold leading-none animate-pulse-subtle tabular-nums"
-                    style={{
-                      background: "var(--status-running-bg)",
-                      color: "var(--status-running)",
-                      boxShadow: "0 0 8px var(--status-running-60)",
-                    }}
-                    aria-label={`${tabCount} 个任务进行中`}
-                  >
-                    <CountUp
-                      to={tabCount}
-                      duration={0.5}
-                      className="leading-none"
-                    />
-                  </span>
-                )}
+                <AnimatePresence>
+                  {isRunning && (
+                    <motion.span
+                      key="badge"
+                      initial={
+                        reducedMotion
+                          ? false
+                          : { opacity: 0, scale: 0.6 }
+                      }
+                      animate={{ opacity: 1, scale: 1 }}
+                      exit={
+                        reducedMotion
+                          ? { opacity: 0 }
+                          : { opacity: 0, scale: 0.6 }
+                      }
+                      transition={{ duration: 0.2, ease: [0.22, 1, 0.36, 1] }}
+                      className="relative z-10 inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 rounded-full text-[11px] font-mono font-semibold leading-none animate-pulse-subtle tabular-nums"
+                      style={{
+                        background: "var(--status-running-bg)",
+                        color: "var(--status-running)",
+                        boxShadow: "0 0 8px var(--status-running-60)",
+                      }}
+                      aria-label={`${tabCount} 个任务进行中`}
+                    >
+                      <CountUp
+                        to={tabCount}
+                        duration={0.5}
+                        className="leading-none"
+                      />
+                    </motion.span>
+                  )}
+                </AnimatePresence>
               </motion.button>
             </div>
           );
