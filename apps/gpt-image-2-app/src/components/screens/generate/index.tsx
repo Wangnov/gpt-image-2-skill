@@ -14,22 +14,15 @@ import {
 import { motion } from "motion/react";
 import GradientText from "@/components/reactbits/text/GradientText";
 import ShinyText from "@/components/reactbits/text/ShinyText";
-import type { MasonryItem } from "@/components/reactbits/components/Masonry";
 import logoUrl from "@/assets/logo.png";
 import { useTweaks } from "@/hooks/use-tweaks";
 import { useReducedMotion } from "@/hooks/use-reduced-motion";
 import { THEME_PRESETS } from "@/lib/theme-presets";
 import { loadGenerateDraft, saveGenerateDraft } from "@/lib/drafts";
-import { useCreateGenerate, useJobs } from "@/hooks/use-jobs";
+import { useCreateGenerate } from "@/hooks/use-jobs";
 import { useJobEvents } from "@/hooks/use-job-events";
-import { api } from "@/lib/api";
 import { isActiveJobStatus } from "@/lib/api/types";
 import { cn } from "@/lib/cn";
-import {
-  jobOutputIndexes,
-  jobOutputPath,
-  jobOutputUrl,
-} from "@/lib/job-outputs";
 import { insertPromptAtCursor } from "@/lib/prompt-templates";
 import {
   errorMessage,
@@ -38,7 +31,6 @@ import {
 } from "@/lib/job-feedback";
 import {
   normalizeOutputCount,
-  POPULAR_SIZE_OPTIONS,
   validateImageSize,
   validateOutputCount,
 } from "@/lib/image-options";
@@ -54,11 +46,7 @@ import {
 import type { ServerConfig } from "@/lib/types";
 import { GenerateForm } from "./generate-form";
 import { RecentGallery } from "./recent-gallery";
-import {
-  heightRatioFromSize,
-  jobPlaceholderSeed,
-  type GalleryTile,
-} from "./shared";
+import { useGenerateGallery } from "./use-generate-gallery";
 
 export function GenerateScreen({
   config,
@@ -101,8 +89,8 @@ export function GenerateScreen({
 
   const { running } = useJobEvents(jobId);
   const mutate = useCreateGenerate();
-  const { data: jobs = [] } = useJobs();
-  const queueCount = jobs.filter((j) => isActiveJobStatus(j.status)).length;
+  const { galleryItems, hasSplit, pendingCount, queueCount, recentCount } =
+    useGenerateGallery();
   const insertPromptTemplate = useCallback(
     (text: string) => {
       const textarea = promptTextareaRef.current;
@@ -195,86 +183,6 @@ export function GenerateScreen({
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-  // Pending placeholders are derived from the global jobs cache so they
-  // (a) survive screen switches, (b) accumulate when the user fires off
-  // multiple submissions in a row, and (c) stay in sync with the real
-  // queued/running state on the server. Each in-flight job expands into
-  // metadata.n slots so a "n=4" submission shows 4 placeholders at once.
-  const pendingPlaceholders = useMemo(() => {
-    return jobs
-      .filter((j) => isActiveJobStatus(j.status))
-      .flatMap((job) => {
-        const meta = (job.metadata ?? {}) as Record<string, unknown>;
-        const n = typeof meta.n === "number" && meta.n > 0 ? meta.n : 1;
-        return Array.from({ length: n }, (_, i) => ({
-          jobId: job.id,
-          slotIndex: i,
-          seed: jobPlaceholderSeed(job) + i * 13,
-          heightRatio: heightRatioFromSize(meta.size),
-        }));
-      });
-  }, [jobs]);
-  // Cap total gallery tiles at 12 so new placeholders push the oldest
-  // completed thumbnails out instead of bumping rows off-screen.
-  const GALLERY_MAX = 12;
-  const recentCompleted = useMemo(() => {
-    return jobs
-      .filter(
-        (j) =>
-          j.status === "completed" &&
-          ((j.outputs?.length ?? 0) > 0 || Boolean(j.output_path)),
-      )
-      .slice(0, Math.max(0, GALLERY_MAX - pendingPlaceholders.length));
-  }, [jobs, pendingPlaceholders.length]);
-  const galleryItems = useMemo<MasonryItem<GalleryTile>[]>(() => {
-    const pendingItems: MasonryItem<GalleryTile>[] = pendingPlaceholders.map(
-      (placeholder) => ({
-        id: `pending-${placeholder.jobId}-${placeholder.slotIndex}`,
-        heightRatio: placeholder.heightRatio,
-        data: {
-          kind: "pending",
-          jobId: placeholder.jobId,
-          slotIndex: placeholder.slotIndex,
-          seed: placeholder.seed,
-        },
-      }),
-    );
-    const completedItems: MasonryItem<GalleryTile>[] = recentCompleted.map(
-      (job) => {
-        const outputIndex = jobOutputIndexes(job)[0] ?? 0;
-        let url: string | null = null;
-        let path: string | null = null;
-        try {
-          url = jobOutputUrl(job, outputIndex);
-          path = jobOutputPath(job, outputIndex);
-        } catch {
-          url = null;
-          path = null;
-        }
-        const meta = (job.metadata ?? {}) as Record<string, unknown>;
-        const promptText = (meta.prompt as string | undefined) ?? "";
-        return {
-          id: `completed-${job.id}`,
-          heightRatio: heightRatioFromSize(meta.size),
-          data: {
-            kind: "completed",
-            job,
-            outputIndex,
-            path,
-            url,
-            promptText,
-          },
-        };
-      },
-    );
-
-    return [...pendingItems, ...completedItems];
-  }, [pendingPlaceholders, recentCompleted]);
-  // Split layout activates on lg+ viewports once the user has any
-  // completed work OR anything in flight — form on the left, gallery
-  // on the right, hero spanning above. New users / empty history fall
-  // back to the hero-centered single-column layout.
-  const hasSplit = recentCompleted.length > 0 || pendingPlaceholders.length > 0;
   const isSubmitting = mutate.isPending;
   const isTracking = running;
   const isWorking = isSubmitting || isTracking;
@@ -496,8 +404,8 @@ export function GenerateScreen({
         <RecentGallery
           reducedMotion={reducedMotion}
           hasSplit={hasSplit}
-          recentCount={recentCompleted.length}
-          pendingCount={pendingPlaceholders.length}
+          recentCount={recentCount}
+          pendingCount={pendingCount}
           onOpenHistory={onOpenHistory}
           onOpenJob={onOpenJob}
           onOpenEdit={onOpenEdit}
