@@ -1,4 +1,11 @@
-import { type ReactNode, useEffect, useRef, useState } from "react";
+import {
+  type ChangeEvent,
+  type ReactNode,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { useQuery } from "@tanstack/react-query";
 import { toast } from "sonner";
 import {
@@ -15,11 +22,17 @@ import {
   X,
   Eye,
   FileText,
+  Bell,
+  Mail,
+  Webhook,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { Segmented } from "@/components/ui/segmented";
 import { Toggle } from "@/components/ui/toggle";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import { GlassSelect } from "@/components/ui/select";
 import { useConfirm } from "@/hooks/use-confirm";
 import { Empty } from "@/components/ui/empty";
 import { Tooltip } from "@/components/ui/tooltip";
@@ -28,8 +41,11 @@ import { useTweaks } from "@/hooks/use-tweaks";
 import { useQueueStatus } from "@/hooks/use-jobs";
 import {
   useDeleteProvider,
+  useNotificationCapabilities,
   useSetDefaultProvider,
   useTestProvider,
+  useTestNotifications,
+  useUpdateNotifications,
 } from "@/hooks/use-config";
 import {
   checkForAppUpdate,
@@ -37,6 +53,10 @@ import {
   type AppUpdateInfo,
 } from "@/lib/app-updater";
 import { api, type ConfigPaths } from "@/lib/api";
+import {
+  defaultNotificationConfig,
+  normalizeNotificationConfig,
+} from "@/lib/api/shared";
 import { clearCreativeDrafts } from "@/lib/drafts";
 import { copyText, openPath, revealPath } from "@/lib/user-actions";
 import { isDesktopRuntime, runtimeCopy } from "@/lib/runtime-copy";
@@ -44,7 +64,15 @@ import { effectiveDefaultProvider } from "@/lib/providers";
 import { AddProviderDialog } from "@/components/screens/providers/add-provider-dialog";
 import { PromptTemplatesPanel } from "@/components/screens/settings/prompt-templates-panel";
 import { ProviderLogo } from "@/components/provider-logo";
-import type { ProviderConfig, ServerConfig } from "@/lib/types";
+import type {
+  CredentialRef,
+  EmailTlsMode,
+  JobStatus,
+  NotificationConfig,
+  ProviderConfig,
+  ServerConfig,
+  WebhookNotificationConfig,
+} from "@/lib/types";
 import {
   HIDDEN_PRESETS,
   THEME_PRESETS,
@@ -98,6 +126,24 @@ const PARALLEL_OPTIONS = [1, 2, 3, 4, 6, 8].map((n) => ({
   value: String(n),
   label: String(n),
 }));
+
+const TLS_OPTIONS = [
+  { value: "start-tls", label: "STARTTLS" },
+  { value: "smtps", label: "SMTPS" },
+  { value: "none", label: "无 TLS" },
+] as const;
+
+const METHOD_OPTIONS = [
+  { value: "POST", label: "POST" },
+  { value: "PUT", label: "PUT" },
+  { value: "PATCH", label: "PATCH" },
+] as const;
+
+const CREDENTIAL_SOURCE_OPTIONS = [
+  { value: "file", label: "保存值" },
+  { value: "env", label: "环境变量" },
+  { value: "keychain", label: "Keychain" },
+] as const;
 
 const TAB_TITLES: Record<SettingsTab, { title: string; subtitle: string }> = {
   creds: {
@@ -826,6 +872,11 @@ function RuntimePanel() {
   const { tweaks, setTweaks } = useTweaks();
   const copy = runtimeCopy();
   const { data: queue } = useQueueStatus();
+  const { data: config } = useQuery<ServerConfig>({
+    queryKey: ["config"],
+    queryFn: api.getConfig,
+  });
+  const notifications = config?.notifications;
   const running = queue?.running ?? 0;
   const queued = queue?.queued ?? 0;
   const queueSummary =
@@ -886,32 +937,685 @@ function RuntimePanel() {
         />
       </Section>
 
-      <Section
-        title="通知"
-        description="任务结束时是否弹出右上角的 toast 提示。"
-      >
-        <Row
-          title="完成时通知"
-          description="任务成功完成后弹出一条 toast。"
-          control={
-            <Toggle
-              checked={tweaks.notifyOnComplete}
-              onChange={(v) => setTweaks({ notifyOnComplete: v })}
-            />
-          }
-        />
-        <Row
-          title="失败/取消时通知"
-          description="任务失败或被取消时弹出一条 toast。"
-          control={
-            <Toggle
-              checked={tweaks.notifyOnFailure}
-              onChange={(v) => setTweaks({ notifyOnFailure: v })}
-            />
-          }
-        />
-      </Section>
+      <NotificationCenterPanel notifications={notifications} />
     </div>
+  );
+}
+
+function cloneNotificationConfig(value?: NotificationConfig) {
+  return normalizeNotificationConfig(
+    value
+      ? (JSON.parse(JSON.stringify(value)) as NotificationConfig)
+      : defaultNotificationConfig(),
+  );
+}
+
+function fileCredentialValue(credential?: CredentialRef | null) {
+  return credential?.source === "file" && typeof credential.value === "string"
+    ? credential.value
+    : "";
+}
+
+function blankCredential(
+  source: CredentialRef["source"],
+  previous?: CredentialRef | null,
+): CredentialRef {
+  if (source === "env") {
+    return { source, env: previous?.source === "env" ? previous.env : "" };
+  }
+  if (source === "keychain") {
+    return {
+      source,
+      service:
+        previous?.source === "keychain" ? previous.service : "gpt-image-2",
+      account: previous?.source === "keychain" ? previous.account : "",
+    };
+  }
+  return { source: "file", value: "" };
+}
+
+function normalizeCredentialForSave(credential?: CredentialRef | null) {
+  if (!credential) return null;
+  if (credential.source === "env") {
+    const env = credential.env?.trim();
+    return env ? { source: "env" as const, env } : null;
+  }
+  if (credential.source === "keychain") {
+    const account = credential.account?.trim();
+    if (!account) return null;
+    const service = credential.service?.trim();
+    return {
+      source: "keychain" as const,
+      service: service || undefined,
+      account,
+    };
+  }
+  return {
+    source: "file" as const,
+    value: typeof credential.value === "string" ? credential.value : "",
+  };
+}
+
+function parseRecipients(value: string) {
+  return value
+    .split(/[\n,;]/)
+    .map((item) => item.trim())
+    .filter(Boolean);
+}
+
+function webhookHeaderEntries(webhook: WebhookNotificationConfig) {
+  return Object.entries(webhook.headers ?? {});
+}
+
+function prepareNotificationConfigForSave(
+  config: NotificationConfig,
+): NotificationConfig {
+  const webhookHeaders = (webhook: WebhookNotificationConfig) => {
+    const headers: Record<string, CredentialRef> = {};
+    for (const [header, credential] of webhookHeaderEntries(webhook)) {
+      const name = header.trim();
+      const nextCredential = normalizeCredentialForSave(credential);
+      if (name && nextCredential) headers[name] = nextCredential;
+    }
+    return headers;
+  };
+
+  return {
+    ...config,
+    email: {
+      ...config.email,
+      smtp_host: config.email.smtp_host.trim(),
+      smtp_port: Math.max(1, Math.round(config.email.smtp_port || 587)),
+      username: config.email.username?.trim() || undefined,
+      password: normalizeCredentialForSave(config.email.password),
+      from: config.email.from.trim(),
+      to: config.email.to.map((item) => item.trim()).filter(Boolean),
+      timeout_seconds: Math.max(
+        1,
+        Math.round(config.email.timeout_seconds || 10),
+      ),
+    },
+    webhooks: config.webhooks.map((webhook) => ({
+      ...webhook,
+      name: webhook.name.trim(),
+      url: webhook.url.trim(),
+      method: webhook.method.trim().toUpperCase() || "POST",
+      timeout_seconds: Math.max(1, Math.round(webhook.timeout_seconds || 10)),
+      headers: webhookHeaders(webhook),
+    })),
+  };
+}
+
+function CredentialEditor({
+  credential,
+  onChange,
+  placeholder,
+  ariaLabel,
+}: {
+  credential?: CredentialRef | null;
+  onChange: (credential: CredentialRef | null) => void;
+  placeholder?: string;
+  ariaLabel: string;
+}) {
+  const source = credential?.source ?? "file";
+  const secretDisplay = credentialSecretDisplay(credential);
+  const changeSource = (nextSource: CredentialRef["source"]) => {
+    onChange(blankCredential(nextSource, credential));
+  };
+
+  return (
+    <div className="grid gap-2 sm:grid-cols-[132px_minmax(0,1fr)]">
+      <GlassSelect
+        value={source}
+        onValueChange={(value) =>
+          changeSource(value as CredentialRef["source"])
+        }
+        options={CREDENTIAL_SOURCE_OPTIONS}
+        size="sm"
+        ariaLabel={`${ariaLabel} 来源`}
+      />
+      {source === "file" && (
+        <Input
+          value={fileCredentialValue(credential)}
+          onChange={(event) =>
+            onChange({ source: "file", value: event.target.value })
+          }
+          placeholder={
+            secretDisplay ? `${secretDisplay}，留空保留` : placeholder
+          }
+          size="sm"
+          monospace
+          aria-label={ariaLabel}
+        />
+      )}
+      {source === "env" && (
+        <Input
+          value={credential?.source === "env" ? credential.env : ""}
+          onChange={(event) =>
+            onChange({ source: "env", env: event.target.value })
+          }
+          placeholder="ENV_NAME"
+          size="sm"
+          monospace
+          aria-label={ariaLabel}
+        />
+      )}
+      {source === "keychain" && (
+        <div className="grid gap-2 sm:grid-cols-2">
+          <Input
+            value={
+              credential?.source === "keychain"
+                ? (credential.service ?? "")
+                : ""
+            }
+            onChange={(event) =>
+              onChange({
+                source: "keychain",
+                service: event.target.value,
+                account:
+                  credential?.source === "keychain" ? credential.account : "",
+              })
+            }
+            placeholder="service"
+            size="sm"
+            monospace
+            aria-label={`${ariaLabel} Keychain service`}
+          />
+          <Input
+            value={credential?.source === "keychain" ? credential.account : ""}
+            onChange={(event) =>
+              onChange({
+                source: "keychain",
+                service:
+                  credential?.source === "keychain"
+                    ? credential.service
+                    : "gpt-image-2",
+                account: event.target.value,
+              })
+            }
+            placeholder="account"
+            size="sm"
+            monospace
+            aria-label={`${ariaLabel} Keychain account`}
+          />
+        </div>
+      )}
+    </div>
+  );
+}
+
+function NotificationCenterPanel({
+  notifications,
+}: {
+  notifications?: NotificationConfig;
+}) {
+  const [draft, setDraft] = useState(() =>
+    cloneNotificationConfig(notifications),
+  );
+  const updateNotifications = useUpdateNotifications();
+  const testNotifications = useTestNotifications();
+  const { data: capabilities } = useNotificationCapabilities();
+
+  useEffect(() => {
+    setDraft(cloneNotificationConfig(notifications));
+  }, [notifications]);
+
+  const recipientText = useMemo(
+    () => draft.email.to.join("\n"),
+    [draft.email.to],
+  );
+  const canUseServerNotifications = Boolean(
+    capabilities?.server.email || capabilities?.server.webhook,
+  );
+  const systemMode = capabilities?.system.tauri_native
+    ? "Tauri 原生"
+    : capabilities?.system.browser
+      ? "浏览器通知"
+      : "当前环境不可用";
+
+  const patch = (next: Partial<NotificationConfig>) => {
+    setDraft((current) => ({ ...current, ...next }));
+  };
+  const patchEmail = (next: Partial<NotificationConfig["email"]>) => {
+    setDraft((current) => ({
+      ...current,
+      email: { ...current.email, ...next },
+    }));
+  };
+  const patchWebhook = (
+    index: number,
+    next: Partial<WebhookNotificationConfig>,
+  ) => {
+    setDraft((current) => ({
+      ...current,
+      webhooks: current.webhooks.map((webhook, itemIndex) =>
+        itemIndex === index ? { ...webhook, ...next } : webhook,
+      ),
+    }));
+  };
+  const addWebhook = () => {
+    setDraft((current) => ({
+      ...current,
+      webhooks: [
+        ...current.webhooks,
+        {
+          id: `webhook-${Date.now()}`,
+          name: "",
+          enabled: true,
+          url: "",
+          method: "POST",
+          headers: {},
+          timeout_seconds: 10,
+        },
+      ],
+    }));
+  };
+  const removeWebhook = (index: number) => {
+    setDraft((current) => ({
+      ...current,
+      webhooks: current.webhooks.filter((_, itemIndex) => itemIndex !== index),
+    }));
+  };
+  const addHeader = (index: number) => {
+    const webhook = draft.webhooks[index];
+    if (!webhook) return;
+    const headers = { ...(webhook.headers ?? {}) };
+    let key = "Authorization";
+    let count = 1;
+    while (headers[key]) {
+      count += 1;
+      key = `X-Webhook-Secret-${count}`;
+    }
+    headers[key] = { source: "file", value: "" };
+    patchWebhook(index, { headers });
+  };
+  const renameHeader = (index: number, oldName: string, nextName: string) => {
+    const webhook = draft.webhooks[index];
+    if (!webhook) return;
+    const headers = { ...(webhook.headers ?? {}) };
+    const credential = headers[oldName];
+    delete headers[oldName];
+    headers[nextName] = credential;
+    patchWebhook(index, { headers });
+  };
+  const updateHeaderCredential = (
+    index: number,
+    header: string,
+    credential: CredentialRef | null,
+  ) => {
+    const webhook = draft.webhooks[index];
+    if (!webhook) return;
+    const headers = { ...(webhook.headers ?? {}) };
+    if (credential) headers[header] = credential;
+    else delete headers[header];
+    patchWebhook(index, { headers });
+  };
+
+  const save = async () => {
+    try {
+      const saved = await updateNotifications.mutateAsync(
+        prepareNotificationConfigForSave(draft),
+      );
+      setDraft(cloneNotificationConfig(saved.notifications));
+      toast.success("通知中心已保存");
+    } catch (error) {
+      toast.error("保存通知中心失败", {
+        description: error instanceof Error ? error.message : String(error),
+      });
+    }
+  };
+
+  const test = async (status: JobStatus) => {
+    try {
+      const result = await testNotifications.mutateAsync(status);
+      const failed = result.deliveries.filter((item) => !item.ok);
+      const message =
+        failed[0]?.message ||
+        result.deliveries.map((item) => item.message).filter(Boolean)[0];
+      if (result.ok) {
+        toast.success("测试通知已发送", { description: message });
+      } else {
+        toast.warning("测试通知未全部成功", { description: message });
+      }
+    } catch (error) {
+      toast.error("测试通知失败", {
+        description: error instanceof Error ? error.message : String(error),
+      });
+    }
+  };
+
+  return (
+    <Section
+      title="通知中心"
+      description="配置任务完成、失败或取消后的 toast、系统通知、邮件和 webhook。"
+    >
+      <Row
+        title="启用通知中心"
+        description={
+          canUseServerNotifications
+            ? `系统通知：${systemMode}；邮件和 webhook 由当前服务端发送。`
+            : `系统通知：${systemMode}；邮件和 webhook 需要桌面 App 或服务端 Web。`
+        }
+        control={
+          <Toggle
+            checked={draft.enabled}
+            onChange={(enabled) => patch({ enabled })}
+          />
+        }
+      />
+      <Row
+        title="触发状态"
+        description="选择哪些终态任务会触发通知。"
+        control={
+          <div className="grid w-full gap-2 sm:w-[420px] sm:grid-cols-3">
+            <label className="flex items-center justify-between gap-3 rounded-md border border-border bg-[color:var(--w-04)] px-3 py-2 text-[12px]">
+              <span>完成</span>
+              <Toggle
+                checked={draft.on_completed}
+                onChange={(on_completed) => patch({ on_completed })}
+              />
+            </label>
+            <label className="flex items-center justify-between gap-3 rounded-md border border-border bg-[color:var(--w-04)] px-3 py-2 text-[12px]">
+              <span>失败</span>
+              <Toggle
+                checked={draft.on_failed}
+                onChange={(on_failed) => patch({ on_failed })}
+              />
+            </label>
+            <label className="flex items-center justify-between gap-3 rounded-md border border-border bg-[color:var(--w-04)] px-3 py-2 text-[12px]">
+              <span>取消</span>
+              <Toggle
+                checked={draft.on_cancelled}
+                onChange={(on_cancelled) => patch({ on_cancelled })}
+              />
+            </label>
+          </div>
+        }
+      />
+      <Row
+        title="本地提示"
+        description="Toast 在应用右上角显示；系统通知会请求系统权限。"
+        control={
+          <div className="grid w-full gap-2 sm:w-[420px] sm:grid-cols-2">
+            <label className="flex items-center justify-between gap-3 rounded-md border border-border bg-[color:var(--w-04)] px-3 py-2 text-[12px]">
+              <span className="inline-flex items-center gap-2">
+                <Bell size={13} />
+                Toast
+              </span>
+              <Toggle
+                checked={draft.toast.enabled}
+                onChange={(enabled) =>
+                  patch({ toast: { ...draft.toast, enabled } })
+                }
+              />
+            </label>
+            <label className="flex items-center justify-between gap-3 rounded-md border border-border bg-[color:var(--w-04)] px-3 py-2 text-[12px]">
+              <span className="inline-flex items-center gap-2">
+                <Bell size={13} />
+                系统
+              </span>
+              <Toggle
+                checked={draft.system.enabled}
+                onChange={(enabled) =>
+                  patch({ system: { ...draft.system, enabled } })
+                }
+              />
+            </label>
+          </div>
+        }
+      />
+      <Row
+        title="邮件通知"
+        description="SMTP 密码可直接保存、引用环境变量，或引用 Keychain 条目。"
+        control={
+          <div className="w-full space-y-2 sm:w-[520px]">
+            <div className="flex items-center justify-between gap-3">
+              <span className="inline-flex items-center gap-2 text-[12px] text-muted">
+                <Mail size={13} />
+                SMTP
+              </span>
+              <Toggle
+                checked={draft.email.enabled}
+                onChange={(enabled) => patchEmail({ enabled })}
+              />
+            </div>
+            <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_90px_120px]">
+              <Input
+                value={draft.email.smtp_host}
+                onChange={(event) =>
+                  patchEmail({ smtp_host: event.target.value })
+                }
+                placeholder="smtp.example.com"
+                size="sm"
+                aria-label="SMTP host"
+              />
+              <Input
+                value={String(draft.email.smtp_port || "")}
+                onChange={(event) =>
+                  patchEmail({ smtp_port: Number(event.target.value) || 587 })
+                }
+                inputMode="numeric"
+                size="sm"
+                aria-label="SMTP port"
+              />
+              <GlassSelect
+                value={draft.email.tls}
+                onValueChange={(value) =>
+                  patchEmail({ tls: value as EmailTlsMode })
+                }
+                options={TLS_OPTIONS}
+                size="sm"
+                ariaLabel="SMTP TLS"
+              />
+            </div>
+            <div className="grid gap-2 sm:grid-cols-2">
+              <Input
+                value={draft.email.from}
+                onChange={(event) => patchEmail({ from: event.target.value })}
+                placeholder="GPT Image 2 <robot@example.com>"
+                size="sm"
+                aria-label="邮件发件人"
+              />
+              <Input
+                value={draft.email.username ?? ""}
+                onChange={(event) =>
+                  patchEmail({ username: event.target.value || undefined })
+                }
+                placeholder="SMTP 用户名"
+                size="sm"
+                aria-label="SMTP username"
+              />
+            </div>
+            <CredentialEditor
+              credential={draft.email.password}
+              onChange={(password) => patchEmail({ password })}
+              placeholder="SMTP 密码"
+              ariaLabel="SMTP 密码"
+            />
+            <Textarea
+              value={recipientText}
+              onChange={(event: ChangeEvent<HTMLTextAreaElement>) =>
+                patchEmail({ to: parseRecipients(event.target.value) })
+              }
+              placeholder={"owner@example.com\nops@example.com"}
+              minHeight={62}
+              aria-label="邮件收件人"
+            />
+          </div>
+        }
+      />
+      <Row
+        title="Webhook"
+        description="每个 webhook 可配置自定义请求头，适配 Bearer Token、签名密钥等鉴权方式。"
+        control={
+          <div className="w-full space-y-3 sm:w-[620px]">
+            {draft.webhooks.length === 0 && (
+              <div className="rounded-md border border-dashed border-border px-3 py-3 text-[12px] text-muted">
+                暂无 webhook。
+              </div>
+            )}
+            {draft.webhooks.map((webhook, index) => (
+              <div
+                key={webhook.id}
+                className="space-y-2 rounded-lg border border-border bg-[color:var(--w-03)] p-3"
+              >
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="inline-flex items-center gap-2 text-[12px] text-muted">
+                    <Webhook size={13} />
+                    {webhook.name || `Webhook ${index + 1}`}
+                  </span>
+                  <div className="ml-auto flex items-center gap-2">
+                    <Toggle
+                      checked={webhook.enabled}
+                      onChange={(enabled) => patchWebhook(index, { enabled })}
+                    />
+                    <Button
+                      variant="ghost"
+                      size="iconSm"
+                      icon="trash"
+                      onClick={() => removeWebhook(index)}
+                      aria-label="删除 webhook"
+                    />
+                  </div>
+                </div>
+                <div className="grid gap-2 sm:grid-cols-[120px_minmax(0,1fr)]">
+                  <Input
+                    value={webhook.name}
+                    onChange={(event) =>
+                      patchWebhook(index, { name: event.target.value })
+                    }
+                    placeholder="名称"
+                    size="sm"
+                    aria-label="Webhook 名称"
+                  />
+                  <Input
+                    value={webhook.url}
+                    onChange={(event) =>
+                      patchWebhook(index, { url: event.target.value })
+                    }
+                    placeholder="https://example.com/hook"
+                    size="sm"
+                    aria-label="Webhook URL"
+                  />
+                </div>
+                <div className="grid gap-2 sm:grid-cols-[120px_110px]">
+                  <GlassSelect
+                    value={webhook.method || "POST"}
+                    onValueChange={(method) => patchWebhook(index, { method })}
+                    options={METHOD_OPTIONS}
+                    size="sm"
+                    ariaLabel="Webhook method"
+                  />
+                  <Input
+                    value={String(webhook.timeout_seconds || 10)}
+                    onChange={(event) =>
+                      patchWebhook(index, {
+                        timeout_seconds: Number(event.target.value) || 10,
+                      })
+                    }
+                    inputMode="numeric"
+                    size="sm"
+                    aria-label="Webhook timeout"
+                  />
+                </div>
+                <div className="space-y-2">
+                  {webhookHeaderEntries(webhook).map(([header, credential]) => (
+                    <div
+                      key={`${webhook.id}:${header}`}
+                      className="grid gap-2 sm:grid-cols-[160px_minmax(0,1fr)_32px]"
+                    >
+                      <Input
+                        value={header}
+                        onChange={(event) =>
+                          renameHeader(index, header, event.target.value)
+                        }
+                        placeholder="Authorization"
+                        size="sm"
+                        monospace
+                        aria-label="Webhook header"
+                      />
+                      <CredentialEditor
+                        credential={credential}
+                        onChange={(nextCredential) =>
+                          updateHeaderCredential(index, header, nextCredential)
+                        }
+                        placeholder="Bearer ..."
+                        ariaLabel={`${header} 值`}
+                      />
+                      <Button
+                        variant="ghost"
+                        size="iconSm"
+                        icon="x"
+                        onClick={() =>
+                          updateHeaderCredential(index, header, null)
+                        }
+                        aria-label="删除 header"
+                      />
+                    </div>
+                  ))}
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    icon="plus"
+                    onClick={() => addHeader(index)}
+                  >
+                    添加 Header
+                  </Button>
+                </div>
+              </div>
+            ))}
+            <Button
+              variant="secondary"
+              size="sm"
+              icon="plus"
+              onClick={addWebhook}
+            >
+              添加 Webhook
+            </Button>
+          </div>
+        }
+      />
+      <Row
+        title="保存与测试"
+        description="测试会按当前已保存配置发送一条模拟任务通知。"
+        control={
+          <div className="flex w-full flex-wrap justify-end gap-2 sm:w-[520px]">
+            <Button
+              variant="secondary"
+              size="sm"
+              disabled={testNotifications.isPending}
+              onClick={() => void test("completed")}
+            >
+              测试完成
+            </Button>
+            <Button
+              variant="secondary"
+              size="sm"
+              disabled={testNotifications.isPending}
+              onClick={() => void test("failed")}
+            >
+              测试失败
+            </Button>
+            <Button
+              variant="secondary"
+              size="sm"
+              disabled={testNotifications.isPending}
+              onClick={() => void test("cancelled")}
+            >
+              测试取消
+            </Button>
+            <Button
+              variant="primary"
+              size="sm"
+              disabled={updateNotifications.isPending}
+              onClick={() => void save()}
+            >
+              保存
+            </Button>
+          </div>
+        }
+      />
+    </Section>
   );
 }
 

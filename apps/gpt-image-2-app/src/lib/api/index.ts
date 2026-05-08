@@ -73,6 +73,18 @@ export const api: ApiClient = {
     invokeClient("getConfig") as ReturnType<ApiClient["getConfig"]>,
   configPaths: () =>
     invokeClient("configPaths") as ReturnType<ApiClient["configPaths"]>,
+  updateNotifications: (config) =>
+    invokeClient("updateNotifications", config) as ReturnType<
+      ApiClient["updateNotifications"]
+    >,
+  testNotifications: (status) =>
+    invokeClient("testNotifications", status) as ReturnType<
+      ApiClient["testNotifications"]
+    >,
+  notificationCapabilities: () =>
+    invokeClient("notificationCapabilities") as ReturnType<
+      ApiClient["notificationCapabilities"]
+    >,
   setDefault: (name) =>
     invokeClient("setDefault", name) as ReturnType<ApiClient["setDefault"]>,
   upsertProvider: (name, cfg) =>

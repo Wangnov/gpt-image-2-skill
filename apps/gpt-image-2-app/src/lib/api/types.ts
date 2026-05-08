@@ -2,6 +2,10 @@ import type {
   GenerateRequest,
   Job,
   JobEvent,
+  JobStatus,
+  NotificationCapabilities,
+  NotificationConfig,
+  NotificationTestResult,
   OutputRef,
   ProviderConfig,
   QueueStatus,
@@ -63,6 +67,9 @@ export type JobListPage = {
 export type ApiClient = RuntimeCapabilities & {
   getConfig(): Promise<ServerConfig>;
   configPaths(): Promise<ConfigPaths>;
+  updateNotifications(config: NotificationConfig): Promise<ServerConfig>;
+  testNotifications(status?: JobStatus): Promise<NotificationTestResult>;
+  notificationCapabilities(): Promise<NotificationCapabilities>;
   setDefault(name: string): Promise<ServerConfig>;
   upsertProvider(name: string, cfg: ProviderConfig): Promise<ServerConfig>;
   revealProviderCredential(

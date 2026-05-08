@@ -2,6 +2,10 @@ import type {
   GenerateRequest,
   Job,
   JobEvent,
+  JobStatus,
+  NotificationCapabilities,
+  NotificationConfig,
+  NotificationTestResult,
   ProviderConfig,
   QueueStatus,
   ServerConfig,
@@ -215,6 +219,23 @@ export const httpApi: ApiClient = {
   },
   async configPaths() {
     return requestJson<ConfigPaths>("/config-paths");
+  },
+  async updateNotifications(config: NotificationConfig) {
+    return normalizeConfig(
+      await requestJson<ServerConfig>("/notifications", {
+        method: "PUT",
+        body: jsonBody(config),
+      }),
+    );
+  },
+  async testNotifications(status?: JobStatus) {
+    return requestJson<NotificationTestResult>("/notifications/test", {
+      method: "POST",
+      body: jsonBody({ status: status ?? "completed" }),
+    });
+  },
+  async notificationCapabilities() {
+    return requestJson<NotificationCapabilities>("/notifications/capabilities");
   },
   async setDefault(name: string) {
     return normalizeConfig(

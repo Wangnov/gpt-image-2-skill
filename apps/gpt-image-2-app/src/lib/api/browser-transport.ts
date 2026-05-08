@@ -2,6 +2,10 @@ import type {
   GenerateRequest,
   Job,
   JobEvent,
+  JobStatus,
+  NotificationCapabilities,
+  NotificationConfig,
+  NotificationTestResult,
   OutputRef,
   ProviderConfig,
   QueueStatus,
@@ -9,9 +13,11 @@ import type {
   TestProviderResult,
 } from "../types";
 import {
+  defaultNotificationConfig,
   jobOutputPath,
   jobOutputPaths,
   normalizeConfig,
+  normalizeNotificationConfig,
   normalizeJob,
   normalizeJobResponse,
   outputPath,
@@ -160,7 +166,12 @@ async function readConfigRecord() {
     tx.objectStore("kv").get(CONFIG_KEY),
   );
   return (
-    record?.value ?? ({ version: 1, providers: {} } satisfies ServerConfig)
+    record?.value ??
+    ({
+      version: 1,
+      providers: {},
+      notifications: defaultNotificationConfig(),
+    } satisfies ServerConfig)
   );
 }
 
@@ -392,6 +403,44 @@ function sanitizeCredential(credential: ProviderConfig["credentials"][string]) {
   return rest;
 }
 
+function sanitizeNotificationCredential(
+  credential: NotificationConfig["email"]["password"],
+) {
+  if (!credential) return credential;
+  if (credential.source === "file") {
+    return {
+      source: "file" as const,
+      present: Boolean(
+        credential.present ||
+        (typeof credential.value === "string" && credential.value.length > 0),
+      ),
+    };
+  }
+  const { value: _value, ...rest } = credential;
+  return rest;
+}
+
+function sanitizeNotificationConfig(
+  config: NotificationConfig,
+): NotificationConfig {
+  return {
+    ...config,
+    email: {
+      ...config.email,
+      password: sanitizeNotificationCredential(config.email.password),
+    },
+    webhooks: config.webhooks.map((webhook) => ({
+      ...webhook,
+      headers: Object.fromEntries(
+        Object.entries(webhook.headers ?? {}).map(([header, credential]) => [
+          header,
+          sanitizeNotificationCredential(credential)!,
+        ]),
+      ),
+    })),
+  };
+}
+
 function browserConfigForUi(config: ServerConfig): ServerConfig {
   const providers = Object.fromEntries(
     Object.entries(config.providers ?? {}).map(([name, provider]) => [
@@ -426,6 +475,9 @@ function browserConfigForUi(config: ServerConfig): ServerConfig {
     version: 1,
     default_provider: defaultProvider,
     providers,
+    notifications: sanitizeNotificationConfig(
+      normalizeNotificationConfig(config.notifications),
+    ),
   });
 }
 
@@ -438,6 +490,7 @@ function browserStoredConfig(config: ServerConfig): ServerConfig {
         ? config.default_provider
         : Object.keys(providers)[0],
     providers,
+    notifications: normalizeNotificationConfig(config.notifications),
   };
 }
 
@@ -1194,6 +1247,55 @@ export const browserApi: ApiClient = {
       config_file: "IndexedDB: kv/config",
       history_file: "IndexedDB: jobs",
       jobs_dir: "IndexedDB: outputs",
+    };
+  },
+  async updateNotifications(config: NotificationConfig) {
+    await prepareBrowserRuntime();
+    const current = await readConfigRecord();
+    const notifications = normalizeNotificationConfig(config);
+    current.notifications = {
+      ...notifications,
+      email: {
+        ...notifications.email,
+        enabled: false,
+      },
+      webhooks: notifications.webhooks.map((webhook) => ({
+        ...webhook,
+        enabled: false,
+      })),
+    };
+    await writeStoredConfig(browserStoredConfig(current));
+    return browserConfigForUi(current);
+  },
+  async testNotifications(status?: JobStatus): Promise<NotificationTestResult> {
+    const config = normalizeNotificationConfig(
+      (await readConfigRecord()).notifications,
+    );
+    const allowed =
+      (config.enabled ?? true) &&
+      ((status === "failed" && config.on_failed) ||
+        (status === "cancelled" && config.on_cancelled) ||
+        ((!status || status === "completed") && config.on_completed));
+    return {
+      ok: Boolean(allowed && (config.toast.enabled || config.system.enabled)),
+      deliveries: [
+        {
+          channel: "browser",
+          name: "Browser runtime",
+          ok: true,
+          message:
+            "静态 Web 只保存 toast/系统通知偏好；邮件和 webhook 需要桌面 App 或服务端 Web。",
+        },
+      ],
+    };
+  },
+  async notificationCapabilities(): Promise<NotificationCapabilities> {
+    return {
+      system: {
+        tauri_native: false,
+        browser: typeof window !== "undefined" && "Notification" in window,
+      },
+      server: { email: false, webhook: false },
     };
   },
   async setDefault(name: string) {
