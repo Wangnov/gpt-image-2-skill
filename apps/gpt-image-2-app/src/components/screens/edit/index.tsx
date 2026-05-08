@@ -15,6 +15,7 @@ import {
   type RefWithFile,
 } from "./shared";
 import { useMaskWorkspace } from "./use-mask-workspace";
+import { useEditDraft } from "./use-edit-draft";
 import { useReferenceImages } from "./use-reference-images";
 import { useCreateEdit } from "@/hooks/use-jobs";
 import { useJobEvents } from "@/hooks/use-job-events";
@@ -22,7 +23,6 @@ import { useReducedMotion } from "@/hooks/use-reduced-motion";
 import { useTweaks } from "@/hooks/use-tweaks";
 import { api } from "@/lib/api";
 import { isActiveJobStatus } from "@/lib/api/types";
-import { loadEditDraft, saveEditDraft } from "@/lib/drafts";
 import {
   errorMessage,
   outputCountDescription,
@@ -90,7 +90,6 @@ export function EditScreen({
   const [runError, setRunError] = useState<string | null>(null);
   const [runNotice, setRunNotice] = useState<string | null>(null);
   const [isDraggingImages, setIsDraggingImages] = useState(false);
-  const [draftLoaded, setDraftLoaded] = useState(false);
   const promptId = useId();
   const insertPromptTemplate = useCallback(
     (text: string) => {
@@ -197,82 +196,36 @@ export function EditScreen({
     }
   }, [n, supportsMultipleOutputs]);
 
-  useEffect(() => {
-    if (!tweaks.persistCreativeDrafts) {
-      setDraftLoaded(true);
-      return;
-    }
-    let cancelled = false;
-    void loadEditDraft()
-      .then((draft) => {
-        if (cancelled || !draft) return;
-        setEditMode(draft.editMode);
-        setPrompt(draft.prompt);
-        setProvider(draft.provider);
-        setSize(draft.size);
-        setFormat(draft.format);
-        setQuality(draft.quality);
-        setN(draft.n);
-        setRefs((prev) => {
-          prev.forEach((ref) => URL.revokeObjectURL(ref.url));
-          return draft.refs;
-        });
-        setSelectedRef(draft.selectedRef);
-        setTargetRefId(draft.targetRefId);
-        setBrushSize(draft.brushSize === 28 ? 12 : draft.brushSize);
-        setMaskTool(
-          draft.maskTool ?? (draft.maskMode === "erase" ? "erase" : "brush"),
-        );
-        setMaskSnapshots(draft.maskSnapshots);
-      })
-      .catch(() => undefined)
-      .finally(() => {
-        if (!cancelled) setDraftLoaded(true);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [tweaks.persistCreativeDrafts]);
-
-  useEffect(() => {
-    if (!draftLoaded || !tweaks.persistCreativeDrafts) return;
-    const handle = window.setTimeout(() => {
-      void saveEditDraft({
-        editMode,
-        prompt,
-        provider,
-        size,
-        quality,
-        format,
-        n,
-        refs,
-        selectedRef,
-        targetRefId,
-        brushSize,
-        maskTool,
-        maskMode,
-        maskSnapshots,
-      }).catch(() => undefined);
-    }, 500);
-    return () => window.clearTimeout(handle);
-  }, [
+  useEditDraft({
     brushSize,
-    draftLoaded,
     editMode,
     format,
     maskMode,
     maskTool,
     maskSnapshots,
     n,
+    persist: tweaks.persistCreativeDrafts,
     prompt,
     provider,
     quality,
     refs,
     selectedRef,
+    setBrushSize,
+    setEditMode,
+    setFormat,
+    setMaskSnapshots,
+    setMaskTool,
+    setN,
+    setPrompt,
+    setProvider,
+    setQuality,
+    setRefs,
+    setSelectedRef,
+    setSize,
+    setTargetRefId,
     size,
     targetRefId,
-    tweaks.persistCreativeDrafts,
-  ]);
+  });
 
   const {
     addRef,
