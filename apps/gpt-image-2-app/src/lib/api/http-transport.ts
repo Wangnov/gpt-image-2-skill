@@ -15,201 +15,36 @@ import type {
   TestProviderResult,
 } from "../types";
 import {
-  fileToUpload,
   jobOutputPath,
   jobOutputPaths,
   normalizeConfig,
   normalizeJob,
   normalizeJobResponse,
   outputPath,
-  rememberJobOutputs,
 } from "./shared";
 import type {
   ApiClient,
   ConfigPaths,
   EventHandler,
-  JobListOptions,
-  JobListPage,
   JobUpdateHandler,
   StorageTestResult,
   TauriJobResponse,
 } from "./types";
 import { isTerminalJobStatus } from "./types";
-import { jobExportBaseName, outputFileName } from "@/lib/job-export";
-import { createStoredZip } from "@/lib/zip";
+import { fileApiUrl, jsonBody, requestJson } from "./http/client";
+import { basename, downloadJobZip, downloadUrl } from "./http/downloads";
+import { formUploadPayload } from "./http/edit-payload";
+import {
+  jobUpdateSignature,
+  listJobsPage as requestJobsPage,
+  mergeJobsById,
+  rememberEventJob,
+} from "./http/jobs";
 
-type UploadPayload = Awaited<ReturnType<typeof fileToUpload>>;
-
-function trimTrailingSlash(value: string) {
-  return value.endsWith("/") ? value.slice(0, -1) : value;
-}
-
-export function configuredHttpApiBase() {
-  const fromWindow =
-    typeof window !== "undefined" ? window.__GPT_IMAGE_2_API_BASE__ : undefined;
-  const fromEnv = import.meta.env.VITE_GPT_IMAGE_2_API_BASE;
-  const value = (fromWindow || fromEnv || "").trim();
-  return value ? trimTrailingSlash(value) : undefined;
-}
-
-export function hasConfiguredHttpRuntime() {
-  if (typeof window === "undefined") return false;
-  return (
-    window.__GPT_IMAGE_2_RUNTIME__ === "http" ||
-    Boolean(configuredHttpApiBase())
-  );
-}
-
-function apiUrl(path: string) {
-  const base = configuredHttpApiBase() ?? "/api";
-  const suffix = path.startsWith("/") ? path : `/${path}`;
-  return `${base}${suffix}`;
-}
-
-function fileApiUrl(path: string) {
-  const base = configuredHttpApiBase() ?? "/api";
-  return `${base}/files?path=${encodeURIComponent(path)}`;
-}
-
-async function parseErrorResponse(response: Response) {
-  const fallback = `${response.status} ${response.statusText}`.trim();
-  const text = await response.text();
-  if (!text) return fallback;
-  try {
-    const payload = JSON.parse(text) as {
-      error?: { message?: string };
-      message?: string;
-    };
-    return payload.error?.message || payload.message || fallback;
-  } catch {
-    return text || fallback;
-  }
-}
-
-async function requestJson<T>(
-  path: string,
-  init: RequestInit = {},
-): Promise<T> {
-  const headers = new Headers(init.headers);
-  if (init.body && !headers.has("Content-Type")) {
-    headers.set("Content-Type", "application/json");
-  }
-  const response = await fetch(apiUrl(path), { ...init, headers });
-  if (!response.ok) throw new Error(await parseErrorResponse(response));
-  if (response.status === 204) return undefined as T;
-  return (await response.json()) as T;
-}
-
-function jsonBody(value: unknown) {
-  return JSON.stringify(value);
-}
-
-function jobTimestamp(job: Job) {
-  const raw = job.created_at || job.updated_at || "";
-  const numeric = Number(raw);
-  if (Number.isFinite(numeric) && raw.trim() !== "") return numeric * 1000;
-  const parsed = new Date(raw).getTime();
-  return Number.isFinite(parsed) ? parsed : 0;
-}
-
-function mergeJobsById(jobs: Job[]) {
-  const byId = new Map<string, Job>();
-  for (const job of jobs) byId.set(job.id, job);
-  return Array.from(byId.values()).sort(
-    (a, b) => jobTimestamp(b) - jobTimestamp(a),
-  );
-}
-
-function jobsQuery(options: JobListOptions = {}) {
-  const params = new URLSearchParams();
-  if (options.limit) params.set("limit", String(options.limit));
-  if (options.cursor) params.set("cursor", options.cursor);
-  if (options.filter && options.filter !== "all") {
-    params.set("status", options.filter);
-  }
-  if (options.query?.trim()) params.set("q", options.query.trim());
-  const query = params.toString();
-  return query ? `/jobs?${query}` : "/jobs";
-}
-
-function rememberEventJob(event: JobEvent) {
-  const job = event.data?.job;
-  if (job && typeof job === "object") {
-    rememberJobOutputs(normalizeJob(job as Record<string, unknown>));
-  }
-}
-
-async function formUploadPayload(form: FormData) {
-  const metaRaw = form.get("meta");
-  const meta =
-    typeof metaRaw === "string"
-      ? (JSON.parse(metaRaw) as Record<string, unknown>)
-      : {};
-  const refs: Array<{ key: string; file: File }> = [];
-  let mask: UploadPayload | undefined;
-  let selection_hint: UploadPayload | undefined;
-
-  for (const [key, value] of form.entries()) {
-    if (key.startsWith("ref_") && value instanceof File) {
-      refs.push({ key, file: value });
-    }
-    if (key === "mask" && value instanceof File) {
-      mask = await fileToUpload(value);
-    }
-    if (key === "selection_hint" && value instanceof File) {
-      selection_hint = await fileToUpload(value);
-    }
-  }
-
-  refs.sort((a, b) => a.key.localeCompare(b.key));
-  return {
-    ...meta,
-    refs: await Promise.all(refs.map((entry) => fileToUpload(entry.file))),
-    mask,
-    selection_hint,
-  };
-}
-
-function downloadUrl(url: string, name: string) {
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = name;
-  document.body.appendChild(a);
-  a.click();
-  a.remove();
-}
-
-function basename(path: string, fallback: string) {
-  const value = path.split(/[\\/]/).pop();
-  return value && value.trim() ? value : fallback;
-}
-
-async function fetchOutputBlob(path: string) {
-  const url = httpApi.fileUrl(path);
-  if (!url) throw new Error("没有可下载的图片。");
-  const response = await fetch(url);
-  if (!response.ok) {
-    throw new Error(`下载图片失败：${response.status} ${response.statusText}`);
-  }
-  return response.blob();
-}
-
-async function downloadJobZip(job: Job) {
-  const paths = httpApi.jobOutputPaths(job);
-  if (paths.length === 0) throw new Error("没有可下载的图片。");
-  const baseName = jobExportBaseName(job);
-  const entries = await Promise.all(
-    paths.map(async (path, index) => ({
-      name: `${baseName}/${outputFileName(path, index)}`,
-      data: await fetchOutputBlob(path),
-    })),
-  );
-  const zip = await createStoredZip(entries);
-  const url = URL.createObjectURL(zip);
-  downloadUrl(url, `${baseName}.zip`);
-  window.setTimeout(() => URL.revokeObjectURL(url), 5_000);
-  return [`${baseName}.zip`];
-}
+export {
+  configuredHttpApiBase,
+  hasConfiguredHttpRuntime,
+} from "./http/client";
 
 export const httpApi: ApiClient = {
   kind: "http",
@@ -319,18 +154,7 @@ export const httpApi: ApiClient = {
     return mergeJobsById([...active, ...page.jobs]);
   },
   async listJobsPage(options = {}) {
-    const payload = await requestJson<{
-      jobs: Record<string, unknown>[];
-      next_cursor?: string | null;
-      has_more?: boolean;
-      total?: number;
-    }>(jobsQuery(options));
-    return {
-      jobs: (payload.jobs ?? []).map(normalizeJob),
-      next_cursor: payload.next_cursor ?? null,
-      has_more: Boolean(payload.has_more),
-      total: Number(payload.total ?? payload.jobs?.length ?? 0),
-    } satisfies JobListPage;
+    return requestJobsPage(options);
   },
   async listActiveJobs() {
     const payload = await requestJson<{ jobs: Record<string, unknown>[] }>(
@@ -407,7 +231,7 @@ export const httpApi: ApiClient = {
   },
   async exportJobToConfiguredFolder(jobId: string) {
     const { job } = await httpApi.getJob(jobId);
-    return downloadJobZip(job);
+    return downloadJobZip(job, httpApi.fileUrl, httpApi.jobOutputPaths);
   },
   async createGenerate(body: GenerateRequest) {
     const result = await requestJson<TauriJobResponse>("/images/generate", {
@@ -506,39 +330,12 @@ export const httpApi: ApiClient = {
     let initialized = false;
     const known = new Map<string, string>();
 
-    const signature = (job: Job) => {
-      const uploadState = job.outputs
-        .map((output) =>
-          [
-            output.index,
-            ...(output.uploads ?? []).map((upload) =>
-              [
-                upload.target,
-                upload.status,
-                upload.updated_at ?? "",
-                upload.url ?? "",
-                upload.error ?? "",
-              ].join("|"),
-            ),
-          ].join(":"),
-        )
-        .join(";");
-      return [
-        job.status,
-        job.updated_at,
-        job.storage_status ?? "",
-        job.outputs.length,
-        job.output_path ?? "",
-        uploadState,
-      ].join(":");
-    };
-
     const poll = async () => {
       if (closed) return;
       try {
         const jobs = await httpApi.listJobs();
         for (const job of jobs) {
-          const next = signature(job);
+          const next = jobUpdateSignature(job);
           const previous = known.get(job.id);
           known.set(job.id, next);
           if (initialized && previous && previous !== next) {
