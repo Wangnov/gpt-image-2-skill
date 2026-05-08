@@ -96,11 +96,11 @@ export function ImageHoverToolbar({
                 onClick={async (event) => {
                   event.stopPropagation();
                   event.preventDefault();
-                  await run(action.id);
+                  const succeeded = await run(action.id);
                   // Flash a ✓ + a brief outline pulse on actions that
                   // benefit from a "yes, that worked" beat — copy/save —
                   // otherwise sonner's toast is already enough.
-                  if (FLASHABLE_ACTIONS.has(action.id)) {
+                  if (succeeded && FLASHABLE_ACTIONS.has(action.id)) {
                     setFlashedActionId(action.id);
                     window.setTimeout(
                       () =>

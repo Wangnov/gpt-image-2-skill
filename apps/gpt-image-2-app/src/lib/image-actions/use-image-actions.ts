@@ -20,7 +20,8 @@ export type UseImageActionsOptions = {
  *
  * Returns the available + grouped action lists for the given asset/surface
  * combo, plus a `run(id)` callback that resolves availability + enabled
- * state, executes the action, and surfaces failures via a sonner toast.
+ * state, executes the action, surfaces failures via a sonner toast, and
+ * reports whether the executor completed successfully.
  */
 export function useImageActions({ asset, surface }: UseImageActionsOptions) {
   const ctx: ImageActionContext = useMemo(
@@ -37,15 +38,17 @@ export function useImageActions({ asset, surface }: UseImageActionsOptions) {
       if (!action) {
         // eslint-disable-next-line no-console
         console.warn(`[image-actions] unknown action id: ${id}`);
-        return;
+        return false;
       }
-      if (!action.isAvailable(ctx)) return;
-      if (action.isEnabled && !action.isEnabled(ctx)) return;
+      if (!action.isAvailable(ctx)) return false;
+      if (action.isEnabled && !action.isEnabled(ctx)) return false;
       try {
         await action.execute(ctx);
+        return true;
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
         toast.error("操作失败", { description: message });
+        return false;
       }
     },
     [ctx],
