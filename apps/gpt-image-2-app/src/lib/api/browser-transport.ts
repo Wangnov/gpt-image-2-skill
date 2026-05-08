@@ -1253,6 +1253,11 @@ export const browserApi: ApiClient = {
     await prepareBrowserRuntime();
     const current = await readConfigRecord();
     const notifications = normalizeNotificationConfig(config);
+    // Defense-in-depth: NotificationCenterPanel hides the email and webhook
+    // rows in this runtime, so users cannot enable them through the UI. If a
+    // config still arrives with them enabled (preset sync, manual IndexedDB
+    // tweak), force the toggles off — the browser has no SMTP socket and
+    // webhook secrets stored here would be effectively plaintext on disk.
     current.notifications = {
       ...notifications,
       email: {
@@ -1276,15 +1281,24 @@ export const browserApi: ApiClient = {
       ((status === "failed" && config.on_failed) ||
         (status === "cancelled" && config.on_cancelled) ||
         ((!status || status === "completed") && config.on_completed));
+    const localChannelEnabled =
+      config.toast.enabled || config.system.enabled;
+    if (!allowed || !localChannelEnabled) {
+      return {
+        ok: false,
+        reason: "no_eligible_channel",
+        deliveries: [],
+      };
+    }
     return {
-      ok: Boolean(allowed && (config.toast.enabled || config.system.enabled)),
+      ok: true,
       deliveries: [
         {
           channel: "browser",
           name: "Browser runtime",
           ok: true,
           message:
-            "静态 Web 只保存 toast/系统通知偏好；邮件和 webhook 需要桌面 App 或服务端 Web。",
+            "已校验本地 toast / 系统通知配置；邮件和 webhook 需要桌面 App 或服务端 Web。",
         },
       ],
     };

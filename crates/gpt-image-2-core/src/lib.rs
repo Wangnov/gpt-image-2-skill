@@ -1,6 +1,6 @@
 use std::fs;
 use std::io::{self, BufRead, BufReader, Read};
-use std::net::{TcpStream, ToSocketAddrs};
+use std::net::{IpAddr, Ipv4Addr, TcpStream, ToSocketAddrs};
 use std::path::{Path, PathBuf};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use std::{collections::BTreeMap, process::Command};
@@ -1326,7 +1326,8 @@ pub fn build_webhook_request(
     webhook: &WebhookNotificationConfig,
     job: &NotificationJob,
 ) -> Result<WebhookRequest, AppError> {
-    if webhook.url.trim().is_empty() {
+    let url = webhook.url.trim();
+    if url.is_empty() {
         return Err(AppError::new(
             "notification_webhook_invalid",
             "Webhook URL is required.",
@@ -1345,11 +1346,124 @@ pub fn build_webhook_request(
     }
     Ok(WebhookRequest {
         method: webhook.method.trim().to_ascii_uppercase(),
-        url: webhook.url.trim().to_string(),
+        url: url.to_string(),
         headers,
         body: notification_payload(job),
         timeout_seconds: webhook.timeout_seconds.max(1),
     })
+}
+
+// Webhook URLs are user-supplied and the server can reach internal networks
+// (loopback, RFC1918, link-local, cloud metadata at 169.254.169.254). Without
+// a check, a misconfigured or hostile webhook would let the server speak to
+// services it should not (SSRF). This validates scheme + DNS-resolved IPs.
+//
+// This is best-effort: a perfect defense would replace reqwest's connector to
+// avoid DNS rebinding races. That's larger than this PR — this still blocks
+// the realistic configuration mistakes and obvious abuse.
+fn validate_webhook_target(url_str: &str) -> Result<(), AppError> {
+    let url = reqwest::Url::parse(url_str).map_err(|err| {
+        AppError::new("notification_webhook_invalid", "Webhook URL is invalid.")
+            .with_detail(json!({"url": url_str, "error": err.to_string()}))
+    })?;
+    match url.scheme() {
+        "http" | "https" => {}
+        scheme => {
+            return Err(AppError::new(
+                "notification_webhook_invalid",
+                "Webhook URL must use http or https.",
+            )
+            .with_detail(json!({"scheme": scheme})));
+        }
+    }
+    let host_label = url
+        .host_str()
+        .ok_or_else(|| {
+            AppError::new(
+                "notification_webhook_invalid",
+                "Webhook URL is missing a host.",
+            )
+            .with_detail(json!({"url": url_str}))
+        })?
+        .to_string();
+    // Url::socket_addrs handles IPv6 literals (`[::1]` strips brackets) and
+    // resolves DNS names — both of which `(host_str, port).to_socket_addrs()`
+    // would mishandle.
+    let addrs = url.socket_addrs(|| None).map_err(|err| {
+        AppError::new(
+            "notification_webhook_failed",
+            "Unable to resolve webhook host.",
+        )
+        .with_detail(json!({"host": host_label, "error": err.to_string()}))
+    })?;
+    if addrs.is_empty() {
+        return Err(AppError::new(
+            "notification_webhook_failed",
+            "Webhook host did not resolve to any address.",
+        )
+        .with_detail(json!({"host": host_label})));
+    }
+    for addr in &addrs {
+        let ip = canonicalize_ip(addr.ip());
+        if ip_is_internal(ip) {
+            return Err(AppError::new(
+                "notification_webhook_blocked",
+                "Webhook target resolves to a non-routable address (loopback, private, link-local, or unspecified). Refusing to send.",
+            )
+            .with_detail(json!({
+                "host": host_label,
+                "address": ip.to_string(),
+            })));
+        }
+    }
+    Ok(())
+}
+
+fn canonicalize_ip(ip: IpAddr) -> IpAddr {
+    if let IpAddr::V6(v6) = ip {
+        let segs = v6.segments();
+        // Unmap ::ffff:0:0/96 into the underlying IPv4 so private/loopback
+        // checks below catch it.
+        if segs[0] == 0
+            && segs[1] == 0
+            && segs[2] == 0
+            && segs[3] == 0
+            && segs[4] == 0
+            && segs[5] == 0xffff
+        {
+            return IpAddr::V4(Ipv4Addr::new(
+                (segs[6] >> 8) as u8,
+                (segs[6] & 0xff) as u8,
+                (segs[7] >> 8) as u8,
+                (segs[7] & 0xff) as u8,
+            ));
+        }
+    }
+    ip
+}
+
+fn ip_is_internal(ip: IpAddr) -> bool {
+    if ip.is_loopback() || ip.is_unspecified() || ip.is_multicast() {
+        return true;
+    }
+    match ip {
+        IpAddr::V4(v4) => {
+            // Covers 10/8, 172.16/12, 192.168/16, 169.254/16 (incl. AWS/GCP
+            // metadata at 169.254.169.254), broadcast 255.255.255.255, and
+            // the 0.0.0.0/8 "this network" block.
+            v4.is_private()
+                || v4.is_link_local()
+                || v4.is_broadcast()
+                || v4.octets()[0] == 0
+        }
+        IpAddr::V6(v6) => {
+            let segs = v6.segments();
+            // ULA fc00::/7
+            (segs[0] & 0xfe00) == 0xfc00
+                // Link-local fe80::/10
+                || (segs[0] & 0xffc0) == 0xfe80
+        }
+    }
 }
 
 fn notification_payload(job: &NotificationJob) -> Value {
@@ -1443,6 +1557,7 @@ fn send_webhook_notification(
 }
 
 fn execute_webhook_request(request: &WebhookRequest) -> Result<String, AppError> {
+    validate_webhook_target(&request.url)?;
     let client = Client::builder()
         .timeout(Duration::from_secs(request.timeout_seconds.max(1)))
         .build()
@@ -6063,5 +6178,75 @@ mod tests {
                 value: "Bearer secret".to_string()
             })
         );
+    }
+
+    #[test]
+    fn webhook_ssrf_guard_blocks_internal_addresses() {
+        for url in [
+            "http://127.0.0.1/hook",
+            "http://localhost/hook",
+            "http://10.0.0.1/hook",
+            "http://172.16.5.5/hook",
+            "http://192.168.1.1/hook",
+            "http://169.254.169.254/latest/meta-data/", // AWS metadata
+            "http://0.0.0.0/hook",
+            "http://255.255.255.255/hook",
+            "http://[::1]/hook",
+            "http://[::ffff:127.0.0.1]/hook",
+            "http://[fc00::1]/hook",
+            "http://[fe80::1]/hook",
+        ] {
+            let err = validate_webhook_target(url).err().unwrap_or_else(|| {
+                panic!("expected {url} to be rejected as internal");
+            });
+            assert_eq!(
+                err.code, "notification_webhook_blocked",
+                "url {url} produced unexpected error code {}",
+                err.code
+            );
+        }
+    }
+
+    #[test]
+    fn webhook_ssrf_guard_rejects_non_http_schemes() {
+        let err = validate_webhook_target("ftp://example.com/hook")
+            .err()
+            .expect("non-http scheme should be rejected");
+        assert_eq!(err.code, "notification_webhook_invalid");
+    }
+
+    #[test]
+    fn webhook_ssrf_guard_rejects_malformed_urls() {
+        let err = validate_webhook_target("not a url")
+            .err()
+            .expect("malformed url should be rejected");
+        assert_eq!(err.code, "notification_webhook_invalid");
+    }
+
+    #[test]
+    fn ip_is_internal_classifies_addresses() {
+        assert!(ip_is_internal("127.0.0.1".parse().unwrap()));
+        assert!(ip_is_internal("10.0.0.1".parse().unwrap()));
+        assert!(ip_is_internal("172.16.5.5".parse().unwrap()));
+        assert!(ip_is_internal("192.168.1.1".parse().unwrap()));
+        assert!(ip_is_internal("169.254.169.254".parse().unwrap()));
+        assert!(ip_is_internal("0.0.0.0".parse().unwrap()));
+        assert!(ip_is_internal("224.0.0.1".parse().unwrap()));
+        assert!(ip_is_internal("::1".parse().unwrap()));
+        assert!(ip_is_internal("fc00::1".parse().unwrap()));
+        assert!(ip_is_internal("fe80::1".parse().unwrap()));
+
+        assert!(!ip_is_internal("8.8.8.8".parse().unwrap()));
+        assert!(!ip_is_internal("1.1.1.1".parse().unwrap()));
+        assert!(!ip_is_internal("2606:4700:4700::1111".parse().unwrap()));
+    }
+
+    #[test]
+    fn canonicalize_ip_unmaps_ipv4_in_ipv6() {
+        let mapped: IpAddr = "::ffff:127.0.0.1".parse().unwrap();
+        match canonicalize_ip(mapped) {
+            IpAddr::V4(v4) => assert_eq!(v4, Ipv4Addr::new(127, 0, 0, 1)),
+            other => panic!("expected ipv4 unmapping, got {other:?}"),
+        }
     }
 }

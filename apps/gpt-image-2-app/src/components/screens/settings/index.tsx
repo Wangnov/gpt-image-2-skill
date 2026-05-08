@@ -1380,6 +1380,13 @@ function NotificationCenterPanel({
       const message =
         failed[0]?.message ||
         result.deliveries.map((item) => item.message).filter(Boolean)[0];
+      if (result.reason === "no_eligible_channel") {
+        toast.info("当前没有可发送的通道", {
+          description:
+            "通知中心未启用，或当前状态/通道未开启，所以什么都不会发出。",
+        });
+        return;
+      }
       if (result.ok) {
         toast.success("测试通知已发送", { description: message });
       } else {
@@ -1397,6 +1404,14 @@ function NotificationCenterPanel({
       title="通知中心"
       description="配置任务完成、失败或取消后的 toast、系统通知、邮件和 webhook。"
     >
+      {capabilities && !canUseServerNotifications && (
+        <div className="flex items-start gap-2 px-4 py-3 text-[12px] text-muted sm:px-5">
+          <Info size={14} className="mt-0.5 shrink-0" />
+          <div>
+            当前运行环境仅支持本地通道（toast 与系统通知）。邮件和 Webhook 需要桌面 App 或服务端 Web 才会真正发送。
+          </div>
+        </div>
+      )}
       <Row
         title="启用通知中心"
         description={
@@ -1472,6 +1487,7 @@ function NotificationCenterPanel({
           </div>
         }
       />
+      {capabilities?.server.email && (
       <Row
         title="邮件通知"
         description="SMTP 密码可直接保存、引用环境变量，或引用 Keychain 条目。"
@@ -1552,6 +1568,8 @@ function NotificationCenterPanel({
           </div>
         }
       />
+      )}
+      {capabilities?.server.webhook && (
       <Row
         title="Webhook"
         description="每个 webhook 可配置自定义请求头，适配 Bearer Token、签名密钥等鉴权方式。"
@@ -1683,6 +1701,7 @@ function NotificationCenterPanel({
           </div>
         }
       />
+      )}
       <Row
         title="保存与测试"
         description="测试会按当前已保存配置发送一条模拟任务通知。"

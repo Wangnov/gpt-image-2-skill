@@ -1275,8 +1275,18 @@ fn test_notifications(input: NotificationTestInput) -> Result<Value, String> {
         "error": if status == "failed" { json!({"message": "Notification test failure"}) } else { Value::Null },
     });
     let deliveries = dispatch_task_notifications(&config, &job);
+    // An empty deliveries vec means *nothing* was sent (notifications disabled,
+    // status filtered out, or no channel enabled). `[].iter().all(..)` is true,
+    // so collapsing the empty case to `ok=true` would lie to the UI.
+    let ok = !deliveries.is_empty() && deliveries.iter().all(|delivery| delivery.ok);
+    let reason = if deliveries.is_empty() {
+        Some("no_eligible_channel")
+    } else {
+        None
+    };
     Ok(json!({
-        "ok": deliveries.iter().all(|delivery| delivery.ok),
+        "ok": ok,
+        "reason": reason,
         "deliveries": deliveries.into_iter().map(|delivery| {
             json!({
                 "channel": delivery.channel,
@@ -1574,21 +1584,45 @@ fn finish_queued_job(
         }
     };
     let _ = persist_job(&job);
-    let notification_deliveries = dispatch_notifications_for_job(&job);
     let event = {
         let mut inner = match state.inner.lock() {
             Ok(inner) => inner,
             Err(_) => return,
         };
         inner.running = inner.running.saturating_sub(1);
-        let mut event_data = event_data;
-        if let Some(object) = event_data.as_object_mut() {
-            object.insert("notifications".to_string(), json!(notification_deliveries));
-        }
         append_queue_event(&mut inner, &queued.id, "local", event_type, event_data)
     };
     emit_queue_event(&app, &queued.id, &event);
+    spawn_notification_dispatch(app.clone(), state.clone(), queued.id, job);
     start_queued_jobs(app, state);
+}
+
+// Notification I/O (SMTP, webhooks) is blocking and may take seconds. Run it
+// off the worker / command thread so it cannot occupy a queue slot or stall
+// the IPC response.
+fn spawn_notification_dispatch(
+    app: tauri::AppHandle,
+    state: JobQueueState,
+    job_id: String,
+    job: Value,
+) {
+    thread::spawn(move || {
+        let deliveries = dispatch_notifications_for_job(&job);
+        if deliveries.is_empty() {
+            return;
+        }
+        let event = match state.inner.lock() {
+            Ok(mut inner) => append_queue_event(
+                &mut inner,
+                &job_id,
+                "local",
+                "job.notifications",
+                json!({ "deliveries": deliveries }),
+            ),
+            Err(_) => return,
+        };
+        emit_queue_event(&app, &job_id, &event);
+    });
 }
 
 fn start_queued_jobs(app: tauri::AppHandle, state: JobQueueState) {
@@ -1770,8 +1804,8 @@ fn cancel_job(
         error: Value::Null,
     });
     persist_job(&job)?;
-    let notification_deliveries = dispatch_notifications_for_job(&job);
     emit_queue_event(&app, &job_id, &event);
+    spawn_notification_dispatch(app.clone(), queue_state, job_id.clone(), job.clone());
     Ok(json!({
         "job_id": job_id,
         "job": job,
@@ -1781,7 +1815,6 @@ fn cancel_job(
             "type": event.get("type").cloned().unwrap_or(Value::Null),
             "data": {
                 "status": "canceled",
-                "notifications": notification_deliveries,
             }
         }],
         "canceled": true,

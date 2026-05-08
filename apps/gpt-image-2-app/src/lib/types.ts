@@ -79,6 +79,7 @@ export interface NotificationDelivery {
 export interface NotificationTestResult {
   ok: boolean;
   deliveries: NotificationDelivery[];
+  reason?: string | null;
 }
 
 export interface NotificationCapabilities {
