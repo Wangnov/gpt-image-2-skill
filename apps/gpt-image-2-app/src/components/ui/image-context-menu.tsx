@@ -73,10 +73,9 @@ export function ImageContextMenu({ asset, children, inlineTrigger }: Props) {
                 disabled={
                   action.isEnabled ? !action.isEnabled(ctx) : false
                 }
-                onSelect={(event) => {
-                  // Prevent Radix's automatic menu close from racing the
-                  // async executor in some clipboard-related flows.
-                  event.preventDefault();
+                onSelect={() => {
+                  // Let Radix close the menu on its own; the executor runs
+                  // async in the background.
                   void run(action.id);
                 }}
               >

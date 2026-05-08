@@ -4,7 +4,7 @@ import type { RuntimeKind } from "@/lib/api/types";
 
 export type ImageActionId =
   | "copy-image"
-  | "copy-image-with-prompt"
+  | "copy-prompt"
   | "copy-path-or-link"
   | "save-as"
   | "reveal-in-finder"

@@ -19,7 +19,7 @@ import {
  *   - Space        → open Quick Look on the focused asset
  *   - ⌘C / Ctrl+C  → copy-image (skipped when text is selected so the
  *                    native text-copy gesture wins)
- *   - ⇧⌘C          → copy-image-with-prompt
+ *   - ⇧⌘C          → copy-prompt
  *   - ⌘⌫ / Delete  → soft delete with undo
  *
  * The handler short-circuits when:
@@ -58,7 +58,7 @@ export function useImageShortcuts() {
         if (hasNonEmptySelection()) return;
         event.preventDefault();
         const id: ImageActionId = event.shiftKey
-          ? "copy-image-with-prompt"
+          ? "copy-prompt"
           : "copy-image";
         runActionById(id, ctx);
         return;

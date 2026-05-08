@@ -17,6 +17,7 @@ import { EditScreen } from "@/components/screens/edit";
 import { HistoryScreen } from "@/components/screens/history";
 import { SettingsScreen } from "@/components/screens/settings";
 import { useConfig } from "@/hooks/use-config";
+import { useConfirm } from "@/hooks/use-confirm";
 import { useDisableWebviewContextMenu } from "@/hooks/use-disable-webview-contextmenu";
 import { useImageShortcuts } from "@/hooks/use-image-shortcuts";
 import { useJobNotifications } from "@/hooks/use-job-notifications";
@@ -25,6 +26,7 @@ import { useGlobalShortcuts } from "@/hooks/use-shortcuts";
 import { useTweaks } from "@/hooks/use-tweaks";
 import { TextSelectionContextMenu } from "@/components/ui/text-selection-context-menu";
 import { QuickLookHost } from "@/components/ui/quick-look";
+import { setActionsConfirm } from "@/lib/image-actions/confirm-action";
 import { setActionsNavigator } from "@/lib/image-actions/navigation";
 import {
   checkForAppUpdate,
@@ -98,6 +100,7 @@ export default function App() {
   } = useConfig();
   const { data: jobs } = useJobs();
   const { tweaks } = useTweaks();
+  const confirm = useConfirm();
 
   const setScreen = useCallback((s: ScreenId) => {
     setScreenState(s);
@@ -135,6 +138,13 @@ export default function App() {
   useEffect(() => {
     setActionsNavigator(setScreen);
   }, [setScreen]);
+
+  // And the confirm dialog so destructive executors (Delete) can prompt
+  // before tearing down a multi-output job.
+  useEffect(() => {
+    setActionsConfirm(confirm);
+    return () => setActionsConfirm(null);
+  }, [confirm]);
 
   useEffect(() => {
     if (!shouldAutoCheckForUpdates()) return;
@@ -321,6 +331,10 @@ export default function App() {
             theme={legacyInterface ? tweaks.theme : "dark"}
             closeButton
             richColors
+            // Stay above drawers (z-50) and Quick Look overlay (z-[60]) so
+            // action feedback isn't hidden behind the surface that triggered
+            // the action.
+            style={{ zIndex: 200 }}
           />
           <TextSelectionContextMenu />
           <QuickLookHost />

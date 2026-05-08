@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { Drawer } from "@/components/ui/drawer";
 import { Button } from "@/components/ui/button";
+import { Tooltip } from "@/components/ui/tooltip";
 import { ImageContextMenu } from "@/components/ui/image-context-menu";
 import { openQuickLook } from "@/components/ui/quick-look";
 import TiltedCard from "@/components/reactbits/components/TiltedCard";
@@ -190,115 +191,110 @@ export function JobImageDetailDrawer({
         description={prompt ? prompt.slice(0, 80) : "（无提示词）"}
         width={520}
         footer={
-          <div className="flex w-full min-w-0 flex-wrap items-center gap-2">
+          <div className="flex w-full min-w-0 items-center gap-1.5">
             {canShowFileLocation && (
               <>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  icon="copy"
-                  disabled={!path}
-                  onClick={() => {
-                    if (path) void copyText(path, "图片路径");
-                  }}
-                >
-                  复制路径
-                </Button>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  icon="folder"
-                  disabled={!path}
-                  onClick={() => {
-                    if (path) void revealPath(path);
-                  }}
-                >
-                  打开位置
-                </Button>
+                <Tooltip text="复制路径">
+                  <Button
+                    variant="ghost"
+                    size="iconSm"
+                    icon="copy"
+                    aria-label="复制路径"
+                    disabled={!path}
+                    onClick={() => {
+                      if (path) void copyText(path, "图片路径");
+                    }}
+                  />
+                </Tooltip>
+                <Tooltip text="在 Finder 中显示">
+                  <Button
+                    variant="ghost"
+                    size="iconSm"
+                    icon="folder"
+                    aria-label="在 Finder 中显示"
+                    disabled={!path}
+                    onClick={() => {
+                      if (path) void revealPath(path);
+                    }}
+                  />
+                </Tooltip>
               </>
             )}
             {onRerun && job && (
-              <Button
-                variant="ghost"
-                size="sm"
-                icon="reload"
-                onClick={handleRerun}
-                title="用相同的 prompt 和参数预填到生成屏"
-              >
-                再来一次
-              </Button>
+              <Tooltip text="再来一次（用相同参数预填生成屏）">
+                <Button
+                  variant="ghost"
+                  size="iconSm"
+                  icon="reload"
+                  aria-label="再来一次"
+                  onClick={handleRerun}
+                />
+              </Tooltip>
             )}
             {onRetry &&
               job &&
               (job.status === "failed" || job.status === "cancelled") && (
-                <Button
-                  variant="secondary"
-                  size="sm"
-                  icon="reload"
-                  onClick={() => onRetry(job.id)}
-                  title="原样重新提交这个任务"
-                >
-                  重试
-                </Button>
+                <Tooltip text="重试（原样重新提交）">
+                  <Button
+                    variant="secondary"
+                    size="iconSm"
+                    icon="reload"
+                    aria-label="重试"
+                    onClick={() => onRetry(job.id)}
+                  />
+                </Tooltip>
               )}
             {onSendToEdit && job && (
-              <Button
-                variant="secondary"
-                size="sm"
-                icon="edit"
-                disabled={!path && !url}
-                onClick={() => onSendToEdit(job, activeOutputIndex)}
-                title="把当前图片添加为编辑参考图"
-              >
-                发送到编辑
-              </Button>
+              <Tooltip text="发送到编辑（作为参考图）">
+                <Button
+                  variant="secondary"
+                  size="iconSm"
+                  icon="edit"
+                  aria-label="发送到编辑"
+                  disabled={!path && !url}
+                  onClick={() => onSendToEdit(job, activeOutputIndex)}
+                />
+              </Tooltip>
             )}
             <div className="min-w-2 flex-1" />
             {onDelete && job && (
-              <Button
-                variant="ghost"
-                size="sm"
-                icon="trash"
-                onClick={async () => {
-                  const summary = prompt
-                    ? prompt.length > 60
-                      ? `${prompt.slice(0, 60)}…`
-                      : prompt
-                    : "（无提示词）";
-                  const ok = await confirm({
-                    title: "删除整个任务记录",
-                    description: (
-                      <>
-                        将删除任务{" "}
-                        <span className="text-foreground font-medium">
-                          「{summary}」
-                        </span>
-                        。图片文件不会被删除。
-                      </>
-                    ),
-                    confirmText: "删除",
-                    variant: "danger",
-                  });
-                  if (!ok) return;
-                  onDelete(job.id);
-                  onClose();
-                }}
-              >
-                删除
-              </Button>
+              <Tooltip text="删除任务">
+                <Button
+                  variant="ghost"
+                  size="iconSm"
+                  icon="trash"
+                  aria-label="删除任务"
+                  onClick={async () => {
+                    const outputCount = job.outputs?.length ?? 1;
+                    const description =
+                      outputCount > 1
+                        ? `这是包含 ${outputCount} 张图的任务，删除会移除整个任务记录和全部 ${outputCount} 张图，无法分别删除单张。`
+                        : "这会删除这张图和它的任务记录。图片文件会移到回收站。";
+                    const ok = await confirm({
+                      title: "删除任务？",
+                      description,
+                      confirmText: "删除任务",
+                      variant: "danger",
+                    });
+                    if (!ok) return;
+                    onDelete(job.id);
+                    onClose();
+                  }}
+                />
+              </Tooltip>
             )}
-            <Button
-              variant="primary"
-              size="sm"
-              icon="download"
-              className="ml-auto"
-              disabled={!path}
-              onClick={() => {
-                if (path) void saveImages([path], "图片");
-              }}
-            >
-              {copy.saveImageLabel}
-            </Button>
+            <Tooltip text={copy.saveImageLabel}>
+              <Button
+                variant="primary"
+                size="iconSm"
+                icon="download"
+                aria-label={copy.saveImageLabel}
+                disabled={!path}
+                onClick={() => {
+                  if (path) void saveImages([path], "图片");
+                }}
+              />
+            </Tooltip>
           </div>
         }
       >

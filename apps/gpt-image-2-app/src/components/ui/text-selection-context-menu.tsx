@@ -1,32 +1,43 @@
 import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
+import { toast } from "sonner";
 import { cn } from "@/lib/cn";
+
+export type SelectionCapture =
+  | {
+      kind: "input";
+      element: HTMLInputElement | HTMLTextAreaElement;
+      selectionStart: number;
+      selectionEnd: number;
+      selectedText: string;
+    }
+  | { kind: "document"; selectedText: string };
 
 type SelectionMenuState = {
   x: number;
   y: number;
-  hasEditableTarget: boolean;
-  hasSelection: boolean;
+  capture: SelectionCapture;
 };
 
 type Listener = (state: SelectionMenuState) => void;
 let activeListener: Listener | null = null;
 
 /**
- * Imperative entry point used by `useDisableWebviewContextMenu`. The hook
- * decides when (input/textarea/contenteditable target, or any element with a
- * non-empty selection), this component renders the actual menu.
+ * Imperative entry point used by `useDisableWebviewContextMenu`. Captures
+ * the live selection (input/textarea offset pair, or window.getSelection
+ * text) so menu actions don't fight with selection-loss when the menu
+ * itself takes focus.
  */
 export function openTextSelectionMenu(state: SelectionMenuState) {
   activeListener?.(state);
 }
 
 /**
- * Tiny self-rendered "Cut / Copy / Paste / Select All" menu. Shown when the
- * user right-clicks on editable surfaces or text selections — replacing the
- * webview's native menu after `useDisableWebviewContextMenu` suppresses it.
- *
- * Mounted once at app root.
+ * Replaces the webview's native Cut/Copy/Paste/Select All menu on editable
+ * surfaces and over plain text selections. Implemented entirely on top of
+ * `navigator.clipboard` and the captured selection — `document.execCommand`
+ * is unreliable in modern WebKit when the menu portal pulls focus away
+ * from the source element.
  */
 export function TextSelectionContextMenu() {
   const [state, setState] = useState<SelectionMenuState | null>(null);
@@ -59,6 +70,71 @@ export function TextSelectionContextMenu() {
   if (!state) return null;
 
   const close = () => setState(null);
+  const { capture } = state;
+  const hasSelection = capture.selectedText.length > 0;
+  const isEditable = capture.kind === "input";
+
+  const onCopy = async () => {
+    if (!hasSelection) return close();
+    try {
+      await navigator.clipboard.writeText(capture.selectedText);
+    } catch (error) {
+      toast.error("复制失败", {
+        description: error instanceof Error ? error.message : String(error),
+      });
+    }
+    close();
+  };
+
+  const onCut = async () => {
+    if (capture.kind !== "input" || !hasSelection) return close();
+    const { element, selectionStart, selectionEnd, selectedText } = capture;
+    try {
+      await navigator.clipboard.writeText(selectedText);
+    } catch (error) {
+      toast.error("剪切失败", {
+        description: error instanceof Error ? error.message : String(error),
+      });
+      return close();
+    }
+    replaceInputRange(element, selectionStart, selectionEnd, "");
+    close();
+  };
+
+  const onPaste = async () => {
+    if (capture.kind !== "input") return close();
+    let text: string;
+    try {
+      text = await navigator.clipboard.readText();
+    } catch {
+      // User denied clipboard access (or macOS prompt was dismissed).
+      // No toast — Apple's own prompt is enough signal.
+      return close();
+    }
+    const { element, selectionStart, selectionEnd } = capture;
+    replaceInputRange(element, selectionStart, selectionEnd, text);
+    close();
+  };
+
+  const onSelectAll = () => {
+    if (capture.kind === "input") {
+      capture.element.focus();
+      capture.element.select();
+    } else {
+      // contenteditable / generic: re-select via Range API
+      const range = document.createRange();
+      const target = document.activeElement ?? document.body;
+      try {
+        range.selectNodeContents(target);
+        const sel = window.getSelection();
+        sel?.removeAllRanges();
+        sel?.addRange(range);
+      } catch {
+        /* ignore — node not selectable */
+      }
+    }
+    close();
+  };
 
   return createPortal(
     <div
@@ -75,56 +151,62 @@ export function TextSelectionContextMenu() {
         boxShadow: "var(--shadow-floating)",
       }}
     >
-      {state.hasEditableTarget ? (
+      {isEditable ? (
         <MenuButton
           label="剪切"
           shortcut="⌘X"
-          disabled={!state.hasSelection}
-          onSelect={() => {
-            document.execCommand("cut");
-            close();
-          }}
+          disabled={!hasSelection}
+          onSelect={onCut}
         />
       ) : null}
       <MenuButton
         label="复制"
         shortcut="⌘C"
-        disabled={!state.hasSelection}
-        onSelect={() => {
-          document.execCommand("copy");
-          close();
-        }}
+        disabled={!hasSelection}
+        onSelect={onCopy}
       />
-      {state.hasEditableTarget ? (
-        <MenuButton
-          label="粘贴"
-          shortcut="⌘V"
-          onSelect={async () => {
-            try {
-              const text = await navigator.clipboard.readText();
-              document.execCommand("insertText", false, text);
-            } catch {
-              document.execCommand("paste");
-            }
-            close();
-          }}
-        />
+      {isEditable ? (
+        <MenuButton label="粘贴" shortcut="⌘V" onSelect={onPaste} />
       ) : null}
       <div
         className="my-1 h-px"
         style={{ background: "var(--border-faint)" }}
       />
-      <MenuButton
-        label="全选"
-        shortcut="⌘A"
-        onSelect={() => {
-          document.execCommand("selectAll");
-          close();
-        }}
-      />
+      <MenuButton label="全选" shortcut="⌘A" onSelect={onSelectAll} />
     </div>,
     document.body,
   );
+}
+
+/**
+ * React-friendly value mutation: triggers React's onChange handler by
+ * dispatching a native `input` event after using the prototype's value
+ * setter (otherwise React's synthetic-event tracking ignores the change).
+ */
+function replaceInputRange(
+  element: HTMLInputElement | HTMLTextAreaElement,
+  start: number,
+  end: number,
+  insert: string,
+) {
+  const before = element.value.slice(0, start);
+  const after = element.value.slice(end);
+  const next = before + insert + after;
+  const proto = Object.getPrototypeOf(element);
+  const setter = Object.getOwnPropertyDescriptor(proto, "value")?.set;
+  if (setter) {
+    setter.call(element, next);
+  } else {
+    element.value = next;
+  }
+  element.dispatchEvent(new Event("input", { bubbles: true }));
+  const caret = start + insert.length;
+  element.focus();
+  try {
+    element.setSelectionRange(caret, caret);
+  } catch {
+    /* some input types (number, color) don't support setSelectionRange */
+  }
 }
 
 type MenuButtonProps = {

@@ -2,6 +2,7 @@ import { toast } from "sonner";
 import { api } from "@/lib/api";
 import { openQuickLook } from "@/components/ui/quick-look";
 import { openJobInHistory, sendImageToEdit } from "@/lib/job-navigation";
+import { actionsConfirm } from "./confirm-action";
 import { copyImageToClipboard } from "./copy-image";
 import { softDeleteJobWithUndo } from "./delete-job";
 import { navigateToScreen } from "./navigation";
@@ -52,20 +53,19 @@ const copyImage: ImageAction = {
   },
 };
 
-const copyImageWithPrompt: ImageAction = {
-  id: "copy-image-with-prompt",
-  label: () => "复制图片+提示词",
+const copyPrompt: ImageAction = {
+  id: "copy-prompt",
+  label: () => "复制提示词",
   icon: "copy",
   shortcut: "⇧⌘C",
   group: "transfer",
-  isAvailable: ({ asset }) => Boolean(asset.src),
-  // Older jobs without a stored prompt grey-out instead of hide so the menu
-  // shape stays stable.
-  isEnabled: ({ asset }) => Boolean(asset.prompt?.trim()),
-  disabledReason: () => "这个任务没有保存提示词",
+  // Hide on older jobs without a saved prompt — there's no graceful "fall
+  // back to image" here because the user explicitly asked for the prompt.
+  isAvailable: ({ asset }) => Boolean(asset.prompt?.trim()),
   execute: async ({ asset }) => {
-    await copyImageToClipboard(asset, { withPrompt: true });
-    toast.success("已复制图片和提示词", { duration: 1_500 });
+    if (!asset.prompt) throw new Error("没有提示词。");
+    await navigator.clipboard.writeText(asset.prompt);
+    toast.success("已复制提示词", { duration: 1_500 });
   },
 };
 
@@ -242,13 +242,30 @@ const shareAction: ImageAction = {
 
 const deleteAction: ImageAction = {
   id: "delete",
-  label: () => "删除",
+  label: () => "删除任务",
   icon: "trash",
   shortcut: "⌘⌫",
   group: "destructive",
   destructive: true,
   isAvailable: () => true,
   execute: async ({ asset, runtime }) => {
+    // Important: a Job is the unit of deletion — a multi-output job has
+    // all of its outputs grouped under one DB row + one folder. Right-
+    // clicking a single output and choosing Delete WILL remove the entire
+    // job, so the confirm copy makes that explicit when there's more than
+    // one output.
+    const outputCount = asset.job?.outputs?.length ?? 1;
+    const description =
+      outputCount > 1
+        ? `这是包含 ${outputCount} 张图的任务，删除会移除整个任务记录和全部 ${outputCount} 张图，无法分别删除单张。`
+        : "这会删除这张图和它的任务记录。";
+    const ok = await actionsConfirm({
+      title: "删除任务？",
+      description,
+      confirmText: "删除任务",
+      variant: "danger",
+    });
+    if (!ok) return;
     await softDeleteJobWithUndo(asset.jobId, runtime);
     invalidateJobsQueries();
   },
@@ -256,7 +273,7 @@ const deleteAction: ImageAction = {
 
 export const C2_TRANSFER_EXPORT_MANAGE_ACTIONS: ImageAction[] = [
   copyImage,
-  copyImageWithPrompt,
+  copyPrompt,
   copyPathOrLink,
   saveAs,
   revealInFinder,

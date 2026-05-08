@@ -21,7 +21,10 @@ export const ContextMenuSub = RadixContextMenu.Sub;
 export const ContextMenuRadioGroup = RadixContextMenu.RadioGroup;
 
 const surfaceClasses = cn(
-  "z-50 min-w-[200px] rounded-xl border outline-none p-1",
+  // z-[70] keeps the menu above Drawer (z-50) and Quick Look overlay
+  // (z-[60-61]) so right-click on the zoomed image / inside drawers still
+  // shows actions.
+  "z-[70] min-w-[200px] rounded-xl border outline-none p-1",
   "data-[state=open]:animate-in data-[state=closed]:animate-out",
   "data-[state=open]:fade-in-0 data-[state=closed]:fade-out-0",
   "data-[state=open]:zoom-in-95 data-[state=closed]:zoom-out-95",

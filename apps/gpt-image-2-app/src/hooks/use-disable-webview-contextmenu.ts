@@ -1,5 +1,8 @@
 import { useEffect } from "react";
-import { openTextSelectionMenu } from "@/components/ui/text-selection-context-menu";
+import {
+  openTextSelectionMenu,
+  type SelectionCapture,
+} from "@/components/ui/text-selection-context-menu";
 
 const TRIGGER_OPT_OUT_ATTR = "data-image-action-trigger";
 
@@ -38,14 +41,12 @@ export function useDisableWebviewContextMenu() {
 
       event.preventDefault();
 
-      const editable = isEditableTarget(target);
-      const hasSelection = hasNonEmptySelection();
-      if (editable || hasSelection) {
+      const capture = captureSelection(target);
+      if (capture) {
         openTextSelectionMenu({
           x: event.clientX,
           y: event.clientY,
-          hasEditableTarget: editable,
-          hasSelection,
+          capture,
         });
       }
     };
@@ -77,4 +78,40 @@ export function hasNonEmptySelection(): boolean {
   if (!selection) return false;
   if (selection.isCollapsed) return false;
   return selection.toString().length > 0;
+}
+
+/**
+ * Capture the right snapshot for the text-selection menu so its handlers
+ * don't depend on focus or selection still being live by the time the user
+ * clicks an item. Returns null when the click target has nothing actionable
+ * (no selection AND not an editable surface).
+ */
+function captureSelection(target: HTMLElement): SelectionCapture | null {
+  const inputLike = nearestEditableInput(target);
+  if (inputLike) {
+    const start = inputLike.selectionStart ?? 0;
+    const end = inputLike.selectionEnd ?? 0;
+    return {
+      kind: "input",
+      element: inputLike,
+      selectionStart: start,
+      selectionEnd: end,
+      selectedText: inputLike.value.slice(start, end),
+    };
+  }
+  const text = window.getSelection()?.toString() ?? "";
+  if (text.length > 0) {
+    return { kind: "document", selectedText: text };
+  }
+  return null;
+}
+
+function nearestEditableInput(
+  el: HTMLElement,
+): HTMLInputElement | HTMLTextAreaElement | null {
+  const tag = el.tagName;
+  if (tag === "INPUT" || tag === "TEXTAREA") {
+    return el as HTMLInputElement | HTMLTextAreaElement;
+  }
+  return null;
 }

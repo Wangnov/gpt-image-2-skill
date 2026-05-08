@@ -40,7 +40,7 @@ const DEFAULT_SLOTS: ImageActionId[] = [
 const FLASH_DURATION_MS = 600;
 const FLASHABLE_ACTIONS = new Set<ImageActionId>([
   "copy-image",
-  "copy-image-with-prompt",
+  "copy-prompt",
   "save-as",
 ]);
 
