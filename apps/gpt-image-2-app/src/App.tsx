@@ -17,10 +17,13 @@ import { EditScreen } from "@/components/screens/edit";
 import { HistoryScreen } from "@/components/screens/history";
 import { SettingsScreen } from "@/components/screens/settings";
 import { useConfig } from "@/hooks/use-config";
+import { useDisableWebviewContextMenu } from "@/hooks/use-disable-webview-contextmenu";
+import { useImageShortcuts } from "@/hooks/use-image-shortcuts";
 import { useJobNotifications } from "@/hooks/use-job-notifications";
 import { useJobs } from "@/hooks/use-jobs";
 import { useGlobalShortcuts } from "@/hooks/use-shortcuts";
 import { useTweaks } from "@/hooks/use-tweaks";
+import { TextSelectionContextMenu } from "@/components/ui/text-selection-context-menu";
 import {
   checkForAppUpdate,
   installAppUpdate,
@@ -121,6 +124,8 @@ export default function App() {
     },
   });
   useJobNotifications(jobs, openJob);
+  useDisableWebviewContextMenu();
+  useImageShortcuts();
 
   useEffect(() => {
     if (!shouldAutoCheckForUpdates()) return;
@@ -308,6 +313,7 @@ export default function App() {
             closeButton
             richColors
           />
+          <TextSelectionContextMenu />
         </div>
       </WindowChrome>
     </div>
