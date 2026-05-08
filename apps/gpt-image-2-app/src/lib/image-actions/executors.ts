@@ -8,7 +8,7 @@ import { softDeleteJobWithUndo } from "./delete-job";
 import { inferImageExtension, inferImageMime } from "./mime";
 import { navigateToScreen } from "./navigation";
 import { invalidateJobsQueries } from "./query-client";
-import type { ImageAction } from "./types";
+import type { ImageAction, ImageAsset } from "./types";
 
 /**
  * Concrete `ImageAction` definitions registered in `registry.ts`. Each entry
@@ -116,7 +116,7 @@ const saveAs: ImageAction = {
     // honor the `download` attribute even cross-origin if CORS allows it.
     const a = document.createElement("a");
     a.href = asset.src;
-    a.download = inferDownloadName(asset.src, asset.jobId, asset.outputIndex);
+    a.download = inferDownloadName(asset);
     a.rel = "noopener";
     document.body.appendChild(a);
     a.click();
@@ -297,17 +297,18 @@ export const C4_GENERATE_ACTIONS: ImageAction[] = [
   revealJobInHistory,
 ];
 
-function inferDownloadName(
-  src: string,
-  jobId: string,
-  index: number,
-): string {
+function inferDownloadName(asset: ImageAsset): string {
+  // Prefer a real basename from the URL when present.
   try {
-    const url = new URL(src, window.location.href);
+    const url = new URL(asset.src, window.location.href);
     const last = url.pathname.split("/").filter(Boolean).pop();
     if (last && last.includes(".")) return last;
   } catch {
     /* fall through to the fabricated name */
   }
-  return `${jobId}-${index}.png`;
+  // Fabricated fallback — must match the asset's true format so OS / app
+  // associations don't mis-handle a JPEG/WEBP saved with a `.png`
+  // extension. `inferImageExtension` consults metadata.format first, then
+  // URL/path extension, before defaulting to png.
+  return `${asset.jobId}-${asset.outputIndex}.${inferImageExtension(asset)}`;
 }

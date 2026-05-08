@@ -1,4 +1,5 @@
 import { useEffect } from "react";
+import { toast } from "sonner";
 import { openQuickLook } from "@/components/ui/quick-look";
 import { api } from "@/lib/api";
 import { useFocusedImage } from "@/lib/image-actions/focused-image";
@@ -32,6 +33,10 @@ export function useImageShortcuts() {
 
   useEffect(() => {
     const handler = (event: KeyboardEvent) => {
+      // If a closer-scoped handler already claimed this keypress (e.g.
+      // OutputTile binds Space/Enter to onSelect and calls preventDefault),
+      // don't double-activate from the bubbled event up here.
+      if (event.defaultPrevented) return;
       const target = event.target as HTMLElement | null;
       if (target && isEditableTarget(target)) return;
       if (!focused) return;
@@ -83,5 +88,12 @@ function runActionById(id: ImageActionId, ctx: ImageActionContext) {
   if (!action) return;
   if (!action.isAvailable(ctx)) return;
   if (action.isEnabled && !action.isEnabled(ctx)) return;
-  void action.execute(ctx);
+  // Mirror the error handling in `useImageActions().run` — keyboard-driven
+  // executors otherwise emit unhandled promise rejections (clipboard
+  // permission denied, fetch failures, etc.) and the user gets no feedback
+  // about why nothing happened.
+  void Promise.resolve(action.execute(ctx)).catch((error: unknown) => {
+    const message = error instanceof Error ? error.message : String(error);
+    toast.error("操作失败", { description: message });
+  });
 }
