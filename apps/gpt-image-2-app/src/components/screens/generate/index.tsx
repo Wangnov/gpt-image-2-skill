@@ -14,9 +14,7 @@ import {
 import { motion } from "motion/react";
 import GradientText from "@/components/reactbits/text/GradientText";
 import ShinyText from "@/components/reactbits/text/ShinyText";
-import Masonry, {
-  type MasonryItem,
-} from "@/components/reactbits/components/Masonry";
+import type { MasonryItem } from "@/components/reactbits/components/Masonry";
 import logoUrl from "@/assets/logo.png";
 import { useTweaks } from "@/hooks/use-tweaks";
 import { useReducedMotion } from "@/hooks/use-reduced-motion";
@@ -32,7 +30,6 @@ import {
   jobOutputPath,
   jobOutputUrl,
 } from "@/lib/job-outputs";
-import { sendImageToEdit } from "@/lib/job-navigation";
 import { insertPromptAtCursor } from "@/lib/prompt-templates";
 import {
   errorMessage,
@@ -56,7 +53,7 @@ import {
 } from "@/lib/providers";
 import type { ServerConfig } from "@/lib/types";
 import { GenerateForm } from "./generate-form";
-import { PendingWorkTile, RecentWorkTile } from "./gallery-tile";
+import { RecentGallery } from "./recent-gallery";
 import {
   heightRatioFromSize,
   jobPlaceholderSeed,
@@ -496,76 +493,16 @@ export function GenerateScreen({
           pulseKey={pulseKey}
         />
 
-        {/* Inline result gallery — closes the prompt → result loop on the
-            same screen. Renders whenever there's anything to show
-            (completed work OR in-flight placeholders) so the user sees
-            their submission immediately, not after the API returns. */}
-        {(recentCompleted.length > 0 || pendingPlaceholders.length > 0) && (
-          <motion.section
-            initial={reducedMotion ? false : { opacity: 0, y: 12 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{
-              duration: reducedMotion ? 0 : 0.46,
-              delay: reducedMotion ? 0 : 0.14,
-              ease: [0.22, 1, 0.36, 1],
-            }}
-            aria-label="最近的作品"
-            className={cn(
-              "mt-6 w-full max-w-[640px]",
-              // Split mode: right column, top-aligned with the form,
-              // wider visual since the column is the larger of the two.
-              hasSplit &&
-                "xl:col-start-2 xl:row-start-2 xl:mt-0 xl:max-w-none xl:self-start",
-            )}
-          >
-            <div className="flex items-center justify-between mb-2 px-1">
-              <span className="t-caps">最近的作品</span>
-              {onOpenHistory && (
-                <button
-                  type="button"
-                  onClick={() => onOpenHistory()}
-                  className="text-[11px] text-muted hover:text-foreground transition-colors"
-                >
-                  查看全部 ›
-                </button>
-              )}
-            </div>
-            <Masonry
-              items={galleryItems}
-              gap={10}
-              minColumnWidth={126}
-              maxColumns={4}
-              animateFrom="bottom"
-              className="min-h-[260px]"
-              renderItem={({ data }) =>
-                data.kind === "pending" ? (
-                  <PendingWorkTile
-                    seed={data.seed}
-                    slotIndex={data.slotIndex}
-                  />
-                ) : (
-                  <RecentWorkTile
-                    job={data.job}
-                    outputIndex={data.outputIndex}
-                    path={data.path}
-                    url={data.url}
-                    promptText={data.promptText}
-                    onOpenJob={onOpenJob}
-                    onSendToEdit={() => {
-                      sendImageToEdit({
-                        jobId: data.job.id,
-                        outputIndex: data.outputIndex,
-                        path: data.path,
-                        url: data.url,
-                      });
-                      onOpenEdit?.();
-                    }}
-                  />
-                )
-              }
-            />
-          </motion.section>
-        )}
+        <RecentGallery
+          reducedMotion={reducedMotion}
+          hasSplit={hasSplit}
+          recentCount={recentCompleted.length}
+          pendingCount={pendingPlaceholders.length}
+          onOpenHistory={onOpenHistory}
+          onOpenJob={onOpenJob}
+          onOpenEdit={onOpenEdit}
+          galleryItems={galleryItems}
+        />
 
         {/* Queue chip — spans both columns in split mode and centers
             itself; in default mode it's part of the centered stack.
