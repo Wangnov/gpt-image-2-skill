@@ -7,7 +7,7 @@ import {
   type RefObject,
 } from "react";
 import { PlaceholderImage } from "@/components/screens/shared/placeholder-image";
-import { exportMaskPayload, loadImage } from "./mask-export";
+import { exportMaskPayload } from "./mask-export";
 import {
   canvasPointerPosition,
   canvasSnapshot,
@@ -18,6 +18,7 @@ import {
   type MaskPoint,
   type MaskSnapshot,
 } from "./mask-canvas-drawing";
+import { useMaskImageSize } from "./use-mask-image-size";
 
 export type MaskMode = "paint" | "erase";
 export type MaskTool = "brush" | "erase" | "rect" | "ellipse";
@@ -96,43 +97,13 @@ export function MaskCanvas({
     canRedo: false,
   });
   const [cursor, setCursor] = useState({ x: 512, y: 512 });
-  const [imageSize, setImageSize] = useState({ width: 1024, height: 1024 });
+  const imageSize = useMaskImageSize({ imageUrl, onImageSizeChange });
   const W = imageSize.width;
   const H = imageSize.height;
   const activeTool = tool ?? (mode === "erase" ? "erase" : "brush");
   const strokeWidth = tool ? brushSize : brushSize * 2;
   const displayWidth = Math.max(1, Math.round(W * zoom));
   const displayHeight = Math.max(1, Math.round(H * zoom));
-
-  useEffect(() => {
-    if (!imageUrl) {
-      const fallback = { width: 1024, height: 1024 };
-      setImageSize(fallback);
-      onImageSizeChange?.(fallback);
-      return;
-    }
-    let cancelled = false;
-    loadImage(imageUrl)
-      .then((image) => {
-        if (cancelled) return;
-        const next = {
-          width: Math.max(1, image.naturalWidth),
-          height: Math.max(1, image.naturalHeight),
-        };
-        setImageSize(next);
-        onImageSizeChange?.(next);
-      })
-      .catch(() => {
-        if (!cancelled) {
-          const fallback = { width: 1024, height: 1024 };
-          setImageSize(fallback);
-          onImageSizeChange?.(fallback);
-        }
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [imageUrl, onImageSizeChange]);
 
   const commitSnapshot = () => {
     const c = canvasRef.current;
