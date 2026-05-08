@@ -831,6 +831,24 @@
   }
 }
 
+/* tailwindcss-animate emits raw CSS animations on `animate-in` /
+   `animate-out` — unlike framer-motion, the plugin doesn't honor
+   prefers-reduced-motion automatically, so every Radix surface that
+   uses `data-[state=open]:animate-in` (Popover, Select, Combobox,
+   Drawer, mobile params sheet, edit actions sheet, history detail
+   dialog) keeps animating for motion-sensitive users unless we patch
+   it. Collapse to 1ms across the board: Radix still gets its
+   animationend so components unmount cleanly, but the motion is
+   imperceptible. !important is required because tailwindcss-animate's
+   own `data-[state=…]:duration-*` utilities also set
+   animation-duration. */
+@media (prefers-reduced-motion: reduce) {
+  .animate-in,
+  .animate-out {
+    animation-duration: 1ms !important;
+  }
+}
+
 .image-overlay {
   background: var(--image-overlay);
   color: var(--image-overlay-text);
