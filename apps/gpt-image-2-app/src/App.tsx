@@ -6,6 +6,7 @@ import {
   useEffect,
   useState,
 } from "react";
+import { createPortal } from "react-dom";
 import { Toaster, toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { ClassicShell } from "@/components/legacy/classic-shell";
@@ -326,16 +327,29 @@ export default function App() {
               </div>
             </div>
           )}
+          <TextSelectionContextMenu />
+          <QuickLookHost />
+        </div>
+      </WindowChrome>
+      {/*
+        Sonner doesn't internally portal its toaster to <body>, so when it
+        renders inside a stacking context (`div.desktop` / `div.relative`)
+        its `z-index` gets clamped to that context's stacking position —
+        and Radix Drawer / Quick Look (which DO portal to <body>) end up
+        on top regardless of how high we crank the value. Mounting the
+        Toaster via a Portal to <body> puts it in the root stacking
+        context where the z-index 9999 in index.css actually wins.
+      */}
+      {typeof document !== "undefined" &&
+        createPortal(
           <Toaster
             position="top-right"
             theme={legacyInterface ? tweaks.theme : "dark"}
             closeButton
             richColors
-          />
-          <TextSelectionContextMenu />
-          <QuickLookHost />
-        </div>
-      </WindowChrome>
+          />,
+          document.body,
+        )}
     </div>
   );
 }

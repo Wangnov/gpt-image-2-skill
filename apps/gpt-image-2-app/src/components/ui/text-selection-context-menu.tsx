@@ -1,7 +1,9 @@
-import { useEffect, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { toast } from "sonner";
 import { cn } from "@/lib/cn";
+
+const VIEWPORT_PADDING = 8;
 
 export type SelectionCapture =
   | {
@@ -41,6 +43,12 @@ export function openTextSelectionMenu(state: SelectionMenuState) {
  */
 export function TextSelectionContextMenu() {
   const [state, setState] = useState<SelectionMenuState | null>(null);
+  const [position, setPosition] = useState<{
+    top: number;
+    left: number;
+    ready: boolean;
+  } | null>(null);
+  const menuRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     activeListener = setState;
@@ -67,7 +75,37 @@ export function TextSelectionContextMenu() {
     };
   }, [state]);
 
-  if (!state) return null;
+  // Reset to the click position synchronously when a new state arrives so
+  // the first frame paints near the cursor (off-screen clamping happens in
+  // the next pass once we've measured the menu).
+  useLayoutEffect(() => {
+    if (!state) {
+      setPosition(null);
+      return;
+    }
+    setPosition({ top: state.y, left: state.x, ready: false });
+  }, [state]);
+
+  // After the menu paints, measure its real size and clamp into the
+  // viewport. Avoids the right-click-near-the-edge "menu is half off-screen"
+  // problem the user hit.
+  useLayoutEffect(() => {
+    if (!state || !menuRef.current) return;
+    const rect = menuRef.current.getBoundingClientRect();
+    let left = state.x;
+    let top = state.y;
+    if (left + rect.width + VIEWPORT_PADDING > window.innerWidth) {
+      left = window.innerWidth - rect.width - VIEWPORT_PADDING;
+    }
+    if (top + rect.height + VIEWPORT_PADDING > window.innerHeight) {
+      top = window.innerHeight - rect.height - VIEWPORT_PADDING;
+    }
+    if (left < VIEWPORT_PADDING) left = VIEWPORT_PADDING;
+    if (top < VIEWPORT_PADDING) top = VIEWPORT_PADDING;
+    setPosition({ top, left, ready: true });
+  }, [state]);
+
+  if (!state || !position) return null;
 
   const close = () => setState(null);
   const { capture } = state;
@@ -138,12 +176,17 @@ export function TextSelectionContextMenu() {
 
   return createPortal(
     <div
+      ref={menuRef}
       role="menu"
       onMouseDown={(event) => event.stopPropagation()}
       className="fixed z-[1000] min-w-[180px] overflow-hidden rounded-xl border p-1 outline-none"
       style={{
-        top: state.y,
-        left: state.x,
+        top: position.top,
+        left: position.left,
+        // Hide the first paint at the user's cursor position so they don't
+        // see the menu pop, then jump to the clamped location. Once
+        // useLayoutEffect commits the measured position, opacity flips on.
+        opacity: position.ready ? 1 : 0,
         background: "var(--surface-floating)",
         borderColor: "var(--surface-floating-border)",
         backdropFilter: "blur(28px) saturate(150%)",
