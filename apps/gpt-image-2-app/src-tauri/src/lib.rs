@@ -2598,6 +2598,7 @@ pub fn run() {
         .plugin(tauri_plugin_notification::init())
         .plugin(tauri_plugin_process::init())
         .plugin(tauri_plugin_clipboard_manager::init())
+        .plugin(tauri_plugin_drag::init())
         .plugin(tauri_plugin_single_instance::init(|app, _argv, _cwd| {
             let window = app
                 .get_webview_window("main")

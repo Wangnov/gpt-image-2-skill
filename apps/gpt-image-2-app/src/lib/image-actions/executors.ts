@@ -52,6 +52,23 @@ const copyImage: ImageAction = {
   },
 };
 
+const copyImageWithPrompt: ImageAction = {
+  id: "copy-image-with-prompt",
+  label: () => "复制图片+提示词",
+  icon: "copy",
+  shortcut: "⇧⌘C",
+  group: "transfer",
+  isAvailable: ({ asset }) => Boolean(asset.src),
+  // Older jobs without a stored prompt grey-out instead of hide so the menu
+  // shape stays stable.
+  isEnabled: ({ asset }) => Boolean(asset.prompt?.trim()),
+  disabledReason: () => "这个任务没有保存提示词",
+  execute: async ({ asset }) => {
+    await copyImageToClipboard(asset, { withPrompt: true });
+    toast.success("已复制图片和提示词", { duration: 1_500 });
+  },
+};
+
 const copyPathOrLink: ImageAction = {
   id: "copy-path-or-link",
   label: ({ runtime }) => (runtime === "tauri" ? "复制文件路径" : "复制链接"),
@@ -186,6 +203,43 @@ const revealJobInHistory: ImageAction = {
   },
 };
 
+const shareAction: ImageAction = {
+  id: "share",
+  label: () => "分享…",
+  icon: "external",
+  group: "transfer",
+  isAvailable: ({ runtime, asset }) => {
+    if (runtime === "tauri") return false;
+    if (typeof navigator === "undefined") return false;
+    if (typeof navigator.share !== "function") return false;
+    return Boolean(asset.src);
+  },
+  execute: async ({ asset }) => {
+    const response = await fetch(asset.src);
+    if (!response.ok) {
+      throw new Error(`无法读取图片：HTTP ${response.status}`);
+    }
+    const blob = await response.blob();
+    const filename = `${asset.jobId}-${asset.outputIndex}.png`;
+    const file = new File([blob], filename, { type: "image/png" });
+    const shareData: ShareData = { files: [file] };
+    if (asset.prompt) shareData.text = asset.prompt;
+    // Some platforms (older Safari) don't support file shares — fall back
+    // to URL-only when feature detection fails.
+    if (
+      typeof navigator.canShare === "function" &&
+      !navigator.canShare({ files: [file] })
+    ) {
+      await navigator.share({
+        url: asset.src,
+        text: asset.prompt,
+      });
+      return;
+    }
+    await navigator.share(shareData);
+  },
+};
+
 const deleteAction: ImageAction = {
   id: "delete",
   label: () => "删除",
@@ -202,10 +256,12 @@ const deleteAction: ImageAction = {
 
 export const C2_TRANSFER_EXPORT_MANAGE_ACTIONS: ImageAction[] = [
   copyImage,
+  copyImageWithPrompt,
   copyPathOrLink,
   saveAs,
   revealInFinder,
   openWithDefault,
+  shareAction,
   deleteAction,
 ];
 

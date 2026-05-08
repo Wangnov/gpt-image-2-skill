@@ -5,6 +5,7 @@ import { RevealImage } from "@/components/ui/reveal-image";
 import { ImageContextMenu } from "@/components/ui/image-context-menu";
 import { ImageHoverToolbar } from "@/components/ui/image-hover-toolbar";
 import { useReducedMotion } from "@/hooks/use-reduced-motion";
+import { imageDragProps } from "@/lib/image-actions/drag-out";
 import { setFocusedImage } from "@/lib/image-actions/focused-image";
 import type { ImageAsset } from "@/lib/image-actions/types";
 import { PlaceholderImage } from "./placeholder-image";
@@ -49,6 +50,7 @@ export function OutputTile({
     setImageFailed(false);
   }, [output.url]);
 
+  const dragProps = asset ? imageDragProps(asset) : { draggable: false };
   const tile = (
     <motion.div
       onMouseEnter={() => {
@@ -122,6 +124,7 @@ export function OutputTile({
           decoding="async"
           className="w-full h-full object-cover"
           onError={() => setImageFailed(true)}
+          {...dragProps}
         />
       ) : (
         <PlaceholderImage

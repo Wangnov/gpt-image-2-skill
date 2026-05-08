@@ -10,6 +10,7 @@
     "updater:default",
     "process:allow-restart",
     "clipboard-manager:allow-write-image",
-    "clipboard-manager:allow-write-text"
+    "clipboard-manager:allow-write-text",
+    "drag:default"
   ]
 }
