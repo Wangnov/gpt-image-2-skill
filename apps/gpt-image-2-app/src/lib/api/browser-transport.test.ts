@@ -107,7 +107,7 @@ describe("browserApi", () => {
     expect(secret.value).toBe("sk-test");
   });
 
-  it("keeps browser notification preferences while disabling server channels", async () => {
+  it("keeps browser notification preferences while disabling server channels and scrubbing inline secrets", async () => {
     const config = await browserApi.updateNotifications({
       enabled: true,
       on_completed: true,
@@ -145,17 +145,22 @@ describe("browserApi", () => {
     expect(config.notifications.system.enabled).toBe(true);
     expect(config.notifications.email.enabled).toBe(false);
     expect(config.notifications.webhooks[0].enabled).toBe(false);
+    // The browser cannot deliver SMTP / webhook calls and must not persist
+    // their plaintext secrets to IndexedDB. The source stays so the editor
+    // still renders a file input, but `present: false` proves the value was
+    // scrubbed before storage.
     expect(config.notifications.email.password).toEqual({
       source: "file",
-      present: true,
+      present: false,
     });
     expect(config.notifications.webhooks[0].headers.Authorization).toEqual({
       source: "file",
-      present: true,
+      present: false,
     });
 
     const test = await browserApi.testNotifications("completed");
     expect(test.ok).toBe(true);
+    expect(test.reason).toBe("local_only");
     expect(test.deliveries[0].channel).toBe("browser");
   });
 

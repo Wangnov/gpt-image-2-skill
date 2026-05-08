@@ -403,6 +403,18 @@ function sanitizeCredential(credential: ProviderConfig["credentials"][string]) {
   return rest;
 }
 
+// Replace any inline file secret with an empty value, keeping the source so
+// the editor still renders the right input shape. env / keychain credentials
+// hold only references, so they pass through unchanged.
+function scrubFileCredentialSecret<
+  T extends NotificationConfig["email"]["password"],
+>(credential: T): T {
+  if (credential && credential.source === "file") {
+    return { source: "file", value: "" } as unknown as T;
+  }
+  return credential;
+}
+
 function sanitizeNotificationCredential(
   credential: NotificationConfig["email"]["password"],
 ) {
@@ -1253,20 +1265,29 @@ export const browserApi: ApiClient = {
     await prepareBrowserRuntime();
     const current = await readConfigRecord();
     const notifications = normalizeNotificationConfig(config);
-    // Defense-in-depth: NotificationCenterPanel hides the email and webhook
-    // rows in this runtime, so users cannot enable them through the UI. If a
-    // config still arrives with them enabled (preset sync, manual IndexedDB
-    // tweak), force the toggles off — the browser has no SMTP socket and
-    // webhook secrets stored here would be effectively plaintext on disk.
+    // Defense-in-depth: NotificationCenterPanel hides email/webhook rows in
+    // this runtime, but if a config arrives with them enabled (preset sync,
+    // manual IndexedDB tweak) we both force the toggles off AND strip any
+    // inline secrets. The browser cannot deliver SMTP / webhook calls, and
+    // persisting plaintext SMTP passwords or Bearer tokens to IndexedDB
+    // would leave them on disk for anyone with file-system access. env /
+    // keychain references hold no secret so they pass through unchanged.
     current.notifications = {
       ...notifications,
       email: {
         ...notifications.email,
         enabled: false,
+        password: scrubFileCredentialSecret(notifications.email.password),
       },
       webhooks: notifications.webhooks.map((webhook) => ({
         ...webhook,
         enabled: false,
+        headers: Object.fromEntries(
+          Object.entries(webhook.headers ?? {}).map(([name, credential]) => [
+            name,
+            scrubFileCredentialSecret(credential)!,
+          ]),
+        ),
       })),
     };
     await writeStoredConfig(browserStoredConfig(current));
@@ -1292,6 +1313,9 @@ export const browserApi: ApiClient = {
     }
     return {
       ok: true,
+      // Static Web has no server-side channels at all; mirror the server's
+      // `local_only` shape so the settings UI takes the same code path.
+      reason: "local_only",
       deliveries: [
         {
           channel: "browser",

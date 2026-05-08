@@ -12,9 +12,10 @@ use gpt_image_2_core::{
     AppConfig, CredentialRef, HistoryListOptions, KEYCHAIN_SERVICE, NotificationConfig,
     ProviderConfig, default_config_path, default_keychain_account, delete_history_job,
     dispatch_task_notifications, history_db_path, jobs_dir, list_active_history_jobs,
-    list_history_jobs_page, load_app_config, preserve_notification_secrets, read_keychain_secret,
-    redact_app_config, run_json, save_app_config, shared_config_dir, show_history_job,
-    upsert_history_job, write_keychain_secret,
+    list_history_jobs_page, load_app_config, notification_status_allowed,
+    preserve_notification_secrets, read_keychain_secret, redact_app_config, run_json,
+    save_app_config, shared_config_dir, show_history_job, upsert_history_job,
+    write_keychain_secret,
 };
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
@@ -1275,14 +1276,23 @@ fn test_notifications(input: NotificationTestInput) -> Result<Value, String> {
         "error": if status == "failed" { json!({"message": "Notification test failure"}) } else { Value::Null },
     });
     let deliveries = dispatch_task_notifications(&config, &job);
-    // An empty deliveries vec means *nothing* was sent (notifications disabled,
-    // status filtered out, or no channel enabled). `[].iter().all(..)` is true,
-    // so collapsing the empty case to `ok=true` would lie to the UI.
-    let ok = !deliveries.is_empty() && deliveries.iter().all(|delivery| delivery.ok);
-    let reason = if deliveries.is_empty() {
-        Some("no_eligible_channel")
+    // dispatch_task_notifications only fires server channels (email/webhook).
+    // Toast and system notifications are delivered client-side, so a wholly
+    // empty deliveries vec is OK as long as the config still has a local
+    // channel that would fire for this status — surface that with a
+    // distinct `local_only` reason instead of treating it as "nothing sent".
+    let local_eligible = config.notifications.enabled
+        && notification_status_allowed(&config.notifications, status)
+        && (config.notifications.toast.enabled || config.notifications.system.enabled);
+    let (ok, reason) = if !deliveries.is_empty() {
+        (
+            deliveries.iter().all(|delivery| delivery.ok),
+            None,
+        )
+    } else if local_eligible {
+        (true, Some("local_only"))
     } else {
-        None
+        (false, Some("no_eligible_channel"))
     };
     Ok(json!({
         "ok": ok,

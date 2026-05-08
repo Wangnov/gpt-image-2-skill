@@ -1064,6 +1064,10 @@ function fileCredentialValue(credential?: CredentialRef | null) {
     : "";
 }
 
+// Keep in sync with `KEYCHAIN_SERVICE` in crates/gpt-image-2-core/src/lib.rs;
+// the backend resolves keychain refs against this exact service name.
+const DEFAULT_KEYCHAIN_SERVICE = "gpt-image-2-skill";
+
 function blankCredential(
   source: CredentialRef["source"],
   previous?: CredentialRef | null,
@@ -1075,7 +1079,9 @@ function blankCredential(
     return {
       source,
       service:
-        previous?.source === "keychain" ? previous.service : "gpt-image-2",
+        previous?.source === "keychain"
+          ? previous.service
+          : DEFAULT_KEYCHAIN_SERVICE,
       account: previous?.source === "keychain" ? previous.account : "",
     };
   }
@@ -1237,7 +1243,7 @@ function CredentialEditor({
                 service:
                   credential?.source === "keychain"
                     ? credential.service
-                    : "gpt-image-2",
+                    : DEFAULT_KEYCHAIN_SERVICE,
                 account: event.target.value,
               })
             }
@@ -1388,7 +1394,12 @@ function NotificationCenterPanel({
         return;
       }
       if (result.ok) {
-        toast.success("测试通知已发送", { description: message });
+        const description =
+          message ||
+          (result.reason === "local_only"
+            ? "服务端未配置 server-side 通道；toast 和系统通知会在真实任务完成时由客户端发出。"
+            : undefined);
+        toast.success("测试通知已发送", { description });
       } else {
         toast.warning("测试通知未全部成功", { description: message });
       }
