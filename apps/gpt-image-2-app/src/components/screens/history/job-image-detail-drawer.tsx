@@ -1,9 +1,8 @@
 import { useEffect, useState } from "react";
-import * as Radix from "@radix-ui/react-dialog";
-import { ChevronLeft, ChevronRight, X } from "lucide-react";
+import { ChevronLeft, ChevronRight } from "lucide-react";
 import { Drawer } from "@/components/ui/drawer";
 import { Button } from "@/components/ui/button";
-import { RevealImage } from "@/components/ui/reveal-image";
+import { openQuickLook } from "@/components/ui/quick-look";
 import TiltedCard from "@/components/reactbits/components/TiltedCard";
 import { copyText, openPath, revealPath, saveImages } from "@/lib/user-actions";
 import { useConfirm } from "@/hooks/use-confirm";
@@ -16,6 +15,8 @@ import {
   jobOutputPath,
   jobOutputUrl,
 } from "@/lib/job-outputs";
+import { imageAssetFromOutput } from "@/lib/image-actions/asset";
+import type { ImageAsset } from "@/lib/image-actions/types";
 import { PlaceholderImage } from "@/components/screens/shared/placeholder-image";
 
 type Props = {
@@ -66,7 +67,6 @@ export function JobImageDetailDrawer({
   onSendToEdit,
 }: Props) {
   const confirm = useConfirm();
-  const [zoomOpen, setZoomOpen] = useState(false);
   const [imageFailed, setImageFailed] = useState(false);
   const [thumbFailed, setThumbFailed] = useState<Set<number>>(new Set());
   const copy = runtimeCopy();
@@ -135,21 +135,44 @@ export function JobImageDetailDrawer({
     onChangeIndex(outputIndexes[(activePosition + 1) % outputCount]);
   };
 
-  useEffect(() => {
-    if (!zoomOpen) return;
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "ArrowLeft") {
-        event.preventDefault();
-        goPrev();
-      }
-      if (event.key === "ArrowRight") {
-        event.preventDefault();
-        goNext();
-      }
-    };
-    window.addEventListener("keydown", onKeyDown);
-    return () => window.removeEventListener("keydown", onKeyDown);
-  }, [activePosition, outputCount, outputIndexes, zoomOpen]);
+  // QuickLook owns its own ArrowLeft/ArrowRight handling; the drawer no
+  // longer needs a parallel keyboard listener.
+
+  const peerAssets: ImageAsset[] = job
+    ? outputIndexes.map((idx) =>
+        imageAssetFromOutput({
+          jobId: job.id,
+          outputIndex: idx,
+          src: jobOutputUrl(job, idx) ?? "",
+          path: jobOutputPath(job, idx) ?? null,
+          prompt: prompt || undefined,
+          command: job.command,
+          job,
+        }),
+      )
+    : [];
+  const activeAsset =
+    peerAssets[activePosition] ??
+    (job && url
+      ? imageAssetFromOutput({
+          jobId: job.id,
+          outputIndex: activeOutputIndex,
+          src: url,
+          path: path ?? null,
+          prompt: prompt || undefined,
+          command: job.command,
+          job,
+        })
+      : null);
+
+  const openZoom = () => {
+    if (!activeAsset) return;
+    openQuickLook({
+      asset: activeAsset,
+      peers: peerAssets.length > 1 ? peerAssets : undefined,
+      onChange: (next) => onChangeIndex(next.outputIndex),
+    });
+  };
 
   return (
     <>
@@ -285,7 +308,7 @@ export function JobImageDetailDrawer({
             {url && !imageFailed ? (
               <button
                 type="button"
-                onClick={() => setZoomOpen(true)}
+                onClick={openZoom}
                 className="mx-auto block w-full max-w-[340px] cursor-zoom-in rounded-[15px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--accent-55)] focus-visible:ring-offset-2 focus-visible:ring-offset-[color:var(--bg)]"
                 aria-label={`查看第 ${letter} 张大图`}
               >
@@ -449,108 +472,6 @@ export function JobImageDetailDrawer({
           </section>
         </div>
       </Drawer>
-
-      {/* Fullscreen image zoom — opened by clicking the big image. Plain
-        Radix Dialog so we can size it 90vw/90vh without the standard
-        <Dialog> wrapper's max-width. */}
-      <Radix.Root open={zoomOpen} onOpenChange={setZoomOpen}>
-        <Radix.Portal>
-          <Radix.Overlay
-            className="fixed inset-0 z-[60] data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=closed]:animate-out data-[state=closed]:fade-out-0"
-            style={{
-              background: "var(--k-70)",
-              backdropFilter: "blur(8px)",
-              WebkitBackdropFilter: "blur(8px)",
-            }}
-          />
-          <Radix.Content
-            aria-describedby={undefined}
-            className="fixed left-1/2 top-1/2 z-[61] -translate-x-1/2 -translate-y-1/2 max-w-[92vw] max-h-[92vh] outline-none data-[state=open]:animate-in data-[state=open]:zoom-in-95 data-[state=closed]:animate-out data-[state=closed]:zoom-out-95"
-          >
-            <Radix.Title className="sr-only">
-              {outputCount > 1 ? `作品 ${letter}` : "作品详情"}
-            </Radix.Title>
-            {url && !imageFailed && (
-              <RevealImage
-                src={url}
-                alt={`第 ${letter} 张大图`}
-                decoding="async"
-                duration={500}
-                className="block max-w-[92vw] max-h-[92vh] object-contain rounded-lg shadow-[var(--shadow-floating)]"
-              />
-            )}
-            {outputCount > 1 && (
-              <>
-                <button
-                  type="button"
-                  onClick={goPrev}
-                  aria-label="上一张"
-                  className="absolute left-3 top-1/2 inline-flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full border border-[color:var(--surface-floating-border)] bg-[color:var(--surface-floating)] text-foreground backdrop-blur transition-colors hover:bg-[color:var(--surface-floating-strong)]"
-                  style={{ boxShadow: "var(--shadow-floating)" }}
-                >
-                  <ChevronLeft size={20} />
-                </button>
-                <button
-                  type="button"
-                  onClick={goNext}
-                  aria-label="下一张"
-                  className="absolute right-3 top-1/2 inline-flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full border border-[color:var(--surface-floating-border)] bg-[color:var(--surface-floating)] text-foreground backdrop-blur transition-colors hover:bg-[color:var(--surface-floating-strong)]"
-                  style={{ boxShadow: "var(--shadow-floating)" }}
-                >
-                  <ChevronRight size={20} />
-                </button>
-                <div className="absolute bottom-3 left-1/2 flex max-w-[78vw] -translate-x-1/2 items-center gap-1.5 overflow-x-auto rounded-full border border-[color:var(--surface-floating-border)] bg-[color:var(--surface-floating)] p-1.5 backdrop-blur scrollbar-none">
-                  {job &&
-                    outputIndexes.map((idx, i) => {
-                      const thumbUrl = jobOutputUrl(job, idx);
-                      const isActive = idx === activeOutputIndex;
-                      return (
-                        <button
-                          key={idx}
-                          type="button"
-                          onClick={() => onChangeIndex(idx)}
-                          className={cn(
-                            "h-10 w-10 shrink-0 overflow-hidden rounded-full border transition-all",
-                            isActive
-                              ? "border-[color:var(--accent)] opacity-100"
-                              : "border-transparent opacity-55 hover:opacity-90",
-                          )}
-                          aria-label={`切换到第 ${i + 1} 张`}
-                        >
-                          {thumbUrl ? (
-                            <img
-                              src={thumbUrl}
-                              alt=""
-                              loading="lazy"
-                              decoding="async"
-                              className="h-full w-full object-cover"
-                              draggable={false}
-                            />
-                          ) : (
-                            <PlaceholderImage
-                              seed={idx + i + 41}
-                              variant={`zoom-thumb-${job.id}`}
-                            />
-                          )}
-                        </button>
-                      );
-                    })}
-                </div>
-              </>
-            )}
-            <Radix.Close asChild>
-              <button
-                type="button"
-                aria-label="关闭"
-                className="absolute -top-2 -right-2 h-9 w-9 rounded-full inline-flex items-center justify-center bg-[color:var(--surface-floating)] backdrop-blur border border-[color:var(--surface-floating-border)] text-foreground hover:bg-[color:var(--surface-floating-strong)] transition-colors"
-                style={{ boxShadow: "var(--shadow-floating)" }}
-              >
-                <X size={16} />
-              </button>
-            </Radix.Close>
-          </Radix.Content>
-        </Radix.Portal>
-      </Radix.Root>
     </>
   );
 }

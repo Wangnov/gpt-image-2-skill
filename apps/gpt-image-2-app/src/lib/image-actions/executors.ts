@@ -1,5 +1,6 @@
 import { toast } from "sonner";
 import { api } from "@/lib/api";
+import { openQuickLook } from "@/components/ui/quick-look";
 import { copyImageToClipboard } from "./copy-image";
 import { softDeleteJobWithUndo } from "./delete-job";
 import { invalidateJobsQueries } from "./query-client";
@@ -15,6 +16,22 @@ import type { ImageAction } from "./types";
  * Space + the action). Variations and Upscale stay out of scope until the
  * backend supports them.
  */
+
+const quickLook: ImageAction = {
+  id: "quick-look",
+  // Quick Look isn't shown inside the right-click menu — Space is a much
+  // stickier mental model for it, and the action would just bloat the menu.
+  // Hover toolbar (first slot) and command palette still see it.
+  label: () => "快速查看",
+  icon: "eye",
+  shortcut: "Space",
+  group: "transfer",
+  isAvailable: ({ surface, asset }) =>
+    surface !== "context-menu" && Boolean(asset.src),
+  execute: ({ asset }) => {
+    openQuickLook({ asset });
+  },
+};
 
 const copyImage: ImageAction = {
   id: "copy-image",
@@ -137,6 +154,8 @@ export const C2_TRANSFER_EXPORT_MANAGE_ACTIONS: ImageAction[] = [
   openWithDefault,
   deleteAction,
 ];
+
+export const C3_PREVIEW_ACTIONS: ImageAction[] = [quickLook];
 
 function inferDownloadName(
   src: string,

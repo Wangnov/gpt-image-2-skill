@@ -3,7 +3,9 @@ import { AnimatePresence, motion } from "motion/react";
 import { Icon } from "@/components/icon";
 import { RevealImage } from "@/components/ui/reveal-image";
 import { ImageContextMenu } from "@/components/ui/image-context-menu";
+import { ImageHoverToolbar } from "@/components/ui/image-hover-toolbar";
 import { useReducedMotion } from "@/hooks/use-reduced-motion";
+import { setFocusedImage } from "@/lib/image-actions/focused-image";
 import type { ImageAsset } from "@/lib/image-actions/types";
 import { PlaceholderImage } from "./placeholder-image";
 
@@ -49,9 +51,15 @@ export function OutputTile({
 
   const tile = (
     <motion.div
-      onMouseEnter={() => setHover(true)}
+      onMouseEnter={() => {
+        setHover(true);
+        if (asset) setFocusedImage(asset);
+      }}
       onMouseLeave={() => setHover(false)}
-      onFocusCapture={() => setFocusWithin(true)}
+      onFocusCapture={() => {
+        setFocusWithin(true);
+        if (asset) setFocusedImage(asset);
+      }}
       onBlurCapture={(event) => {
         if (!event.currentTarget.contains(event.relatedTarget as Node | null)) {
           setFocusWithin(false);
@@ -148,61 +156,70 @@ export function OutputTile({
         </div>
         {output.selected && <Icon name="check" size={12} />}
       </div>
-      <AnimatePresence>
-        {(hover || focusWithin || output.selected) && (
-          <motion.div
-            className="absolute top-2 right-2 z-20 flex gap-1"
-            initial={reducedMotion ? false : { opacity: 0, y: -3, scale: 0.98 }}
-            animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={
-              reducedMotion
-                ? { opacity: 0 }
-                : { opacity: 0, y: -2, scale: 0.98 }
-            }
-            transition={{ duration: 0.16, ease: [0.22, 1, 0.36, 1] }}
-          >
-            {onOpen && (
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onOpen();
-                }}
-                title="打开图片"
-                aria-label="打开图片"
-                className="touch-target image-overlay flex h-8 w-8 items-center justify-center rounded-[4px] border-none"
-              >
-                <Icon name="external" size={13} />
-              </button>
-            )}
-            {onSendToEdit && (
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onSendToEdit();
-                }}
-                title="发送到编辑"
-                aria-label="发送到编辑"
-                className="touch-target image-overlay flex h-8 w-8 items-center justify-center rounded-[4px] border-none"
-              >
-                <Icon name="edit" size={13} />
-              </button>
-            )}
-            {onDownload && (
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onDownload();
-                }}
-                title={downloadLabel}
-                aria-label={downloadLabel}
-                className="touch-target image-overlay flex h-8 w-8 items-center justify-center rounded-[4px] border-none"
-              >
-                <Icon name="download" size={13} />
-              </button>
-            )}
-          </motion.div>
-        )}
-      </AnimatePresence>
+      {asset ? (
+        <ImageHoverToolbar
+          asset={asset}
+          visible={hover || focusWithin || Boolean(output.selected)}
+        />
+      ) : (
+        <AnimatePresence>
+          {(hover || focusWithin || output.selected) && (
+            <motion.div
+              className="absolute top-2 right-2 z-20 flex gap-1"
+              initial={
+                reducedMotion ? false : { opacity: 0, y: -3, scale: 0.98 }
+              }
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={
+                reducedMotion
+                  ? { opacity: 0 }
+                  : { opacity: 0, y: -2, scale: 0.98 }
+              }
+              transition={{ duration: 0.16, ease: [0.22, 1, 0.36, 1] }}
+            >
+              {onOpen && (
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onOpen();
+                  }}
+                  title="打开图片"
+                  aria-label="打开图片"
+                  className="touch-target image-overlay flex h-8 w-8 items-center justify-center rounded-[4px] border-none"
+                >
+                  <Icon name="external" size={13} />
+                </button>
+              )}
+              {onSendToEdit && (
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onSendToEdit();
+                  }}
+                  title="发送到编辑"
+                  aria-label="发送到编辑"
+                  className="touch-target image-overlay flex h-8 w-8 items-center justify-center rounded-[4px] border-none"
+                >
+                  <Icon name="edit" size={13} />
+                </button>
+              )}
+              {onDownload && (
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onDownload();
+                  }}
+                  title={downloadLabel}
+                  aria-label={downloadLabel}
+                  className="touch-target image-overlay flex h-8 w-8 items-center justify-center rounded-[4px] border-none"
+                >
+                  <Icon name="download" size={13} />
+                </button>
+              )}
+            </motion.div>
+          )}
+        </AnimatePresence>
+      )}
     </motion.div>
   );
 

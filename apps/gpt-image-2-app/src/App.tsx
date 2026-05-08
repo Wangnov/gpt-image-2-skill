@@ -24,6 +24,7 @@ import { useJobs } from "@/hooks/use-jobs";
 import { useGlobalShortcuts } from "@/hooks/use-shortcuts";
 import { useTweaks } from "@/hooks/use-tweaks";
 import { TextSelectionContextMenu } from "@/components/ui/text-selection-context-menu";
+import { QuickLookHost } from "@/components/ui/quick-look";
 import {
   checkForAppUpdate,
   installAppUpdate,
@@ -314,6 +315,7 @@ export default function App() {
             richColors
           />
           <TextSelectionContextMenu />
+          <QuickLookHost />
         </div>
       </WindowChrome>
     </div>

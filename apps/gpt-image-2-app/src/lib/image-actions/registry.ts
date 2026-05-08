@@ -1,4 +1,7 @@
-import { C2_TRANSFER_EXPORT_MANAGE_ACTIONS } from "./executors";
+import {
+  C2_TRANSFER_EXPORT_MANAGE_ACTIONS,
+  C3_PREVIEW_ACTIONS,
+} from "./executors";
 import type {
   ImageAction,
   ImageActionContext,
@@ -18,6 +21,7 @@ import type {
  * `actionsFor(ctx)` and never define their own action shapes.
  */
 export const IMAGE_ACTIONS: ImageAction[] = [
+  ...C3_PREVIEW_ACTIONS,
   ...C2_TRANSFER_EXPORT_MANAGE_ACTIONS,
 ];
 
