@@ -2,7 +2,9 @@ import { useEffect, useState } from "react";
 import { AnimatePresence, motion } from "motion/react";
 import { Icon } from "@/components/icon";
 import { RevealImage } from "@/components/ui/reveal-image";
+import { ImageContextMenu } from "@/components/ui/image-context-menu";
 import { useReducedMotion } from "@/hooks/use-reduced-motion";
+import type { ImageAsset } from "@/lib/image-actions/types";
 import { PlaceholderImage } from "./placeholder-image";
 
 type OutputMeta = {
@@ -19,6 +21,7 @@ export function OutputTile({
   onOpen,
   onSendToEdit,
   downloadLabel = "保存图片",
+  asset,
 }: {
   output: OutputMeta;
   onSelect?: () => void;
@@ -26,6 +29,12 @@ export function OutputTile({
   onOpen?: () => void;
   onSendToEdit?: () => void;
   downloadLabel?: string;
+  /**
+   * When provided, the tile is wrapped in an `ImageContextMenu` so right-click
+   * surfaces the runtime-aware action set. The legacy/classic shells leave
+   * this undefined and keep the existing hover-only behavior.
+   */
+  asset?: ImageAsset;
 }) {
   const reducedMotion = useReducedMotion();
   const [hover, setHover] = useState(false);
@@ -38,7 +47,7 @@ export function OutputTile({
     setImageFailed(false);
   }, [output.url]);
 
-  return (
+  const tile = (
     <motion.div
       onMouseEnter={() => setHover(true)}
       onMouseLeave={() => setHover(false)}
@@ -196,4 +205,9 @@ export function OutputTile({
       </AnimatePresence>
     </motion.div>
   );
+
+  if (asset) {
+    return <ImageContextMenu asset={asset}>{tile}</ImageContextMenu>;
+  }
+  return tile;
 }

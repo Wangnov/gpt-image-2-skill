@@ -96,6 +96,7 @@ import {
   type SendToEditPayload,
 } from "@/lib/job-navigation";
 import { insertPromptAtCursor } from "@/lib/prompt-templates";
+import { imageAssetFromOutput } from "@/lib/image-actions/asset";
 import {
   isTauriRuntime,
   useGlobalImagePaste,
@@ -1604,6 +1605,15 @@ export function EditScreen({
                         >
                           <OutputTile
                             output={output}
+                            asset={imageAssetFromOutput({
+                              jobId: jobId!,
+                              outputIndex: output.index,
+                              src: output.url ?? "",
+                              path:
+                                api.outputPath(jobId!, output.index) ?? null,
+                              prompt: prompt || undefined,
+                              command: "images edit",
+                            })}
                             downloadLabel={copy.saveImageLabel}
                             onSelect={() => setSelectedOutput(output.index)}
                             onDownload={() =>

@@ -1483,6 +1483,20 @@ export const browserApi: ApiClient = {
     eventLog.delete(id);
     nextSeq.delete(id);
   },
+  async softDeleteJob(id: string) {
+    // Browser runtime has no recoverable trash; the executor suppresses the
+    // "undo" toast on non-Tauri runtimes so the UX matches reality.
+    await this.deleteJob(id);
+  },
+  async restoreDeletedJob(_id: string) {
+    throw new Error("浏览器模式不支持恢复，请重新生成。");
+  },
+  async hardDeleteJob(id: string) {
+    await this.deleteJob(id);
+  },
+  async copyImageToClipboard(_path: string, _prompt?: string | null) {
+    throw new Error("浏览器模式请使用 ClipboardItem。");
+  },
   async cancelJob(id: string) {
     await prepareBrowserRuntime();
     const queuedIndex = queue.findIndex((task) => task.job.id === id);

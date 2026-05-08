@@ -177,6 +177,18 @@ export const tauriApi: ApiClient = {
   async deleteJob(id: string) {
     await invoke("history_delete", { jobId: id });
   },
+  async softDeleteJob(id: string) {
+    await invoke("soft_delete_job", { jobId: id });
+  },
+  async restoreDeletedJob(id: string) {
+    await invoke("restore_deleted_job", { jobId: id });
+  },
+  async hardDeleteJob(id: string) {
+    await invoke("hard_delete_job", { jobId: id });
+  },
+  async copyImageToClipboard(path: string, prompt?: string | null) {
+    await invoke("copy_image_to_clipboard", { path, prompt: prompt ?? null });
+  },
   async cancelJob(id: string) {
     const result = await invoke<TauriJobResponse>("cancel_job", { jobId: id });
     return normalizeJobResponse(result);

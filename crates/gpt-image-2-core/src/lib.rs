@@ -4541,6 +4541,32 @@ fn open_history_db() -> Result<Connection, AppError> {
         )
         .with_detail(json!({"error": error.to_string()}))
     })?;
+    // Soft-delete migration: add `deleted_at TEXT` column. SQLite returns
+    // "duplicate column name" if the column already exists — swallow only
+    // that case so the migration is idempotent.
+    match conn.execute("ALTER TABLE jobs ADD COLUMN deleted_at TEXT", []) {
+        Ok(_) => {}
+        Err(rusqlite::Error::SqliteFailure(_, Some(msg)))
+            if msg.contains("duplicate column name") => {}
+        Err(error) => {
+            return Err(AppError::new(
+                "history_migration_failed",
+                "Unable to add deleted_at column.",
+            )
+            .with_detail(json!({"error": error.to_string()})));
+        }
+    }
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_jobs_deleted_at_created_at ON jobs (deleted_at, created_at DESC, id DESC)",
+        [],
+    )
+    .map_err(|error| {
+        AppError::new(
+            "history_migration_failed",
+            "Unable to initialize history indexes.",
+        )
+        .with_detail(json!({"error": error.to_string()}))
+    })?;
     Ok(conn)
 }
 
@@ -4611,12 +4637,54 @@ pub fn delete_history_job(job_id: &str) -> Result<usize, AppError> {
         })
 }
 
+/// Mark a history row as soft-deleted by stamping `deleted_at` with the
+/// current epoch seconds. Already-deleted rows are not re-stamped, keeping
+/// the original deletion time intact for trash retention windows.
+pub fn soft_delete_history_job(job_id: &str) -> Result<usize, AppError> {
+    let conn = open_history_db()?;
+    let now = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_secs()
+        .to_string();
+    conn.execute(
+        "UPDATE jobs SET deleted_at = ?1 WHERE id = ?2 AND deleted_at IS NULL",
+        params![now, job_id],
+    )
+    .map_err(|error| {
+        AppError::new(
+            "history_soft_delete_failed",
+            "Unable to soft-delete history job.",
+        )
+        .with_detail(json!({"error": error.to_string()}))
+    })
+}
+
+/// Clear `deleted_at` so the row reappears in the default listing. Idempotent.
+pub fn restore_deleted_history_job(job_id: &str) -> Result<usize, AppError> {
+    let conn = open_history_db()?;
+    conn.execute(
+        "UPDATE jobs SET deleted_at = NULL WHERE id = ?1",
+        params![job_id],
+    )
+    .map_err(|error| {
+        AppError::new(
+            "history_restore_failed",
+            "Unable to restore history job.",
+        )
+        .with_detail(json!({"error": error.to_string()}))
+    })
+}
+
 #[derive(Debug, Clone, Default)]
 pub struct HistoryListOptions {
     pub limit: Option<usize>,
     pub cursor: Option<String>,
     pub status: Option<String>,
     pub query: Option<String>,
+    /// When false (default), soft-deleted rows (deleted_at IS NOT NULL) are
+    /// excluded. Trash views set this to true to surface them.
+    pub include_deleted: bool,
 }
 
 #[derive(Debug, Clone)]
@@ -4769,6 +4837,9 @@ pub fn list_history_jobs_page(options: HistoryListOptions) -> Result<HistoryList
     let mut count_clauses = Vec::new();
     let mut count_params = Vec::new();
     append_status_filter(&mut count_clauses, &mut count_params, &statuses);
+    if !options.include_deleted {
+        count_clauses.push("deleted_at IS NULL".to_string());
+    }
     append_search_filter(
         &mut count_clauses,
         &mut count_params,
@@ -4790,6 +4861,9 @@ pub fn list_history_jobs_page(options: HistoryListOptions) -> Result<HistoryList
     let mut clauses = Vec::new();
     let mut query_params = Vec::new();
     append_status_filter(&mut clauses, &mut query_params, &statuses);
+    if !options.include_deleted {
+        clauses.push("deleted_at IS NULL".to_string());
+    }
     append_search_filter(&mut clauses, &mut query_params, options.query.as_deref());
     if let Some((created_at, id)) = cursor {
         clauses.push("(created_at < ? OR (created_at = ? AND id < ?))".to_string());
@@ -4841,7 +4915,7 @@ pub fn list_history_jobs() -> Result<Vec<Value>, AppError> {
 pub fn list_active_history_jobs() -> Result<Vec<Value>, AppError> {
     let conn = open_history_db()?;
     let mut stmt = conn
-        .prepare("SELECT id, command, provider, status, output_path, created_at, metadata FROM jobs WHERE status IN ('queued', 'running') ORDER BY created_at DESC, id DESC")
+        .prepare("SELECT id, command, provider, status, output_path, created_at, metadata FROM jobs WHERE status IN ('queued', 'running') AND deleted_at IS NULL ORDER BY created_at DESC, id DESC")
         .map_err(|error| AppError::new("history_query_failed", "Unable to query active history.").with_detail(json!({"error": error.to_string()})))?;
     stmt.query_map([], history_row_to_value)
         .map_err(|error| {

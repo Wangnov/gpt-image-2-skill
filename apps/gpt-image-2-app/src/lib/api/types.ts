@@ -83,6 +83,34 @@ export type ApiClient = RuntimeCapabilities & {
   listActiveJobs(): Promise<Job[]>;
   getJob(id: string): Promise<{ job: Job; events: JobEvent[] }>;
   deleteJob(id: string): Promise<void>;
+  /**
+   * Soft delete: hide a job from listings but keep it recoverable for the
+   * 5-second undo window. On Tauri this moves the job folder into
+   * `jobs_dir/.trash/<id>` and sets the SQLite `deleted_at` timestamp; on
+   * HTTP / Browser runtimes this falls back to a hard delete (no undo).
+   */
+  softDeleteJob(id: string): Promise<void>;
+  /**
+   * Reverse a soft delete. Tauri-only meaningful operation; other runtimes
+   * throw because they have no recoverable trash state.
+   */
+  restoreDeletedJob(id: string): Promise<void>;
+  /**
+   * Permanently delete a job: rm `jobs_dir/<id>` and `jobs_dir/.trash/<id>`,
+   * then DELETE the history row.
+   */
+  hardDeleteJob(id: string): Promise<void>;
+  /**
+   * Tauri-only: read `path` from disk, decode as image, and write to the
+   * system clipboard via `tauri-plugin-clipboard-manager`. Optionally also
+   * writes `prompt` as plain text in the same write so a single Cmd+V on the
+   * far side can yield image + prompt.
+   *
+   * On HTTP / Browser runtimes the executor is expected to use
+   * `navigator.clipboard.write([new ClipboardItem(...)])` directly instead of
+   * calling this method.
+   */
+  copyImageToClipboard(path: string, prompt?: string | null): Promise<void>;
   cancelJob(id: string): Promise<TauriJobResponse>;
   queueStatus(): Promise<QueueStatus>;
   setQueueConcurrency(maxParallel: number): Promise<QueueStatus>;

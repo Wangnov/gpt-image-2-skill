@@ -13,13 +13,14 @@ use gpt_image_2_core::{
     ProviderConfig, default_config_path, default_keychain_account, delete_history_job,
     dispatch_task_notifications, history_db_path, jobs_dir, list_active_history_jobs,
     list_history_jobs_page, load_app_config, notification_status_allowed,
-    preserve_notification_secrets, read_keychain_secret, redact_app_config, run_json,
-    save_app_config, shared_config_dir, show_history_job, upsert_history_job,
-    write_keychain_secret,
+    preserve_notification_secrets, read_keychain_secret, redact_app_config,
+    restore_deleted_history_job, run_json, save_app_config, shared_config_dir, show_history_job,
+    soft_delete_history_job, upsert_history_job, write_keychain_secret,
 };
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use tauri::{Emitter, Manager};
+use tauri_plugin_clipboard_manager::ClipboardExt;
 
 fn app_error(error: gpt_image_2_core::AppError) -> String {
     format!("{}: {}", error.code, error.message)
@@ -1464,6 +1465,7 @@ fn history_list(
         cursor,
         status,
         query,
+        include_deleted: false,
     })
     .map_err(app_error)?;
     Ok(json!({
@@ -2194,6 +2196,153 @@ fn downloads_export_dir() -> Result<PathBuf, String> {
     Ok(home.join("Downloads").join("GPT Image 2"))
 }
 
+fn jobs_trash_dir() -> PathBuf {
+    jobs_dir().join(".trash")
+}
+
+/// Resolve a raw user-supplied path against the asset-protocol scope. Reading
+/// outside `jobs_dir` or the system temp dir is rejected so a malicious
+/// `read_image_bytes` payload can't exfiltrate arbitrary files.
+fn resolve_within_allowed_scope(input: &Path) -> Result<PathBuf, String> {
+    let canonical_target = input
+        .canonicalize()
+        .map_err(|error| format!("无法解析路径：{error}"))?;
+    let canonical_jobs = jobs_dir()
+        .canonicalize()
+        .unwrap_or_else(|_| jobs_dir());
+    if canonical_target.starts_with(&canonical_jobs) {
+        return Ok(canonical_target);
+    }
+    let temp = std::env::temp_dir();
+    let canonical_temp = temp.canonicalize().unwrap_or(temp);
+    if canonical_target.starts_with(&canonical_temp) {
+        return Ok(canonical_target);
+    }
+    Err("不允许读取该路径。".to_string())
+}
+
+#[tauri::command]
+async fn read_image_bytes(path: String) -> Result<Vec<u8>, String> {
+    let raw = PathBuf::from(&path);
+    if !raw.is_file() {
+        return Err("文件不存在或不是文件。".to_string());
+    }
+    let resolved = resolve_within_allowed_scope(&raw)?;
+    fs::read(&resolved).map_err(|error| format!("读取失败：{error}"))
+}
+
+#[tauri::command]
+async fn copy_image_to_clipboard(
+    path: String,
+    prompt: Option<String>,
+    app: tauri::AppHandle,
+) -> Result<(), String> {
+    let raw = PathBuf::from(&path);
+    if !raw.is_file() {
+        return Err("图片文件不存在，可能已被移动或删除。".to_string());
+    }
+    let resolved = resolve_within_allowed_scope(&raw)?;
+    let bytes = fs::read(&resolved).map_err(|error| format!("读取失败：{error}"))?;
+    let image = tauri::image::Image::from_bytes(&bytes)
+        .map_err(|error| format!("解析图片失败：{error}"))?;
+    app.clipboard()
+        .write_image(&image)
+        .map_err(|error| format!("写入剪贴板失败：{error}"))?;
+    if let Some(text) = prompt {
+        let trimmed = text.trim();
+        if !trimmed.is_empty() {
+            app.clipboard()
+                .write_text(trimmed.to_string())
+                .map_err(|error| format!("写入提示词失败：{error}"))?;
+        }
+    }
+    Ok(())
+}
+
+#[tauri::command]
+fn soft_delete_job(job_id: String) -> Result<(), String> {
+    let job_root = jobs_dir().join(&job_id);
+    if job_root.exists() {
+        let trash_root = jobs_trash_dir();
+        fs::create_dir_all(&trash_root)
+            .map_err(|error| format!("创建回收目录失败：{error}"))?;
+        let trash_path = trash_root.join(&job_id);
+        if trash_path.exists() {
+            // Defensive: a previous soft-delete may have left an entry behind.
+            let _ = fs::remove_dir_all(&trash_path);
+        }
+        fs::rename(&job_root, &trash_path)
+            .map_err(|error| format!("移动到回收目录失败：{error}"))?;
+    }
+    soft_delete_history_job(&job_id).map_err(app_error)?;
+    Ok(())
+}
+
+#[tauri::command]
+fn restore_deleted_job(job_id: String) -> Result<(), String> {
+    let trash_path = jobs_trash_dir().join(&job_id);
+    if trash_path.exists() {
+        let dest = jobs_dir().join(&job_id);
+        if dest.exists() {
+            return Err("恢复失败：目标位置已存在同名任务。".to_string());
+        }
+        fs::rename(&trash_path, &dest)
+            .map_err(|error| format!("从回收目录恢复失败：{error}"))?;
+    }
+    restore_deleted_history_job(&job_id).map_err(app_error)?;
+    Ok(())
+}
+
+#[tauri::command]
+fn hard_delete_job(job_id: String) -> Result<(), String> {
+    let trash_path = jobs_trash_dir().join(&job_id);
+    if trash_path.exists() {
+        fs::remove_dir_all(&trash_path)
+            .map_err(|error| format!("清空回收目录失败：{error}"))?;
+    }
+    let main_path = jobs_dir().join(&job_id);
+    if main_path.exists() {
+        let _ = fs::remove_dir_all(&main_path);
+    }
+    delete_history_job(&job_id).map_err(app_error)?;
+    Ok(())
+}
+
+/// Walk `jobs_dir/.trash` and permanently remove entries older than 5 minutes.
+/// Called once at app startup so undo timeouts that were dropped by a sudden
+/// quit don't leak disk forever.
+fn cleanup_orphan_trash_on_start() {
+    let trash_root = jobs_trash_dir();
+    if !trash_root.is_dir() {
+        return;
+    }
+    let cutoff = std::time::Duration::from_secs(5 * 60);
+    let now = SystemTime::now();
+    let entries = match fs::read_dir(&trash_root) {
+        Ok(e) => e,
+        Err(_) => return,
+    };
+    for entry in entries.flatten() {
+        let Ok(metadata) = entry.metadata() else {
+            continue;
+        };
+        let Ok(modified) = metadata.modified() else {
+            continue;
+        };
+        let Ok(elapsed) = now.duration_since(modified) else {
+            continue;
+        };
+        if elapsed <= cutoff {
+            continue;
+        }
+        let path = entry.path();
+        let _ = fs::remove_dir_all(&path);
+        if let Some(name) = path.file_name().and_then(|n| n.to_str()) {
+            let _ = delete_history_job(name);
+        }
+    }
+}
+
 fn output_paths_from_job(job: &Value) -> Vec<String> {
     let mut paths = job
         .get("outputs")
@@ -2448,6 +2597,7 @@ pub fn run() {
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_notification::init())
         .plugin(tauri_plugin_process::init())
+        .plugin(tauri_plugin_clipboard_manager::init())
         .plugin(tauri_plugin_single_instance::init(|app, _argv, _cwd| {
             let window = app
                 .get_webview_window("main")
@@ -2458,6 +2608,11 @@ pub fn run() {
                 let _ = window.set_focus();
             }
         }))
+        .setup(|_app| {
+            // Spawn off-thread so a slow filesystem walk can't delay startup.
+            thread::spawn(cleanup_orphan_trash_on_start);
+            Ok(())
+        })
         .manage(JobQueueState::default())
         .invoke_handler(tauri::generate_handler![
             config_path,
@@ -2489,6 +2644,11 @@ pub fn run() {
             reveal_path,
             export_files_to_downloads,
             export_job_to_downloads,
+            read_image_bytes,
+            copy_image_to_clipboard,
+            soft_delete_job,
+            restore_deleted_job,
+            hard_delete_job,
         ])
         .run(tauri::generate_context!())
         .expect("error while running gpt-image-2-app");

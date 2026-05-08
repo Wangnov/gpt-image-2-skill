@@ -317,6 +317,24 @@ export const httpApi: ApiClient = {
   async deleteJob(id: string) {
     await requestJson(`/jobs/${encodeURIComponent(id)}`, { method: "DELETE" });
   },
+  async softDeleteJob(id: string) {
+    // HTTP backend has no soft-delete endpoint — fall back to hard delete.
+    // The executor that calls this also suppresses the "undo" toast button
+    // when `runtime !== "tauri"` so the UX stays honest.
+    await this.deleteJob(id);
+  },
+  async restoreDeletedJob(_id: string) {
+    throw new Error("HTTP 模式不支持恢复，请重新生成。");
+  },
+  async hardDeleteJob(id: string) {
+    await this.deleteJob(id);
+  },
+  async copyImageToClipboard(_path: string, _prompt?: string | null) {
+    // HTTP runtime has no Rust bridge. The image-actions executor is expected
+    // to use `navigator.clipboard.write` with a `ClipboardItem` instead of
+    // calling this transport method.
+    throw new Error("HTTP 模式请使用浏览器内置剪贴板。");
+  },
   async cancelJob(id: string) {
     const result = await requestJson<TauriJobResponse>(
       `/jobs/${encodeURIComponent(id)}/cancel`,

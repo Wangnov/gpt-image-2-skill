@@ -1,3 +1,4 @@
+import { C2_TRANSFER_EXPORT_MANAGE_ACTIONS } from "./executors";
 import type {
   ImageAction,
   ImageActionContext,
@@ -16,7 +17,9 @@ import type {
  * The ContextMenu, HoverToolbar, and CommandPalette all read this list via
  * `actionsFor(ctx)` and never define their own action shapes.
  */
-export const IMAGE_ACTIONS: ImageAction[] = [];
+export const IMAGE_ACTIONS: ImageAction[] = [
+  ...C2_TRANSFER_EXPORT_MANAGE_ACTIONS,
+];
 
 const GROUP_ORDER: ImageActionGroup[] = [
   "transfer",

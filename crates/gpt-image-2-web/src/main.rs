@@ -1680,6 +1680,7 @@ async fn history_list(Query(query): Query<HistoryListQuery>) -> ApiResult {
         cursor: query.cursor,
         status: query.status,
         query: query.q,
+        include_deleted: false,
     })
     .map_err(app_error)
     .map_err(ApiError::internal)?;

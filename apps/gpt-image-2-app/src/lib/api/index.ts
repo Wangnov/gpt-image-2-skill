@@ -111,6 +111,18 @@ export const api: ApiClient = {
   getJob: (id) => invokeClient("getJob", id) as ReturnType<ApiClient["getJob"]>,
   deleteJob: (id) =>
     invokeClient("deleteJob", id) as ReturnType<ApiClient["deleteJob"]>,
+  softDeleteJob: (id) =>
+    invokeClient("softDeleteJob", id) as ReturnType<ApiClient["softDeleteJob"]>,
+  restoreDeletedJob: (id) =>
+    invokeClient("restoreDeletedJob", id) as ReturnType<
+      ApiClient["restoreDeletedJob"]
+    >,
+  hardDeleteJob: (id) =>
+    invokeClient("hardDeleteJob", id) as ReturnType<ApiClient["hardDeleteJob"]>,
+  copyImageToClipboard: (path, prompt) =>
+    invokeClient("copyImageToClipboard", path, prompt) as ReturnType<
+      ApiClient["copyImageToClipboard"]
+    >,
   cancelJob: (id) =>
     invokeClient("cancelJob", id) as ReturnType<ApiClient["cancelJob"]>,
   queueStatus: () =>
