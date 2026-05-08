@@ -2,6 +2,7 @@ import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react"
 import { toast } from "sonner";
 import { type MaskExport } from "./mask-canvas";
 import { EditCanvasStage } from "./edit-canvas-stage";
+import { EditFileInput } from "./edit-file-input";
 import { EditFooter } from "./edit-footer";
 import { EditModeHeader } from "./edit-mode-header";
 import {
@@ -14,12 +15,12 @@ import { LocalEditOnboarding } from "./local-edit-onboarding";
 import { ReferenceStrip } from "./reference-strip";
 import {
   clampZoom,
-  MAX_INPUT_IMAGES,
   regionModeLabel,
   type EditMode,
   type RefWithFile,
 } from "./shared";
 import { useMaskWorkspace } from "./use-mask-workspace";
+import { useEditCapabilities } from "./use-edit-capabilities";
 import { useEditDraft } from "./use-edit-draft";
 import { useEditOutputs } from "./use-edit-outputs";
 import { useReferenceImages } from "./use-reference-images";
@@ -34,17 +35,7 @@ import {
   outputCountMismatchMessage,
   responseOutputCount,
 } from "@/lib/job-feedback";
-import {
-  normalizeOutputCount,
-  validateImageSize,
-  validateOutputCount,
-} from "@/lib/image-options";
-import {
-  effectiveOutputCount,
-  providerEditRegionMode,
-  providerSupportsMultipleOutputs,
-  requestOutputCount,
-} from "@/lib/provider-capabilities";
+import { effectiveOutputCount, requestOutputCount } from "@/lib/provider-capabilities";
 import {
   providerNames as readProviderNames,
   reconcileProviderSelection,
@@ -131,28 +122,30 @@ export function EditScreen({
   const isSubmitting = exportKey != null || mutate.isPending;
   const isTracking = running;
   const isWorking = isSubmitting || isTracking;
-  const supportsMultipleOutputs = providerSupportsMultipleOutputs(
+  const {
+    actualN,
+    editRegionMode,
+    maxReferenceImages,
+    outputCountValidation,
+    parameterError,
+    referenceCountError,
+    regionUnavailable,
+    safeN,
+    sizeValidation,
+    submitDisabled,
+    supportsMultipleOutputs,
+    usesNativeMask,
+    usesRegion,
+    usesSoftRegion,
+  } = useEditCapabilities({
     config,
+    editMode,
+    isSubmitting,
+    n,
     provider,
-  );
-  const editRegionMode = providerEditRegionMode(config, provider);
-  const usesRegion = editMode === "region";
-  const usesNativeMask = usesRegion && editRegionMode === "native-mask";
-  const usesSoftRegion = usesRegion && editRegionMode === "reference-hint";
-  const regionUnavailable = usesRegion && editRegionMode === "none";
-  const maxReferenceImages = MAX_INPUT_IMAGES - (usesSoftRegion ? 1 : 0);
-  const referenceCountError =
-    refs.length > maxReferenceImages
-      ? `最多上传 ${maxReferenceImages} 张参考图。`
-      : undefined;
-  const sizeValidation = validateImageSize(size);
-  const outputCountValidation = validateOutputCount(n);
-  const parameterError =
-    referenceCountError ??
-    sizeValidation.message ??
-    (supportsMultipleOutputs ? outputCountValidation.message : undefined);
-  const safeN = normalizeOutputCount(n);
-  const actualN = effectiveOutputCount(config, provider, safeN);
+    refsLength: refs.length,
+    size,
+  });
   const displayN =
     isWorking && pendingOutputCount != null ? pendingOutputCount : actualN;
   const selectedRefObj = refs.find((ref) => ref.id === selectedRef);
@@ -388,13 +381,6 @@ export function EditScreen({
     outputCount,
   });
 
-  const submitDisabled =
-    isSubmitting ||
-    refs.length === 0 ||
-    !provider ||
-    Boolean(parameterError) ||
-    regionUnavailable;
-
   return (
     <div className="relative h-full w-full overflow-hidden flex flex-col">
       <LocalEditOnboarding active={usesRegion} />
@@ -407,17 +393,7 @@ export function EditScreen({
         }}
       />
 
-      <input
-        ref={fileInputRef}
-        type="file"
-        multiple
-        accept="image/*"
-        className="hidden"
-        onChange={(event) => {
-          addRef(event.target.files);
-          if (fileInputRef.current) fileInputRef.current.value = "";
-        }}
-      />
+      <EditFileInput addRef={addRef} fileInputRef={fileInputRef} />
 
       <ReferenceStrip
         refs={refs}
