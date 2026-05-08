@@ -1,4 +1,6 @@
 import { Fragment, useEffect, useMemo, useState } from "react";
+import { AnimatePresence, motion } from "motion/react";
+import { useReducedMotion } from "@/hooks/use-reduced-motion";
 import { cn } from "@/lib/cn";
 import { Icon, type IconName } from "@/components/icon";
 import { Badge } from "@/components/ui/badge";
@@ -222,6 +224,7 @@ export function JobRow({
   onSelectOutput?: (index: number) => void;
   onDelete?: () => void;
 }) {
+  const reducedMotion = useReducedMotion();
   const [hover, setHover] = useState(false);
   const [focusWithin, setFocusWithin] = useState(false);
   const prompt = (job.metadata as Record<string, unknown>)?.prompt as
@@ -354,12 +357,27 @@ export function JobRow({
           )}
         </div>
       </div>
-      {expanded && (
-        <ExpandedOutputs
-          job={job}
-          onOpenIndex={(index) => onSelectOutput?.(index)}
-        />
-      )}
+      <AnimatePresence initial={false}>
+        {expanded && (
+          <motion.div
+            key="expanded"
+            initial={
+              reducedMotion ? false : { height: 0, opacity: 0 }
+            }
+            animate={{ height: "auto", opacity: 1 }}
+            exit={
+              reducedMotion ? { opacity: 0 } : { height: 0, opacity: 0 }
+            }
+            transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }}
+            style={{ overflow: "hidden" }}
+          >
+            <ExpandedOutputs
+              job={job}
+              onOpenIndex={(index) => onSelectOutput?.(index)}
+            />
+          </motion.div>
+        )}
+      </AnimatePresence>
     </Fragment>
   );
 }
