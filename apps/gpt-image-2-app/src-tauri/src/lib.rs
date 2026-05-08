@@ -2241,8 +2241,15 @@ async fn copy_image_to_clipboard(
     }
     let resolved = resolve_within_allowed_scope(&raw)?;
     let bytes = fs::read(&resolved).map_err(|error| format!("读取失败：{error}"))?;
-    let image = tauri::image::Image::from_bytes(&bytes)
-        .map_err(|error| format!("解析图片失败：{error}"))?;
+    // Decode via the `image` crate so JPEG / WEBP / GIF outputs round-trip
+    // — `tauri::image::Image::from_bytes` only supports PNG/ICO with the
+    // currently enabled feature set, which would otherwise hard-regress
+    // Copy Image on any non-PNG job.
+    let decoded =
+        image::load_from_memory(&bytes).map_err(|error| format!("解析图片失败：{error}"))?;
+    let rgba = decoded.to_rgba8();
+    let (width, height) = rgba.dimensions();
+    let image = tauri::image::Image::new_owned(rgba.into_raw(), width, height);
     app.clipboard()
         .write_image(&image)
         .map_err(|error| format!("写入剪贴板失败：{error}"))?;

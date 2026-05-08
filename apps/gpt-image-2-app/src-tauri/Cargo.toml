@@ -22,6 +22,10 @@ gpt-image-2-core = { path = "../../../crates/gpt-image-2-core", version = "0.4.0
 serde = { version = "1.0.228", features = ["derive"] }
 serde_json = "1.0.145"
 tauri = { version = "2.0.0", features = ["protocol-asset", "image-png"] }
+# Generic image decoder so `copy_image_to_clipboard` works on JPEG/WEBP/GIF
+# outputs too — `tauri::image::Image::from_bytes` only handles PNG/ICO under
+# the enabled feature set.
+image = { version = "0.25", default-features = false, features = ["png", "jpeg", "webp", "gif"] }
 tauri-plugin-clipboard-manager = "2"
 tauri-plugin-drag = "2"
 tauri-plugin-notification = "2.0.0"
