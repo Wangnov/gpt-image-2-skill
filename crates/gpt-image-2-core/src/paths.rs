@@ -70,11 +70,25 @@ pub fn shared_config_dir() -> PathBuf {
     resolve_codex_home().join(CONFIG_DIR_NAME)
 }
 
+pub const PRODUCT_CONFIG_FILE_ENV: &str = "GPT_IMAGE_2_CONFIG_FILE";
+
+pub const PRODUCT_HISTORY_FILE_ENV: &str = "GPT_IMAGE_2_HISTORY_FILE";
+
 pub fn default_config_path() -> PathBuf {
+    if let Some(value) = std::env::var_os(PRODUCT_CONFIG_FILE_ENV)
+        && !value.is_empty()
+    {
+        return PathBuf::from(value);
+    }
     shared_config_dir().join(CONFIG_FILE_NAME)
 }
 
 pub fn history_db_path() -> PathBuf {
+    if let Some(value) = std::env::var_os(PRODUCT_HISTORY_FILE_ENV)
+        && !value.is_empty()
+    {
+        return PathBuf::from(value);
+    }
     shared_config_dir().join(HISTORY_FILE_NAME)
 }
 
@@ -160,6 +174,31 @@ pub fn product_app_data_dir(config: Option<&AppConfig>, runtime: ProductRuntime)
     config
         .map(|config| resolve_path_ref(default.clone(), &config.paths.app_data_dir))
         .unwrap_or(default)
+}
+
+pub fn product_config_path(config: Option<&AppConfig>, runtime: ProductRuntime) -> PathBuf {
+    product_app_data_dir(config, runtime).join(CONFIG_FILE_NAME)
+}
+
+pub fn product_history_db_path(config: Option<&AppConfig>, runtime: ProductRuntime) -> PathBuf {
+    product_app_data_dir(config, runtime).join(HISTORY_FILE_NAME)
+}
+
+/// Configure this process so App/Web product runtimes use their own
+/// config/history files, while CLI/Skill keep the legacy `$CODEX_HOME` paths.
+///
+/// The optional legacy config is used only to honor already-saved custom
+/// product data dirs before we redirect `default_config_path()`.
+pub fn initialize_product_runtime_paths(runtime: ProductRuntime) -> (PathBuf, PathBuf) {
+    let legacy_config_path = shared_config_dir().join(CONFIG_FILE_NAME);
+    let legacy_config = load_app_config(&legacy_config_path).ok();
+    let config_file = product_config_path(legacy_config.as_ref(), runtime);
+    let history_file = product_history_db_path(legacy_config.as_ref(), runtime);
+    unsafe {
+        std::env::set_var(PRODUCT_CONFIG_FILE_ENV, &config_file);
+        std::env::set_var(PRODUCT_HISTORY_FILE_ENV, &history_file);
+    }
+    (config_file, history_file)
 }
 
 pub fn product_result_library_dir(config: Option<&AppConfig>, runtime: ProductRuntime) -> PathBuf {
