@@ -60,6 +60,7 @@ pub(crate) async fn update_notifications(Json(mut body): Json<NotificationConfig
 }
 
 pub(crate) async fn update_paths(Json(body): Json<PathConfig>) -> ApiResult {
+    validate_path_config_for_save(&body).map_err(ApiError::bad_request)?;
     let mut config = load_config().map_err(ApiError::internal)?;
     config.paths = body;
     save_config(&config).map_err(ApiError::internal)?;

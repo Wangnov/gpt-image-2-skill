@@ -47,6 +47,7 @@ pub(crate) fn update_notifications(mut config: NotificationConfig) -> Result<Val
 
 #[tauri::command]
 pub(crate) fn update_paths(config: PathConfig) -> Result<Value, String> {
+    validate_path_config_for_save(&config)?;
     let mut app_config = load_config()?;
     app_config.paths = config;
     save_config(&app_config)?;

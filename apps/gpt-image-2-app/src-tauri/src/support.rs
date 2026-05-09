@@ -41,6 +41,51 @@ pub(crate) fn default_export_dir() -> PathBuf {
     product_default_export_dir(Some(&load_config_or_default()), ProductRuntime::Tauri)
 }
 
+pub(crate) fn validate_writable_dir(path: &Path, label: &str) -> Result<(), String> {
+    if path.as_os_str().is_empty() {
+        return Err(format!("{label}不能为空。"));
+    }
+    fs::create_dir_all(path).map_err(|error| format!("无法创建{label}：{error}"))?;
+    let probe = path.join(".gpt-image-2-path-test");
+    fs::write(&probe, b"ok").map_err(|error| format!("{label}不可写：{error}"))?;
+    let _ = fs::remove_file(&probe);
+    Ok(())
+}
+
+pub(crate) fn validate_path_config_for_save(config: &PathConfig) -> Result<(), String> {
+    if config.paths_app_data_custom() {
+        return Err("应用数据目录暂不支持在界面中修改。".to_string());
+    }
+    if config.paths_result_library_custom() {
+        return Err(
+            "结果库位置暂不支持直接修改；请先使用默认结果库，避免本地预览权限失效。".to_string(),
+        );
+    }
+    if config.default_export_dir.mode == gpt_image_2_core::ExportDirMode::Custom {
+        let path = config
+            .default_export_dir
+            .path
+            .as_ref()
+            .ok_or_else(|| "自定义保存文件夹不能为空。".to_string())?;
+        validate_writable_dir(path, "保存文件夹")?;
+    }
+    Ok(())
+}
+
+trait PathConfigExt {
+    fn paths_app_data_custom(&self) -> bool;
+    fn paths_result_library_custom(&self) -> bool;
+}
+
+impl PathConfigExt for PathConfig {
+    fn paths_app_data_custom(&self) -> bool {
+        self.app_data_dir.mode == gpt_image_2_core::PathMode::Custom
+    }
+    fn paths_result_library_custom(&self) -> bool {
+        self.result_library_dir.mode == gpt_image_2_core::PathMode::Custom
+    }
+}
+
 pub(crate) fn config_for_ui(config: &AppConfig) -> Value {
     let mut payload = redact_app_config(config);
     if let Some(providers) = payload.get_mut("providers").and_then(Value::as_object_mut) {
