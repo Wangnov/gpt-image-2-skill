@@ -1,47 +1,15 @@
 use rusqlite::types::Value as SqlValue;
 use rusqlite::{Connection, Row, params, params_from_iter};
-use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 
 use crate::constants::{DEFAULT_HISTORY_PAGE_LIMIT, MAX_HISTORY_PAGE_LIMIT};
 use crate::errors::AppError;
-use crate::history_db::{
-    OutputUploadRecord, open_history_db, row_to_upload_record, upload_record_to_value,
+use crate::history_db::open_history_db;
+use crate::storage::{
+    OutputUploadRecord, enrich_outputs_with_uploads, list_output_upload_records_with_conn,
+    storage_status_for_uploads,
 };
 use crate::util::now_iso;
-
-pub(crate) fn list_output_upload_records_with_conn(
-    conn: &Connection,
-    job_id: &str,
-) -> Result<Vec<OutputUploadRecord>, AppError> {
-    let mut stmt = conn
-        .prepare(
-            "SELECT job_id, output_index, target, target_type, status, url, error, bytes, attempts, updated_at, metadata
-             FROM output_uploads
-             WHERE job_id = ?1
-             ORDER BY output_index ASC, target ASC",
-        )
-        .map_err(|error| {
-            AppError::new("history_query_failed", "Unable to query output upload history.")
-                .with_detail(json!({"error": error.to_string()}))
-        })?;
-    stmt.query_map(params![job_id], row_to_upload_record)
-        .map_err(|error| {
-            AppError::new(
-                "history_query_failed",
-                "Unable to query output upload history.",
-            )
-            .with_detail(json!({"error": error.to_string()}))
-        })?
-        .collect::<Result<Vec<_>, _>>()
-        .map_err(|error| {
-            AppError::new(
-                "history_query_failed",
-                "Unable to read output upload history.",
-            )
-            .with_detail(json!({"error": error.to_string()}))
-        })
-}
 
 #[derive(Debug, Clone, Default)]
 pub struct HistoryListOptions {
@@ -60,65 +28,6 @@ pub struct HistoryListPage {
     pub next_cursor: Option<String>,
     pub has_more: bool,
     pub total: usize,
-}
-
-pub(crate) fn storage_status_for_uploads(uploads: &[OutputUploadRecord]) -> &'static str {
-    if uploads.is_empty() {
-        return "not_configured";
-    }
-    let completed = uploads
-        .iter()
-        .filter(|upload| upload.status == "completed")
-        .count();
-    if completed == uploads.len() {
-        "completed"
-    } else {
-        let primary_completed = uploads.iter().any(|upload| {
-            upload.status == "completed"
-                && upload.metadata.get("role").and_then(Value::as_str) == Some("primary")
-        });
-        let fallback_completed = uploads.iter().any(|upload| {
-            upload.status == "completed"
-                && upload.metadata.get("role").and_then(Value::as_str) == Some("fallback")
-        });
-        if fallback_completed && !primary_completed {
-            "fallback_completed"
-        } else if completed > 0 {
-            "partial_failed"
-        } else {
-            "failed"
-        }
-    }
-}
-
-pub(crate) fn enrich_outputs_with_uploads(
-    mut outputs: Value,
-    uploads: &[OutputUploadRecord],
-) -> Value {
-    let Some(output_items) = outputs.as_array_mut() else {
-        return outputs;
-    };
-    for output in output_items {
-        let Some(output_index) = output
-            .get("index")
-            .and_then(Value::as_u64)
-            .map(|value| value as usize)
-        else {
-            continue;
-        };
-        let output_uploads = uploads
-            .iter()
-            .filter(|upload| upload.output_index == output_index)
-            .map(upload_record_to_value)
-            .collect::<Vec<_>>();
-        if output_uploads.is_empty() {
-            continue;
-        }
-        if let Some(object) = output.as_object_mut() {
-            object.insert("uploads".to_string(), Value::Array(output_uploads));
-        }
-    }
-    outputs
 }
 
 pub(crate) fn history_row_to_value(row: &Row<'_>) -> rusqlite::Result<Value> {

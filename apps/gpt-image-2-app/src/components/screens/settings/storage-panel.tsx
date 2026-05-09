@@ -11,6 +11,11 @@ import {
 import { api, type ConfigPaths } from "@/lib/api";
 import { storageTargetType } from "@/lib/api/shared";
 import { runtimeCopy } from "@/lib/runtime-copy";
+import {
+  storageConfigIssue,
+  storageTargetConfigIssue,
+  visibleStorageTargetIssues,
+} from "@/lib/storage-validation";
 import type {
   CredentialRef,
   PathConfig,
@@ -39,9 +44,14 @@ export function StoragePanel({
   paths?: PathConfig;
 }) {
   const [draft, setDraft] = useState(() => cloneStorageConfig(storage));
+  const [saveAttempted, setSaveAttempted] = useState(false);
+  const [testedTargets, setTestedTargets] = useState<Set<string>>(
+    () => new Set(),
+  );
   const updateStorage = useUpdateStorage();
   const testStorage = useTestStorageTarget();
   const copy = runtimeCopy();
+  const requireLocalDirectory = copy.kind !== "browser";
   const { data: configPaths } = useQuery<ConfigPaths>({
     queryKey: ["config-paths"],
     queryFn: api.configPaths,
@@ -50,6 +60,8 @@ export function StoragePanel({
 
   useEffect(() => {
     setDraft(cloneStorageConfig(storage));
+    setSaveAttempted(false);
+    setTestedTargets(new Set());
   }, [storage]);
 
   const targetEntries = Object.entries(draft.targets);
@@ -172,32 +184,48 @@ export function StoragePanel({
   };
 
   const save = async () => {
+    setSaveAttempted(true);
+    const issue = storageConfigIssue(draft, { requireLocalDirectory });
+    if (issue) {
+      toast.warning("存储配置未完成", { description: issue });
+      return;
+    }
     try {
       const saved = await updateStorage.mutateAsync(
         prepareStorageConfigForSave(draft),
       );
       setDraft(cloneStorageConfig(saved.storage));
-      toast.success("自动上传设置已保存");
+      setSaveAttempted(false);
+      setTestedTargets(new Set());
+      toast.success("结果存储已保存");
     } catch (error) {
-      toast.error("保存自动上传设置失败", {
+      toast.error("保存结果存储失败", {
         description: error instanceof Error ? error.message : String(error),
       });
     }
   };
 
   const runTest = async (name: string) => {
+    setTestedTargets((current) => new Set(current).add(name));
+    const issue = storageTargetConfigIssue(name, draft.targets[name], {
+      requireLocalDirectory,
+    });
+    if (issue) {
+      toast.warning("测试失败", { description: issue });
+      return;
+    }
     try {
       const result = await testStorage.mutateAsync({
         name,
         target: normalizeStorageTargetForSave(draft.targets[name]),
       });
       if (result.ok) {
-        toast.success("上传位置可用", { description: result.message });
+        toast.success("存储目标可用", { description: result.message });
       } else {
-        toast.warning("上传位置不可用", { description: result.message });
+        toast.warning("存储目标不可用", { description: result.message });
       }
     } catch (error) {
-      toast.error("测试上传位置失败", {
+      toast.error("测试存储目标失败", {
         description: error instanceof Error ? error.message : String(error),
       });
     }
@@ -346,21 +374,30 @@ export function StoragePanel({
 
       <Section title="位置列表">
         <div className="space-y-3 px-4 py-3.5 sm:px-5">
-          {targetEntries.map(([name, target]) => (
-            <StorageTargetCard
-              key={name}
-              name={name}
-              target={target}
-              testPending={testStorage.isPending}
-              onRename={renameTarget}
-              onSetType={setTargetType}
-              onPatch={patchTarget}
-              onRemove={removeTarget}
-              onRunTest={(targetName) => void runTest(targetName)}
-              onAddHttpHeader={addHttpHeader}
-              onUpdateHttpHeader={updateHttpHeader}
-            />
-          ))}
+          {targetEntries.map(([name, target]) => {
+            const targetIssues = visibleStorageTargetIssues(
+              name,
+              target,
+              { saveAttempted, testedTargets },
+              { requireLocalDirectory },
+            );
+            return (
+              <StorageTargetCard
+                key={name}
+                name={name}
+                target={target}
+                issues={targetIssues}
+                testPending={testStorage.isPending}
+                onRename={renameTarget}
+                onSetType={setTargetType}
+                onPatch={patchTarget}
+                onRemove={removeTarget}
+                onRunTest={(targetName) => void runTest(targetName)}
+                onAddHttpHeader={addHttpHeader}
+                onUpdateHttpHeader={updateHttpHeader}
+              />
+            );
+          })}
           <div className="flex items-center justify-between gap-2">
             <Button variant="secondary" size="sm" icon="plus" onClick={addTarget}>
               添加上传位置

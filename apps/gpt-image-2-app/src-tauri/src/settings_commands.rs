@@ -113,7 +113,7 @@ pub(crate) fn test_notifications(input: NotificationTestInput) -> Result<Value, 
         "output_path": Value::Null,
         "error": if status == "failed" { json!({"message": "Notification test failure"}) } else { Value::Null },
     });
-    let deliveries = dispatch_task_notifications(&config, &job);
+    let deliveries = dispatch_task_notifications(&config.notifications, &job);
     // dispatch_task_notifications only fires server channels (email/webhook).
     // Toast and system notifications are delivered client-side, so a wholly
     // empty deliveries vec is OK as long as the config still has a local

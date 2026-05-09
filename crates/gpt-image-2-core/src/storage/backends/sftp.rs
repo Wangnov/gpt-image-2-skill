@@ -1,139 +1,21 @@
-#![allow(unused_imports)]
+use std::fs;
+use std::io::Write;
+use std::net::TcpStream;
+use std::path::{Path, PathBuf};
 
-use super::*;
+use base64::Engine;
+use base64::engine::general_purpose::STANDARD;
+use serde_json::json;
+use sha2::{Digest, Sha256};
+use ssh2::Session;
 
-pub(crate) fn upload_to_webdav(
-    url: &str,
-    username: Option<&str>,
-    password: Option<&CredentialRef>,
-    public_base_url: Option<&str>,
-    job_id: &str,
-    output: &UploadOutput,
-) -> Result<StorageUploadOutcome, AppError> {
-    let (_, host_label, addrs) = validate_remote_http_target(url, "WebDAV storage")?;
-    if !output.path.is_file() {
-        return Err(AppError::new(
-            "storage_source_missing",
-            "Generated output file is missing.",
-        )
-        .with_detail(json!({"path": output.path.display().to_string()})));
-    }
-    let key = storage_object_key(job_id, output);
-    let endpoint = join_storage_url(url, &key);
-    let bytes = fs::read(&output.path).map_err(|error| {
-        AppError::new("storage_read_failed", "Unable to read generated output.").with_detail(
-            json!({"path": output.path.display().to_string(), "error": error.to_string()}),
-        )
-    })?;
-    let client = pinned_http_client(
-        &host_label,
-        &addrs,
-        Duration::from_secs(DEFAULT_REQUEST_TIMEOUT.min(120)),
-        "storage_webdav_client_failed",
-        "Unable to build WebDAV client.",
-    )?;
-    let resolved_password = if username.is_some_and(|value| !value.trim().is_empty()) {
-        Some(
-            password
-                .map(resolve_credential)
-                .transpose()?
-                .map(|(value, _)| value)
-                .unwrap_or_default(),
-        )
-    } else {
-        None
-    };
-    let parent_keys = key
-        .split('/')
-        .scan(String::new(), |state, part| {
-            if state.is_empty() {
-                state.push_str(part);
-            } else {
-                state.push('/');
-                state.push_str(part);
-            }
-            Some(state.clone())
-        })
-        .take_while(|value| value != &key)
-        .collect::<Vec<_>>();
-    for parent_key in parent_keys {
-        let collection_url = join_storage_url(url, &parent_key);
-        let mut request = client.request(
-            reqwest::Method::from_bytes(b"MKCOL").unwrap(),
-            &collection_url,
-        );
-        if let Some(username) = username.filter(|value| !value.trim().is_empty()) {
-            request = request.basic_auth(username.to_string(), resolved_password.clone());
-        }
-        let response = request.send().map_err(|error| {
-            AppError::new(
-                "storage_webdav_mkcol_failed",
-                "WebDAV collection creation failed.",
-            )
-            .with_detail(json!({
-                "url": redact_url_for_log(&collection_url),
-                "error": error.to_string(),
-            }))
-        })?;
-        let status = response.status();
-        if !(status.is_success() || matches!(status.as_u16(), 405 | 409)) {
-            let body = response.text().unwrap_or_default();
-            return Err(AppError::new(
-                "storage_webdav_mkcol_failed",
-                format!("WebDAV MKCOL returned {status}."),
-            )
-            .with_detail(json!({
-                "url": redact_url_for_log(&collection_url),
-                "body": sanitized_response_body(&body),
-            })));
-        }
-    }
-    let mut request = client
-        .put(&endpoint)
-        .header(
-            CONTENT_TYPE,
-            mime_guess::from_path(&output.path)
-                .first_or_octet_stream()
-                .as_ref(),
-        )
-        .body(bytes.clone());
-    if let Some(username) = username.filter(|value| !value.trim().is_empty()) {
-        request = request.basic_auth(username.to_string(), resolved_password);
-    }
-    let response = request.send().map_err(|error| {
-        AppError::new(
-            "storage_webdav_request_failed",
-            "WebDAV storage upload failed.",
-        )
-        .with_detail(json!({
-            "url": redact_url_for_log(&endpoint),
-            "error": error.to_string(),
-        }))
-    })?;
-    let status = response.status();
-    let body = response.text().unwrap_or_default();
-    if !status.is_success() {
-        return Err(AppError::new(
-            "storage_webdav_status_failed",
-            format!("WebDAV storage upload returned {status}."),
-        )
-        .with_detail(json!({
-            "url": redact_url_for_log(&endpoint),
-            "body": sanitized_response_body(&body),
-        })));
-    }
-    Ok(StorageUploadOutcome {
-        url: http_url_if_safe(public_base_url.map(|base| join_storage_url(base, &key))),
-        bytes: Some(bytes.len() as u64),
-        metadata: json!({
-            "key": key,
-            "webdav_url": redact_url_for_log(&endpoint),
-            "http_status": status.as_u16(),
-        }),
-    })
-}
+use crate::{resolve_credential, validate_remote_tcp_target};
 
-pub(crate) fn ensure_remote_dir(sftp: &ssh2::Sftp, remote_dir: &Path) {
+use super::super::types::StorageTargetConfig;
+use super::super::util::*;
+use crate::{AppError, CredentialRef};
+
+fn ensure_remote_dir(sftp: &ssh2::Sftp, remote_dir: &Path) {
     let mut current = PathBuf::new();
     for component in remote_dir.components() {
         current.push(component.as_os_str());
@@ -144,7 +26,7 @@ pub(crate) fn ensure_remote_dir(sftp: &ssh2::Sftp, remote_dir: &Path) {
     }
 }
 
-pub(crate) fn sftp_expected_host_key(expected: Option<&str>) -> Result<&str, AppError> {
+fn sftp_expected_host_key(expected: Option<&str>) -> Result<&str, AppError> {
     expected
         .map(str::trim)
         .filter(|value| !value.is_empty())
@@ -156,7 +38,7 @@ pub(crate) fn sftp_expected_host_key(expected: Option<&str>) -> Result<&str, App
         })
 }
 
-pub(crate) fn strip_sha256_prefix(value: &str) -> &str {
+fn strip_sha256_prefix(value: &str) -> &str {
     if value.len() >= 7 && value[..7].eq_ignore_ascii_case("SHA256:") {
         &value[7..]
     } else {
@@ -172,10 +54,7 @@ pub(crate) fn sftp_host_key_matches(expected: &str, actual_hex: &str, actual_bas
         || expected.trim_end_matches('=') == actual_base64.trim_end_matches('=')
 }
 
-pub(crate) fn verify_sftp_host_key(
-    session: &Session,
-    expected: Option<&str>,
-) -> Result<String, AppError> {
+fn verify_sftp_host_key(session: &Session, expected: Option<&str>) -> Result<String, AppError> {
     let expected = sftp_expected_host_key(expected)?;
     let (host_key, _) = session.host_key().ok_or_else(|| {
         AppError::new(
@@ -274,18 +153,27 @@ pub(crate) fn authenticate_sftp_session(
     Ok(())
 }
 
-pub(crate) fn upload_to_sftp(
-    host: &str,
-    port: u16,
-    host_key_sha256: Option<&str>,
-    username: &str,
-    password: Option<&CredentialRef>,
-    private_key: Option<&CredentialRef>,
-    remote_dir: &str,
-    public_base_url: Option<&str>,
+pub(super) fn upload_to_sftp(
+    target: &StorageTargetConfig,
     job_id: &str,
     output: &UploadOutput,
 ) -> Result<StorageUploadOutcome, AppError> {
+    let StorageTargetConfig::Sftp {
+        host,
+        port,
+        host_key_sha256,
+        username,
+        password,
+        private_key,
+        remote_dir,
+        public_base_url,
+    } = target
+    else {
+        return Err(AppError::new(
+            "storage_target_type_mismatch",
+            "Expected SFTP storage target.",
+        ));
+    };
     if !output.path.is_file() {
         return Err(AppError::new(
             "storage_source_missing",
@@ -293,8 +181,15 @@ pub(crate) fn upload_to_sftp(
         )
         .with_detail(json!({"path": output.path.display().to_string()})));
     }
-    let (session, host_key_fingerprint) = connect_sftp_session(host, port, host_key_sha256)?;
-    authenticate_sftp_session(&session, host, username, password, private_key)?;
+    let (session, host_key_fingerprint) =
+        connect_sftp_session(host, *port, host_key_sha256.as_deref())?;
+    authenticate_sftp_session(
+        &session,
+        host,
+        username,
+        password.as_ref(),
+        private_key.as_ref(),
+    )?;
     let sftp = session.sftp().map_err(|error| {
         AppError::new("storage_sftp_open_failed", "Unable to open SFTP subsystem.")
             .with_detail(json!({"error": error.to_string()}))
@@ -325,7 +220,11 @@ pub(crate) fn upload_to_sftp(
         .with_detail(json!({"path": destination.display().to_string(), "error": error.to_string()}))
     })?;
     Ok(StorageUploadOutcome {
-        url: http_url_if_safe(public_base_url.map(|base| join_storage_url(base, &key))),
+        url: http_url_if_safe(
+            public_base_url
+                .as_deref()
+                .map(|base| join_storage_url(base, &key)),
+        ),
         bytes: Some(bytes.len() as u64),
         metadata: json!({
             "key": key,

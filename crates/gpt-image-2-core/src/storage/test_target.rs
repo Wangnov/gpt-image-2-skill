@@ -1,152 +1,40 @@
-#![allow(unused_imports)]
+use std::fs;
+use std::path::Path;
+use std::time::{Duration, SystemTime};
 
-use super::*;
+use serde::{Deserialize, Serialize};
+use serde_json::{Value, json};
 
-pub(crate) fn run_target_uploads(
-    config: &StorageConfig,
-    job_id: &str,
-    output: &UploadOutput,
-    target_names: &[String],
-    role: &str,
-) -> Result<bool, AppError> {
-    let target_concurrency = config.target_concurrency.clamp(1, 32);
-    let (tx, rx) = mpsc::channel::<Result<bool, AppError>>();
-    let mut active = 0usize;
-    let mut completed = false;
-    let mut first_error = None;
-    for target_name in target_names {
-        while active >= target_concurrency {
-            match rx.recv() {
-                Ok(Ok(value)) => {
-                    completed |= value;
-                    active = active.saturating_sub(1);
-                }
-                Ok(Err(error)) => {
-                    first_error.get_or_insert(error);
-                    active = active.saturating_sub(1);
-                }
-                Err(_) => break,
-            }
-        }
-        if let Some(target) = config.targets.get(target_name) {
-            let tx = tx.clone();
-            let job_id = job_id.to_string();
-            let output = output.clone();
-            let target_name = target_name.clone();
-            let target = target.clone();
-            let role = role.to_string();
-            thread::spawn(move || {
-                let result = record_upload_attempt(&job_id, &output, &target_name, &target, &role);
-                let _ = tx.send(result);
-            });
-            active += 1;
-        } else {
-            if let Err(error) = record_missing_storage_target(job_id, output, target_name, role) {
-                first_error.get_or_insert(error);
-            }
-        }
-    }
-    drop(tx);
-    while active > 0 {
-        match rx.recv() {
-            Ok(Ok(value)) => {
-                completed |= value;
-                active -= 1;
-            }
-            Ok(Err(error)) => {
-                first_error.get_or_insert(error);
-                active -= 1;
-            }
-            Err(_) => break,
-        }
-    }
-    if let Some(error) = first_error {
-        Err(error)
-    } else {
-        Ok(completed)
-    }
-}
+use crate::{AppError, resolve_credential, validate_remote_http_target};
 
-pub fn upload_job_outputs_to_storage(
-    config: &StorageConfig,
-    job: &Value,
-    overrides: StorageUploadOverrides,
-) -> Result<Vec<OutputUploadRecord>, AppError> {
-    let Some(job_id) = job.get("id").and_then(Value::as_str) else {
-        return Err(AppError::new(
-            "storage_job_invalid",
-            "Job id is required before uploading outputs.",
-        ));
-    };
-    let outputs = upload_outputs_from_job(job);
-    if outputs.is_empty() {
-        return list_output_upload_records(job_id);
-    }
-    let (primary_names, fallback_names) = target_names_for_upload(config, &overrides);
-    if primary_names.is_empty() && config.fallback_policy != StorageFallbackPolicy::Always {
-        return list_output_upload_records(job_id);
-    }
-    let upload_concurrency = config.upload_concurrency.clamp(1, 32);
-    let (tx, rx) = mpsc::channel::<Result<(), AppError>>();
-    let mut active = 0usize;
-    let mut first_error = None;
-    for output in outputs {
-        while active >= upload_concurrency {
-            match rx.recv() {
-                Ok(Ok(())) => {}
-                Ok(Err(error)) => {
-                    first_error.get_or_insert(error);
-                }
-                Err(_) => break,
-            }
-            active = active.saturating_sub(1);
-        }
-        let tx = tx.clone();
-        let job_id = job_id.to_string();
-        let config = config.clone();
-        let primary_names = primary_names.clone();
-        let fallback_names = fallback_names.clone();
-        thread::spawn(move || {
-            let primary_completed =
-                match run_target_uploads(&config, &job_id, &output, &primary_names, "primary") {
-                    Ok(value) => value,
-                    Err(error) => {
-                        let _ = tx.send(Err(error));
-                        return;
-                    }
-                };
-            let should_run_fallback = match config.fallback_policy {
-                StorageFallbackPolicy::Never => false,
-                StorageFallbackPolicy::Always => true,
-                StorageFallbackPolicy::OnFailure => !primary_names.is_empty() && !primary_completed,
-            };
-            if should_run_fallback {
-                if let Err(error) =
-                    run_target_uploads(&config, &job_id, &output, &fallback_names, "fallback")
-                {
-                    let _ = tx.send(Err(error));
-                    return;
-                }
-            }
-            let _ = tx.send(Ok(()));
-        });
-        active += 1;
-    }
-    drop(tx);
-    while active > 0 {
-        match rx.recv() {
-            Ok(Ok(())) => {}
-            Ok(Err(error)) => {
-                first_error.get_or_insert(error);
-            }
-            Err(_) => break,
-        }
-        active -= 1;
-    }
-    if let Some(error) = first_error {
-        return Err(error);
-    }
-    list_output_upload_records(job_id)
+use super::backends::{
+    BAIDU_NETDISK_FILE_ENDPOINT, PAN123_OPEN_TOKEN_ENDPOINT, authenticate_sftp_session,
+    connect_sftp_session, s3_endpoint_and_host,
+};
+use super::types::StorageTargetConfig;
+use super::util::{
+    credential_resolves_non_empty, pinned_http_client, redact_url_for_log, resolve_storage_headers,
+    storage_error_message, storage_target_type,
+};
+use super::{
+    BaiduNetdiskAuthMode, Pan123OpenAuthMode, effective_baidu_netdisk_auth_mode,
+    effective_pan123_open_auth_mode,
+};
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct StorageTestResult {
+    pub ok: bool,
+    pub target: String,
+    pub target_type: String,
+    pub message: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub latency_ms: Option<u128>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub detail: Option<Value>,
+    #[serde(default)]
+    pub unsupported: bool,
+    #[serde(default)]
+    pub local_only: bool,
 }
 
 pub fn test_storage_target(name: &str, target: &StorageTargetConfig) -> StorageTestResult {
@@ -199,7 +87,7 @@ pub fn test_storage_target(name: &str, target: &StorageTargetConfig) -> StorageT
                         AppError::new("storage_http_request_failed", "HTTP storage test failed.")
                             .with_detail(json!({
                                 "url": redact_url_for_log(url),
-                                "error": error.to_string(),
+                                "error": super::util::sanitized_request_error(&error),
                             }))
                     })
                 },
@@ -266,7 +154,7 @@ pub fn test_storage_target(name: &str, target: &StorageTargetConfig) -> StorageT
                         )
                         .with_detail(json!({
                             "url": redact_url_for_log(url),
-                            "error": error.to_string(),
+                            "error": super::util::sanitized_request_error(&error),
                         }))
                     })
                 },
@@ -373,10 +261,12 @@ pub fn test_storage_target(name: &str, target: &StorageTargetConfig) -> StorageT
             secret_access_key,
             ..
         } => {
-            let access_key_ready =
-                storage_credential_present_and_resolvable(access_key_id.as_ref()).is_ok();
-            let secret_key_ready =
-                storage_credential_present_and_resolvable(secret_access_key.as_ref()).is_ok();
+            let access_key_ready = access_key_id
+                .as_ref()
+                .is_some_and(credential_resolves_non_empty);
+            let secret_key_ready = secret_access_key
+                .as_ref()
+                .is_some_and(credential_resolves_non_empty);
             let credential_ready = access_key_ready && secret_key_ready;
             let endpoint_url = s3_endpoint_and_host(
                 bucket,
@@ -384,10 +274,11 @@ pub fn test_storage_target(name: &str, target: &StorageTargetConfig) -> StorageT
                 endpoint.as_deref(),
                 ".gpt-image-2-storage-test",
             );
-            let endpoint_ready = endpoint_url
-                .as_ref()
-                .map(|(url, _, _)| validate_remote_http_target(url, "S3 storage").is_ok())
-                .unwrap_or(false);
+            let endpoint_ready = credential_ready
+                && endpoint_url
+                    .as_ref()
+                    .map(|(url, _, _)| validate_remote_http_target(url, "S3 storage").is_ok())
+                    .unwrap_or(false);
             StorageTestResult {
                 ok: credential_ready && endpoint_ready,
                 target: name.to_string(),
@@ -406,6 +297,137 @@ pub fn test_storage_target(name: &str, target: &StorageTargetConfig) -> StorageT
                     "access_key_ready": access_key_ready,
                     "secret_key_ready": secret_key_ready,
                     "endpoint_ready": endpoint_ready,
+                })),
+                unsupported: false,
+                local_only: false,
+            }
+        }
+        StorageTargetConfig::BaiduNetdisk {
+            auth_mode,
+            app_key,
+            secret_key,
+            access_token,
+            refresh_token,
+            app_name,
+            remote_dir,
+            ..
+        } => {
+            let access_token_ready = access_token
+                .as_ref()
+                .is_some_and(credential_resolves_non_empty);
+            let secret_key_ready = secret_key
+                .as_ref()
+                .is_some_and(credential_resolves_non_empty);
+            let refresh_token_ready = refresh_token
+                .as_ref()
+                .is_some_and(credential_resolves_non_empty);
+            let mode = effective_baidu_netdisk_auth_mode(*auth_mode, access_token.as_ref());
+            let credential_ready = match mode {
+                BaiduNetdiskAuthMode::Personal => access_token_ready,
+                BaiduNetdiskAuthMode::Oauth => {
+                    !app_key.trim().is_empty() && secret_key_ready && refresh_token_ready
+                }
+            };
+            let app_name_ready = !app_name.trim().is_empty();
+            let endpoint_ready = credential_ready
+                && app_name_ready
+                && validate_remote_http_target(
+                    BAIDU_NETDISK_FILE_ENDPOINT,
+                    "Baidu Netdisk storage",
+                )
+                .is_ok();
+            let ok = credential_ready && app_name_ready && endpoint_ready;
+            StorageTestResult {
+                ok,
+                target: name.to_string(),
+                target_type,
+                message: if ok {
+                    "百度网盘 OpenAPI 配置可用于上传；请确认应用已开通网盘上传权限。".to_string()
+                } else if !credential_ready {
+                    match mode {
+                        BaiduNetdiskAuthMode::Personal => {
+                            "百度网盘个人对接需要 access_token。".to_string()
+                        }
+                        BaiduNetdiskAuthMode::Oauth => {
+                            "百度网盘 OAuth 对接需要 app_key + secret_key + refresh_token。"
+                                .to_string()
+                        }
+                    }
+                } else if !app_name_ready {
+                    "百度网盘应用名称不能为空；请填写百度网盘开放平台应用目录名。".to_string()
+                } else {
+                    "百度网盘 OpenAPI 端点不可达；请检查本机网络或代理设置。".to_string()
+                },
+                latency_ms: None,
+                detail: Some(json!({
+                    "auth_mode": mode,
+                    "app_key_present": !app_key.trim().is_empty(),
+                    "access_token_ready": access_token_ready,
+                    "secret_key_ready": secret_key_ready,
+                    "refresh_token_ready": refresh_token_ready,
+                    "credential_ready": credential_ready,
+                    "app_name_present": app_name_ready,
+                    "endpoint_ready": endpoint_ready,
+                    "app_name": app_name,
+                    "remote_dir": remote_dir,
+                })),
+                unsupported: false,
+                local_only: false,
+            }
+        }
+        StorageTargetConfig::Pan123Open {
+            auth_mode,
+            client_id,
+            client_secret,
+            access_token,
+            parent_id,
+            use_direct_link,
+        } => {
+            let access_token_ready = access_token
+                .as_ref()
+                .is_some_and(credential_resolves_non_empty);
+            let client_secret_ready = client_secret
+                .as_ref()
+                .is_some_and(credential_resolves_non_empty);
+            let client_credentials_ready = !client_id.trim().is_empty() && client_secret_ready;
+            let mode = effective_pan123_open_auth_mode(*auth_mode, access_token.as_ref());
+            let credential_ready = match mode {
+                Pan123OpenAuthMode::Client => client_credentials_ready,
+                Pan123OpenAuthMode::AccessToken => access_token_ready,
+            };
+            let endpoint_ready = credential_ready
+                && validate_remote_http_target(PAN123_OPEN_TOKEN_ENDPOINT, "123 Netdisk storage")
+                    .is_ok();
+            let ok = credential_ready && endpoint_ready;
+            StorageTestResult {
+                ok,
+                target: name.to_string(),
+                target_type,
+                message: if ok {
+                    "123 网盘 OpenAPI 配置可用于上传；直链需要账号侧开通直链能力。".to_string()
+                } else if !credential_ready {
+                    match mode {
+                        Pan123OpenAuthMode::Client => {
+                            "123 网盘 client 对接需要 client_id + client_secret。".to_string()
+                        }
+                        Pan123OpenAuthMode::AccessToken => {
+                            "123 网盘 access_token 对接需要 access_token。".to_string()
+                        }
+                    }
+                } else {
+                    "123 网盘 OpenAPI 端点不可达；请检查本机网络或代理设置。".to_string()
+                },
+                latency_ms: None,
+                detail: Some(json!({
+                    "auth_mode": mode,
+                    "client_id_present": !client_id.trim().is_empty(),
+                    "access_token_ready": access_token_ready,
+                    "client_secret_ready": client_secret_ready,
+                    "client_credentials_ready": client_credentials_ready,
+                    "credential_ready": credential_ready,
+                    "endpoint_ready": endpoint_ready,
+                    "parent_id": parent_id,
+                    "use_direct_link": use_direct_link,
                 })),
                 unsupported: false,
                 local_only: false,

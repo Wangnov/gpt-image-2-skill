@@ -1,6 +1,14 @@
-#![allow(unused_imports)]
+use std::fs;
+use std::time::Duration;
 
-use super::*;
+use chrono::Utc;
+use reqwest::header::{AUTHORIZATION, CONTENT_TYPE};
+use serde_json::json;
+use url::Url;
+
+use super::super::types::StorageTargetConfig;
+use super::super::util::*;
+use crate::{AppError, DEFAULT_REQUEST_TIMEOUT, resolve_credential, validate_remote_http_target};
 
 pub(crate) fn s3_endpoint_and_host(
     bucket: &str,
@@ -18,7 +26,7 @@ pub(crate) fn s3_endpoint_and_host(
         };
         let parsed = Url::parse(&url).map_err(|error| {
             AppError::new("storage_s3_url_invalid", "Invalid S3 endpoint URL.")
-                .with_detail(json!({"url": url, "error": error.to_string()}))
+                .with_detail(json!({"url": redact_url_for_log(&url), "error": error.to_string()}))
         })?;
         let host = s3_host_header(&parsed)?;
         return Ok((url, host, parsed.path().to_string()));
@@ -38,29 +46,34 @@ pub(crate) fn s3_endpoint_and_host(
     ))
 }
 
-pub(crate) fn s3_signing_key(
-    secret_access_key: &str,
-    date: &str,
-    region: &str,
-) -> Result<Vec<u8>, AppError> {
+fn s3_signing_key(secret_access_key: &str, date: &str, region: &str) -> Result<Vec<u8>, AppError> {
     let date_key = hmac_sha256(format!("AWS4{secret_access_key}").as_bytes(), date)?;
     let region_key = hmac_sha256(&date_key, region)?;
     let service_key = hmac_sha256(&region_key, "s3")?;
     hmac_sha256(&service_key, "aws4_request")
 }
 
-pub(crate) fn upload_to_s3(
-    bucket: &str,
-    region: Option<&str>,
-    endpoint: Option<&str>,
-    prefix: Option<&str>,
-    access_key_id: Option<&CredentialRef>,
-    secret_access_key: Option<&CredentialRef>,
-    session_token: Option<&CredentialRef>,
-    public_base_url: Option<&str>,
+pub(super) fn upload_to_s3(
+    target: &StorageTargetConfig,
     job_id: &str,
     output: &UploadOutput,
 ) -> Result<StorageUploadOutcome, AppError> {
+    let StorageTargetConfig::S3 {
+        bucket,
+        region,
+        endpoint,
+        prefix,
+        access_key_id,
+        secret_access_key,
+        session_token,
+        public_base_url,
+    } = target
+    else {
+        return Err(AppError::new(
+            "storage_target_type_mismatch",
+            "Expected S3 storage target.",
+        ));
+    };
     if !output.path.is_file() {
         return Err(AppError::new(
             "storage_source_missing",
@@ -69,6 +82,7 @@ pub(crate) fn upload_to_s3(
         .with_detail(json!({"path": output.path.display().to_string()})));
     }
     let (access_key_id, _) = access_key_id
+        .as_ref()
         .ok_or_else(|| {
             AppError::new(
                 "storage_s3_credentials_missing",
@@ -77,6 +91,7 @@ pub(crate) fn upload_to_s3(
         })
         .and_then(resolve_credential)?;
     let (secret_access_key, _) = secret_access_key
+        .as_ref()
         .ok_or_else(|| {
             AppError::new(
                 "storage_s3_credentials_missing",
@@ -85,6 +100,7 @@ pub(crate) fn upload_to_s3(
         })
         .and_then(resolve_credential)?;
     let session_token = session_token
+        .as_ref()
         .map(resolve_credential)
         .transpose()?
         .map(|(value, _)| value);
@@ -93,7 +109,7 @@ pub(crate) fn upload_to_s3(
             json!({"path": output.path.display().to_string(), "error": error.to_string()}),
         )
     })?;
-    let prefix = prefix.unwrap_or("").trim_matches('/');
+    let prefix = prefix.as_deref().unwrap_or("").trim_matches('/');
     let raw_key = storage_object_key(job_id, output);
     let key = if prefix.is_empty() {
         raw_key
@@ -101,10 +117,11 @@ pub(crate) fn upload_to_s3(
         format!("{prefix}/{raw_key}")
     };
     let signing_region = region
+        .as_deref()
         .filter(|value| !value.trim().is_empty())
         .unwrap_or("us-east-1");
     let (url, host, canonical_uri) =
-        s3_endpoint_and_host(bucket, Some(signing_region), endpoint, &key)?;
+        s3_endpoint_and_host(bucket, Some(signing_region), endpoint.as_deref(), &key)?;
     let (_, host_label, addrs) = validate_remote_http_target(&url, "S3 storage")?;
     let now = Utc::now();
     let amz_date = now.format("%Y%m%dT%H%M%SZ").to_string();
@@ -152,8 +169,10 @@ pub(crate) fn upload_to_s3(
         request = request.header("x-amz-security-token", token);
     }
     let response = request.send().map_err(|error| {
-        AppError::new("storage_s3_request_failed", "S3 storage upload failed.")
-            .with_detail(json!({"url": redact_url_for_log(&url), "error": error.to_string()}))
+        AppError::new("storage_s3_request_failed", "S3 storage upload failed.").with_detail(json!({
+            "url": redact_url_for_log(&url),
+            "error": sanitized_request_error(&error),
+        }))
     })?;
     let status = response.status();
     let etag = response
@@ -173,7 +192,11 @@ pub(crate) fn upload_to_s3(
         })));
     }
     Ok(StorageUploadOutcome {
-        url: http_url_if_safe(public_base_url.map(|base| join_storage_url(base, &key))),
+        url: http_url_if_safe(
+            public_base_url
+                .as_deref()
+                .map(|base| join_storage_url(base, &key)),
+        ),
         bytes: Some(bytes.len() as u64),
         metadata: json!({
             "bucket": bucket,

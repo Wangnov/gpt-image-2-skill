@@ -17,7 +17,7 @@ export function Tooltip({
         <Tip.Portal>
           <Tip.Content
             sideOffset={6}
-            className="z-[100] text-foreground text-[11px] font-medium px-2.5 py-1.5 rounded-md animate-fade-in"
+            className="z-[100] max-w-[280px] whitespace-pre-line text-foreground text-[11px] font-medium leading-relaxed px-2.5 py-1.5 rounded-md animate-fade-in"
             style={{
               background: "var(--surface-floating-strong)",
               backdropFilter: "blur(12px)",

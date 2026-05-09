@@ -69,7 +69,16 @@ export interface NotificationConfig {
   webhooks: WebhookNotificationConfig[];
 }
 
-export type StorageTargetKind = "local" | "s3" | "webdav" | "http" | "sftp";
+export type StorageTargetKind =
+  | "local"
+  | "s3"
+  | "webdav"
+  | "http"
+  | "sftp"
+  | "baidu_netdisk"
+  | "pan123_open";
+export type BaiduNetdiskAuthMode = "personal" | "oauth";
+export type Pan123OpenAuthMode = "client" | "access_token";
 export type StorageFallbackPolicy = "never" | "on_failure" | "always";
 export type StorageStatus =
   | "not_configured"
@@ -132,12 +141,36 @@ export interface SftpStorageTargetConfig {
   public_base_url?: string | null;
 }
 
+export interface BaiduNetdiskStorageTargetConfig {
+  type?: "baidu_netdisk";
+  auth_mode?: BaiduNetdiskAuthMode;
+  app_key: string;
+  secret_key?: CredentialRef | null;
+  access_token?: CredentialRef | null;
+  refresh_token?: CredentialRef | null;
+  app_name: string;
+  remote_dir?: string | null;
+  public_base_url?: string | null;
+}
+
+export interface Pan123OpenStorageTargetConfig {
+  type?: "pan123_open";
+  auth_mode?: Pan123OpenAuthMode;
+  client_id: string;
+  client_secret?: CredentialRef | null;
+  access_token?: CredentialRef | null;
+  parent_id: number;
+  use_direct_link: boolean;
+}
+
 export type StorageTargetConfig =
   | LocalStorageTargetConfig
   | S3StorageTargetConfig
   | WebDavStorageTargetConfig
   | HttpStorageTargetConfig
-  | SftpStorageTargetConfig;
+  | SftpStorageTargetConfig
+  | BaiduNetdiskStorageTargetConfig
+  | Pan123OpenStorageTargetConfig;
 
 export interface StorageConfig {
   targets: Record<string, StorageTargetConfig>;

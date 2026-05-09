@@ -75,6 +75,18 @@ export const STORAGE_TARGET_TYPE_OPTIONS = [
   { value: "s3", label: "S3" },
   { value: "webdav", label: "WebDAV" },
   { value: "sftp", label: "SFTP" },
+  { value: "baidu_netdisk", label: "百度网盘 OpenAPI" },
+  { value: "pan123_open", label: "123 网盘 OpenAPI" },
+] as const;
+
+export const BAIDU_AUTH_MODE_OPTIONS = [
+  { value: "personal", label: "个人对接" },
+  { value: "oauth", label: "OAuth 对接" },
+] as const;
+
+export const PAN123_AUTH_MODE_OPTIONS = [
+  { value: "client", label: "client 对接" },
+  { value: "access_token", label: "accessToken 对接" },
 ] as const;
 
 export const STORAGE_FALLBACK_POLICY_OPTIONS = [
@@ -88,6 +100,26 @@ export const CREDENTIAL_SOURCE_OPTIONS = [
   { value: "env", label: "环境变量" },
   { value: "keychain", label: "系统钥匙串" },
 ] as const;
+
+export const BAIDU_NETDISK_HINT = [
+  "百度网盘 OpenAPI 对接条件：",
+  "创建个人应用，并开通网盘上传权限。",
+  "填写 App Key + Secret Key + Refresh Token，或长期 Access Token。",
+  "上传路径位于 /apps/{应用名}/，应用名需与开放平台一致。",
+].join("\n");
+
+export const PAN123_OPEN_HINT = [
+  "123 网盘 OpenAPI 对接条件：",
+  "填写长期 Access Token；或配置 clientID + clientSecret。",
+  "父目录 ID 默认 0，表示根目录。",
+  "直链是可选增强；未开通时仍会上传成功，只是不返回公开 URL。",
+].join("\n");
+
+export const LOCAL_PUBLIC_BASE_URL_HINT = [
+  "可选。",
+  "仅当本地目录已经通过 Nginx、CDN 或静态文件服务映射成可访问地址时填写。",
+  "上传记录会用它拼出图片 URL；留空时仍会保存到本地目录。",
+].join("\n");
 
 export const EXPORT_DIR_MODE_OPTIONS = [
   { value: "downloads", label: "下载" },

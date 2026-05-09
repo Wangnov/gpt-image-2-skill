@@ -157,7 +157,7 @@ pub(crate) fn dispatch_notifications_for_job(job: &Value) -> Vec<Value> {
             return Vec::new();
         }
     };
-    let deliveries = dispatch_task_notifications(&config, job);
+    let deliveries = dispatch_task_notifications(&config.notifications, job);
     for delivery in &deliveries {
         if !delivery.ok {
             eprintln!(

@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { defaultPathConfig, defaultStorageConfig } from "./api/shared";
 import {
   effectiveDefaultProvider,
   reconcileProviderSelection,
@@ -42,23 +43,8 @@ function config(defaultProvider: string): ServerConfig {
       },
       webhooks: [],
     },
-    storage: {
-      targets: {},
-      default_targets: [],
-      fallback_targets: [],
-      fallback_policy: "never",
-      upload_concurrency: 2,
-      target_concurrency: 2,
-    },
-    paths: {
-      app_data_dir: { mode: "default" },
-      result_library_dir: { mode: "default" },
-      default_export_dir: { mode: "downloads" },
-      legacy_shared_codex_dir: {
-        path: "",
-        enabled_for_read: true,
-      },
-    },
+    storage: defaultStorageConfig(),
+    paths: defaultPathConfig(),
   };
 }
 

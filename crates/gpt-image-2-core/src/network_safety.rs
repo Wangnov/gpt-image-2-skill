@@ -2,64 +2,6 @@
 
 use super::*;
 
-pub(crate) fn validate_webhook_target(url_str: &str) -> Result<(), AppError> {
-    let url = reqwest::Url::parse(url_str).map_err(|err| {
-        AppError::new("notification_webhook_invalid", "Webhook URL is invalid.")
-            .with_detail(json!({"url": url_str, "error": err.to_string()}))
-    })?;
-    match url.scheme() {
-        "http" | "https" => {}
-        scheme => {
-            return Err(AppError::new(
-                "notification_webhook_invalid",
-                "Webhook URL must use http or https.",
-            )
-            .with_detail(json!({"scheme": scheme})));
-        }
-    }
-    let host_label = url
-        .host_str()
-        .ok_or_else(|| {
-            AppError::new(
-                "notification_webhook_invalid",
-                "Webhook URL is missing a host.",
-            )
-            .with_detail(json!({"url": url_str}))
-        })?
-        .to_string();
-    // Url::socket_addrs handles IPv6 literals (`[::1]` strips brackets) and
-    // resolves DNS names — both of which `(host_str, port).to_socket_addrs()`
-    // would mishandle.
-    let addrs = url.socket_addrs(|| None).map_err(|err| {
-        AppError::new(
-            "notification_webhook_failed",
-            "Unable to resolve webhook host.",
-        )
-        .with_detail(json!({"host": host_label, "error": err.to_string()}))
-    })?;
-    if addrs.is_empty() {
-        return Err(AppError::new(
-            "notification_webhook_failed",
-            "Webhook host did not resolve to any address.",
-        )
-        .with_detail(json!({"host": host_label})));
-    }
-    for addr in &addrs {
-        let ip = canonicalize_ip(addr.ip());
-        if ip_is_internal(ip) {
-            return Err(AppError::new(
-                "notification_webhook_blocked",
-                "Webhook target resolves to a non-routable address (loopback, private, link-local, or unspecified). Refusing to send.",
-            )
-            .with_detail(json!({
-                "host": host_label,
-                "address": ip.to_string(),
-            })));
-        }
-    }
-    Ok(())
-}
-
 pub(crate) fn validate_remote_http_target(
     url_str: &str,
     target_label: &str,

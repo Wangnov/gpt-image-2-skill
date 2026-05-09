@@ -11,6 +11,8 @@ import type {
   HttpStorageTargetConfig,
   NotificationConfig,
   PathConfig,
+  BaiduNetdiskStorageTargetConfig,
+  Pan123OpenStorageTargetConfig,
   SftpStorageTargetConfig,
   StorageConfig,
   StorageTargetConfig,
@@ -232,6 +234,30 @@ export function blankStorageTarget(type: StorageTargetKind): StorageTargetConfig
       public_base_url: "",
     };
   }
+  if (type === "baidu_netdisk") {
+    return {
+      type,
+      auth_mode: "personal",
+      app_key: "",
+      secret_key: null,
+      access_token: null,
+      refresh_token: null,
+      app_name: "",
+      remote_dir: "",
+      public_base_url: "",
+    };
+  }
+  if (type === "pan123_open") {
+    return {
+      type,
+      auth_mode: "client",
+      client_id: "",
+      client_secret: null,
+      access_token: null,
+      parent_id: 0,
+      use_direct_link: false,
+    };
+  }
   return { type: "local", directory: "", public_base_url: "" };
 }
 
@@ -291,6 +317,50 @@ export function normalizeStorageTargetForSave(
       private_key: normalizeCredentialForSave(sftp.private_key),
       remote_dir: sftp.remote_dir.trim() || "/",
       public_base_url: sftp.public_base_url?.trim() || undefined,
+    };
+  }
+  if (type === "baidu_netdisk") {
+    const baidu = target as BaiduNetdiskStorageTargetConfig;
+    const authMode = baidu.auth_mode === "oauth" ? "oauth" : "personal";
+    return {
+      type,
+      auth_mode: authMode,
+      app_key: authMode === "oauth" ? baidu.app_key.trim() : "",
+      secret_key:
+        authMode === "oauth"
+          ? normalizeCredentialForSave(baidu.secret_key)
+          : undefined,
+      access_token:
+        authMode === "personal"
+          ? normalizeCredentialForSave(baidu.access_token)
+          : undefined,
+      refresh_token:
+        authMode === "oauth"
+          ? normalizeCredentialForSave(baidu.refresh_token)
+          : undefined,
+      app_name: baidu.app_name.trim(),
+      remote_dir: baidu.remote_dir?.trim() || undefined,
+      public_base_url: baidu.public_base_url?.trim() || undefined,
+    };
+  }
+  if (type === "pan123_open") {
+    const pan123 = target as Pan123OpenStorageTargetConfig;
+    const authMode =
+      pan123.auth_mode === "access_token" ? "access_token" : "client";
+    return {
+      type,
+      auth_mode: authMode,
+      client_id: authMode === "client" ? pan123.client_id.trim() : "",
+      client_secret:
+        authMode === "client"
+          ? normalizeCredentialForSave(pan123.client_secret)
+          : undefined,
+      access_token:
+        authMode === "access_token"
+          ? normalizeCredentialForSave(pan123.access_token)
+          : undefined,
+      parent_id: Math.max(0, Math.round(pan123.parent_id || 0)),
+      use_direct_link: Boolean(pan123.use_direct_link),
     };
   }
   return {

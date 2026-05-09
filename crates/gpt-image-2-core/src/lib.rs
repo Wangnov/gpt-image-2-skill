@@ -23,8 +23,6 @@ use rusqlite::types::Value as SqlValue;
 use rusqlite::{Connection, Row, params, params_from_iter};
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value, json};
-use sha2::{Digest, Sha256};
-use ssh2::Session;
 use url::Url;
 
 mod auth;
@@ -51,13 +49,8 @@ mod request_commands;
 mod request_payloads;
 mod runtime_image_args;
 mod runtime_request_types;
+mod storage;
 mod storage_config;
-mod storage_upload_attempts;
-mod storage_upload_common;
-mod storage_upload_local_http;
-mod storage_upload_remote;
-mod storage_upload_runner;
-mod storage_upload_s3;
 mod transparent;
 mod util;
 
@@ -77,11 +70,7 @@ pub(crate) use config_commands::*;
 pub(crate) use config_io::*;
 pub use config_io::{load_app_config, redact_app_config, save_app_config};
 pub(crate) use config_types::*;
-pub use config_types::{
-    AppConfig, CredentialRef, EmailNotificationConfig, EmailTlsMode, NotificationConfig,
-    SystemNotificationConfig, ToastNotificationConfig, WebhookNotificationConfig,
-    preserve_notification_secrets,
-};
+pub use config_types::{AppConfig, CredentialRef};
 pub use constants::{
     CLI_NAME, CONFIG_DIR_NAME, CONFIG_FILE_NAME, DEFAULT_BACKGROUND, DEFAULT_CODEX_ENDPOINT,
     DEFAULT_CODEX_MODEL, DEFAULT_HISTORY_PAGE_LIMIT, DEFAULT_INSTRUCTIONS, DEFAULT_OPENAI_API_BASE,
@@ -99,9 +88,8 @@ pub use errors::{AppError, CommandOutcome};
 pub(crate) use history_commands::*;
 pub(crate) use history_db::*;
 pub use history_db::{
-    OutputUploadRecord, delete_history_job, list_expired_deleted_history_jobs,
-    list_output_upload_records, restore_deleted_history_job, soft_delete_history_job,
-    upsert_history_job, upsert_output_upload_record,
+    delete_history_job, list_expired_deleted_history_jobs, restore_deleted_history_job,
+    soft_delete_history_job, upsert_history_job,
 };
 pub(crate) use history_list::*;
 pub use history_list::{
@@ -114,9 +102,11 @@ pub use json_events::JsonEventLogger;
 pub(crate) use network_safety::*;
 pub(crate) use notifications::*;
 pub use notifications::{
-    EmailNotificationMessage, NotificationDelivery, NotificationJob, WebhookRequest,
-    build_email_notification_message, build_webhook_request, dispatch_task_notifications,
-    notification_status_allowed,
+    EmailNotificationConfig, EmailNotificationMessage, EmailTlsMode, NotificationConfig,
+    NotificationDelivery, NotificationJob, SystemNotificationConfig, ToastNotificationConfig,
+    WebhookNotificationConfig, WebhookRequest, build_email_notification_message,
+    build_webhook_request, dispatch_task_notifications, notification_status_allowed,
+    preserve_notification_secrets,
 };
 pub use paths::{
     PRODUCT_CONFIG_FILE_ENV, PRODUCT_HISTORY_FILE_ENV, ProductRuntime, default_auth_path,
@@ -143,19 +133,25 @@ pub use runtime_image_args::{
     push_provider_arg, requested_n,
 };
 pub use runtime_request_types::{EditRequest, GenerateRequest, UploadFile};
+#[cfg(test)]
+pub(crate) use storage::backends::s3_endpoint_and_host;
+#[cfg(test)]
+pub(crate) use storage::backends::{pan123_file_name_from_key, sftp_host_key_matches};
+use storage::util::redact_url_for_log;
+pub use storage::{
+    BaiduNetdiskAuthMode, OutputUploadRecord, Pan123OpenAuthMode, StorageConfig,
+    StorageFallbackPolicy, StorageTargetConfig, StorageTestResult, StorageUploadOverrides,
+    list_output_upload_records, preserve_storage_secrets, test_storage_target,
+    upload_job_outputs_to_storage, upsert_output_upload_record,
+};
+pub(crate) use storage::{
+    enrich_outputs_with_uploads, list_output_upload_records_with_conn, redact_storage_config,
+    storage_status_for_uploads,
+};
 pub(crate) use storage_config::*;
 pub use storage_config::{
-    ExportDirConfig, ExportDirMode, LegacyPathConfig, PathConfig, PathMode, PathRef, StorageConfig,
-    StorageFallbackPolicy, StorageTargetConfig, preserve_storage_secrets,
+    ExportDirConfig, ExportDirMode, LegacyPathConfig, PathConfig, PathMode, PathRef,
 };
-pub(crate) use storage_upload_attempts::*;
-pub(crate) use storage_upload_common::*;
-pub use storage_upload_common::{StorageTestResult, StorageUploadOverrides};
-pub(crate) use storage_upload_local_http::*;
-pub(crate) use storage_upload_remote::*;
-pub(crate) use storage_upload_runner::*;
-pub use storage_upload_runner::{test_storage_target, upload_job_outputs_to_storage};
-pub(crate) use storage_upload_s3::*;
 pub(crate) use util::*;
 
 #[cfg(test)]

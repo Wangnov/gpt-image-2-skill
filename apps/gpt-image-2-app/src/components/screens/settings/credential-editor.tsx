@@ -14,11 +14,13 @@ export function CredentialEditor({
   onChange,
   placeholder,
   ariaLabel,
+  invalid,
 }: {
   credential?: CredentialRef | null;
   onChange: (credential: CredentialRef | null) => void;
   placeholder?: string;
   ariaLabel: string;
+  invalid?: boolean;
 }) {
   const source = credential?.source ?? "file";
   const secretDisplay = credentialSecretDisplay(credential);
@@ -49,6 +51,7 @@ export function CredentialEditor({
           size="sm"
           monospace
           aria-label={ariaLabel}
+          aria-invalid={invalid}
         />
       )}
       {source === "env" && (
@@ -61,6 +64,7 @@ export function CredentialEditor({
           size="sm"
           monospace
           aria-label={ariaLabel}
+          aria-invalid={invalid}
         />
       )}
       {source === "keychain" && (
@@ -83,6 +87,7 @@ export function CredentialEditor({
             size="sm"
             monospace
             aria-label={`${ariaLabel} Keychain service`}
+            aria-invalid={invalid}
           />
           <Input
             value={credential?.source === "keychain" ? credential.account : ""}
@@ -100,6 +105,7 @@ export function CredentialEditor({
             size="sm"
             monospace
             aria-label={`${ariaLabel} Keychain account`}
+            aria-invalid={invalid}
           />
         </div>
       )}

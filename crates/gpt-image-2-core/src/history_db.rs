@@ -2,12 +2,10 @@ use std::fs;
 use std::path::Path;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
-use rusqlite::{Connection, Row, params};
-use serde::{Deserialize, Serialize};
+use rusqlite::{Connection, params};
 use serde_json::{Value, json};
 
 use crate::errors::AppError;
-use crate::history_list::list_output_upload_records_with_conn;
 use crate::paths::history_db_path;
 use crate::util::now_iso;
 
@@ -309,100 +307,4 @@ pub fn list_expired_deleted_history_jobs(
         )
         .with_detail(json!({"error": error.to_string()}))
     })
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct OutputUploadRecord {
-    pub job_id: String,
-    pub output_index: usize,
-    pub target: String,
-    pub target_type: String,
-    pub status: String,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub url: Option<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub error: Option<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub bytes: Option<u64>,
-    pub attempts: u32,
-    pub updated_at: String,
-    #[serde(default)]
-    pub metadata: Value,
-}
-
-pub(crate) fn upload_record_to_value(record: &OutputUploadRecord) -> Value {
-    json!({
-        "job_id": record.job_id,
-        "output_index": record.output_index,
-        "target": record.target,
-        "target_type": record.target_type,
-        "status": record.status,
-        "url": record.url,
-        "error": record.error,
-        "bytes": record.bytes,
-        "attempts": record.attempts,
-        "updated_at": record.updated_at,
-        "metadata": record.metadata,
-    })
-}
-
-pub(crate) fn row_to_upload_record(row: &Row<'_>) -> rusqlite::Result<OutputUploadRecord> {
-    let metadata = serde_json::from_str::<Value>(&row.get::<_, String>(10)?).unwrap_or(Value::Null);
-    Ok(OutputUploadRecord {
-        job_id: row.get(0)?,
-        output_index: row.get::<_, i64>(1)?.max(0) as usize,
-        target: row.get(2)?,
-        target_type: row.get(3)?,
-        status: row.get(4)?,
-        url: row.get(5)?,
-        error: row.get(6)?,
-        bytes: row
-            .get::<_, Option<i64>>(7)?
-            .map(|value| value.max(0) as u64),
-        attempts: row.get::<_, i64>(8)?.max(0) as u32,
-        updated_at: row.get(9)?,
-        metadata,
-    })
-}
-
-pub fn upsert_output_upload_record(record: &OutputUploadRecord) -> Result<(), AppError> {
-    let conn = open_history_db()?;
-    conn.execute(
-        "INSERT INTO output_uploads (
-            job_id, output_index, target, target_type, status, url, error, bytes, attempts, updated_at, metadata
-        )
-        VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)
-        ON CONFLICT(job_id, output_index, target) DO UPDATE SET
-            target_type = excluded.target_type,
-            status = excluded.status,
-            url = excluded.url,
-            error = excluded.error,
-            bytes = excluded.bytes,
-            attempts = excluded.attempts,
-            updated_at = excluded.updated_at,
-            metadata = excluded.metadata",
-        params![
-            record.job_id,
-            record.output_index as i64,
-            record.target,
-            record.target_type,
-            record.status,
-            record.url,
-            record.error,
-            record.bytes.map(|value| value as i64),
-            record.attempts as i64,
-            record.updated_at,
-            serde_json::to_string(&record.metadata).unwrap_or_else(|_| "{}".to_string()),
-        ],
-    )
-    .map_err(|error| {
-        AppError::new("history_write_failed", "Unable to record output upload history.")
-            .with_detail(json!({"error": error.to_string()}))
-    })?;
-    Ok(())
-}
-
-pub fn list_output_upload_records(job_id: &str) -> Result<Vec<OutputUploadRecord>, AppError> {
-    let conn = open_history_db()?;
-    list_output_upload_records_with_conn(&conn, job_id)
 }

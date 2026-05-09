@@ -1,72 +1,14 @@
-#![allow(unused_imports)]
+use std::collections::BTreeMap;
+use std::fs;
+use std::time::Duration;
 
-use super::*;
+use reqwest::blocking::multipart::{Form, Part};
+use serde_json::{Value, json};
 
-pub(crate) fn storage_credential_present_and_resolvable(
-    credential: Option<&CredentialRef>,
-) -> Result<(), AppError> {
-    let credential = credential.ok_or_else(|| {
-        AppError::new(
-            "storage_credentials_missing",
-            "Storage credential is missing.",
-        )
-    })?;
-    let (resolved, _) = resolve_credential(credential)?;
-    if resolved.trim().is_empty() {
-        return Err(AppError::new(
-            "storage_credentials_missing",
-            "Storage credential is empty.",
-        ));
-    }
-    Ok(())
-}
+use super::super::util::*;
+use crate::{AppError, CredentialRef, DEFAULT_REQUEST_TIMEOUT, validate_remote_http_target};
 
-pub(crate) fn upload_to_local(
-    directory: &Path,
-    public_base_url: Option<&str>,
-    job_id: &str,
-    output: &UploadOutput,
-) -> Result<StorageUploadOutcome, AppError> {
-    if !output.path.is_file() {
-        return Err(AppError::new(
-            "storage_source_missing",
-            "Generated output file is missing.",
-        )
-        .with_detail(json!({"path": output.path.display().to_string()})));
-    }
-    let key = storage_object_key(job_id, output);
-    let destination = directory.join(&key);
-    if let Some(parent) = destination.parent() {
-        fs::create_dir_all(parent).map_err(|error| {
-            AppError::new(
-                "storage_local_create_failed",
-                "Unable to create local storage directory.",
-            )
-            .with_detail(json!({"path": parent.display().to_string(), "error": error.to_string()}))
-        })?;
-    }
-    fs::copy(&output.path, &destination).map_err(|error| {
-        AppError::new(
-            "storage_local_copy_failed",
-            "Unable to copy output to local storage.",
-        )
-        .with_detail(json!({
-            "source": output.path.display().to_string(),
-            "destination": destination.display().to_string(),
-            "error": error.to_string(),
-        }))
-    })?;
-    Ok(StorageUploadOutcome {
-        url: http_url_if_safe(public_base_url.map(|base| join_storage_url(base, &key))),
-        bytes: Some(output.bytes),
-        metadata: json!({
-            "path": destination.display().to_string(),
-            "key": key,
-        }),
-    })
-}
-
-pub(crate) fn upload_to_http(
+pub(super) fn upload_to_http(
     url: &str,
     method: &str,
     headers: &BTreeMap<String, CredentialRef>,
@@ -125,8 +67,12 @@ pub(crate) fn upload_to_http(
     let resolved_headers = resolve_storage_headers(headers)?;
     request = request.headers(resolved_headers).multipart(form);
     let response = request.send().map_err(|error| {
-        AppError::new("storage_http_request_failed", "HTTP storage upload failed.")
-            .with_detail(json!({"url": redact_url_for_log(url), "error": error.to_string()}))
+        AppError::new("storage_http_request_failed", "HTTP storage upload failed.").with_detail(
+            json!({
+                "url": redact_url_for_log(url),
+                "error": sanitized_request_error(&error),
+            }),
+        )
     })?;
     let status = response.status();
     let body = response.text().unwrap_or_default();

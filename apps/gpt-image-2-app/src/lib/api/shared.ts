@@ -199,10 +199,35 @@ export function storageTargetType(target?: StorageTargetConfig | null) {
   if (!target) return "local";
   if (target.type) return target.type;
   if ("bucket" in target) return "s3";
+  if ("app_key" in target || "app_name" in target) return "baidu_netdisk";
+  if ("client_id" in target || "parent_id" in target) return "pan123_open";
   if ("remote_dir" in target) return "sftp";
   if ("method" in target || "public_url_json_pointer" in target) return "http";
   if ("url" in target) return "webdav";
   return "local";
+}
+
+function credentialHasReference(value: unknown) {
+  if (!value || typeof value !== "object") return false;
+  const credential = value as {
+    source?: string;
+    value?: unknown;
+    present?: boolean;
+    env?: string | null;
+    service?: string | null;
+    account?: string | null;
+  };
+  if (credential.source === "file") {
+    return (
+      (typeof credential.value === "string" && credential.value.trim() !== "") ||
+      Boolean(credential.present)
+    );
+  }
+  if (credential.source === "env") return Boolean(credential.env?.trim());
+  if (credential.source === "keychain") {
+    return Boolean(credential.service?.trim() && credential.account?.trim());
+  }
+  return false;
 }
 
 function normalizeStorageTarget(target: StorageTargetConfig): StorageTargetConfig {
@@ -268,6 +293,61 @@ function normalizeStorageTarget(target: StorageTargetConfig): StorageTargetConfi
           : "",
       public_base_url:
         "public_base_url" in target ? (target.public_base_url ?? null) : null,
+    };
+  }
+  if (type === "baidu_netdisk") {
+    const explicitAuthMode =
+      "auth_mode" in target && target.auth_mode === "oauth"
+        ? "oauth"
+        : "auth_mode" in target && target.auth_mode === "personal"
+          ? "personal"
+          : undefined;
+    const inferredAuthMode = credentialHasReference(
+      "access_token" in target ? target.access_token : null,
+    )
+      ? "personal"
+      : "oauth";
+    return {
+      type,
+      auth_mode: explicitAuthMode ?? inferredAuthMode,
+      app_key: "app_key" in target ? target.app_key : "",
+      secret_key: "secret_key" in target ? (target.secret_key ?? null) : null,
+      access_token:
+        "access_token" in target ? (target.access_token ?? null) : null,
+      refresh_token:
+        "refresh_token" in target ? (target.refresh_token ?? null) : null,
+      app_name:
+        "app_name" in target && typeof target.app_name === "string"
+          ? target.app_name
+          : "",
+      remote_dir: "remote_dir" in target ? (target.remote_dir ?? null) : null,
+      public_base_url:
+        "public_base_url" in target ? (target.public_base_url ?? null) : null,
+    };
+  }
+  if (type === "pan123_open") {
+    const explicitAuthMode =
+      "auth_mode" in target && target.auth_mode === "access_token"
+        ? "access_token"
+        : "auth_mode" in target && target.auth_mode === "client"
+          ? "client"
+          : undefined;
+    const inferredAuthMode = credentialHasReference(
+      "access_token" in target ? target.access_token : null,
+    )
+      ? "access_token"
+      : "client";
+    return {
+      type,
+      auth_mode: explicitAuthMode ?? inferredAuthMode,
+      client_id: "client_id" in target ? target.client_id : "",
+      client_secret:
+        "client_secret" in target ? (target.client_secret ?? null) : null,
+      access_token:
+        "access_token" in target ? (target.access_token ?? null) : null,
+      parent_id: "parent_id" in target ? Number(target.parent_id || 0) : 0,
+      use_direct_link:
+        "use_direct_link" in target ? Boolean(target.use_direct_link) : false,
     };
   }
   return {
