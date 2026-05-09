@@ -30,13 +30,16 @@ pub(crate) fn safe_job_file_path(path: &str) -> Result<PathBuf, ApiError> {
     if file.starts_with(&root) {
         return Ok(file);
     }
-    let legacy = legacy_jobs_dir(Some(&load_config_or_default()));
-    let legacy_root = legacy.canonicalize().ok();
-    if legacy_root
-        .as_ref()
-        .is_some_and(|root| file.starts_with(root))
-    {
-        return Ok(file);
+    let config = load_config_or_default();
+    if config.paths.legacy_shared_codex_dir.enabled_for_read {
+        let legacy = legacy_jobs_dir(Some(&config));
+        let legacy_root = legacy.canonicalize().ok();
+        if legacy_root
+            .as_ref()
+            .is_some_and(|root| file.starts_with(root))
+        {
+            return Ok(file);
+        }
     }
     Err(ApiError::forbidden("只能读取当前服务生成的任务文件。"))
 }

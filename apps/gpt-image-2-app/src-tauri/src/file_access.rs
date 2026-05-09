@@ -19,10 +19,13 @@ pub(crate) fn resolve_within_allowed_scope(input: &Path) -> Result<PathBuf, Stri
     if canonical_target.starts_with(&canonical_library) {
         return Ok(canonical_target);
     }
-    let legacy = legacy_jobs_dir(Some(&load_config_or_default()));
-    let canonical_legacy = legacy.canonicalize().unwrap_or(legacy);
-    if canonical_target.starts_with(&canonical_legacy) {
-        return Ok(canonical_target);
+    let config = load_config_or_default();
+    if config.paths.legacy_shared_codex_dir.enabled_for_read {
+        let legacy = legacy_jobs_dir(Some(&config));
+        let canonical_legacy = legacy.canonicalize().unwrap_or(legacy);
+        if canonical_target.starts_with(&canonical_legacy) {
+            return Ok(canonical_target);
+        }
     }
     let temp = std::env::temp_dir();
     let canonical_temp = temp.canonicalize().unwrap_or(temp);
