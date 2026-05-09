@@ -21,6 +21,8 @@ COPY --from=web /app/apps/gpt-image-2-app/dist /app/public
 ENV GPT_IMAGE_2_WEB_HOST=0.0.0.0 \
     GPT_IMAGE_2_WEB_PORT=8787 \
     GPT_IMAGE_2_WEB_DIST=/app/public \
+    GPT_IMAGE_2_DATA_DIR=/data/gpt-image-2 \
+    GPT_IMAGE_2_ALLOWED_DATA_ROOTS=/data/gpt-image-2 \
     XDG_CONFIG_HOME=/data/config \
     CODEX_HOME=/data/codex
 VOLUME ["/data"]
