@@ -61,8 +61,8 @@ mod storage_upload_s3;
 mod transparent;
 mod util;
 
-pub use auth::{inspect_codex_auth_file, inspect_openai_auth};
 pub(crate) use auth::*;
+pub use auth::{inspect_codex_auth_file, inspect_openai_auth};
 pub use auth_types::{CodexAuthPersistence, CodexAuthState, OpenAiAuthState};
 pub use cli_types::{
     AddProviderArgs, AuthCommand, AuthSubcommand, Background, Cli, Commands, ConfigCommand,
@@ -74,14 +74,14 @@ pub use cli_types::{
     TestProviderArgs,
 };
 pub(crate) use config_commands::*;
-pub use config_io::{load_app_config, redact_app_config, save_app_config};
 pub(crate) use config_io::*;
+pub use config_io::{load_app_config, redact_app_config, save_app_config};
+pub(crate) use config_types::*;
 pub use config_types::{
     AppConfig, CredentialRef, EmailNotificationConfig, EmailTlsMode, NotificationConfig,
     SystemNotificationConfig, ToastNotificationConfig, WebhookNotificationConfig,
     preserve_notification_secrets,
 };
-pub(crate) use config_types::*;
 pub use constants::{
     CLI_NAME, CONFIG_DIR_NAME, CONFIG_FILE_NAME, DEFAULT_BACKGROUND, DEFAULT_CODEX_ENDPOINT,
     DEFAULT_CODEX_MODEL, DEFAULT_HISTORY_PAGE_LIMIT, DEFAULT_INSTRUCTIONS, DEFAULT_OPENAI_API_BASE,
@@ -93,31 +93,31 @@ pub use constants::{
     OPENAI_GENERATIONS_PATH, PRODUCT_DIR_NAME, REFRESH_CLIENT_ID, REFRESH_ENDPOINT,
     RESULTS_DIR_NAME, VERSION,
 };
-pub use credentials::{default_keychain_account, read_keychain_secret, write_keychain_secret};
 pub(crate) use credentials::*;
+pub use credentials::{default_keychain_account, read_keychain_secret, write_keychain_secret};
 pub use errors::{AppError, CommandOutcome};
 pub(crate) use history_commands::*;
+pub(crate) use history_db::*;
 pub use history_db::{
     OutputUploadRecord, delete_history_job, list_expired_deleted_history_jobs,
     list_output_upload_records, restore_deleted_history_job, soft_delete_history_job,
     upsert_history_job, upsert_output_upload_record,
 };
-pub(crate) use history_db::*;
+pub(crate) use history_list::*;
 pub use history_list::{
     HistoryListOptions, HistoryListPage, list_active_history_jobs, list_history_jobs,
     list_history_jobs_page, show_history_job,
 };
-pub(crate) use history_list::*;
 pub(crate) use image_commands::*;
 pub(crate) use image_requests::*;
 pub use json_events::JsonEventLogger;
 pub(crate) use network_safety::*;
+pub(crate) use notifications::*;
 pub use notifications::{
     EmailNotificationMessage, NotificationDelivery, NotificationJob, WebhookRequest,
     build_email_notification_message, build_webhook_request, dispatch_task_notifications,
     notification_status_allowed,
 };
-pub(crate) use notifications::*;
 pub use paths::{
     PRODUCT_CONFIG_FILE_ENV, PRODUCT_HISTORY_FILE_ENV, ProductRuntime, default_auth_path,
     default_config_path, history_db_path, initialize_product_runtime_paths, jobs_dir,
@@ -134,8 +134,8 @@ pub(crate) use paths::{
 pub(crate) use provider_selection::*;
 pub use provider_types::ProviderConfig;
 pub(crate) use provider_types::*;
-pub use request_commands::{run, run_json};
 pub(crate) use request_commands::*;
+pub use request_commands::{run, run_json};
 pub use request_payloads::build_openai_image_body;
 pub(crate) use request_payloads::*;
 pub use runtime_image_args::{
@@ -143,18 +143,18 @@ pub use runtime_image_args::{
     push_provider_arg, requested_n,
 };
 pub use runtime_request_types::{EditRequest, GenerateRequest, UploadFile};
+pub(crate) use storage_config::*;
 pub use storage_config::{
     ExportDirConfig, ExportDirMode, LegacyPathConfig, PathConfig, PathMode, PathRef, StorageConfig,
     StorageFallbackPolicy, StorageTargetConfig, preserve_storage_secrets,
 };
-pub(crate) use storage_config::*;
 pub(crate) use storage_upload_attempts::*;
-pub use storage_upload_common::{StorageTestResult, StorageUploadOverrides};
 pub(crate) use storage_upload_common::*;
+pub use storage_upload_common::{StorageTestResult, StorageUploadOverrides};
 pub(crate) use storage_upload_local_http::*;
 pub(crate) use storage_upload_remote::*;
-pub use storage_upload_runner::{test_storage_target, upload_job_outputs_to_storage};
 pub(crate) use storage_upload_runner::*;
+pub use storage_upload_runner::{test_storage_target, upload_job_outputs_to_storage};
 pub(crate) use storage_upload_s3::*;
 pub(crate) use util::*;
 
