@@ -163,7 +163,7 @@ pub(crate) fn resolve_path_ref(default: PathBuf, path_ref: &PathRef) -> PathBuf 
             .path
             .as_ref()
             .filter(|path| !path.as_os_str().is_empty())
-            .cloned()
+            .map(|path| expand_pathbuf_tilde(path))
             .unwrap_or(default),
         PathMode::Default => default,
     }
@@ -246,7 +246,7 @@ pub fn product_storage_fallback_dir(
 
 pub fn legacy_shared_codex_dir(config: Option<&AppConfig>) -> PathBuf {
     config
-        .map(|config| config.paths.legacy_shared_codex_dir.path.clone())
+        .map(|config| expand_pathbuf_tilde(&config.paths.legacy_shared_codex_dir.path))
         .unwrap_or_else(default_legacy_shared_codex_path)
 }
 
@@ -282,4 +282,10 @@ pub(crate) fn expand_tilde(value: &str) -> PathBuf {
             .join(rest);
     }
     PathBuf::from(value)
+}
+
+pub(crate) fn expand_pathbuf_tilde(path: &Path) -> PathBuf {
+    path.to_str()
+        .map(expand_tilde)
+        .unwrap_or_else(|| path.to_path_buf())
 }
