@@ -367,7 +367,7 @@ pub fn list_history_jobs() -> Result<Vec<Value>, AppError> {
 pub fn list_active_history_jobs() -> Result<Vec<Value>, AppError> {
     let conn = open_history_db()?;
     let mut stmt = conn
-        .prepare("SELECT id, command, provider, status, output_path, created_at, metadata FROM jobs WHERE status IN ('queued', 'running') AND deleted_at IS NULL ORDER BY created_at DESC, id DESC")
+        .prepare("SELECT id, command, provider, status, output_path, created_at, metadata FROM jobs WHERE status IN ('queued', 'running', 'uploading') AND deleted_at IS NULL ORDER BY created_at DESC, id DESC")
         .map_err(|error| AppError::new("history_query_failed", "Unable to query active history.").with_detail(json!({"error": error.to_string()})))?;
     let mut jobs = stmt
         .query_map([], history_row_to_value)
