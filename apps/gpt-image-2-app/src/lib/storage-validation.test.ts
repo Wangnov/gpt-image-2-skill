@@ -4,6 +4,7 @@ import {
   storageConfigIssue,
   storageTargetConfigIssues,
   storageTargetConfigIssue,
+  visibleStorageTargetIssues,
 } from "./storage-validation";
 
 const baseStorageConfig: StorageConfig = {
@@ -168,5 +169,34 @@ describe("storage validation", () => {
         use_direct_link: false,
       }),
     ).toEqual([]);
+  });
+
+  it("hides field issues until saving or testing the target", () => {
+    const target = {
+      type: "pan123_open",
+      auth_mode: "client",
+      client_id: "",
+      client_secret: null,
+      access_token: null,
+      parent_id: 0,
+      use_direct_link: false,
+    } as const;
+
+    expect(visibleStorageTargetIssues("pan123", target)).toEqual([]);
+    expect(
+      visibleStorageTargetIssues("pan123", target, {
+        testedTargets: new Set(["other"]),
+      }),
+    ).toEqual([]);
+    expect(
+      visibleStorageTargetIssues("pan123", target, {
+        testedTargets: new Set(["pan123"]),
+      }).map((issue) => issue.field),
+    ).toEqual(["client_id", "client_secret"]);
+    expect(
+      visibleStorageTargetIssues("pan123", target, {
+        saveAttempted: true,
+      }).map((issue) => issue.field),
+    ).toEqual(["client_id", "client_secret"]);
   });
 });

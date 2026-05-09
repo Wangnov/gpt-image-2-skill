@@ -74,8 +74,8 @@ import { effectiveDefaultProvider } from "@/lib/providers";
 import {
   type StorageFieldIssue,
   storageConfigIssue,
-  storageTargetConfigIssues,
   storageTargetConfigIssue,
+  visibleStorageTargetIssues,
 } from "@/lib/storage-validation";
 import { AddProviderDialog } from "@/components/screens/providers/add-provider-dialog";
 import { PromptTemplatesPanel } from "@/components/screens/settings/prompt-templates-panel";
@@ -341,13 +341,20 @@ function issueForField(issues: StorageFieldIssue[], field: string) {
 
 function StorageField({
   error,
+  required,
   children,
 }: {
   error?: string;
+  required?: boolean;
   children: ReactNode;
 }) {
   return (
     <div className="space-y-1">
+      {required && (
+        <div className="text-right text-[11px] font-semibold leading-none text-[color:var(--accent-70)]">
+          *
+        </div>
+      )}
       {children}
       {error && (
         <div className="text-[11px] leading-snug text-status-err">{error}</div>
@@ -2297,6 +2304,10 @@ function StoragePanel({
   paths?: PathConfig;
 }) {
   const [draft, setDraft] = useState(() => cloneStorageConfig(storage));
+  const [saveAttempted, setSaveAttempted] = useState(false);
+  const [testedTargets, setTestedTargets] = useState<Set<string>>(
+    () => new Set(),
+  );
   const updateStorage = useUpdateStorage();
   const testStorage = useTestStorageTarget();
   const copy = runtimeCopy();
@@ -2310,6 +2321,8 @@ function StoragePanel({
 
   useEffect(() => {
     setDraft(cloneStorageConfig(storage));
+    setSaveAttempted(false);
+    setTestedTargets(new Set());
   }, [storage]);
 
   const targetEntries = Object.entries(draft.targets);
@@ -2442,6 +2455,7 @@ function StoragePanel({
   };
 
   const save = async () => {
+    setSaveAttempted(true);
     const issue = storageConfigIssue(draft, { requireLocalDirectory });
     if (issue) {
       toast.warning("存储配置未完成", { description: issue });
@@ -2452,6 +2466,8 @@ function StoragePanel({
         prepareStorageConfigForSave(draft),
       );
       setDraft(cloneStorageConfig(saved.storage));
+      setSaveAttempted(false);
+      setTestedTargets(new Set());
       toast.success("结果存储已保存");
     } catch (error) {
       toast.error("保存结果存储失败", {
@@ -2461,6 +2477,7 @@ function StoragePanel({
   };
 
   const runTest = async (name: string) => {
+    setTestedTargets((current) => new Set(current).add(name));
     const issue = storageTargetConfigIssue(name, draft.targets[name], {
       requireLocalDirectory,
     });
@@ -2646,9 +2663,12 @@ function StoragePanel({
               type === "pan123_open"
                 ? (target as Pan123OpenStorageTargetConfig)
                 : undefined;
-            const targetIssues = storageTargetConfigIssues(name, target, {
-              requireLocalDirectory,
-            });
+            const targetIssues = visibleStorageTargetIssues(
+              name,
+              target,
+              { saveAttempted, testedTargets },
+              { requireLocalDirectory },
+            );
             const fieldError = (field: string) =>
               issueForField(targetIssues, field);
             const baiduAuthMode =
@@ -2711,7 +2731,7 @@ function StoragePanel({
                 <div className="space-y-2 bg-[color:var(--w-02)] px-3 py-3">
                   {type === "local" && "directory" in target && (
                     <div className="grid gap-2 sm:grid-cols-2">
-                      <StorageField error={fieldError("directory")}>
+                      <StorageField error={fieldError("directory")} required>
                         <Input
                           value={target.directory}
                           onChange={(event) =>
@@ -2753,7 +2773,7 @@ function StoragePanel({
                 {type === "s3" && "bucket" in target && (
                   <div className="space-y-2">
                     <div className="grid gap-2 sm:grid-cols-3">
-                      <StorageField error={fieldError("bucket")}>
+                      <StorageField error={fieldError("bucket")} required>
                         <Input
                           value={target.bucket}
                           onChange={(event) =>
@@ -2806,7 +2826,7 @@ function StoragePanel({
                         aria-label="S3 public base URL"
                       />
                     </div>
-                    <StorageField error={fieldError("access_key_id")}>
+                    <StorageField error={fieldError("access_key_id")} required>
                       <CredentialEditor
                         credential={target.access_key_id}
                         onChange={(access_key_id) =>
@@ -2817,7 +2837,7 @@ function StoragePanel({
                         invalid={Boolean(fieldError("access_key_id"))}
                       />
                     </StorageField>
-                    <StorageField error={fieldError("secret_access_key")}>
+                    <StorageField error={fieldError("secret_access_key")} required>
                       <CredentialEditor
                         credential={target.secret_access_key}
                         onChange={(secret_access_key) =>
@@ -2833,7 +2853,7 @@ function StoragePanel({
                 {webdavTarget && (
                   <div className="space-y-2">
                     <div className="grid gap-2 sm:grid-cols-2">
-                      <StorageField error={fieldError("url")}>
+                      <StorageField error={fieldError("url")} required>
                         <Input
                           value={webdavTarget.url}
                           onChange={(event) =>
@@ -2877,7 +2897,7 @@ function StoragePanel({
                 {httpTarget && (
                   <div className="space-y-2">
                     <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_110px_150px]">
-                      <StorageField error={fieldError("url")}>
+                      <StorageField error={fieldError("url")} required>
                         <Input
                           value={httpTarget.url}
                           onChange={(event) =>
@@ -2969,7 +2989,7 @@ function StoragePanel({
                 {sftpTarget && (
                   <div className="space-y-2">
                     <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_88px_minmax(0,1fr)]">
-                      <StorageField error={fieldError("host")}>
+                      <StorageField error={fieldError("host")} required>
                         <Input
                           value={sftpTarget.host}
                           onChange={(event) =>
@@ -2992,7 +3012,7 @@ function StoragePanel({
                         size="sm"
                         aria-label="SFTP port"
                       />
-                      <StorageField error={fieldError("username")}>
+                      <StorageField error={fieldError("username")} required>
                         <Input
                           value={sftpTarget.username}
                           onChange={(event) =>
@@ -3006,7 +3026,7 @@ function StoragePanel({
                       </StorageField>
                     </div>
                     <div className="grid gap-2 sm:grid-cols-2">
-                      <StorageField error={fieldError("remote_dir")}>
+                      <StorageField error={fieldError("remote_dir")} required>
                         <Input
                           value={sftpTarget.remote_dir}
                           onChange={(event) =>
@@ -3030,7 +3050,7 @@ function StoragePanel({
                         aria-label="SFTP public base URL"
                       />
                     </div>
-                    <StorageField error={fieldError("host_key_sha256")}>
+                    <StorageField error={fieldError("host_key_sha256")} required>
                       <Input
                         value={sftpTarget.host_key_sha256 ?? ""}
                         onChange={(event) =>
@@ -3044,7 +3064,7 @@ function StoragePanel({
                         aria-invalid={Boolean(fieldError("host_key_sha256"))}
                       />
                     </StorageField>
-                    <StorageField error={fieldError("sftp_auth")}>
+                    <StorageField error={fieldError("sftp_auth")} required>
                       <CredentialEditor
                         credential={sftpTarget.password}
                         onChange={(password) => patchTarget(name, { password })}
@@ -3083,7 +3103,7 @@ function StoragePanel({
                       </span>
                     </div>
                     <div className="grid gap-2 sm:grid-cols-2">
-                      <StorageField error={fieldError("app_name")}>
+                      <StorageField error={fieldError("app_name")} required>
                         <Input
                           value={baiduTarget.app_name}
                           onChange={(event) =>
@@ -3117,7 +3137,7 @@ function StoragePanel({
                       aria-label="百度网盘公开基础 URL"
                     />
                     {baiduAuthMode === "personal" && (
-                      <StorageField error={fieldError("access_token")}>
+                      <StorageField error={fieldError("access_token")} required>
                         <CredentialEditor
                           credential={baiduTarget.access_token}
                           onChange={(access_token) =>
@@ -3131,7 +3151,7 @@ function StoragePanel({
                     )}
                     {baiduAuthMode === "oauth" && (
                       <div className="space-y-2">
-                        <StorageField error={fieldError("app_key")}>
+                        <StorageField error={fieldError("app_key")} required>
                           <Input
                             value={baiduTarget.app_key}
                             onChange={(event) =>
@@ -3144,7 +3164,7 @@ function StoragePanel({
                             suffix={<HintButton text={BAIDU_NETDISK_HINT} />}
                           />
                         </StorageField>
-                        <StorageField error={fieldError("secret_key")}>
+                        <StorageField error={fieldError("secret_key")} required>
                           <CredentialEditor
                             credential={baiduTarget.secret_key}
                             onChange={(secret_key) =>
@@ -3155,7 +3175,7 @@ function StoragePanel({
                             invalid={Boolean(fieldError("secret_key"))}
                           />
                         </StorageField>
-                        <StorageField error={fieldError("refresh_token")}>
+                        <StorageField error={fieldError("refresh_token")} required>
                           <CredentialEditor
                             credential={baiduTarget.refresh_token}
                             onChange={(refresh_token) =>
@@ -3214,7 +3234,7 @@ function StoragePanel({
                     </label>
                     {pan123AuthMode === "client" && (
                       <div className="space-y-2">
-                        <StorageField error={fieldError("client_id")}>
+                        <StorageField error={fieldError("client_id")} required>
                           <Input
                             value={pan123Target.client_id}
                             onChange={(event) =>
@@ -3229,7 +3249,7 @@ function StoragePanel({
                             suffix={<HintButton text={PAN123_OPEN_HINT} />}
                           />
                         </StorageField>
-                        <StorageField error={fieldError("client_secret")}>
+                        <StorageField error={fieldError("client_secret")} required>
                           <CredentialEditor
                             credential={pan123Target.client_secret}
                             onChange={(client_secret) =>
@@ -3243,7 +3263,7 @@ function StoragePanel({
                       </div>
                     )}
                     {pan123AuthMode === "access_token" && (
-                      <StorageField error={fieldError("access_token")}>
+                      <StorageField error={fieldError("access_token")} required>
                         <CredentialEditor
                           credential={pan123Target.access_token}
                           onChange={(access_token) =>

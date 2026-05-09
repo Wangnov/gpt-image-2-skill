@@ -5,6 +5,11 @@ type StorageValidationOptions = {
   requireLocalDirectory?: boolean;
 };
 
+export type StorageValidationVisibility = {
+  saveAttempted?: boolean;
+  testedTargets?: Iterable<string>;
+};
+
 export type StorageFieldIssue = {
   field: string;
   message: string;
@@ -150,4 +155,15 @@ export function storageConfigIssue(
     if (issue) return issue;
   }
   return null;
+}
+
+export function visibleStorageTargetIssues(
+  name: string,
+  target: StorageTargetConfig | undefined,
+  visibility: StorageValidationVisibility = {},
+  options: StorageValidationOptions = {},
+) {
+  const testedTargets = new Set(visibility.testedTargets ?? []);
+  if (!visibility.saveAttempted && !testedTargets.has(name)) return [];
+  return storageTargetConfigIssues(name, target, options);
 }
