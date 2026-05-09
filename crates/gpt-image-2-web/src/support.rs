@@ -56,11 +56,24 @@ pub(crate) fn allowed_data_roots() -> Vec<PathBuf> {
 }
 
 pub(crate) fn path_under_allowed_root(path: &FsPath) -> bool {
-    let target = path.canonicalize().unwrap_or_else(|_| path.to_path_buf());
-    allowed_data_roots().into_iter().any(|root| {
-        let root = root.canonicalize().unwrap_or(root);
-        target.starts_with(root)
-    })
+    // Walk up to the first ancestor we can canonicalize — that's where
+    // create_dir_all will start creating directories, so it's the location
+    // we actually need to confine. Falling back to the raw user path here
+    // is unsafe: a path like `/data/gpt-image-2/../outside/newdir` would
+    // pass `starts_with("/data/gpt-image-2")` lexically while
+    // create_dir_all would resolve the `..` and write outside the root.
+    let mut probe = path.to_path_buf();
+    loop {
+        if let Ok(canonical) = probe.canonicalize() {
+            return allowed_data_roots().into_iter().any(|root| {
+                let root = root.canonicalize().unwrap_or(root);
+                canonical.starts_with(&root)
+            });
+        }
+        if !probe.pop() {
+            return false;
+        }
+    }
 }
 
 pub(crate) fn validate_server_writable_dir(path: &FsPath, label: &str) -> Result<(), String> {
