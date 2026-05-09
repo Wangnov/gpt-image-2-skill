@@ -95,12 +95,10 @@ fn normalize_product_storage_defaults(config: &mut AppConfig) {
     let fallback_dir = product_storage_fallback_dir(Some(config), ProductRuntime::DockerWeb);
     if let Some(StorageTargetConfig::Local { directory, .. }) =
         config.storage.targets.get_mut("local-default")
+        && (*directory == shared_config_dir().join("storage").join("fallback")
+            || directory.as_os_str().is_empty())
     {
-        if *directory == shared_config_dir().join("storage").join("fallback")
-            || directory.as_os_str().is_empty()
-        {
-            *directory = fallback_dir;
-        }
+        *directory = fallback_dir;
     }
 }
 
@@ -794,28 +792,30 @@ fn output_path_from_payload(payload: &Value) -> Option<String> {
         })
 }
 
-fn job_snapshot(
-    id: &str,
-    command: &str,
-    provider: &str,
-    status: &str,
-    created_at: &str,
+struct JobSnapshotInput<'a> {
+    id: &'a str,
+    command: &'a str,
+    provider: &'a str,
+    status: &'a str,
+    created_at: &'a str,
     metadata: Value,
     output_path: Option<String>,
     outputs: Value,
     error: Value,
-) -> Value {
+}
+
+fn job_snapshot(input: JobSnapshotInput<'_>) -> Value {
     json!({
-        "id": id,
-        "command": command,
-        "provider": provider,
-        "status": status,
-        "created_at": created_at,
+        "id": input.id,
+        "command": input.command,
+        "provider": input.provider,
+        "status": input.status,
+        "created_at": input.created_at,
         "updated_at": chrono_like_now(),
-        "metadata": metadata,
-        "outputs": outputs,
-        "output_path": output_path,
-        "error": error,
+        "metadata": input.metadata,
+        "outputs": input.outputs,
+        "output_path": input.output_path,
+        "error": input.error,
     })
 }
 
@@ -1029,17 +1029,17 @@ fn apply_partial_output(
         .and_then(Value::as_str)
         .map(ToString::to_string);
 
-    let parent_snapshot = job_snapshot(
-        &ctx.job_id,
-        &ctx.command,
-        &ctx.provider,
-        "running",
-        &ctx.created_at,
-        ctx.metadata.clone(),
-        first_path,
-        json!(sorted_outputs),
-        Value::Null,
-    );
+    let parent_snapshot = job_snapshot(JobSnapshotInput {
+        id: &ctx.job_id,
+        command: &ctx.command,
+        provider: &ctx.provider,
+        status: "running",
+        created_at: &ctx.created_at,
+        metadata: ctx.metadata.clone(),
+        output_path: first_path,
+        outputs: json!(sorted_outputs),
+        error: Value::Null,
+    });
     let _ = persist_job(&parent_snapshot);
 
     let payload_path = payload
@@ -1294,17 +1294,17 @@ fn completed_job_for_queue(queued: &QueuedJob, response: &Value) -> Value {
             .and_then(Value::as_str)
             .map(ToString::to_string)
     });
-    job_snapshot(
-        &queued.id,
-        &queued.command,
+    job_snapshot(JobSnapshotInput {
+        id: &queued.id,
+        command: &queued.command,
         provider,
-        "completed",
-        &queued.created_at,
-        queued.metadata.clone(),
+        status: "completed",
+        created_at: &queued.created_at,
+        metadata: queued.metadata.clone(),
         output_path,
         outputs,
-        Value::Null,
-    )
+        error: Value::Null,
+    })
 }
 
 fn uploading_job_for_queue(queued: &QueuedJob, response: &Value) -> Value {
@@ -1331,31 +1331,31 @@ fn uploading_job_for_queue(queued: &QueuedJob, response: &Value) -> Value {
             .and_then(Value::as_str)
             .map(ToString::to_string)
     });
-    job_snapshot(
-        &queued.id,
-        &queued.command,
+    job_snapshot(JobSnapshotInput {
+        id: &queued.id,
+        command: &queued.command,
         provider,
-        "uploading",
-        &queued.created_at,
-        queued.metadata.clone(),
+        status: "uploading",
+        created_at: &queued.created_at,
+        metadata: queued.metadata.clone(),
         output_path,
         outputs,
-        Value::Null,
-    )
+        error: Value::Null,
+    })
 }
 
 fn failed_job_for_queue(queued: &QueuedJob, message: String) -> Value {
-    job_snapshot(
-        &queued.id,
-        &queued.command,
-        &queued.provider,
-        "failed",
-        &queued.created_at,
-        queued.metadata.clone(),
-        None,
-        json!([]),
-        json!({"message": message}),
-    )
+    job_snapshot(JobSnapshotInput {
+        id: &queued.id,
+        command: &queued.command,
+        provider: &queued.provider,
+        status: "failed",
+        created_at: &queued.created_at,
+        metadata: queued.metadata.clone(),
+        output_path: None,
+        outputs: json!([]),
+        error: json!({"message": message}),
+    })
 }
 
 fn completed_event_data(job: &Value) -> Value {
@@ -1448,13 +1448,16 @@ fn storage_overrides_from_job(job: &Value) -> StorageUploadOverrides {
 }
 
 fn upload_completed_job_outputs(job: &Value) -> Result<Value, String> {
-    let _ = persist_job(job);
-    let config = load_config()?;
-    let overrides = storage_overrides_from_job(job);
-    upload_job_outputs_to_storage(&config.storage, job, overrides)
-        .map_err(app_error)
-        .map(|_| ())
-        .map_err(|error| format!("Storage upload failed: {error}"))?;
+    let upload_result = load_config()
+        .and_then(|config| {
+            let overrides = storage_overrides_from_job(job);
+            upload_job_outputs_to_storage(&config.storage, job, overrides)
+                .map_err(app_error)
+                .map(|_| ())
+        })
+        .map_err(|error| format!("Storage upload failed: {error}"));
+    persist_job(job)?;
+    upload_result?;
     let job_id = job
         .get("id")
         .and_then(Value::as_str)
@@ -1530,17 +1533,17 @@ fn start_queued_jobs(state: JobQueueState) {
                 return;
             };
             inner.running += 1;
-            let running_job = job_snapshot(
-                &queued.id,
-                &queued.command,
-                &queued.provider,
-                "running",
-                &queued.created_at,
-                queued.metadata.clone(),
-                None,
-                json!([]),
-                Value::Null,
-            );
+            let running_job = job_snapshot(JobSnapshotInput {
+                id: &queued.id,
+                command: &queued.command,
+                provider: &queued.provider,
+                status: "running",
+                created_at: &queued.created_at,
+                metadata: queued.metadata.clone(),
+                output_path: None,
+                outputs: json!([]),
+                error: Value::Null,
+            });
             append_queue_event(
                 &mut inner,
                 &queued.id,
@@ -1578,17 +1581,17 @@ fn start_queued_jobs(state: JobQueueState) {
 }
 
 fn enqueue_job(state: JobQueueState, queued: QueuedJob) -> Result<Value, String> {
-    let job = job_snapshot(
-        &queued.id,
-        &queued.command,
-        &queued.provider,
-        "queued",
-        &queued.created_at,
-        queued.metadata.clone(),
-        None,
-        json!([]),
-        Value::Null,
-    );
+    let job = job_snapshot(JobSnapshotInput {
+        id: &queued.id,
+        command: &queued.command,
+        provider: &queued.provider,
+        status: "queued",
+        created_at: &queued.created_at,
+        metadata: queued.metadata.clone(),
+        output_path: None,
+        outputs: json!([]),
+        error: Value::Null,
+    });
     persist_job(&job)?;
     let job_id = queued.id.clone();
     let (event, queue) = {
@@ -2019,17 +2022,17 @@ async fn cancel_job(Path(job_id): Path<String>, State(state): State<JobQueueStat
         );
         (queued, event)
     };
-    let job = job_snapshot(
-        &queued.id,
-        &queued.command,
-        &queued.provider,
-        "canceled",
-        &queued.created_at,
-        queued.metadata,
-        None,
-        json!([]),
-        Value::Null,
-    );
+    let job = job_snapshot(JobSnapshotInput {
+        id: &queued.id,
+        command: &queued.command,
+        provider: &queued.provider,
+        status: "canceled",
+        created_at: &queued.created_at,
+        metadata: queued.metadata,
+        output_path: None,
+        outputs: json!([]),
+        error: Value::Null,
+    });
     persist_job(&job).map_err(ApiError::internal)?;
     let notification_deliveries = dispatch_notifications_for_job(&job);
     Ok(Json(json!({

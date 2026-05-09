@@ -1798,13 +1798,16 @@ fn storage_overrides_from_job(job: &Value) -> StorageUploadOverrides {
 }
 
 fn upload_completed_job_outputs(job: &Value) -> Result<Value, String> {
-    let _ = persist_job(job);
-    let config = load_config()?;
-    let overrides = storage_overrides_from_job(job);
-    upload_job_outputs_to_storage(&config.storage, job, overrides)
-        .map_err(app_error)
-        .map(|_| ())
-        .map_err(|error| format!("Storage upload failed: {error}"))?;
+    let upload_result = load_config()
+        .and_then(|config| {
+            let overrides = storage_overrides_from_job(job);
+            upload_job_outputs_to_storage(&config.storage, job, overrides)
+                .map_err(app_error)
+                .map(|_| ())
+        })
+        .map_err(|error| format!("Storage upload failed: {error}"));
+    persist_job(job)?;
+    upload_result?;
     let job_id = job
         .get("id")
         .and_then(Value::as_str)

@@ -7121,7 +7121,7 @@ mod tests {
     }
 
     #[test]
-    fn netdisk_access_token_preservation_requires_same_named_target() {
+    fn netdisk_access_token_preservation_skips_added_targets_when_existing_target_remains() {
         let existing = StorageConfig {
             targets: BTreeMap::from([
                 (
@@ -7158,6 +7158,21 @@ mod tests {
         let mut next = StorageConfig {
             targets: BTreeMap::from([
                 (
+                    "baidu-personal".to_string(),
+                    StorageTargetConfig::BaiduNetdisk {
+                        auth_mode: Some(BaiduNetdiskAuthMode::Personal),
+                        app_key: String::new(),
+                        secret_key: None,
+                        access_token: Some(CredentialRef::File {
+                            value: "baidu-token".to_string(),
+                        }),
+                        refresh_token: None,
+                        app_name: "old-app".to_string(),
+                        remote_dir: None,
+                        public_base_url: None,
+                    },
+                ),
+                (
                     "baidu-new".to_string(),
                     StorageTargetConfig::BaiduNetdisk {
                         auth_mode: Some(BaiduNetdiskAuthMode::Personal),
@@ -7170,6 +7185,19 @@ mod tests {
                         app_name: "new-app".to_string(),
                         remote_dir: None,
                         public_base_url: None,
+                    },
+                ),
+                (
+                    "pan123-token".to_string(),
+                    StorageTargetConfig::Pan123Open {
+                        auth_mode: Some(Pan123OpenAuthMode::AccessToken),
+                        client_id: String::new(),
+                        client_secret: None,
+                        access_token: Some(CredentialRef::File {
+                            value: "pan-token".to_string(),
+                        }),
+                        parent_id: 0,
+                        use_direct_link: false,
                     },
                 ),
                 (
@@ -7211,6 +7239,114 @@ mod tests {
             access_token,
             &Some(CredentialRef::File {
                 value: String::new()
+            })
+        );
+    }
+
+    #[test]
+    fn netdisk_access_token_preservation_survives_target_rename() {
+        let existing = StorageConfig {
+            targets: BTreeMap::from([
+                (
+                    "baidu-personal".to_string(),
+                    StorageTargetConfig::BaiduNetdisk {
+                        auth_mode: Some(BaiduNetdiskAuthMode::Personal),
+                        app_key: String::new(),
+                        secret_key: None,
+                        access_token: Some(CredentialRef::File {
+                            value: "baidu-token".to_string(),
+                        }),
+                        refresh_token: Some(CredentialRef::File {
+                            value: "baidu-refresh".to_string(),
+                        }),
+                        app_name: "old-app".to_string(),
+                        remote_dir: None,
+                        public_base_url: None,
+                    },
+                ),
+                (
+                    "pan123-token".to_string(),
+                    StorageTargetConfig::Pan123Open {
+                        auth_mode: Some(Pan123OpenAuthMode::AccessToken),
+                        client_id: String::new(),
+                        client_secret: None,
+                        access_token: Some(CredentialRef::File {
+                            value: "pan-token".to_string(),
+                        }),
+                        parent_id: 0,
+                        use_direct_link: false,
+                    },
+                ),
+            ]),
+            ..StorageConfig::default()
+        };
+        let mut next = StorageConfig {
+            targets: BTreeMap::from([
+                (
+                    "baidu-renamed".to_string(),
+                    StorageTargetConfig::BaiduNetdisk {
+                        auth_mode: Some(BaiduNetdiskAuthMode::Personal),
+                        app_key: String::new(),
+                        secret_key: None,
+                        access_token: Some(CredentialRef::File {
+                            value: String::new(),
+                        }),
+                        refresh_token: Some(CredentialRef::File {
+                            value: String::new(),
+                        }),
+                        app_name: "old-app".to_string(),
+                        remote_dir: None,
+                        public_base_url: None,
+                    },
+                ),
+                (
+                    "pan123-renamed".to_string(),
+                    StorageTargetConfig::Pan123Open {
+                        auth_mode: Some(Pan123OpenAuthMode::AccessToken),
+                        client_id: String::new(),
+                        client_secret: None,
+                        access_token: Some(CredentialRef::File {
+                            value: String::new(),
+                        }),
+                        parent_id: 0,
+                        use_direct_link: false,
+                    },
+                ),
+            ]),
+            ..StorageConfig::default()
+        };
+
+        preserve_storage_secrets(&mut next, &existing);
+
+        let StorageTargetConfig::BaiduNetdisk {
+            access_token,
+            refresh_token,
+            ..
+        } = next.targets.get("baidu-renamed").unwrap()
+        else {
+            panic!("expected baidu target");
+        };
+        assert_eq!(
+            access_token,
+            &Some(CredentialRef::File {
+                value: "baidu-token".to_string()
+            })
+        );
+        assert_eq!(
+            refresh_token,
+            &Some(CredentialRef::File {
+                value: "baidu-refresh".to_string()
+            })
+        );
+        let StorageTargetConfig::Pan123Open { access_token, .. } =
+            next.targets.get("pan123-renamed").unwrap()
+        else {
+            panic!("expected 123 target");
+        };
+        assert_eq!(
+            access_token,
+            &Some(CredentialRef::File {
+                value: "pan-token".to_string()
             })
         );
     }

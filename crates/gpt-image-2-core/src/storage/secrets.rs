@@ -1,4 +1,5 @@
 use crate::CredentialRef;
+use std::collections::BTreeSet;
 
 use super::{
     BaiduNetdiskAuthMode, Pan123OpenAuthMode, StorageConfig, StorageTargetConfig,
@@ -155,39 +156,13 @@ fn storage_secret_rename_identity_matches(
     next: &StorageTargetConfig,
     existing: &StorageTargetConfig,
 ) -> bool {
-    if !storage_secret_identity_matches(next, existing) {
-        return false;
-    }
-    match (next, existing) {
-        (
-            StorageTargetConfig::BaiduNetdisk {
-                auth_mode,
-                access_token,
-                ..
-            },
-            StorageTargetConfig::BaiduNetdisk { .. },
-        ) => {
-            effective_baidu_netdisk_auth_mode(*auth_mode, access_token.as_ref())
-                != BaiduNetdiskAuthMode::Personal
-        }
-        (
-            StorageTargetConfig::Pan123Open {
-                auth_mode,
-                access_token,
-                ..
-            },
-            StorageTargetConfig::Pan123Open { .. },
-        ) => {
-            effective_pan123_open_auth_mode(*auth_mode, access_token.as_ref())
-                != Pan123OpenAuthMode::AccessToken
-        }
-        _ => true,
-    }
+    storage_secret_identity_matches(next, existing)
 }
 
 fn storage_secret_source<'a>(
     name: &str,
     target: &StorageTargetConfig,
+    next_names: &BTreeSet<String>,
     existing: &'a StorageConfig,
 ) -> Option<&'a StorageTargetConfig> {
     if let Some(existing_target) = existing.targets.get(name)
@@ -199,7 +174,9 @@ fn storage_secret_source<'a>(
     let mut matches = existing
         .targets
         .iter()
-        .filter(|(existing_name, _)| *existing_name != name)
+        .filter(|(existing_name, _)| {
+            existing_name.as_str() != name && !next_names.contains(existing_name.as_str())
+        })
         .map(|(_, existing_target)| existing_target)
         .filter(|existing_target| storage_secret_rename_identity_matches(target, existing_target));
     let first = matches.next()?;
@@ -211,8 +188,9 @@ fn storage_secret_source<'a>(
 }
 
 pub fn preserve_storage_secrets(next: &mut StorageConfig, existing: &StorageConfig) {
+    let next_names = next.targets.keys().cloned().collect::<BTreeSet<_>>();
     for (name, target) in &mut next.targets {
-        let existing_target = storage_secret_source(name, target, existing);
+        let existing_target = storage_secret_source(name, target, &next_names, existing);
         match target {
             StorageTargetConfig::S3 {
                 access_key_id,
