@@ -12,14 +12,14 @@ use gpt_image_2_core::{
     AppConfig, CredentialRef, HistoryListOptions, KEYCHAIN_SERVICE, NotificationConfig, PathConfig,
     ProductRuntime, ProviderConfig, StorageConfig, StorageTargetConfig, StorageUploadOverrides,
     default_config_path, default_keychain_account, delete_history_job, dispatch_task_notifications,
-    history_db_path, legacy_jobs_dir, legacy_shared_codex_dir, list_active_history_jobs,
-    list_expired_deleted_history_jobs, list_history_jobs_page, load_app_config,
-    notification_status_allowed, preserve_notification_secrets, preserve_storage_secrets,
-    product_app_data_dir, product_default_export_dir, product_default_export_dirs,
-    product_result_library_dir, product_storage_fallback_dir, read_keychain_secret,
-    redact_app_config, restore_deleted_history_job, run_json, save_app_config, shared_config_dir,
-    show_history_job, soft_delete_history_job, upload_job_outputs_to_storage, upsert_history_job,
-    write_keychain_secret,
+    history_db_path, initialize_product_runtime_paths, legacy_jobs_dir, legacy_shared_codex_dir,
+    list_active_history_jobs, list_expired_deleted_history_jobs, list_history_jobs_page,
+    load_app_config, notification_status_allowed, preserve_notification_secrets,
+    preserve_storage_secrets, product_app_data_dir, product_default_export_dir,
+    product_default_export_dirs, product_result_library_dir, product_storage_fallback_dir,
+    read_keychain_secret, redact_app_config, restore_deleted_history_job, run_json,
+    save_app_config, shared_config_dir, show_history_job, soft_delete_history_job,
+    upload_job_outputs_to_storage, upsert_history_job, write_keychain_secret,
 };
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
@@ -62,6 +62,7 @@ pub(crate) use types::*;
 mod tests;
 
 pub fn run() {
+    let _ = initialize_product_runtime_paths(ProductRuntime::Tauri);
     tauri::Builder::default()
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_notification::init())
