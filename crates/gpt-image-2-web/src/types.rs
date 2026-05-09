@@ -44,69 +44,6 @@ pub(crate) enum CredentialInput {
     },
 }
 
-#[derive(Debug, Clone, Deserialize, Serialize)]
-pub(crate) struct GenerateRequest {
-    pub(crate) prompt: String,
-    #[serde(default)]
-    pub(crate) provider: Option<String>,
-    #[serde(default)]
-    pub(crate) size: Option<String>,
-    #[serde(default)]
-    pub(crate) format: Option<String>,
-    #[serde(default)]
-    pub(crate) quality: Option<String>,
-    #[serde(default)]
-    pub(crate) background: Option<String>,
-    #[serde(default)]
-    pub(crate) n: Option<u8>,
-    #[serde(default)]
-    pub(crate) compression: Option<u8>,
-    #[serde(default)]
-    pub(crate) moderation: Option<String>,
-    #[serde(default)]
-    pub(crate) storage_targets: Option<Vec<String>>,
-    #[serde(default)]
-    pub(crate) fallback_targets: Option<Vec<String>>,
-}
-
-#[derive(Debug, Clone, Deserialize)]
-pub(crate) struct UploadFile {
-    pub(crate) name: String,
-    pub(crate) bytes: Vec<u8>,
-}
-
-#[derive(Debug, Clone, Deserialize)]
-pub(crate) struct EditRequest {
-    pub(crate) prompt: String,
-    #[serde(default)]
-    pub(crate) provider: Option<String>,
-    #[serde(default)]
-    pub(crate) size: Option<String>,
-    #[serde(default)]
-    pub(crate) format: Option<String>,
-    #[serde(default)]
-    pub(crate) quality: Option<String>,
-    #[serde(default)]
-    pub(crate) background: Option<String>,
-    #[serde(default)]
-    pub(crate) n: Option<u8>,
-    #[serde(default)]
-    pub(crate) compression: Option<u8>,
-    #[serde(default)]
-    pub(crate) input_fidelity: Option<String>,
-    #[serde(default)]
-    pub(crate) moderation: Option<String>,
-    #[serde(default)]
-    pub(crate) storage_targets: Option<Vec<String>>,
-    #[serde(default)]
-    pub(crate) fallback_targets: Option<Vec<String>>,
-    pub(crate) refs: Vec<UploadFile>,
-    #[serde(default)]
-    pub(crate) mask: Option<UploadFile>,
-    #[serde(default)]
-    pub(crate) selection_hint: Option<UploadFile>,
-}
-
 #[derive(Clone)]
 pub(crate) struct JobQueueState {
     pub(crate) inner: Arc<Mutex<JobQueueInner>>,

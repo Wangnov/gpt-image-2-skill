@@ -237,7 +237,7 @@ pub(crate) fn run_codex_image_command(
     })
 }
 
-pub(crate) fn batch_output_path(output_path: &Path, index: usize) -> String {
+pub(crate) fn cli_batch_output_path(output_path: &Path, index: usize) -> String {
     let base_name = output_path
         .file_stem()
         .and_then(|stem| stem.to_str())
@@ -303,7 +303,7 @@ pub(crate) fn run_batched_image_command(
         .map(|index| {
             let mut next = shared.clone();
             next.n = None;
-            next.out = batch_output_path(&output_path, index as usize);
+            next.out = cli_batch_output_path(&output_path, index as usize);
             next
         })
         .collect::<Vec<_>>();

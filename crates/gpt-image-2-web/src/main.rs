@@ -16,19 +16,20 @@ use axum::{
     routing::{get, post, put},
 };
 use gpt_image_2_core::{
-    AppConfig, CONFIG_DIR_NAME, CredentialRef, HistoryListOptions, KEYCHAIN_SERVICE,
-    NotificationConfig, PathConfig, ProductRuntime, ProviderConfig, StorageConfig,
-    StorageTargetConfig, StorageUploadOverrides, default_config_path, default_keychain_account,
-    delete_history_job, dispatch_task_notifications, history_db_path,
-    initialize_product_runtime_paths, legacy_jobs_dir, legacy_shared_codex_dir,
-    list_active_history_jobs, list_history_jobs_page, load_app_config, notification_status_allowed,
-    preserve_notification_secrets, preserve_storage_secrets, product_app_data_dir,
-    product_default_export_dir, product_default_export_dirs, product_result_library_dir,
-    product_storage_fallback_dir, read_keychain_secret, redact_app_config, run_json,
-    save_app_config, shared_config_dir, show_history_job, test_storage_target,
-    upload_job_outputs_to_storage, upsert_history_job, write_keychain_secret,
+    AppConfig, CONFIG_DIR_NAME, CredentialRef, EditRequest, GenerateRequest, HistoryListOptions,
+    KEYCHAIN_SERVICE, NotificationConfig, PathConfig, ProductRuntime, ProviderConfig,
+    StorageConfig, StorageTargetConfig, StorageUploadOverrides, UploadFile, batch_output_path,
+    default_config_path, default_keychain_account, delete_history_job, dispatch_task_notifications,
+    edit_args, generate_args, history_db_path, initialize_product_runtime_paths, legacy_jobs_dir,
+    legacy_shared_codex_dir, list_active_history_jobs, list_history_jobs_page, load_app_config,
+    notification_status_allowed, output_extension, preserve_notification_secrets,
+    preserve_storage_secrets, product_app_data_dir, product_default_export_dir,
+    product_default_export_dirs, product_result_library_dir, product_storage_fallback_dir,
+    read_keychain_secret, redact_app_config, requested_n, run_json, save_app_config,
+    shared_config_dir, show_history_job, test_storage_target, upload_job_outputs_to_storage,
+    upsert_history_job, write_keychain_secret,
 };
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
 use serde_json::{Value, json};
 use tower_http::services::{ServeDir, ServeFile};
 

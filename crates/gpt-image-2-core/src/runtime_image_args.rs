@@ -2,7 +2,7 @@
 
 use super::*;
 
-pub(crate) fn requested_n(n: Option<u8>) -> Result<u8, String> {
+pub fn requested_n(n: Option<u8>) -> Result<u8, String> {
     let requested = n.unwrap_or(1);
     if requested == 0 {
         return Err("Output count must be at least 1.".to_string());
@@ -10,7 +10,25 @@ pub(crate) fn requested_n(n: Option<u8>) -> Result<u8, String> {
     Ok(requested.min(16))
 }
 
-pub(crate) fn push_provider_arg(args: &mut Vec<String>, provider: Option<&str>) {
+pub fn output_extension(format: Option<&str>) -> &str {
+    match format {
+        Some("jpeg") => "jpg",
+        Some("webp") => "webp",
+        _ => "png",
+    }
+}
+
+pub fn push_optional(args: &mut Vec<String>, flag: &str, value: Option<&str>) {
+    if let Some(value) = value
+        && !value.is_empty()
+        && value != "auto"
+    {
+        args.push(flag.to_string());
+        args.push(value.to_string());
+    }
+}
+
+pub fn push_provider_arg(args: &mut Vec<String>, provider: Option<&str>) {
     if let Some(provider) = provider
         && !provider.trim().is_empty()
     {
@@ -19,11 +37,7 @@ pub(crate) fn push_provider_arg(args: &mut Vec<String>, provider: Option<&str>) 
     }
 }
 
-pub(crate) fn generate_args(
-    request: &GenerateRequest,
-    out: &FsPath,
-    include_n: bool,
-) -> Vec<String> {
+pub fn generate_args(request: &GenerateRequest, out: &Path, include_n: bool) -> Vec<String> {
     let mut args = Vec::new();
     push_provider_arg(&mut args, request.provider.as_deref());
     args.extend([
@@ -50,11 +64,11 @@ pub(crate) fn generate_args(
     args
 }
 
-pub(crate) fn edit_args(
+pub fn edit_args(
     request: &EditRequest,
     ref_paths: &[PathBuf],
-    mask_path: Option<&FsPath>,
-    out: &FsPath,
+    mask_path: Option<&Path>,
+    out: &Path,
     include_n: bool,
 ) -> Vec<String> {
     let mut args = Vec::new();
@@ -96,6 +110,6 @@ pub(crate) fn edit_args(
     args
 }
 
-pub(crate) fn batch_output_path(dir: &FsPath, format: Option<&str>, index: u8) -> PathBuf {
+pub fn batch_output_path(dir: &Path, format: Option<&str>, index: u8) -> PathBuf {
     dir.join(format!("out-{}.{}", index + 1, output_extension(format)))
 }
