@@ -1568,8 +1568,8 @@ fn checkerboard_at_cell_size(image: &RgbaImage, cell_size: u32) -> bool {
         for cx in 0..cells_x {
             let color = average_cell_color(image, cx * cell_size, cy * cell_size, cell_size);
             let parity = ((cx + cy) % 2) as usize;
-            for channel in 0..3 {
-                sums[parity][channel] += f64::from(color[channel]);
+            for (channel, value) in color.iter().enumerate() {
+                sums[parity][channel] += f64::from(*value);
             }
             counts[parity] += 1.0;
             cell_colors.push((parity, color));
@@ -1597,8 +1597,8 @@ fn checkerboard_at_cell_size(image: &RgbaImage, cell_size: u32) -> bool {
     let mut squared_error = 0.0f64;
     let mut samples = 0.0f64;
     for (parity, color) in cell_colors {
-        for channel in 0..3 {
-            let delta = f64::from(color[channel]) - means[parity][channel];
+        for (channel, value) in color.iter().enumerate() {
+            let delta = f64::from(*value) - means[parity][channel];
             squared_error += delta * delta;
             samples += 1.0;
         }

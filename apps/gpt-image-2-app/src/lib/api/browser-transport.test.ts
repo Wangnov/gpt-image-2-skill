@@ -183,9 +183,29 @@ describe("browserApi", () => {
           session_token: { source: "file", value: "session-test" },
           public_base_url: "https://cdn.example.com",
         },
+        baidu: {
+          type: "baidu_netdisk",
+          auth_mode: "oauth",
+          app_key: "baidu-app-key",
+          secret_key: { source: "file", value: "baidu-secret" },
+          access_token: { source: "file", value: "baidu-access" },
+          refresh_token: { source: "file", value: "baidu-refresh" },
+          app_name: "gpt-image-2",
+          remote_dir: "generated",
+          public_base_url: "https://pan.example.com",
+        },
+        pan123: {
+          type: "pan123_open",
+          auth_mode: "client",
+          client_id: "pan-client",
+          client_secret: { source: "file", value: "pan-secret" },
+          access_token: { source: "file", value: "pan-access" },
+          parent_id: 123,
+          use_direct_link: true,
+        },
       },
       default_targets: ["archive"],
-      fallback_targets: ["archive", "local-default"],
+      fallback_targets: ["archive", "local-default", "baidu", "pan123"],
       fallback_policy: "on_failure",
       upload_concurrency: 4,
       target_concurrency: 2,
@@ -205,6 +225,25 @@ describe("browserApi", () => {
       secret_access_key: { source: "file", present: false },
       session_token: { source: "file", present: false },
     });
+    expect(saved.storage.targets.baidu).toMatchObject({
+      type: "baidu_netdisk",
+      auth_mode: "oauth",
+      app_key: "baidu-app-key",
+      secret_key: { source: "file", present: false },
+      access_token: { source: "file", present: false },
+      refresh_token: { source: "file", present: false },
+      app_name: "gpt-image-2",
+      remote_dir: "generated",
+    });
+    expect(saved.storage.targets.pan123).toMatchObject({
+      type: "pan123_open",
+      auth_mode: "client",
+      client_id: "pan-client",
+      client_secret: { source: "file", present: false },
+      access_token: { source: "file", present: false },
+      parent_id: 123,
+      use_direct_link: true,
+    });
 
     const reloaded = await browserApi.getConfig();
     expect(reloaded.storage.default_targets).toEqual([]);
@@ -212,6 +251,24 @@ describe("browserApi", () => {
     expect(JSON.stringify(reloaded.storage)).not.toContain("ak-test");
     expect(JSON.stringify(reloaded.storage)).not.toContain("sk-test");
     expect(JSON.stringify(reloaded.storage)).not.toContain("session-test");
+    expect(JSON.stringify(reloaded.storage)).not.toContain("baidu-secret");
+    expect(JSON.stringify(reloaded.storage)).not.toContain("baidu-access");
+    expect(JSON.stringify(reloaded.storage)).not.toContain("baidu-refresh");
+    expect(JSON.stringify(reloaded.storage)).not.toContain("pan-secret");
+    expect(JSON.stringify(reloaded.storage)).not.toContain("pan-access");
+    expect(reloaded.storage.targets.baidu).toMatchObject({
+      type: "baidu_netdisk",
+      auth_mode: "oauth",
+      app_key: "baidu-app-key",
+      app_name: "gpt-image-2",
+    });
+    expect(reloaded.storage.targets.pan123).toMatchObject({
+      type: "pan123_open",
+      auth_mode: "client",
+      client_id: "pan-client",
+      parent_id: 123,
+      use_direct_link: true,
+    });
 
     const test = await browserApi.testStorageTarget!(
       "archive",

@@ -484,7 +484,39 @@ function scrubStorageTargetSecrets(
           : null,
     } as StorageTargetConfig;
   }
-  return { ...target, type: "local" } as StorageTargetConfig;
+  if (type === "baidu_netdisk") {
+    return {
+      ...target,
+      type,
+      secret_key:
+        "secret_key" in target
+          ? scrubStorageCredential(target.secret_key)
+          : null,
+      access_token:
+        "access_token" in target
+          ? scrubStorageCredential(target.access_token)
+          : null,
+      refresh_token:
+        "refresh_token" in target
+          ? scrubStorageCredential(target.refresh_token)
+          : null,
+    } as StorageTargetConfig;
+  }
+  if (type === "pan123_open") {
+    return {
+      ...target,
+      type,
+      client_secret:
+        "client_secret" in target
+          ? scrubStorageCredential(target.client_secret)
+          : null,
+      access_token:
+        "access_token" in target
+          ? scrubStorageCredential(target.access_token)
+          : null,
+    } as StorageTargetConfig;
+  }
+  return { ...target, type } as StorageTargetConfig;
 }
 
 function sanitizeStorageTargetConfig(
@@ -544,6 +576,36 @@ function sanitizeStorageTargetConfig(
       private_key:
         "private_key" in scrubbed
           ? sanitizeNotificationCredential(scrubbed.private_key)
+          : null,
+    } as StorageTargetConfig;
+  }
+  if (type === "baidu_netdisk") {
+    return {
+      ...scrubbed,
+      secret_key:
+        "secret_key" in scrubbed
+          ? sanitizeNotificationCredential(scrubbed.secret_key)
+          : null,
+      access_token:
+        "access_token" in scrubbed
+          ? sanitizeNotificationCredential(scrubbed.access_token)
+          : null,
+      refresh_token:
+        "refresh_token" in scrubbed
+          ? sanitizeNotificationCredential(scrubbed.refresh_token)
+          : null,
+    } as StorageTargetConfig;
+  }
+  if (type === "pan123_open") {
+    return {
+      ...scrubbed,
+      client_secret:
+        "client_secret" in scrubbed
+          ? sanitizeNotificationCredential(scrubbed.client_secret)
+          : null,
+      access_token:
+        "access_token" in scrubbed
+          ? sanitizeNotificationCredential(scrubbed.access_token)
           : null,
     } as StorageTargetConfig;
   }

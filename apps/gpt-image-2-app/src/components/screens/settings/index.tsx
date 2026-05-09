@@ -71,6 +71,12 @@ import { clearCreativeDrafts } from "@/lib/drafts";
 import { copyText, openPath, revealPath } from "@/lib/user-actions";
 import { isDesktopRuntime, runtimeCopy } from "@/lib/runtime-copy";
 import { effectiveDefaultProvider } from "@/lib/providers";
+import {
+  type StorageFieldIssue,
+  storageConfigIssue,
+  storageTargetConfigIssues,
+  storageTargetConfigIssue,
+} from "@/lib/storage-validation";
 import { AddProviderDialog } from "@/components/screens/providers/add-provider-dialog";
 import { PromptTemplatesPanel } from "@/components/screens/settings/prompt-templates-panel";
 import { ProviderLogo } from "@/components/provider-logo";
@@ -88,6 +94,8 @@ import type {
   SftpStorageTargetConfig,
   StorageTargetConfig,
   StorageTargetKind,
+  BaiduNetdiskStorageTargetConfig,
+  Pan123OpenStorageTargetConfig,
   WebDavStorageTargetConfig,
   WebhookNotificationConfig,
 } from "@/lib/types";
@@ -170,6 +178,18 @@ const STORAGE_TARGET_TYPE_OPTIONS = [
   { value: "s3", label: "S3" },
   { value: "webdav", label: "WebDAV" },
   { value: "sftp", label: "SFTP" },
+  { value: "baidu_netdisk", label: "百度网盘 OpenAPI" },
+  { value: "pan123_open", label: "123 网盘 OpenAPI" },
+] as const;
+
+const BAIDU_AUTH_MODE_OPTIONS = [
+  { value: "personal", label: "个人对接" },
+  { value: "oauth", label: "OAuth 对接" },
+] as const;
+
+const PAN123_AUTH_MODE_OPTIONS = [
+  { value: "client", label: "client 对接" },
+  { value: "access_token", label: "accessToken 对接" },
 ] as const;
 
 const STORAGE_FALLBACK_POLICY_OPTIONS = [
@@ -183,6 +203,26 @@ const CREDENTIAL_SOURCE_OPTIONS = [
   { value: "env", label: "环境变量" },
   { value: "keychain", label: "系统钥匙串" },
 ] as const;
+
+const BAIDU_NETDISK_HINT = [
+  "百度网盘 OpenAPI 对接条件：",
+  "创建个人应用，并开通网盘上传权限。",
+  "填写 App Key + Secret Key + Refresh Token，或长期 Access Token。",
+  "上传路径位于 /apps/{应用名}/，应用名需与开放平台一致。",
+].join("\n");
+
+const PAN123_OPEN_HINT = [
+  "123 网盘 OpenAPI 对接条件：",
+  "填写长期 Access Token；或配置 clientID + clientSecret。",
+  "父目录 ID 默认 0，表示根目录。",
+  "直链是可选增强；未开通时仍会上传成功，只是不返回公开 URL。",
+].join("\n");
+
+const LOCAL_PUBLIC_BASE_URL_HINT = [
+  "可选。",
+  "仅当本地目录已经通过 Nginx、CDN 或静态文件服务映射成可访问地址时填写。",
+  "上传记录会用它拼出图片 URL；留空时仍会保存到本地目录。",
+].join("\n");
 
 const EXPORT_DIR_MODE_OPTIONS = [
   { value: "downloads", label: "下载" },
@@ -271,6 +311,47 @@ function Row({
         )}
       </div>
       <div className="w-full min-w-0 sm:w-auto sm:shrink-0">{control}</div>
+    </div>
+  );
+}
+
+function HintButton({
+  text,
+  ariaLabel = "查看对接条件",
+}: {
+  text: string;
+  ariaLabel?: string;
+}) {
+  return (
+    <Tooltip text={text}>
+      <button
+        type="button"
+        aria-label={ariaLabel}
+        className="inline-flex h-5 w-5 items-center justify-center rounded-full border border-border text-[11px] font-semibold text-muted transition-colors hover:border-[color:var(--accent-45)] hover:text-foreground"
+      >
+        ?
+      </button>
+    </Tooltip>
+  );
+}
+
+function issueForField(issues: StorageFieldIssue[], field: string) {
+  return issues.find((issue) => issue.field === field)?.message;
+}
+
+function StorageField({
+  error,
+  children,
+}: {
+  error?: string;
+  children: ReactNode;
+}) {
+  return (
+    <div className="space-y-1">
+      {children}
+      {error && (
+        <div className="text-[11px] leading-snug text-status-err">{error}</div>
+      )}
     </div>
   );
 }
@@ -1326,6 +1407,30 @@ function blankStorageTarget(type: StorageTargetKind): StorageTargetConfig {
       public_base_url: "",
     };
   }
+  if (type === "baidu_netdisk") {
+    return {
+      type,
+      auth_mode: "personal",
+      app_key: "",
+      secret_key: null,
+      access_token: null,
+      refresh_token: null,
+      app_name: "",
+      remote_dir: "",
+      public_base_url: "",
+    };
+  }
+  if (type === "pan123_open") {
+    return {
+      type,
+      auth_mode: "client",
+      client_id: "",
+      client_secret: null,
+      access_token: null,
+      parent_id: 0,
+      use_direct_link: false,
+    };
+  }
   return { type: "local", directory: "", public_base_url: "" };
 }
 
@@ -1387,6 +1492,50 @@ function normalizeStorageTargetForSave(
       public_base_url: sftp.public_base_url?.trim() || undefined,
     };
   }
+  if (type === "baidu_netdisk") {
+    const baidu = target as BaiduNetdiskStorageTargetConfig;
+    const authMode = baidu.auth_mode === "oauth" ? "oauth" : "personal";
+    return {
+      type,
+      auth_mode: authMode,
+      app_key: authMode === "oauth" ? baidu.app_key.trim() : "",
+      secret_key:
+        authMode === "oauth"
+          ? normalizeCredentialForSave(baidu.secret_key)
+          : undefined,
+      access_token:
+        authMode === "personal"
+          ? normalizeCredentialForSave(baidu.access_token)
+          : undefined,
+      refresh_token:
+        authMode === "oauth"
+          ? normalizeCredentialForSave(baidu.refresh_token)
+          : undefined,
+      app_name: baidu.app_name.trim(),
+      remote_dir: baidu.remote_dir?.trim() || undefined,
+      public_base_url: baidu.public_base_url?.trim() || undefined,
+    };
+  }
+  if (type === "pan123_open") {
+    const pan123 = target as Pan123OpenStorageTargetConfig;
+    const authMode =
+      pan123.auth_mode === "access_token" ? "access_token" : "client";
+    return {
+      type,
+      auth_mode: authMode,
+      client_id: authMode === "client" ? pan123.client_id.trim() : "",
+      client_secret:
+        authMode === "client"
+          ? normalizeCredentialForSave(pan123.client_secret)
+          : undefined,
+      access_token:
+        authMode === "access_token"
+          ? normalizeCredentialForSave(pan123.access_token)
+          : undefined,
+      parent_id: Math.max(0, Math.round(pan123.parent_id || 0)),
+      use_direct_link: Boolean(pan123.use_direct_link),
+    };
+  }
   return {
     type: "local",
     directory: "directory" in target ? target.directory.trim() : "",
@@ -1435,11 +1584,13 @@ function CredentialEditor({
   onChange,
   placeholder,
   ariaLabel,
+  invalid,
 }: {
   credential?: CredentialRef | null;
   onChange: (credential: CredentialRef | null) => void;
   placeholder?: string;
   ariaLabel: string;
+  invalid?: boolean;
 }) {
   const source = credential?.source ?? "file";
   const secretDisplay = credentialSecretDisplay(credential);
@@ -1470,6 +1621,7 @@ function CredentialEditor({
           size="sm"
           monospace
           aria-label={ariaLabel}
+          aria-invalid={invalid}
         />
       )}
       {source === "env" && (
@@ -1482,6 +1634,7 @@ function CredentialEditor({
           size="sm"
           monospace
           aria-label={ariaLabel}
+          aria-invalid={invalid}
         />
       )}
       {source === "keychain" && (
@@ -1504,6 +1657,7 @@ function CredentialEditor({
             size="sm"
             monospace
             aria-label={`${ariaLabel} Keychain service`}
+            aria-invalid={invalid}
           />
           <Input
             value={credential?.source === "keychain" ? credential.account : ""}
@@ -1521,6 +1675,7 @@ function CredentialEditor({
             size="sm"
             monospace
             aria-label={`${ariaLabel} Keychain account`}
+            aria-invalid={invalid}
           />
         </div>
       )}
@@ -2145,6 +2300,8 @@ function StoragePanel({
   const updateStorage = useUpdateStorage();
   const testStorage = useTestStorageTarget();
   const copy = runtimeCopy();
+  const confirm = useConfirm();
+  const requireLocalDirectory = copy.kind !== "browser";
   const { data: configPaths } = useQuery<ConfigPaths>({
     queryKey: ["config-paths"],
     queryFn: api.configPaths,
@@ -2214,6 +2371,16 @@ function StoragePanel({
       };
     });
   };
+  const confirmRemoveTarget = async (name: string) => {
+    const ok = await confirm({
+      title: `删除存储目标「${name}」`,
+      description:
+        "会从当前存储配置草稿中移除这个目标，并同步从默认目标和回退目标里移除。保存后生效。",
+      confirmText: "删除",
+      variant: "danger",
+    });
+    if (ok) removeTarget(name);
+  };
   const renameTarget = (name: string, nextName: string) => {
     const clean = nextName.trim();
     if (!clean || clean === name || draft.targets[clean]) return;
@@ -2275,32 +2442,44 @@ function StoragePanel({
   };
 
   const save = async () => {
+    const issue = storageConfigIssue(draft, { requireLocalDirectory });
+    if (issue) {
+      toast.warning("存储配置未完成", { description: issue });
+      return;
+    }
     try {
       const saved = await updateStorage.mutateAsync(
         prepareStorageConfigForSave(draft),
       );
       setDraft(cloneStorageConfig(saved.storage));
-      toast.success("自动上传设置已保存");
+      toast.success("结果存储已保存");
     } catch (error) {
-      toast.error("保存自动上传设置失败", {
+      toast.error("保存结果存储失败", {
         description: error instanceof Error ? error.message : String(error),
       });
     }
   };
 
   const runTest = async (name: string) => {
+    const issue = storageTargetConfigIssue(name, draft.targets[name], {
+      requireLocalDirectory,
+    });
+    if (issue) {
+      toast.warning("测试失败", { description: issue });
+      return;
+    }
     try {
       const result = await testStorage.mutateAsync({
         name,
         target: normalizeStorageTargetForSave(draft.targets[name]),
       });
       if (result.ok) {
-        toast.success("上传位置可用", { description: result.message });
+        toast.success("存储目标可用", { description: result.message });
       } else {
-        toast.warning("上传位置不可用", { description: result.message });
+        toast.warning("存储目标不可用", { description: result.message });
       }
     } catch (error) {
-      toast.error("测试上传位置失败", {
+      toast.error("测试存储目标失败", {
         description: error instanceof Error ? error.message : String(error),
       });
     }
@@ -2311,20 +2490,16 @@ function StoragePanel({
       <ResultFoldersSection paths={paths} configPaths={configPaths} />
 
       <Section
-        title="自动上传"
+        title="投递策略"
         description={
           copy.kind === "browser"
-            ? "网页版只存在浏览器本地，要上传云端请用桌面 App 或自建后端。"
-            : "先存进 App 历史，再按下方设置自动上传。"
+            ? "静态 Web 只保留浏览器本地结果；远端上传需要桌面 App 或服务端 Web。"
+            : "任务仍会先写入本地结果目录，再按这里的目标上传或回退。"
         }
       >
         <Row
-          title="主上传目标"
-          description={
-            copy.kind === "browser"
-              ? "网页版不上传云端，只留浏览器本地。"
-              : "任务完成后优先上传到这里。"
-          }
+          title="默认目标"
+          description="每个完成任务优先投递到这些目标。"
           control={
             <div className="flex w-full flex-wrap gap-2 sm:w-[520px]">
               {strategyTargetEntries.map(([name]) => (
@@ -2347,23 +2522,19 @@ function StoragePanel({
                 </label>
               ))}
               {strategyTargetEntries.length === 0 && (
-                <span className="text-[12px] text-muted">暂无上传位置。</span>
+                <span className="text-[12px] text-muted">暂无目标。</span>
               )}
               {remoteDraftCount > 0 && (
                 <span className="text-[12px] text-faint">
-                  {remoteDraftCount} 个云端位置已配置但不启用。
+                  {remoteDraftCount} 个云端目标已配置但不启用。
                 </span>
               )}
             </div>
           }
         />
         <Row
-          title="备用位置"
-          description={
-            copy.kind === "browser"
-              ? "网页版备用位置只在浏览器本地。"
-              : "上传失败时改存到这里，建议保留一个本机位置。"
-          }
+          title="回退目标"
+          description="主目标失败后使用；默认本地回退适合保底留存。"
           control={
             <div className="flex w-full flex-wrap gap-2 sm:w-[520px]">
               {strategyTargetEntries.map(([name]) => (
@@ -2385,69 +2556,77 @@ function StoragePanel({
                   <span>{name}</span>
                 </label>
               ))}
-              {strategyTargetEntries.length === 0 && (
-                <span className="text-[12px] text-muted">暂无备用位置。</span>
-              )}
             </div>
           }
         />
         <Row
-          title="备用启用时机"
-          description="主位置不可用时改用备用。"
+          title="失败处理与上传速度"
+          description="控制上传失败后是否走回退，以及一次最多同时上传多少内容。"
           control={
-            <GlassSelect
-              value={draft.fallback_policy}
-              onValueChange={(fallback_policy) =>
-                patch({
-                  fallback_policy: fallback_policy as StorageFallbackPolicy,
-                })
-              }
-              options={STORAGE_FALLBACK_POLICY_OPTIONS}
-              size="sm"
-              ariaLabel="备用启用时机"
-              className="w-full sm:w-[160px]"
-            />
-          }
-        />
-        <Row
-          title="并行上传图片数"
-          description="一次最多同时上传几张图。"
-          control={
-            <Input
-              value={String(draft.upload_concurrency)}
-              onChange={(event) =>
-                patch({
-                  upload_concurrency: Number(event.target.value) || 1,
-                })
-              }
-              inputMode="numeric"
-              size="sm"
-              aria-label="并行上传图片数"
-              className="w-full sm:w-[100px]"
-            />
-          }
-        />
-        <Row
-          title="同图并行位置数"
-          description="同一张图最多同时传到几个位置。"
-          control={
-            <Input
-              value={String(draft.target_concurrency)}
-              onChange={(event) =>
-                patch({
-                  target_concurrency: Number(event.target.value) || 1,
-                })
-              }
-              inputMode="numeric"
-              size="sm"
-              aria-label="同图并行位置数"
-              className="w-full sm:w-[100px]"
-            />
+            <div className="grid w-full gap-2 sm:w-[620px] lg:grid-cols-[1.15fr_1fr_1fr]">
+              <div className="space-y-1">
+                <div className="text-[10.5px] font-medium text-muted">
+                  主目标失败后
+                </div>
+                <GlassSelect
+                  value={draft.fallback_policy}
+                  onValueChange={(fallback_policy) =>
+                    patch({
+                      fallback_policy:
+                        fallback_policy as StorageFallbackPolicy,
+                    })
+                  }
+                  options={STORAGE_FALLBACK_POLICY_OPTIONS}
+                  size="sm"
+                  ariaLabel="存储回退策略"
+                />
+              </div>
+              <label className="space-y-1">
+                <span className="block text-[10.5px] font-medium text-muted">
+                  同时上传的图片数
+                </span>
+                <Input
+                  value={String(draft.upload_concurrency)}
+                  onChange={(event) =>
+                    patch({
+                      upload_concurrency: Number(event.target.value) || 1,
+                    })
+                  }
+                  inputMode="numeric"
+                  min={1}
+                  size="sm"
+                  aria-label="同时上传的图片数"
+                />
+                <span className="block text-[10px] leading-tight text-faint">
+                  默认 4，控制多张结果图的上传速度。
+                </span>
+              </label>
+              <label className="space-y-1">
+                <span className="block text-[10.5px] font-medium text-muted">
+                  每张图同时上传的目标数
+                </span>
+                <Input
+                  value={String(draft.target_concurrency)}
+                  onChange={(event) =>
+                    patch({
+                      target_concurrency: Number(event.target.value) || 1,
+                    })
+                  }
+                  inputMode="numeric"
+                  min={1}
+                  size="sm"
+                  aria-label="每张图同时上传的目标数"
+                />
+                <span className="block text-[10px] leading-tight text-faint">
+                  默认 2，控制同一张图同时写入几个存储。
+                </span>
+              </label>
+            </div>
           }
         />
       </Section>
 
-      <Section title="位置列表">
+      <Section title="目标">
         <div className="space-y-3 px-4 py-3.5 sm:px-5">
           {targetEntries.map(([name, target]) => {
             const type = storageTargetType(target);
@@ -2459,28 +2638,57 @@ function StoragePanel({
               type === "http" ? (target as HttpStorageTargetConfig) : undefined;
             const sftpTarget =
               type === "sftp" ? (target as SftpStorageTargetConfig) : undefined;
+            const baiduTarget =
+              type === "baidu_netdisk"
+                ? (target as BaiduNetdiskStorageTargetConfig)
+                : undefined;
+            const pan123Target =
+              type === "pan123_open"
+                ? (target as Pan123OpenStorageTargetConfig)
+                : undefined;
+            const targetIssues = storageTargetConfigIssues(name, target, {
+              requireLocalDirectory,
+            });
+            const fieldError = (field: string) =>
+              issueForField(targetIssues, field);
+            const baiduAuthMode =
+              baiduTarget?.auth_mode === "oauth" ? "oauth" : "personal";
+            const pan123AuthMode =
+              pan123Target?.auth_mode === "access_token"
+                ? "access_token"
+                : "client";
             return (
               <div
                 key={name}
-                className="space-y-2 rounded-lg border border-border bg-[color:var(--w-03)] p-3"
+                className="overflow-hidden rounded-lg border border-border bg-[color:var(--w-03)]"
               >
-                <div className="flex flex-wrap items-center gap-2">
+                <div className="flex min-w-0 items-center gap-2 overflow-x-auto border-b border-border bg-[color:var(--w-04)] px-3 py-2">
                   <input
                     defaultValue={name}
                     onBlur={(event) => renameTarget(name, event.target.value)}
                     aria-label="上传位置名称"
-                    className="h-7 w-full rounded-md border border-border bg-[color:var(--w-04)] px-2.5 font-mono text-[13px] outline-none transition-colors placeholder:text-faint focus:border-[color:var(--accent-55)] focus:bg-[color:var(--accent-06)] focus:shadow-[0_0_0_3px_var(--accent-14)] sm:w-[160px]"
+                    className="h-7 min-w-[9rem] flex-[1_1_10rem] rounded-md border border-border bg-[color:var(--w-05)] px-2.5 font-mono text-[13px] outline-none transition-colors placeholder:text-faint focus:border-[color:var(--accent-55)] focus:bg-[color:var(--accent-06)] focus:shadow-[0_0_0_3px_var(--accent-14)]"
                   />
-                  <GlassSelect
-                    value={type}
-                    onValueChange={(value) =>
-                      setTargetType(name, value as StorageTargetKind)
-                    }
-                    options={STORAGE_TARGET_TYPE_OPTIONS}
-                    size="sm"
-                    ariaLabel="上传位置类型"
-                  />
-                  <div className="ml-auto flex gap-1">
+                  <div className="min-w-[12rem] flex-[1_1_14rem]">
+                    <GlassSelect
+                      value={type}
+                      onValueChange={(value) =>
+                        setTargetType(name, value as StorageTargetKind)
+                      }
+                      options={STORAGE_TARGET_TYPE_OPTIONS}
+                      size="sm"
+                      ariaLabel="上传位置类型"
+                    />
+                  </div>
+                  <div className="flex h-7 w-7 shrink-0 items-center justify-center">
+                    {type === "baidu_netdisk" && (
+                      <HintButton text={BAIDU_NETDISK_HINT} />
+                    )}
+                    {type === "pan123_open" && (
+                      <HintButton text={PAN123_OPEN_HINT} />
+                    )}
+                  </div>
+                  <div className="ml-auto flex shrink-0 items-center gap-1">
                     <Button
                       variant="ghost"
                       size="sm"
@@ -2491,50 +2699,72 @@ function StoragePanel({
                       测试
                     </Button>
                     <Button
-                      variant="ghost"
+                      variant="danger"
                       size="iconSm"
                       icon="trash"
-                      onClick={() => removeTarget(name)}
+                      onClick={() => void confirmRemoveTarget(name)}
+                      title="删除上传位置"
                       aria-label="删除上传位置"
                     />
                   </div>
                 </div>
-                {type === "local" && "directory" in target && (
-                  <div className="grid gap-2 sm:grid-cols-2">
-                    <Input
-                      value={target.directory}
-                      onChange={(event) =>
-                        patchTarget(name, { directory: event.target.value })
-                      }
-                      placeholder="/path/to/storage"
-                      size="sm"
-                      aria-label="本地目录"
-                    />
-                    <Input
-                      value={target.public_base_url ?? ""}
-                      onChange={(event) =>
-                        patchTarget(name, {
-                          public_base_url: event.target.value,
-                        })
-                      }
-                      placeholder="对外访问前缀（可选）"
-                      size="sm"
-                      aria-label="对外访问前缀"
-                    />
-                  </div>
-                )}
+                <div className="space-y-2 bg-[color:var(--w-02)] px-3 py-3">
+                  {type === "local" && "directory" in target && (
+                    <div className="grid gap-2 sm:grid-cols-2">
+                      <StorageField error={fieldError("directory")}>
+                        <Input
+                          value={target.directory}
+                          onChange={(event) =>
+                            patchTarget(name, { directory: event.target.value })
+                          }
+                          placeholder="/path/to/storage"
+                          size="sm"
+                          aria-label="本地目录"
+                          aria-invalid={Boolean(fieldError("directory"))}
+                        />
+                      </StorageField>
+                      <StorageField>
+                        <div className="space-y-1">
+                          <div className="flex items-center gap-1.5 text-[11.5px] font-medium text-muted">
+                            <span>公开访问前缀（可选）</span>
+                            <HintButton
+                              text={LOCAL_PUBLIC_BASE_URL_HINT}
+                              ariaLabel="查看公开访问前缀说明"
+                            />
+                          </div>
+                          <Input
+                            value={target.public_base_url ?? ""}
+                            onChange={(event) =>
+                              patchTarget(name, {
+                                public_base_url: event.target.value,
+                              })
+                            }
+                            placeholder="https://cdn.example.com/images"
+                            size="sm"
+                            aria-label="公开访问前缀"
+                          />
+                          <p className="text-[11px] leading-snug text-muted">
+                            用于生成可访问图片 URL；没有静态访问服务时留空。
+                          </p>
+                        </div>
+                      </StorageField>
+                    </div>
+                  )}
                 {type === "s3" && "bucket" in target && (
                   <div className="space-y-2">
                     <div className="grid gap-2 sm:grid-cols-3">
-                      <Input
-                        value={target.bucket}
-                        onChange={(event) =>
-                          patchTarget(name, { bucket: event.target.value })
-                        }
-                        placeholder="bucket"
-                        size="sm"
-                        aria-label="S3 bucket"
-                      />
+                      <StorageField error={fieldError("bucket")}>
+                        <Input
+                          value={target.bucket}
+                          onChange={(event) =>
+                            patchTarget(name, { bucket: event.target.value })
+                          }
+                          placeholder="bucket"
+                          size="sm"
+                          aria-label="S3 bucket"
+                          aria-invalid={Boolean(fieldError("bucket"))}
+                        />
+                      </StorageField>
                       <Input
                         value={target.region ?? ""}
                         onChange={(event) =>
@@ -2571,41 +2801,50 @@ function StoragePanel({
                             public_base_url: event.target.value,
                           })
                         }
-                        placeholder="对外访问前缀（可选）"
+                        placeholder="公开基础 URL"
                         size="sm"
-                        aria-label="S3 对外访问前缀"
+                        aria-label="S3 public base URL"
                       />
                     </div>
-                    <CredentialEditor
-                      credential={target.access_key_id}
-                      onChange={(access_key_id) =>
-                        patchTarget(name, { access_key_id })
-                      }
-                      placeholder="Access Key ID"
-                      ariaLabel="S3 Access Key ID"
-                    />
-                    <CredentialEditor
-                      credential={target.secret_access_key}
-                      onChange={(secret_access_key) =>
-                        patchTarget(name, { secret_access_key })
-                      }
-                      placeholder="Secret Access Key"
-                      ariaLabel="S3 Secret Access Key"
-                    />
+                    <StorageField error={fieldError("access_key_id")}>
+                      <CredentialEditor
+                        credential={target.access_key_id}
+                        onChange={(access_key_id) =>
+                          patchTarget(name, { access_key_id })
+                        }
+                        placeholder="Access Key ID"
+                        ariaLabel="S3 Access Key ID"
+                        invalid={Boolean(fieldError("access_key_id"))}
+                      />
+                    </StorageField>
+                    <StorageField error={fieldError("secret_access_key")}>
+                      <CredentialEditor
+                        credential={target.secret_access_key}
+                        onChange={(secret_access_key) =>
+                          patchTarget(name, { secret_access_key })
+                        }
+                        placeholder="Secret Access Key"
+                        ariaLabel="S3 Secret Access Key"
+                        invalid={Boolean(fieldError("secret_access_key"))}
+                      />
+                    </StorageField>
                   </div>
                 )}
                 {webdavTarget && (
                   <div className="space-y-2">
                     <div className="grid gap-2 sm:grid-cols-2">
-                      <Input
-                        value={webdavTarget.url}
-                        onChange={(event) =>
-                          patchTarget(name, { url: event.target.value })
-                        }
-                        placeholder="https://dav.example.com/out"
-                        size="sm"
-                        aria-label="WebDAV URL"
-                      />
+                      <StorageField error={fieldError("url")}>
+                        <Input
+                          value={webdavTarget.url}
+                          onChange={(event) =>
+                            patchTarget(name, { url: event.target.value })
+                          }
+                          placeholder="https://dav.example.com/out"
+                          size="sm"
+                          aria-label="WebDAV URL"
+                          aria-invalid={Boolean(fieldError("url"))}
+                        />
+                      </StorageField>
                       <Input
                         value={webdavTarget.public_base_url ?? ""}
                         onChange={(event) =>
@@ -2613,9 +2852,9 @@ function StoragePanel({
                             public_base_url: event.target.value,
                           })
                         }
-                        placeholder="对外访问前缀（可选）"
+                        placeholder="公开基础 URL"
                         size="sm"
-                        aria-label="WebDAV 对外访问前缀"
+                        aria-label="WebDAV public base URL"
                       />
                     </div>
                     <Input
@@ -2638,15 +2877,18 @@ function StoragePanel({
                 {httpTarget && (
                   <div className="space-y-2">
                     <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_110px_150px]">
-                      <Input
-                        value={httpTarget.url}
-                        onChange={(event) =>
-                          patchTarget(name, { url: event.target.value })
-                        }
-                        placeholder="https://upload.example.com"
-                        size="sm"
-                        aria-label="HTTP upload URL"
-                      />
+                      <StorageField error={fieldError("url")}>
+                        <Input
+                          value={httpTarget.url}
+                          onChange={(event) =>
+                            patchTarget(name, { url: event.target.value })
+                          }
+                          placeholder="https://upload.example.com"
+                          size="sm"
+                          aria-label="HTTP upload URL"
+                          aria-invalid={Boolean(fieldError("url"))}
+                        />
+                      </StorageField>
                       <GlassSelect
                         value={httpTarget.method || "POST"}
                         onValueChange={(method) =>
@@ -2663,9 +2905,9 @@ function StoragePanel({
                             public_url_json_pointer: event.target.value,
                           })
                         }
-                        placeholder="/data/url"
+                        placeholder="/url"
                         size="sm"
-                        aria-label="JSON 中公开 URL 的字段路径"
+                        aria-label="URL JSON pointer"
                       />
                     </div>
                     {Object.entries(httpTarget.headers ?? {}).map(
@@ -2727,15 +2969,18 @@ function StoragePanel({
                 {sftpTarget && (
                   <div className="space-y-2">
                     <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_88px_minmax(0,1fr)]">
-                      <Input
-                        value={sftpTarget.host}
-                        onChange={(event) =>
-                          patchTarget(name, { host: event.target.value })
-                        }
-                        placeholder="host"
-                        size="sm"
-                        aria-label="SFTP host"
-                      />
+                      <StorageField error={fieldError("host")}>
+                        <Input
+                          value={sftpTarget.host}
+                          onChange={(event) =>
+                            patchTarget(name, { host: event.target.value })
+                          }
+                          placeholder="host"
+                          size="sm"
+                          aria-label="SFTP host"
+                          aria-invalid={Boolean(fieldError("host"))}
+                        />
+                      </StorageField>
                       <Input
                         value={String(sftpTarget.port || 22)}
                         onChange={(event) =>
@@ -2747,26 +2992,32 @@ function StoragePanel({
                         size="sm"
                         aria-label="SFTP port"
                       />
-                      <Input
-                        value={sftpTarget.username}
-                        onChange={(event) =>
-                          patchTarget(name, { username: event.target.value })
-                        }
-                        placeholder="username"
-                        size="sm"
-                        aria-label="SFTP username"
-                      />
+                      <StorageField error={fieldError("username")}>
+                        <Input
+                          value={sftpTarget.username}
+                          onChange={(event) =>
+                            patchTarget(name, { username: event.target.value })
+                          }
+                          placeholder="username"
+                          size="sm"
+                          aria-label="SFTP username"
+                          aria-invalid={Boolean(fieldError("username"))}
+                        />
+                      </StorageField>
                     </div>
                     <div className="grid gap-2 sm:grid-cols-2">
-                      <Input
-                        value={sftpTarget.remote_dir}
-                        onChange={(event) =>
-                          patchTarget(name, { remote_dir: event.target.value })
-                        }
-                        placeholder="/remote/out"
-                        size="sm"
-                        aria-label="SFTP remote dir"
-                      />
+                      <StorageField error={fieldError("remote_dir")}>
+                        <Input
+                          value={sftpTarget.remote_dir}
+                          onChange={(event) =>
+                            patchTarget(name, { remote_dir: event.target.value })
+                          }
+                          placeholder="/remote/out"
+                          size="sm"
+                          aria-label="SFTP remote dir"
+                          aria-invalid={Boolean(fieldError("remote_dir"))}
+                        />
+                      </StorageField>
                       <Input
                         value={sftpTarget.public_base_url ?? ""}
                         onChange={(event) =>
@@ -2774,28 +3025,34 @@ function StoragePanel({
                             public_base_url: event.target.value,
                           })
                         }
-                        placeholder="对外访问前缀（可选）"
+                        placeholder="公开基础 URL"
                         size="sm"
-                        aria-label="SFTP 对外访问前缀"
+                        aria-label="SFTP public base URL"
                       />
                     </div>
-                    <Input
-                      value={sftpTarget.host_key_sha256 ?? ""}
-                      onChange={(event) =>
-                        patchTarget(name, {
-                          host_key_sha256: event.target.value,
-                        })
-                      }
-                      placeholder="SHA256 指纹（可选，用于校验）"
-                      size="sm"
-                      aria-label="SFTP 服务器 SHA256 指纹"
-                    />
-                    <CredentialEditor
-                      credential={sftpTarget.password}
-                      onChange={(password) => patchTarget(name, { password })}
-                      placeholder="password"
-                      ariaLabel="SFTP password"
-                    />
+                    <StorageField error={fieldError("host_key_sha256")}>
+                      <Input
+                        value={sftpTarget.host_key_sha256 ?? ""}
+                        onChange={(event) =>
+                          patchTarget(name, {
+                            host_key_sha256: event.target.value,
+                          })
+                        }
+                        placeholder="SHA256 host key fingerprint"
+                        size="sm"
+                        aria-label="SFTP host key SHA256"
+                        aria-invalid={Boolean(fieldError("host_key_sha256"))}
+                      />
+                    </StorageField>
+                    <StorageField error={fieldError("sftp_auth")}>
+                      <CredentialEditor
+                        credential={sftpTarget.password}
+                        onChange={(password) => patchTarget(name, { password })}
+                        placeholder="password"
+                        ariaLabel="SFTP password"
+                        invalid={Boolean(fieldError("sftp_auth"))}
+                      />
+                    </StorageField>
                     <CredentialEditor
                       credential={sftpTarget.private_key}
                       onChange={(private_key) =>
@@ -2803,9 +3060,204 @@ function StoragePanel({
                       }
                       placeholder="private key"
                       ariaLabel="SFTP private key"
+                      invalid={Boolean(fieldError("sftp_auth"))}
                     />
                   </div>
                 )}
+                {baiduTarget && (
+                  <div className="space-y-2">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <Segmented
+                        value={baiduAuthMode}
+                        onChange={(auth_mode) =>
+                          patchTarget(name, { auth_mode })
+                        }
+                        options={BAIDU_AUTH_MODE_OPTIONS}
+                        size="sm"
+                        ariaLabel="百度网盘对接方式"
+                      />
+                      <span className="text-[11px] text-faint">
+                        {baiduAuthMode === "personal"
+                          ? "个人对接只需要长期 Access Token。"
+                          : "OAuth 对接使用应用凭证换取访问令牌。"}
+                      </span>
+                    </div>
+                    <div className="grid gap-2 sm:grid-cols-2">
+                      <StorageField error={fieldError("app_name")}>
+                        <Input
+                          value={baiduTarget.app_name}
+                          onChange={(event) =>
+                            patchTarget(name, { app_name: event.target.value })
+                          }
+                          placeholder="应用目录名"
+                          size="sm"
+                          aria-label="百度网盘应用目录名"
+                          aria-invalid={Boolean(fieldError("app_name"))}
+                        />
+                      </StorageField>
+                      <Input
+                        value={baiduTarget.remote_dir ?? ""}
+                        onChange={(event) =>
+                          patchTarget(name, { remote_dir: event.target.value })
+                        }
+                        placeholder="outputs"
+                        size="sm"
+                        aria-label="百度网盘远端目录"
+                      />
+                    </div>
+                    <Input
+                      value={baiduTarget.public_base_url ?? ""}
+                      onChange={(event) =>
+                        patchTarget(name, {
+                          public_base_url: event.target.value,
+                        })
+                      }
+                      placeholder="公开基础 URL（可选）"
+                      size="sm"
+                      aria-label="百度网盘公开基础 URL"
+                    />
+                    {baiduAuthMode === "personal" && (
+                      <StorageField error={fieldError("access_token")}>
+                        <CredentialEditor
+                          credential={baiduTarget.access_token}
+                          onChange={(access_token) =>
+                            patchTarget(name, { access_token })
+                          }
+                          placeholder="Access Token"
+                          ariaLabel="百度网盘 Access Token"
+                          invalid={Boolean(fieldError("access_token"))}
+                        />
+                      </StorageField>
+                    )}
+                    {baiduAuthMode === "oauth" && (
+                      <div className="space-y-2">
+                        <StorageField error={fieldError("app_key")}>
+                          <Input
+                            value={baiduTarget.app_key}
+                            onChange={(event) =>
+                              patchTarget(name, { app_key: event.target.value })
+                            }
+                            placeholder="App Key"
+                            size="sm"
+                            aria-label="百度网盘 App Key"
+                            aria-invalid={Boolean(fieldError("app_key"))}
+                            suffix={<HintButton text={BAIDU_NETDISK_HINT} />}
+                          />
+                        </StorageField>
+                        <StorageField error={fieldError("secret_key")}>
+                          <CredentialEditor
+                            credential={baiduTarget.secret_key}
+                            onChange={(secret_key) =>
+                              patchTarget(name, { secret_key })
+                            }
+                            placeholder="Secret Key"
+                            ariaLabel="百度网盘 Secret Key"
+                            invalid={Boolean(fieldError("secret_key"))}
+                          />
+                        </StorageField>
+                        <StorageField error={fieldError("refresh_token")}>
+                          <CredentialEditor
+                            credential={baiduTarget.refresh_token}
+                            onChange={(refresh_token) =>
+                              patchTarget(name, { refresh_token })
+                            }
+                            placeholder="Refresh Token"
+                            ariaLabel="百度网盘 Refresh Token"
+                            invalid={Boolean(fieldError("refresh_token"))}
+                          />
+                        </StorageField>
+                      </div>
+                    )}
+                  </div>
+                )}
+                {pan123Target && (
+                  <div className="space-y-2">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <Segmented
+                        value={pan123AuthMode}
+                        onChange={(auth_mode) =>
+                          patchTarget(name, { auth_mode })
+                        }
+                        options={PAN123_AUTH_MODE_OPTIONS}
+                        size="sm"
+                        ariaLabel="123 网盘对接方式"
+                      />
+                      <span className="text-[11px] text-faint">
+                        {pan123AuthMode === "client"
+                          ? "client 对接使用 clientID + clientSecret。"
+                          : "accessToken 对接只需要长期 accessToken。"}
+                      </span>
+                    </div>
+                    <Input
+                      value={String(pan123Target.parent_id || 0)}
+                      onChange={(event) =>
+                        patchTarget(name, {
+                          parent_id: Number(event.target.value) || 0,
+                        })
+                      }
+                      inputMode="numeric"
+                      size="sm"
+                      aria-label="123 网盘父目录 ID"
+                    />
+                    <label className="flex items-center gap-2 rounded-md border border-border bg-[color:var(--w-04)] px-2.5 py-1.5 text-[12px] text-muted">
+                      <input
+                        type="checkbox"
+                        checked={pan123Target.use_direct_link}
+                        onChange={(event) =>
+                          patchTarget(name, {
+                            use_direct_link: event.target.checked,
+                          })
+                        }
+                      />
+                      <span>上传后尝试获取直链</span>
+                      <HintButton text={PAN123_OPEN_HINT} />
+                    </label>
+                    {pan123AuthMode === "client" && (
+                      <div className="space-y-2">
+                        <StorageField error={fieldError("client_id")}>
+                          <Input
+                            value={pan123Target.client_id}
+                            onChange={(event) =>
+                              patchTarget(name, {
+                                client_id: event.target.value,
+                              })
+                            }
+                            placeholder="clientID"
+                            size="sm"
+                            aria-label="123 网盘 clientID"
+                            aria-invalid={Boolean(fieldError("client_id"))}
+                            suffix={<HintButton text={PAN123_OPEN_HINT} />}
+                          />
+                        </StorageField>
+                        <StorageField error={fieldError("client_secret")}>
+                          <CredentialEditor
+                            credential={pan123Target.client_secret}
+                            onChange={(client_secret) =>
+                              patchTarget(name, { client_secret })
+                            }
+                            placeholder="clientSecret"
+                            ariaLabel="123 网盘 clientSecret"
+                            invalid={Boolean(fieldError("client_secret"))}
+                          />
+                        </StorageField>
+                      </div>
+                    )}
+                    {pan123AuthMode === "access_token" && (
+                      <StorageField error={fieldError("access_token")}>
+                        <CredentialEditor
+                          credential={pan123Target.access_token}
+                          onChange={(access_token) =>
+                            patchTarget(name, { access_token })
+                          }
+                          placeholder="accessToken"
+                          ariaLabel="123 网盘 accessToken"
+                          invalid={Boolean(fieldError("access_token"))}
+                        />
+                      </StorageField>
+                    )}
+                  </div>
+                )}
+                </div>
               </div>
             );
           })}
@@ -2824,7 +3276,7 @@ function StoragePanel({
           </div>
           {targetOptions.length > 0 && (
             <div className="text-[11px] text-faint">
-              当前上传位置：{targetOptions.map((item) => item.label).join(" / ")}
+              当前目标：{targetOptions.map((item) => item.label).join(" / ")}
             </div>
           )}
         </div>

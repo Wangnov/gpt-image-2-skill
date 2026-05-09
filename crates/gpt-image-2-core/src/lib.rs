@@ -1,15 +1,13 @@
 use std::fs;
-use std::io::{self, BufRead, BufReader, Read, Write};
+use std::io::{self, BufRead, BufReader, Read};
 use std::net::{IpAddr, Ipv4Addr, SocketAddr, TcpStream, ToSocketAddrs};
 use std::path::{Path, PathBuf};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
-use std::{collections::BTreeMap, process::Command, sync::mpsc, thread};
+use std::{collections::BTreeMap, process::Command};
 
 use base64::Engine;
 use base64::engine::general_purpose::{STANDARD, URL_SAFE_NO_PAD};
-use chrono::Utc;
 use clap::{ArgAction, Args, Parser, Subcommand, ValueEnum};
-use hmac::{Hmac, Mac};
 use lettre::message::{Mailbox, header::ContentType};
 use lettre::transport::smtp::authentication::Credentials;
 use lettre::{Message, SmtpTransport, Transport};
@@ -21,11 +19,22 @@ use rusqlite::types::Value as SqlValue;
 use rusqlite::{Connection, Row, params, params_from_iter};
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value, json};
-use sha2::{Digest, Sha256};
-use ssh2::Session;
 use url::Url;
 
+mod storage;
 mod transparent;
+
+use storage::util::redact_url_for_log;
+pub use storage::{
+    BaiduNetdiskAuthMode, OutputUploadRecord, Pan123OpenAuthMode, StorageConfig,
+    StorageFallbackPolicy, StorageTargetConfig, StorageTestResult, StorageUploadOverrides,
+    list_output_upload_records, preserve_storage_secrets, test_storage_target,
+    upload_job_outputs_to_storage, upsert_output_upload_record,
+};
+use storage::{
+    enrich_outputs_with_uploads, list_output_upload_records_with_conn, redact_storage_config,
+    storage_status_for_uploads,
+};
 
 pub const CLI_NAME: &str = "gpt-image-2-skill";
 pub const OPENAI_API_KEY_ENV: &str = "OPENAI_API_KEY";
@@ -72,7 +81,7 @@ pub struct AppError {
 }
 
 impl AppError {
-    fn new(code: impl Into<String>, message: impl Into<String>) -> Self {
+    pub(crate) fn new(code: impl Into<String>, message: impl Into<String>) -> Self {
         Self {
             code: code.into(),
             message: message.into(),
@@ -82,7 +91,7 @@ impl AppError {
         }
     }
 
-    fn with_detail(mut self, detail: Value) -> Self {
+    pub(crate) fn with_detail(mut self, detail: Value) -> Self {
         self.detail = Some(detail);
         self
     }
@@ -352,120 +361,13 @@ impl Default for NotificationConfig {
 }
 
 fn preserve_empty_file_credential(next: &mut CredentialRef, existing: Option<&CredentialRef>) {
-    if let CredentialRef::File { value: next_value } = next {
-        if next_value.is_empty()
-            && let Some(CredentialRef::File {
-                value: existing_value,
-            }) = existing
-        {
-            *next_value = existing_value.clone();
-        }
-    }
-}
-
-fn normalized_option_text(value: &Option<String>) -> Option<String> {
-    value
-        .as_deref()
-        .map(str::trim)
-        .filter(|value| !value.is_empty())
-        .map(ToString::to_string)
-}
-
-fn storage_secret_identity_matches(
-    next: &StorageTargetConfig,
-    existing: &StorageTargetConfig,
-) -> bool {
-    match (next, existing) {
-        (
-            StorageTargetConfig::S3 {
-                bucket,
-                region,
-                endpoint,
-                prefix,
-                ..
-            },
-            StorageTargetConfig::S3 {
-                bucket: existing_bucket,
-                region: existing_region,
-                endpoint: existing_endpoint,
-                prefix: existing_prefix,
-                ..
-            },
-        ) => {
-            bucket.trim() == existing_bucket.trim()
-                && normalized_option_text(region) == normalized_option_text(existing_region)
-                && normalized_option_text(endpoint) == normalized_option_text(existing_endpoint)
-                && normalized_option_text(prefix) == normalized_option_text(existing_prefix)
-        }
-        (
-            StorageTargetConfig::WebDav { url, username, .. },
-            StorageTargetConfig::WebDav {
-                url: existing_url,
-                username: existing_username,
-                ..
-            },
-        ) => {
-            url.trim() == existing_url.trim()
-                && normalized_option_text(username) == normalized_option_text(existing_username)
-        }
-        (
-            StorageTargetConfig::Http { url, method, .. },
-            StorageTargetConfig::Http {
-                url: existing_url,
-                method: existing_method,
-                ..
-            },
-        ) => {
-            url.trim() == existing_url.trim()
-                && method.trim().eq_ignore_ascii_case(existing_method.trim())
-        }
-        (
-            StorageTargetConfig::Sftp {
-                host,
-                port,
-                username,
-                remote_dir,
-                host_key_sha256,
-                ..
-            },
-            StorageTargetConfig::Sftp {
-                host: existing_host,
-                port: existing_port,
-                username: existing_username,
-                remote_dir: existing_remote_dir,
-                host_key_sha256: existing_host_key_sha256,
-                ..
-            },
-        ) => {
-            host.trim() == existing_host.trim()
-                && port == existing_port
-                && username.trim() == existing_username.trim()
-                && remote_dir.trim() == existing_remote_dir.trim()
-                && normalized_option_text(host_key_sha256)
-                    == normalized_option_text(existing_host_key_sha256)
-        }
-        _ => false,
-    }
-}
-
-fn storage_secret_source<'a>(
-    name: &str,
-    target: &StorageTargetConfig,
-    existing: &'a StorageConfig,
-) -> Option<&'a StorageTargetConfig> {
-    if let Some(existing_target) = existing.targets.get(name) {
-        return storage_secret_identity_matches(target, existing_target).then_some(existing_target);
-    }
-
-    let mut matches = existing
-        .targets
-        .values()
-        .filter(|existing_target| storage_secret_identity_matches(target, existing_target));
-    let first = matches.next()?;
-    if matches.next().is_none() {
-        Some(first)
-    } else {
-        None
+    if let CredentialRef::File { value: next_value } = next
+        && next_value.is_empty()
+        && let Some(CredentialRef::File {
+            value: existing_value,
+        }) = existing
+    {
+        *next_value = existing_value.clone();
     }
 }
 
@@ -485,215 +387,6 @@ pub fn preserve_notification_secrets(next: &mut NotificationConfig, existing: &N
             let existing_credential =
                 existing_webhook.and_then(|webhook| webhook.headers.get(header));
             preserve_empty_file_credential(credential, existing_credential);
-        }
-    }
-}
-
-pub fn preserve_storage_secrets(next: &mut StorageConfig, existing: &StorageConfig) {
-    for (name, target) in &mut next.targets {
-        let existing_target = storage_secret_source(name, target, existing);
-        match target {
-            StorageTargetConfig::S3 {
-                access_key_id,
-                secret_access_key,
-                session_token,
-                ..
-            } => {
-                let (existing_access_key_id, existing_secret_access_key, existing_session_token) =
-                    match existing_target {
-                        Some(StorageTargetConfig::S3 {
-                            access_key_id,
-                            secret_access_key,
-                            session_token,
-                            ..
-                        }) => (
-                            access_key_id.as_ref(),
-                            secret_access_key.as_ref(),
-                            session_token.as_ref(),
-                        ),
-                        _ => (None, None, None),
-                    };
-                if let Some(credential) = access_key_id.as_mut() {
-                    preserve_empty_file_credential(credential, existing_access_key_id);
-                }
-                if let Some(credential) = secret_access_key.as_mut() {
-                    preserve_empty_file_credential(credential, existing_secret_access_key);
-                }
-                if let Some(credential) = session_token.as_mut() {
-                    preserve_empty_file_credential(credential, existing_session_token);
-                }
-            }
-            StorageTargetConfig::WebDav { password, .. } => {
-                let existing_password = match existing_target {
-                    Some(StorageTargetConfig::WebDav { password, .. }) => password.as_ref(),
-                    _ => None,
-                };
-                if let Some(credential) = password.as_mut() {
-                    preserve_empty_file_credential(credential, existing_password);
-                }
-            }
-            StorageTargetConfig::Http { headers, .. } => {
-                let existing_headers = match existing_target {
-                    Some(StorageTargetConfig::Http { headers, .. }) => Some(headers),
-                    _ => None,
-                };
-                for (header, credential) in headers {
-                    let existing_credential =
-                        existing_headers.and_then(|headers| headers.get(header));
-                    preserve_empty_file_credential(credential, existing_credential);
-                }
-            }
-            StorageTargetConfig::Sftp {
-                password,
-                private_key,
-                ..
-            } => {
-                let (existing_password, existing_private_key) = match existing_target {
-                    Some(StorageTargetConfig::Sftp {
-                        password,
-                        private_key,
-                        ..
-                    }) => (password.as_ref(), private_key.as_ref()),
-                    _ => (None, None),
-                };
-                if let Some(credential) = password.as_mut() {
-                    preserve_empty_file_credential(credential, existing_password);
-                }
-                if let Some(credential) = private_key.as_mut() {
-                    preserve_empty_file_credential(credential, existing_private_key);
-                }
-            }
-            StorageTargetConfig::Local { .. } => {}
-        }
-    }
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(tag = "type", rename_all = "kebab-case")]
-pub enum StorageTargetConfig {
-    Local {
-        directory: PathBuf,
-        #[serde(default, skip_serializing_if = "Option::is_none")]
-        public_base_url: Option<String>,
-    },
-    S3 {
-        bucket: String,
-        #[serde(default, skip_serializing_if = "Option::is_none")]
-        region: Option<String>,
-        #[serde(default, skip_serializing_if = "Option::is_none")]
-        endpoint: Option<String>,
-        #[serde(default, skip_serializing_if = "Option::is_none")]
-        prefix: Option<String>,
-        #[serde(default, skip_serializing_if = "Option::is_none")]
-        access_key_id: Option<CredentialRef>,
-        #[serde(default, skip_serializing_if = "Option::is_none")]
-        secret_access_key: Option<CredentialRef>,
-        #[serde(default, skip_serializing_if = "Option::is_none")]
-        session_token: Option<CredentialRef>,
-        #[serde(default, skip_serializing_if = "Option::is_none")]
-        public_base_url: Option<String>,
-    },
-    #[serde(rename = "webdav")]
-    WebDav {
-        url: String,
-        #[serde(default, skip_serializing_if = "Option::is_none")]
-        username: Option<String>,
-        #[serde(default, skip_serializing_if = "Option::is_none")]
-        password: Option<CredentialRef>,
-        #[serde(default, skip_serializing_if = "Option::is_none")]
-        public_base_url: Option<String>,
-    },
-    Http {
-        url: String,
-        #[serde(default = "default_http_storage_method")]
-        method: String,
-        #[serde(default)]
-        headers: BTreeMap<String, CredentialRef>,
-        #[serde(default, skip_serializing_if = "Option::is_none")]
-        public_url_json_pointer: Option<String>,
-    },
-    Sftp {
-        host: String,
-        #[serde(default = "default_sftp_port")]
-        port: u16,
-        #[serde(default, skip_serializing_if = "Option::is_none")]
-        host_key_sha256: Option<String>,
-        username: String,
-        #[serde(default, skip_serializing_if = "Option::is_none")]
-        password: Option<CredentialRef>,
-        #[serde(default, skip_serializing_if = "Option::is_none")]
-        private_key: Option<CredentialRef>,
-        remote_dir: String,
-        #[serde(default, skip_serializing_if = "Option::is_none")]
-        public_base_url: Option<String>,
-    },
-}
-
-fn default_http_storage_method() -> String {
-    "POST".to_string()
-}
-
-fn default_sftp_port() -> u16 {
-    22
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, Eq, PartialEq)]
-#[serde(rename_all = "snake_case")]
-pub enum StorageFallbackPolicy {
-    Never,
-    OnFailure,
-    Always,
-}
-
-impl Default for StorageFallbackPolicy {
-    fn default() -> Self {
-        Self::OnFailure
-    }
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct StorageConfig {
-    #[serde(default)]
-    pub targets: BTreeMap<String, StorageTargetConfig>,
-    #[serde(default)]
-    pub default_targets: Vec<String>,
-    #[serde(default = "default_storage_fallback_targets")]
-    pub fallback_targets: Vec<String>,
-    #[serde(default)]
-    pub fallback_policy: StorageFallbackPolicy,
-    #[serde(default = "default_storage_upload_concurrency")]
-    pub upload_concurrency: usize,
-    #[serde(default = "default_storage_target_concurrency")]
-    pub target_concurrency: usize,
-}
-
-fn default_storage_fallback_targets() -> Vec<String> {
-    vec!["local-default".to_string()]
-}
-
-fn default_storage_upload_concurrency() -> usize {
-    4
-}
-
-fn default_storage_target_concurrency() -> usize {
-    2
-}
-
-impl Default for StorageConfig {
-    fn default() -> Self {
-        Self {
-            targets: BTreeMap::from([(
-                "local-default".to_string(),
-                StorageTargetConfig::Local {
-                    directory: default_storage_fallback_dir(),
-                    public_base_url: None,
-                },
-            )]),
-            default_targets: Vec::new(),
-            fallback_targets: default_storage_fallback_targets(),
-            fallback_policy: StorageFallbackPolicy::default(),
-            upload_concurrency: default_storage_upload_concurrency(),
-            target_concurrency: default_storage_target_concurrency(),
         }
     }
 }
@@ -1290,7 +983,7 @@ pub fn jobs_dir() -> PathBuf {
     shared_config_dir().join(JOBS_DIR_NAME)
 }
 
-fn default_storage_fallback_dir() -> PathBuf {
+pub(crate) fn default_storage_fallback_dir() -> PathBuf {
     shared_config_dir().join("storage").join("fallback")
 }
 
@@ -1518,7 +1211,7 @@ fn set_private_file_permissions(_path: &Path) -> Result<(), AppError> {
     Ok(())
 }
 
-fn redact_credential_ref(value: &CredentialRef) -> Value {
+pub(crate) fn redact_credential_ref(value: &CredentialRef) -> Value {
     match value {
         CredentialRef::File { value } => json!({
             "source": "file",
@@ -1539,7 +1232,7 @@ fn redact_credential_ref(value: &CredentialRef) -> Value {
     }
 }
 
-fn redact_optional_credential(value: &Option<CredentialRef>) -> Value {
+pub(crate) fn redact_optional_credential(value: &Option<CredentialRef>) -> Value {
     value
         .as_ref()
         .map(redact_credential_ref)
@@ -1583,98 +1276,6 @@ fn redact_notification_config(config: &NotificationConfig) -> Value {
                 "timeout_seconds": webhook.timeout_seconds,
             })
         }).collect::<Vec<_>>(),
-    })
-}
-
-fn redact_storage_target_config(target: &StorageTargetConfig) -> Value {
-    match target {
-        StorageTargetConfig::Local {
-            directory,
-            public_base_url,
-        } => json!({
-            "type": "local",
-            "directory": directory,
-            "public_base_url": public_base_url,
-        }),
-        StorageTargetConfig::S3 {
-            bucket,
-            region,
-            endpoint,
-            prefix,
-            access_key_id,
-            secret_access_key,
-            session_token,
-            public_base_url,
-        } => json!({
-            "type": "s3",
-            "bucket": bucket,
-            "region": region,
-            "endpoint": endpoint,
-            "prefix": prefix,
-            "access_key_id": redact_optional_credential(access_key_id),
-            "secret_access_key": redact_optional_credential(secret_access_key),
-            "session_token": redact_optional_credential(session_token),
-            "public_base_url": public_base_url,
-        }),
-        StorageTargetConfig::WebDav {
-            url,
-            username,
-            password,
-            public_base_url,
-        } => json!({
-            "type": "webdav",
-            "url": url,
-            "username": username,
-            "password": redact_optional_credential(password),
-            "public_base_url": public_base_url,
-        }),
-        StorageTargetConfig::Http {
-            url,
-            method,
-            headers,
-            public_url_json_pointer,
-        } => json!({
-            "type": "http",
-            "url": url,
-            "method": method,
-            "headers": headers.iter().map(|(key, credential)| {
-                (key.clone(), redact_credential_ref(credential))
-            }).collect::<Map<String, Value>>(),
-            "public_url_json_pointer": public_url_json_pointer,
-        }),
-        StorageTargetConfig::Sftp {
-            host,
-            port,
-            host_key_sha256,
-            username,
-            password,
-            private_key,
-            remote_dir,
-            public_base_url,
-        } => json!({
-            "type": "sftp",
-            "host": host,
-            "port": port,
-            "host_key_sha256": host_key_sha256,
-            "username": username,
-            "password": redact_optional_credential(password),
-            "private_key": redact_optional_credential(private_key),
-            "remote_dir": remote_dir,
-            "public_base_url": public_base_url,
-        }),
-    }
-}
-
-fn redact_storage_config(config: &StorageConfig) -> Value {
-    json!({
-        "targets": config.targets.iter().map(|(name, target)| {
-            (name.clone(), redact_storage_target_config(target))
-        }).collect::<Map<String, Value>>(),
-        "default_targets": config.default_targets,
-        "fallback_targets": config.fallback_targets,
-        "fallback_policy": config.fallback_policy,
-        "upload_concurrency": config.upload_concurrency,
-        "target_concurrency": config.target_concurrency,
     })
 }
 
@@ -1774,7 +1375,7 @@ fn delete_keychain_secret(service: &str, account: &str) -> Result<(), AppError> 
     })
 }
 
-fn resolve_credential(credential: &CredentialRef) -> Result<(String, String), AppError> {
+pub(crate) fn resolve_credential(credential: &CredentialRef) -> Result<(String, String), AppError> {
     match credential {
         CredentialRef::File { value } => {
             if value.trim().is_empty() {
@@ -2067,7 +1668,7 @@ fn validate_webhook_target(url_str: &str) -> Result<(), AppError> {
     Ok(())
 }
 
-fn validate_remote_http_target(
+pub(crate) fn validate_remote_http_target(
     url_str: &str,
     target_label: &str,
 ) -> Result<(Url, String, Vec<SocketAddr>), AppError> {
@@ -2109,7 +1710,7 @@ fn validate_remote_http_target(
     Ok((url, host_label, addrs))
 }
 
-fn validate_remote_tcp_target(
+pub(crate) fn validate_remote_tcp_target(
     host: &str,
     port: u16,
     target_label: &str,
@@ -2478,7 +2079,7 @@ fn send_email_message(message: &EmailNotificationMessage) -> Result<String, AppE
     Ok("Email delivered.".to_string())
 }
 
-fn build_user_agent() -> String {
+pub(crate) fn build_user_agent() -> String {
     format!("{CLI_NAME}/{VERSION} local-cli")
 }
 
@@ -5228,7 +4829,7 @@ fn run_secret_delete(cli: &Cli, args: &SecretDeleteArgs) -> Result<CommandOutcom
     })
 }
 
-fn open_history_db() -> Result<Connection, AppError> {
+pub(crate) fn open_history_db() -> Result<Connection, AppError> {
     let path = history_db_path();
     if let Some(parent) = path.parent() {
         fs::create_dir_all(parent).map_err(|error| {
@@ -5525,1748 +5126,6 @@ pub fn list_expired_deleted_history_jobs(
     })
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct OutputUploadRecord {
-    pub job_id: String,
-    pub output_index: usize,
-    pub target: String,
-    pub target_type: String,
-    pub status: String,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub url: Option<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub error: Option<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub bytes: Option<u64>,
-    pub attempts: u32,
-    pub updated_at: String,
-    #[serde(default)]
-    pub metadata: Value,
-}
-
-fn upload_record_to_value(record: &OutputUploadRecord) -> Value {
-    json!({
-        "job_id": record.job_id,
-        "output_index": record.output_index,
-        "target": record.target,
-        "target_type": record.target_type,
-        "status": record.status,
-        "url": record.url,
-        "error": record.error,
-        "bytes": record.bytes,
-        "attempts": record.attempts,
-        "updated_at": record.updated_at,
-        "metadata": record.metadata,
-    })
-}
-
-fn row_to_upload_record(row: &Row<'_>) -> rusqlite::Result<OutputUploadRecord> {
-    let metadata = serde_json::from_str::<Value>(&row.get::<_, String>(10)?).unwrap_or(Value::Null);
-    Ok(OutputUploadRecord {
-        job_id: row.get(0)?,
-        output_index: row.get::<_, i64>(1)?.max(0) as usize,
-        target: row.get(2)?,
-        target_type: row.get(3)?,
-        status: row.get(4)?,
-        url: row.get(5)?,
-        error: row.get(6)?,
-        bytes: row
-            .get::<_, Option<i64>>(7)?
-            .map(|value| value.max(0) as u64),
-        attempts: row.get::<_, i64>(8)?.max(0) as u32,
-        updated_at: row.get(9)?,
-        metadata,
-    })
-}
-
-pub fn upsert_output_upload_record(record: &OutputUploadRecord) -> Result<(), AppError> {
-    let conn = open_history_db()?;
-    conn.execute(
-        "INSERT INTO output_uploads (
-            job_id, output_index, target, target_type, status, url, error, bytes, attempts, updated_at, metadata
-        )
-        VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)
-        ON CONFLICT(job_id, output_index, target) DO UPDATE SET
-            target_type = excluded.target_type,
-            status = excluded.status,
-            url = excluded.url,
-            error = excluded.error,
-            bytes = excluded.bytes,
-            attempts = excluded.attempts,
-            updated_at = excluded.updated_at,
-            metadata = excluded.metadata",
-        params![
-            record.job_id,
-            record.output_index as i64,
-            record.target,
-            record.target_type,
-            record.status,
-            record.url,
-            record.error,
-            record.bytes.map(|value| value as i64),
-            record.attempts as i64,
-            record.updated_at,
-            serde_json::to_string(&record.metadata).unwrap_or_else(|_| "{}".to_string()),
-        ],
-    )
-    .map_err(|error| {
-        AppError::new("history_write_failed", "Unable to record output upload history.")
-            .with_detail(json!({"error": error.to_string()}))
-    })?;
-    Ok(())
-}
-
-pub fn list_output_upload_records(job_id: &str) -> Result<Vec<OutputUploadRecord>, AppError> {
-    let conn = open_history_db()?;
-    list_output_upload_records_with_conn(&conn, job_id)
-}
-
-#[derive(Debug, Clone, Default)]
-pub struct StorageUploadOverrides {
-    pub targets: Option<Vec<String>>,
-    pub fallback_targets: Option<Vec<String>>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct StorageTestResult {
-    pub ok: bool,
-    pub target: String,
-    pub target_type: String,
-    pub message: String,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub latency_ms: Option<u128>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub detail: Option<Value>,
-    #[serde(default)]
-    pub unsupported: bool,
-    #[serde(default)]
-    pub local_only: bool,
-}
-
-#[derive(Debug, Clone)]
-struct UploadOutput {
-    index: usize,
-    path: PathBuf,
-    bytes: u64,
-}
-
-#[derive(Debug, Clone)]
-struct StorageUploadOutcome {
-    url: Option<String>,
-    bytes: Option<u64>,
-    metadata: Value,
-}
-
-fn storage_target_type(target: &StorageTargetConfig) -> &'static str {
-    match target {
-        StorageTargetConfig::Local { .. } => "local",
-        StorageTargetConfig::S3 { .. } => "s3",
-        StorageTargetConfig::WebDav { .. } => "webdav",
-        StorageTargetConfig::Http { .. } => "http",
-        StorageTargetConfig::Sftp { .. } => "sftp",
-    }
-}
-
-fn upload_now() -> String {
-    SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .unwrap_or_default()
-        .as_secs()
-        .to_string()
-}
-
-fn parse_output_index(value: &Value, fallback: usize) -> usize {
-    value
-        .get("index")
-        .and_then(Value::as_u64)
-        .and_then(|value| usize::try_from(value).ok())
-        .unwrap_or(fallback)
-}
-
-fn upload_outputs_from_job(job: &Value) -> Vec<UploadOutput> {
-    job.get("outputs")
-        .and_then(Value::as_array)
-        .map(|outputs| {
-            outputs
-                .iter()
-                .enumerate()
-                .filter_map(|(fallback, output)| {
-                    let path = output.get("path").and_then(Value::as_str)?;
-                    let bytes = output.get("bytes").and_then(Value::as_u64).unwrap_or(0);
-                    Some(UploadOutput {
-                        index: parse_output_index(output, fallback),
-                        path: PathBuf::from(path),
-                        bytes,
-                    })
-                })
-                .collect::<Vec<_>>()
-        })
-        .unwrap_or_default()
-}
-
-fn path_safe_token(value: &str, fallback: &str) -> String {
-    let token = value
-        .chars()
-        .map(|ch| {
-            if ch.is_ascii_alphanumeric() || matches!(ch, '-' | '_' | '.') {
-                ch
-            } else {
-                '-'
-            }
-        })
-        .collect::<String>()
-        .trim_matches('-')
-        .to_string();
-    if token.is_empty() {
-        fallback.to_string()
-    } else {
-        token
-    }
-}
-
-fn output_file_name(output: &UploadOutput) -> String {
-    output
-        .path
-        .file_name()
-        .and_then(|name| name.to_str())
-        .map(|name| path_safe_token(name, "image.png"))
-        .unwrap_or_else(|| "image.png".to_string())
-}
-
-fn storage_object_key(job_id: &str, output: &UploadOutput) -> String {
-    format!(
-        "{}/{}-{}",
-        path_safe_token(job_id, "job"),
-        output.index + 1,
-        output_file_name(output)
-    )
-}
-
-fn join_storage_url(base: &str, key: &str) -> String {
-    format!(
-        "{}/{}",
-        base.trim_end_matches('/'),
-        key.split('/')
-            .map(|part| part.replace(' ', "%20"))
-            .collect::<Vec<_>>()
-            .join("/")
-    )
-}
-
-fn target_names_for_upload(
-    config: &StorageConfig,
-    overrides: &StorageUploadOverrides,
-) -> (Vec<String>, Vec<String>) {
-    let primary = overrides
-        .targets
-        .clone()
-        .unwrap_or_else(|| config.default_targets.clone());
-    let fallback = overrides
-        .fallback_targets
-        .clone()
-        .unwrap_or_else(|| config.fallback_targets.clone());
-    (
-        primary
-            .into_iter()
-            .map(|name| name.trim().to_string())
-            .filter(|name| !name.is_empty())
-            .collect(),
-        fallback
-            .into_iter()
-            .map(|name| name.trim().to_string())
-            .filter(|name| !name.is_empty())
-            .collect(),
-    )
-}
-
-fn resolve_storage_headers(
-    headers: &BTreeMap<String, CredentialRef>,
-) -> Result<HeaderMap, AppError> {
-    let mut resolved = HeaderMap::new();
-    for (name, credential) in headers {
-        let header_name = HeaderName::from_bytes(name.as_bytes()).map_err(|error| {
-            AppError::new(
-                "storage_header_invalid",
-                "Invalid HTTP storage header name.",
-            )
-            .with_detail(json!({"header": name, "error": error.to_string()}))
-        })?;
-        let (value, _) = resolve_credential(credential)?;
-        let header_value = HeaderValue::from_str(&value).map_err(|error| {
-            AppError::new(
-                "storage_header_invalid",
-                "Invalid HTTP storage header value.",
-            )
-            .with_detail(json!({"header": name, "error": error.to_string()}))
-        })?;
-        resolved.insert(header_name, header_value);
-    }
-    Ok(resolved)
-}
-
-fn json_pointer_string(value: &Value, pointer: Option<&str>) -> Option<String> {
-    let pointer = pointer?.trim();
-    if pointer.is_empty() {
-        return None;
-    }
-    value.pointer(pointer).and_then(|value| {
-        value
-            .as_str()
-            .map(ToString::to_string)
-            .or_else(|| value.as_object().map(|_| value.to_string()))
-    })
-}
-
-fn hex_lower(bytes: &[u8]) -> String {
-    const HEX: &[u8; 16] = b"0123456789abcdef";
-    let mut value = String::with_capacity(bytes.len() * 2);
-    for byte in bytes {
-        value.push(HEX[(byte >> 4) as usize] as char);
-        value.push(HEX[(byte & 0x0f) as usize] as char);
-    }
-    value
-}
-
-fn sha256_hex(bytes: &[u8]) -> String {
-    hex_lower(&Sha256::digest(bytes))
-}
-
-fn hmac_sha256(key: &[u8], data: &str) -> Result<Vec<u8>, AppError> {
-    let mut mac = Hmac::<Sha256>::new_from_slice(key).map_err(|error| {
-        AppError::new(
-            "storage_s3_signing_failed",
-            "Unable to initialize S3 signer.",
-        )
-        .with_detail(json!({"error": error.to_string()}))
-    })?;
-    mac.update(data.as_bytes());
-    Ok(mac.finalize().into_bytes().to_vec())
-}
-
-fn pinned_http_client(
-    host_label: &str,
-    addrs: &[SocketAddr],
-    timeout: Duration,
-    error_code: &'static str,
-    error_message: &'static str,
-) -> Result<Client, AppError> {
-    Client::builder()
-        .timeout(timeout)
-        .redirect(reqwest::redirect::Policy::none())
-        .resolve_to_addrs(host_label, addrs)
-        .build()
-        .map_err(|error| {
-            AppError::new(error_code, error_message)
-                .with_detail(json!({"error": error.to_string()}))
-        })
-}
-
-fn s3_encode_key_segment(value: &str) -> String {
-    value
-        .bytes()
-        .flat_map(|byte| match byte {
-            b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'-' | b'_' | b'.' | b'~' => {
-                vec![byte as char]
-            }
-            other => format!("%{other:02X}").chars().collect(),
-        })
-        .collect()
-}
-
-fn s3_canonical_uri(key: &str) -> String {
-    format!(
-        "/{}",
-        key.split('/')
-            .map(s3_encode_key_segment)
-            .collect::<Vec<_>>()
-            .join("/")
-    )
-}
-
-fn s3_host_header(url: &Url) -> Result<String, AppError> {
-    let host = url
-        .host_str()
-        .ok_or_else(|| AppError::new("storage_s3_url_invalid", "S3 endpoint host is missing."))?;
-    Ok(match url.port() {
-        Some(port) => format!("{host}:{port}"),
-        None => host.to_string(),
-    })
-}
-
-fn redact_url_for_log(url: &str) -> String {
-    let Ok(mut parsed) = Url::parse(url) else {
-        return url.chars().take(256).collect();
-    };
-    let _ = parsed.set_username("");
-    let _ = parsed.set_password(None);
-    parsed.set_query(None);
-    parsed.set_fragment(None);
-    parsed.to_string()
-}
-
-fn response_body_snippet(body: &str) -> String {
-    const MAX_LEN: usize = 2048;
-    let mut snippet = body
-        .chars()
-        .map(|ch| {
-            if ch.is_control() && ch != '\n' && ch != '\r' && ch != '\t' {
-                ' '
-            } else {
-                ch
-            }
-        })
-        .take(MAX_LEN + 1)
-        .collect::<String>();
-    if snippet.chars().count() > MAX_LEN {
-        snippet = snippet.chars().take(MAX_LEN).collect::<String>();
-        snippet.push_str("...");
-    }
-    snippet
-}
-
-fn is_sensitive_response_key(key: &str) -> bool {
-    let lowered = key.to_ascii_lowercase();
-    [
-        "access_token",
-        "refresh_token",
-        "id_token",
-        "authorization",
-        "api_key",
-        "token",
-        "secret",
-        "password",
-        "signature",
-        "credential",
-        "set-cookie",
-        "cookie",
-        "url",
-    ]
-    .iter()
-    .any(|needle| lowered.contains(needle))
-}
-
-fn redact_storage_response_value(key: Option<&str>, value: &Value) -> Value {
-    if key.is_some_and(is_sensitive_response_key) {
-        return json!({"_omitted": "secret"});
-    }
-    match value {
-        Value::Object(object) => Value::Object(
-            object
-                .iter()
-                .map(|(key, child)| (key.clone(), redact_storage_response_value(Some(key), child)))
-                .collect(),
-        ),
-        Value::Array(items) => Value::Array(
-            items
-                .iter()
-                .take(20)
-                .map(|item| redact_storage_response_value(None, item))
-                .collect(),
-        ),
-        Value::String(text) if text.len() > 256 => json!(response_body_snippet(text)),
-        _ => value.clone(),
-    }
-}
-
-fn sanitized_response_body(body: &str) -> Value {
-    match serde_json::from_str::<Value>(body) {
-        Ok(value) => redact_storage_response_value(None, &value),
-        Err(_) => json!(response_body_snippet(body)),
-    }
-}
-
-fn http_url_if_safe(url: Option<String>) -> Option<String> {
-    let url = url?;
-    let parsed = Url::parse(&url).ok()?;
-    match parsed.scheme() {
-        "http" | "https" => Some(url),
-        _ => None,
-    }
-}
-
-fn storage_error_message(error: AppError) -> String {
-    if let Some(detail) = error.detail {
-        format!("{}: {}", error.message, detail)
-    } else {
-        error.message
-    }
-}
-
-fn storage_credential_present_and_resolvable(
-    credential: Option<&CredentialRef>,
-) -> Result<(), AppError> {
-    let credential = credential.ok_or_else(|| {
-        AppError::new(
-            "storage_credentials_missing",
-            "Storage credential is missing.",
-        )
-    })?;
-    let (resolved, _) = resolve_credential(credential)?;
-    if resolved.trim().is_empty() {
-        return Err(AppError::new(
-            "storage_credentials_missing",
-            "Storage credential is empty.",
-        ));
-    }
-    Ok(())
-}
-
-fn upload_to_local(
-    directory: &Path,
-    public_base_url: Option<&str>,
-    job_id: &str,
-    output: &UploadOutput,
-) -> Result<StorageUploadOutcome, AppError> {
-    if !output.path.is_file() {
-        return Err(AppError::new(
-            "storage_source_missing",
-            "Generated output file is missing.",
-        )
-        .with_detail(json!({"path": output.path.display().to_string()})));
-    }
-    let key = storage_object_key(job_id, output);
-    let destination = directory.join(&key);
-    if let Some(parent) = destination.parent() {
-        fs::create_dir_all(parent).map_err(|error| {
-            AppError::new(
-                "storage_local_create_failed",
-                "Unable to create local storage directory.",
-            )
-            .with_detail(json!({"path": parent.display().to_string(), "error": error.to_string()}))
-        })?;
-    }
-    fs::copy(&output.path, &destination).map_err(|error| {
-        AppError::new(
-            "storage_local_copy_failed",
-            "Unable to copy output to local storage.",
-        )
-        .with_detail(json!({
-            "source": output.path.display().to_string(),
-            "destination": destination.display().to_string(),
-            "error": error.to_string(),
-        }))
-    })?;
-    Ok(StorageUploadOutcome {
-        url: http_url_if_safe(public_base_url.map(|base| join_storage_url(base, &key))),
-        bytes: Some(output.bytes),
-        metadata: json!({
-            "path": destination.display().to_string(),
-            "key": key,
-        }),
-    })
-}
-
-fn upload_to_http(
-    url: &str,
-    method: &str,
-    headers: &BTreeMap<String, CredentialRef>,
-    public_url_json_pointer: Option<&str>,
-    job_id: &str,
-    output: &UploadOutput,
-) -> Result<StorageUploadOutcome, AppError> {
-    let (_, host_label, addrs) = validate_remote_http_target(url, "HTTP storage")?;
-    if !output.path.is_file() {
-        return Err(AppError::new(
-            "storage_source_missing",
-            "Generated output file is missing.",
-        )
-        .with_detail(json!({"path": output.path.display().to_string()})));
-    }
-    let bytes = fs::read(&output.path).map_err(|error| {
-        AppError::new("storage_read_failed", "Unable to read generated output.").with_detail(
-            json!({"path": output.path.display().to_string(), "error": error.to_string()}),
-        )
-    })?;
-    let mime = mime_guess::from_path(&output.path).first_or_octet_stream();
-    let file_name = output_file_name(output);
-    let part = Part::bytes(bytes.clone())
-        .file_name(file_name.clone())
-        .mime_str(mime.as_ref())
-        .map_err(|error| {
-            AppError::new(
-                "storage_http_multipart_failed",
-                "Unable to build HTTP upload part.",
-            )
-            .with_detail(json!({"error": error.to_string()}))
-        })?;
-    let form = Form::new()
-        .text("job_id", job_id.to_string())
-        .text("output_index", output.index.to_string())
-        .text("key", storage_object_key(job_id, output))
-        .part("file", part);
-    let client = pinned_http_client(
-        &host_label,
-        &addrs,
-        Duration::from_secs(DEFAULT_REQUEST_TIMEOUT.min(120)),
-        "storage_http_client_failed",
-        "Unable to build HTTP storage client.",
-    )?;
-    let mut request = match method.to_ascii_uppercase().as_str() {
-        "PUT" => client.put(url),
-        "PATCH" => client.patch(url),
-        "POST" | "" => client.post(url),
-        other => {
-            return Err(AppError::new(
-                "storage_http_method_unsupported",
-                format!("Unsupported HTTP storage method: {other}"),
-            ));
-        }
-    };
-    let resolved_headers = resolve_storage_headers(headers)?;
-    request = request.headers(resolved_headers).multipart(form);
-    let response = request.send().map_err(|error| {
-        AppError::new("storage_http_request_failed", "HTTP storage upload failed.")
-            .with_detail(json!({"url": redact_url_for_log(url), "error": error.to_string()}))
-    })?;
-    let status = response.status();
-    let body = response.text().unwrap_or_default();
-    if !status.is_success() {
-        return Err(AppError::new(
-            "storage_http_status_failed",
-            format!("HTTP storage upload returned {status}."),
-        )
-        .with_detail(json!({
-            "url": redact_url_for_log(url),
-            "body": sanitized_response_body(&body),
-        })));
-    }
-    let response_json = serde_json::from_str::<Value>(&body).unwrap_or(Value::Null);
-    let extracted_url =
-        http_url_if_safe(json_pointer_string(&response_json, public_url_json_pointer));
-    Ok(StorageUploadOutcome {
-        url: extracted_url,
-        bytes: Some(bytes.len() as u64),
-        metadata: json!({
-            "http_status": status.as_u16(),
-            "url_from_response": public_url_json_pointer
-                .map(|_| json_pointer_string(&response_json, public_url_json_pointer).is_some())
-                .unwrap_or(false),
-        }),
-    })
-}
-
-fn s3_endpoint_and_host(
-    bucket: &str,
-    region: Option<&str>,
-    endpoint: Option<&str>,
-    key: &str,
-) -> Result<(String, String, String), AppError> {
-    let canonical_uri = s3_canonical_uri(key);
-    if let Some(endpoint) = endpoint.filter(|value| !value.trim().is_empty()) {
-        let base = endpoint.trim_end_matches('/');
-        let url = if base.contains("{bucket}") {
-            format!("{}{}", base.replace("{bucket}", bucket), canonical_uri)
-        } else {
-            format!("{}/{bucket}{canonical_uri}", base)
-        };
-        let parsed = Url::parse(&url).map_err(|error| {
-            AppError::new("storage_s3_url_invalid", "Invalid S3 endpoint URL.")
-                .with_detail(json!({"url": url, "error": error.to_string()}))
-        })?;
-        let host = s3_host_header(&parsed)?;
-        return Ok((url, host, parsed.path().to_string()));
-    }
-    let region = region
-        .filter(|value| !value.trim().is_empty())
-        .unwrap_or("us-east-1");
-    let host = if region == "us-east-1" {
-        format!("{bucket}.s3.amazonaws.com")
-    } else {
-        format!("{bucket}.s3.{region}.amazonaws.com")
-    };
-    Ok((
-        format!("https://{host}{canonical_uri}"),
-        host,
-        canonical_uri,
-    ))
-}
-
-fn s3_signing_key(secret_access_key: &str, date: &str, region: &str) -> Result<Vec<u8>, AppError> {
-    let date_key = hmac_sha256(format!("AWS4{secret_access_key}").as_bytes(), date)?;
-    let region_key = hmac_sha256(&date_key, region)?;
-    let service_key = hmac_sha256(&region_key, "s3")?;
-    hmac_sha256(&service_key, "aws4_request")
-}
-
-fn upload_to_s3(
-    bucket: &str,
-    region: Option<&str>,
-    endpoint: Option<&str>,
-    prefix: Option<&str>,
-    access_key_id: Option<&CredentialRef>,
-    secret_access_key: Option<&CredentialRef>,
-    session_token: Option<&CredentialRef>,
-    public_base_url: Option<&str>,
-    job_id: &str,
-    output: &UploadOutput,
-) -> Result<StorageUploadOutcome, AppError> {
-    if !output.path.is_file() {
-        return Err(AppError::new(
-            "storage_source_missing",
-            "Generated output file is missing.",
-        )
-        .with_detail(json!({"path": output.path.display().to_string()})));
-    }
-    let (access_key_id, _) = access_key_id
-        .ok_or_else(|| {
-            AppError::new(
-                "storage_s3_credentials_missing",
-                "S3 access key is missing.",
-            )
-        })
-        .and_then(resolve_credential)?;
-    let (secret_access_key, _) = secret_access_key
-        .ok_or_else(|| {
-            AppError::new(
-                "storage_s3_credentials_missing",
-                "S3 secret key is missing.",
-            )
-        })
-        .and_then(resolve_credential)?;
-    let session_token = session_token
-        .map(resolve_credential)
-        .transpose()?
-        .map(|(value, _)| value);
-    let bytes = fs::read(&output.path).map_err(|error| {
-        AppError::new("storage_read_failed", "Unable to read generated output.").with_detail(
-            json!({"path": output.path.display().to_string(), "error": error.to_string()}),
-        )
-    })?;
-    let prefix = prefix.unwrap_or("").trim_matches('/');
-    let raw_key = storage_object_key(job_id, output);
-    let key = if prefix.is_empty() {
-        raw_key
-    } else {
-        format!("{prefix}/{raw_key}")
-    };
-    let signing_region = region
-        .filter(|value| !value.trim().is_empty())
-        .unwrap_or("us-east-1");
-    let (url, host, canonical_uri) =
-        s3_endpoint_and_host(bucket, Some(signing_region), endpoint, &key)?;
-    let (_, host_label, addrs) = validate_remote_http_target(&url, "S3 storage")?;
-    let now = Utc::now();
-    let amz_date = now.format("%Y%m%dT%H%M%SZ").to_string();
-    let short_date = now.format("%Y%m%d").to_string();
-    let payload_hash = sha256_hex(&bytes);
-    let content_type = mime_guess::from_path(&output.path)
-        .first_or_octet_stream()
-        .to_string();
-    let mut canonical_headers = format!(
-        "content-type:{content_type}\nhost:{host}\nx-amz-content-sha256:{payload_hash}\nx-amz-date:{amz_date}\n"
-    );
-    let mut signed_headers = "content-type;host;x-amz-content-sha256;x-amz-date".to_string();
-    if let Some(token) = &session_token {
-        canonical_headers.push_str(&format!("x-amz-security-token:{token}\n"));
-        signed_headers.push_str(";x-amz-security-token");
-    }
-    let canonical_request =
-        format!("PUT\n{canonical_uri}\n\n{canonical_headers}\n{signed_headers}\n{payload_hash}");
-    let credential_scope = format!("{short_date}/{signing_region}/s3/aws4_request");
-    let string_to_sign = format!(
-        "AWS4-HMAC-SHA256\n{amz_date}\n{credential_scope}\n{}",
-        sha256_hex(canonical_request.as_bytes())
-    );
-    let signing_key = s3_signing_key(&secret_access_key, &short_date, signing_region)?;
-    let signature = hex_lower(&hmac_sha256(&signing_key, &string_to_sign)?);
-    let authorization = format!(
-        "AWS4-HMAC-SHA256 Credential={access_key_id}/{credential_scope}, SignedHeaders={signed_headers}, Signature={signature}"
-    );
-    let client = pinned_http_client(
-        &host_label,
-        &addrs,
-        Duration::from_secs(DEFAULT_REQUEST_TIMEOUT.min(120)),
-        "storage_s3_client_failed",
-        "Unable to build S3 storage client.",
-    )?;
-    let mut request = client
-        .put(&url)
-        .header("Host", host.clone())
-        .header(CONTENT_TYPE, content_type)
-        .header("x-amz-content-sha256", payload_hash)
-        .header("x-amz-date", amz_date)
-        .header(AUTHORIZATION, authorization)
-        .body(bytes.clone());
-    if let Some(token) = session_token {
-        request = request.header("x-amz-security-token", token);
-    }
-    let response = request.send().map_err(|error| {
-        AppError::new("storage_s3_request_failed", "S3 storage upload failed.")
-            .with_detail(json!({"url": redact_url_for_log(&url), "error": error.to_string()}))
-    })?;
-    let status = response.status();
-    let etag = response
-        .headers()
-        .get("etag")
-        .and_then(|value| value.to_str().ok())
-        .map(ToString::to_string);
-    let body = response.text().unwrap_or_default();
-    if !status.is_success() {
-        return Err(AppError::new(
-            "storage_s3_status_failed",
-            format!("S3 storage upload returned {status}."),
-        )
-        .with_detail(json!({
-            "url": redact_url_for_log(&url),
-            "body": sanitized_response_body(&body),
-        })));
-    }
-    Ok(StorageUploadOutcome {
-        url: http_url_if_safe(public_base_url.map(|base| join_storage_url(base, &key))),
-        bytes: Some(bytes.len() as u64),
-        metadata: json!({
-            "bucket": bucket,
-            "key": key,
-            "endpoint": redact_url_for_log(&url),
-            "etag": etag,
-            "http_status": status.as_u16(),
-        }),
-    })
-}
-
-fn upload_to_webdav(
-    url: &str,
-    username: Option<&str>,
-    password: Option<&CredentialRef>,
-    public_base_url: Option<&str>,
-    job_id: &str,
-    output: &UploadOutput,
-) -> Result<StorageUploadOutcome, AppError> {
-    let (_, host_label, addrs) = validate_remote_http_target(url, "WebDAV storage")?;
-    if !output.path.is_file() {
-        return Err(AppError::new(
-            "storage_source_missing",
-            "Generated output file is missing.",
-        )
-        .with_detail(json!({"path": output.path.display().to_string()})));
-    }
-    let key = storage_object_key(job_id, output);
-    let endpoint = join_storage_url(url, &key);
-    let bytes = fs::read(&output.path).map_err(|error| {
-        AppError::new("storage_read_failed", "Unable to read generated output.").with_detail(
-            json!({"path": output.path.display().to_string(), "error": error.to_string()}),
-        )
-    })?;
-    let client = pinned_http_client(
-        &host_label,
-        &addrs,
-        Duration::from_secs(DEFAULT_REQUEST_TIMEOUT.min(120)),
-        "storage_webdav_client_failed",
-        "Unable to build WebDAV client.",
-    )?;
-    let resolved_password = if username.is_some_and(|value| !value.trim().is_empty()) {
-        Some(
-            password
-                .map(resolve_credential)
-                .transpose()?
-                .map(|(value, _)| value)
-                .unwrap_or_default(),
-        )
-    } else {
-        None
-    };
-    let parent_keys = key
-        .split('/')
-        .scan(String::new(), |state, part| {
-            if state.is_empty() {
-                state.push_str(part);
-            } else {
-                state.push('/');
-                state.push_str(part);
-            }
-            Some(state.clone())
-        })
-        .take_while(|value| value != &key)
-        .collect::<Vec<_>>();
-    for parent_key in parent_keys {
-        let collection_url = join_storage_url(url, &parent_key);
-        let mut request = client.request(
-            reqwest::Method::from_bytes(b"MKCOL").unwrap(),
-            &collection_url,
-        );
-        if let Some(username) = username.filter(|value| !value.trim().is_empty()) {
-            request = request.basic_auth(username.to_string(), resolved_password.clone());
-        }
-        let response = request.send().map_err(|error| {
-            AppError::new(
-                "storage_webdav_mkcol_failed",
-                "WebDAV collection creation failed.",
-            )
-            .with_detail(json!({
-                "url": redact_url_for_log(&collection_url),
-                "error": error.to_string(),
-            }))
-        })?;
-        let status = response.status();
-        if !(status.is_success() || matches!(status.as_u16(), 405 | 409)) {
-            let body = response.text().unwrap_or_default();
-            return Err(AppError::new(
-                "storage_webdav_mkcol_failed",
-                format!("WebDAV MKCOL returned {status}."),
-            )
-            .with_detail(json!({
-                "url": redact_url_for_log(&collection_url),
-                "body": sanitized_response_body(&body),
-            })));
-        }
-    }
-    let mut request = client
-        .put(&endpoint)
-        .header(
-            CONTENT_TYPE,
-            mime_guess::from_path(&output.path)
-                .first_or_octet_stream()
-                .as_ref(),
-        )
-        .body(bytes.clone());
-    if let Some(username) = username.filter(|value| !value.trim().is_empty()) {
-        request = request.basic_auth(username.to_string(), resolved_password);
-    }
-    let response = request.send().map_err(|error| {
-        AppError::new(
-            "storage_webdav_request_failed",
-            "WebDAV storage upload failed.",
-        )
-        .with_detail(json!({
-            "url": redact_url_for_log(&endpoint),
-            "error": error.to_string(),
-        }))
-    })?;
-    let status = response.status();
-    let body = response.text().unwrap_or_default();
-    if !status.is_success() {
-        return Err(AppError::new(
-            "storage_webdav_status_failed",
-            format!("WebDAV storage upload returned {status}."),
-        )
-        .with_detail(json!({
-            "url": redact_url_for_log(&endpoint),
-            "body": sanitized_response_body(&body),
-        })));
-    }
-    Ok(StorageUploadOutcome {
-        url: http_url_if_safe(public_base_url.map(|base| join_storage_url(base, &key))),
-        bytes: Some(bytes.len() as u64),
-        metadata: json!({
-            "key": key,
-            "webdav_url": redact_url_for_log(&endpoint),
-            "http_status": status.as_u16(),
-        }),
-    })
-}
-
-fn ensure_remote_dir(sftp: &ssh2::Sftp, remote_dir: &Path) {
-    let mut current = PathBuf::new();
-    for component in remote_dir.components() {
-        current.push(component.as_os_str());
-        if current.as_os_str().is_empty() {
-            continue;
-        }
-        let _ = sftp.mkdir(&current, 0o755);
-    }
-}
-
-fn sftp_expected_host_key(expected: Option<&str>) -> Result<&str, AppError> {
-    expected
-        .map(str::trim)
-        .filter(|value| !value.is_empty())
-        .ok_or_else(|| {
-            AppError::new(
-                "storage_sftp_host_key_missing",
-                "SFTP storage requires a SHA256 host key fingerprint.",
-            )
-        })
-}
-
-fn strip_sha256_prefix(value: &str) -> &str {
-    if value.len() >= 7 && value[..7].eq_ignore_ascii_case("SHA256:") {
-        &value[7..]
-    } else {
-        value
-    }
-}
-
-fn sftp_host_key_matches(expected: &str, actual_hex: &str, actual_base64: &str) -> bool {
-    let expected = strip_sha256_prefix(expected.trim());
-    let compact_expected = expected.replace(':', "");
-    compact_expected.eq_ignore_ascii_case(actual_hex)
-        || expected == actual_base64
-        || expected.trim_end_matches('=') == actual_base64.trim_end_matches('=')
-}
-
-fn verify_sftp_host_key(session: &Session, expected: Option<&str>) -> Result<String, AppError> {
-    let expected = sftp_expected_host_key(expected)?;
-    let (host_key, _) = session.host_key().ok_or_else(|| {
-        AppError::new(
-            "storage_sftp_host_key_unavailable",
-            "SFTP server did not provide a host key.",
-        )
-    })?;
-    let digest = Sha256::digest(host_key);
-    let actual_hex = hex_lower(&digest);
-    let actual_base64 = STANDARD.encode(digest);
-    if !sftp_host_key_matches(expected, &actual_hex, &actual_base64) {
-        return Err(AppError::new(
-            "storage_sftp_host_key_mismatch",
-            "SFTP host key fingerprint does not match.",
-        )
-        .with_detail(json!({
-            "expected": expected,
-            "actual": format!("SHA256:{}", actual_base64.trim_end_matches('=')),
-        })));
-    }
-    Ok(format!("SHA256:{}", actual_base64.trim_end_matches('=')))
-}
-
-fn connect_sftp_session(
-    host: &str,
-    port: u16,
-    host_key_sha256: Option<&str>,
-) -> Result<(Session, String), AppError> {
-    sftp_expected_host_key(host_key_sha256)?;
-    let addrs = validate_remote_tcp_target(host, port, "SFTP storage")?;
-    let tcp = TcpStream::connect(addrs.as_slice()).map_err(|error| {
-        AppError::new(
-            "storage_sftp_connect_failed",
-            "Unable to connect to SFTP server.",
-        )
-        .with_detail(json!({"host": host, "port": port, "error": error.to_string()}))
-    })?;
-    let mut session = Session::new().map_err(|error| {
-        AppError::new(
-            "storage_sftp_session_failed",
-            "Unable to create SFTP session.",
-        )
-        .with_detail(json!({"error": error.to_string()}))
-    })?;
-    session.set_tcp_stream(tcp);
-    session.handshake().map_err(|error| {
-        AppError::new("storage_sftp_handshake_failed", "SFTP handshake failed.")
-            .with_detail(json!({"host": host, "error": error.to_string()}))
-    })?;
-    let host_key_fingerprint = verify_sftp_host_key(&session, host_key_sha256)?;
-    Ok((session, host_key_fingerprint))
-}
-
-fn authenticate_sftp_session(
-    session: &Session,
-    host: &str,
-    username: &str,
-    password: Option<&CredentialRef>,
-    private_key: Option<&CredentialRef>,
-) -> Result<(), AppError> {
-    if let Some(private_key) = private_key {
-        let (private_key, _) = resolve_credential(private_key)?;
-        let passphrase = password
-            .map(resolve_credential)
-            .transpose()?
-            .map(|(value, _)| value);
-        session
-            .userauth_pubkey_memory(username, None, &private_key, passphrase.as_deref())
-            .map_err(|error| {
-                AppError::new("storage_sftp_auth_failed", "SFTP private-key auth failed.")
-                    .with_detail(
-                        json!({"host": host, "username": username, "error": error.to_string()}),
-                    )
-            })?;
-    } else if let Some(password) = password {
-        let (password, _) = resolve_credential(password)?;
-        session
-            .userauth_password(username, &password)
-            .map_err(|error| {
-                AppError::new("storage_sftp_auth_failed", "SFTP password auth failed.").with_detail(
-                    json!({"host": host, "username": username, "error": error.to_string()}),
-                )
-            })?;
-    } else {
-        return Err(AppError::new(
-            "storage_sftp_auth_missing",
-            "SFTP storage requires a password or private key.",
-        ));
-    }
-    if !session.authenticated() {
-        return Err(AppError::new(
-            "storage_sftp_auth_failed",
-            "SFTP authentication failed.",
-        ));
-    }
-    Ok(())
-}
-
-fn upload_to_sftp(
-    host: &str,
-    port: u16,
-    host_key_sha256: Option<&str>,
-    username: &str,
-    password: Option<&CredentialRef>,
-    private_key: Option<&CredentialRef>,
-    remote_dir: &str,
-    public_base_url: Option<&str>,
-    job_id: &str,
-    output: &UploadOutput,
-) -> Result<StorageUploadOutcome, AppError> {
-    if !output.path.is_file() {
-        return Err(AppError::new(
-            "storage_source_missing",
-            "Generated output file is missing.",
-        )
-        .with_detail(json!({"path": output.path.display().to_string()})));
-    }
-    let (session, host_key_fingerprint) = connect_sftp_session(host, port, host_key_sha256)?;
-    authenticate_sftp_session(&session, host, username, password, private_key)?;
-    let sftp = session.sftp().map_err(|error| {
-        AppError::new("storage_sftp_open_failed", "Unable to open SFTP subsystem.")
-            .with_detail(json!({"error": error.to_string()}))
-    })?;
-    let key = storage_object_key(job_id, output);
-    let remote_base = PathBuf::from(remote_dir);
-    let destination = remote_base.join(&key);
-    if let Some(parent) = destination.parent() {
-        ensure_remote_dir(&sftp, parent);
-    }
-    let bytes = fs::read(&output.path).map_err(|error| {
-        AppError::new("storage_read_failed", "Unable to read generated output.").with_detail(
-            json!({"path": output.path.display().to_string(), "error": error.to_string()}),
-        )
-    })?;
-    let mut remote = sftp.create(&destination).map_err(|error| {
-        AppError::new(
-            "storage_sftp_create_failed",
-            "Unable to create remote SFTP file.",
-        )
-        .with_detail(json!({"path": destination.display().to_string(), "error": error.to_string()}))
-    })?;
-    remote.write_all(&bytes).map_err(|error| {
-        AppError::new(
-            "storage_sftp_write_failed",
-            "Unable to write remote SFTP file.",
-        )
-        .with_detail(json!({"path": destination.display().to_string(), "error": error.to_string()}))
-    })?;
-    Ok(StorageUploadOutcome {
-        url: http_url_if_safe(public_base_url.map(|base| join_storage_url(base, &key))),
-        bytes: Some(bytes.len() as u64),
-        metadata: json!({
-            "key": key,
-            "remote_path": destination.display().to_string(),
-            "host_key_sha256": host_key_fingerprint,
-        }),
-    })
-}
-
-fn upload_to_target(
-    target: &StorageTargetConfig,
-    job_id: &str,
-    output: &UploadOutput,
-) -> Result<StorageUploadOutcome, AppError> {
-    match target {
-        StorageTargetConfig::Local {
-            directory,
-            public_base_url,
-        } => upload_to_local(directory, public_base_url.as_deref(), job_id, output),
-        StorageTargetConfig::Http {
-            url,
-            method,
-            headers,
-            public_url_json_pointer,
-        } => upload_to_http(
-            url,
-            method,
-            headers,
-            public_url_json_pointer.as_deref(),
-            job_id,
-            output,
-        ),
-        StorageTargetConfig::WebDav {
-            url,
-            username,
-            password,
-            public_base_url,
-        } => upload_to_webdav(
-            url,
-            username.as_deref(),
-            password.as_ref(),
-            public_base_url.as_deref(),
-            job_id,
-            output,
-        ),
-        StorageTargetConfig::Sftp {
-            host,
-            port,
-            host_key_sha256,
-            username,
-            password,
-            private_key,
-            remote_dir,
-            public_base_url,
-        } => upload_to_sftp(
-            host,
-            *port,
-            host_key_sha256.as_deref(),
-            username,
-            password.as_ref(),
-            private_key.as_ref(),
-            remote_dir,
-            public_base_url.as_deref(),
-            job_id,
-            output,
-        ),
-        StorageTargetConfig::S3 {
-            bucket,
-            region,
-            endpoint,
-            prefix,
-            access_key_id,
-            secret_access_key,
-            session_token,
-            public_base_url,
-        } => upload_to_s3(
-            bucket,
-            region.as_deref(),
-            endpoint.as_deref(),
-            prefix.as_deref(),
-            access_key_id.as_ref(),
-            secret_access_key.as_ref(),
-            session_token.as_ref(),
-            public_base_url.as_deref(),
-            job_id,
-            output,
-        ),
-    }
-}
-
-fn record_upload_attempt(
-    job_id: &str,
-    output: &UploadOutput,
-    target_name: &str,
-    target: &StorageTargetConfig,
-    role: &str,
-) -> Result<bool, AppError> {
-    let started = OutputUploadRecord {
-        job_id: job_id.to_string(),
-        output_index: output.index,
-        target: target_name.to_string(),
-        target_type: storage_target_type(target).to_string(),
-        status: "running".to_string(),
-        url: None,
-        error: None,
-        bytes: None,
-        attempts: 1,
-        updated_at: upload_now(),
-        metadata: json!({"role": role}),
-    };
-    upsert_output_upload_record(&started)?;
-    let result = upload_to_target(target, job_id, output);
-    let (status, url, error, bytes, metadata) = match result {
-        Ok(outcome) => (
-            "completed".to_string(),
-            outcome.url,
-            None,
-            outcome.bytes,
-            json!({
-                "role": role,
-                "detail": outcome.metadata,
-            }),
-        ),
-        Err(error) => (
-            if error.code == "storage_target_unsupported" {
-                "unsupported".to_string()
-            } else {
-                "failed".to_string()
-            },
-            None,
-            Some(storage_error_message(error)),
-            None,
-            json!({"role": role}),
-        ),
-    };
-    let completed = status == "completed";
-    let record = OutputUploadRecord {
-        job_id: job_id.to_string(),
-        output_index: output.index,
-        target: target_name.to_string(),
-        target_type: storage_target_type(target).to_string(),
-        status,
-        url,
-        error,
-        bytes,
-        attempts: 1,
-        updated_at: upload_now(),
-        metadata,
-    };
-    upsert_output_upload_record(&record)?;
-    Ok(completed)
-}
-
-fn record_missing_storage_target(
-    job_id: &str,
-    output: &UploadOutput,
-    target_name: &str,
-    role: &str,
-) -> Result<(), AppError> {
-    let record = OutputUploadRecord {
-        job_id: job_id.to_string(),
-        output_index: output.index,
-        target: target_name.to_string(),
-        target_type: "unknown".to_string(),
-        status: "failed".to_string(),
-        url: None,
-        error: Some(format!("Unknown storage target: {target_name}")),
-        bytes: None,
-        attempts: 0,
-        updated_at: upload_now(),
-        metadata: json!({"role": role}),
-    };
-    upsert_output_upload_record(&record)
-}
-
-fn run_target_uploads(
-    config: &StorageConfig,
-    job_id: &str,
-    output: &UploadOutput,
-    target_names: &[String],
-    role: &str,
-) -> Result<bool, AppError> {
-    let target_concurrency = config.target_concurrency.clamp(1, 32);
-    let (tx, rx) = mpsc::channel::<Result<bool, AppError>>();
-    let mut active = 0usize;
-    let mut completed = false;
-    let mut first_error = None;
-    for target_name in target_names {
-        while active >= target_concurrency {
-            match rx.recv() {
-                Ok(Ok(value)) => {
-                    completed |= value;
-                    active = active.saturating_sub(1);
-                }
-                Ok(Err(error)) => {
-                    first_error.get_or_insert(error);
-                    active = active.saturating_sub(1);
-                }
-                Err(_) => break,
-            }
-        }
-        if let Some(target) = config.targets.get(target_name) {
-            let tx = tx.clone();
-            let job_id = job_id.to_string();
-            let output = output.clone();
-            let target_name = target_name.clone();
-            let target = target.clone();
-            let role = role.to_string();
-            thread::spawn(move || {
-                let result = record_upload_attempt(&job_id, &output, &target_name, &target, &role);
-                let _ = tx.send(result);
-            });
-            active += 1;
-        } else {
-            if let Err(error) = record_missing_storage_target(job_id, output, target_name, role) {
-                first_error.get_or_insert(error);
-            }
-        }
-    }
-    drop(tx);
-    while active > 0 {
-        match rx.recv() {
-            Ok(Ok(value)) => {
-                completed |= value;
-                active -= 1;
-            }
-            Ok(Err(error)) => {
-                first_error.get_or_insert(error);
-                active -= 1;
-            }
-            Err(_) => break,
-        }
-    }
-    if let Some(error) = first_error {
-        Err(error)
-    } else {
-        Ok(completed)
-    }
-}
-
-pub fn upload_job_outputs_to_storage(
-    config: &StorageConfig,
-    job: &Value,
-    overrides: StorageUploadOverrides,
-) -> Result<Vec<OutputUploadRecord>, AppError> {
-    let Some(job_id) = job.get("id").and_then(Value::as_str) else {
-        return Err(AppError::new(
-            "storage_job_invalid",
-            "Job id is required before uploading outputs.",
-        ));
-    };
-    let outputs = upload_outputs_from_job(job);
-    if outputs.is_empty() {
-        return list_output_upload_records(job_id);
-    }
-    let (primary_names, fallback_names) = target_names_for_upload(config, &overrides);
-    if primary_names.is_empty() && config.fallback_policy != StorageFallbackPolicy::Always {
-        return list_output_upload_records(job_id);
-    }
-    let upload_concurrency = config.upload_concurrency.clamp(1, 32);
-    let (tx, rx) = mpsc::channel::<Result<(), AppError>>();
-    let mut active = 0usize;
-    let mut first_error = None;
-    for output in outputs {
-        while active >= upload_concurrency {
-            match rx.recv() {
-                Ok(Ok(())) => {}
-                Ok(Err(error)) => {
-                    first_error.get_or_insert(error);
-                }
-                Err(_) => break,
-            }
-            active = active.saturating_sub(1);
-        }
-        let tx = tx.clone();
-        let job_id = job_id.to_string();
-        let config = config.clone();
-        let primary_names = primary_names.clone();
-        let fallback_names = fallback_names.clone();
-        thread::spawn(move || {
-            let primary_completed =
-                match run_target_uploads(&config, &job_id, &output, &primary_names, "primary") {
-                    Ok(value) => value,
-                    Err(error) => {
-                        let _ = tx.send(Err(error));
-                        return;
-                    }
-                };
-            let should_run_fallback = match config.fallback_policy {
-                StorageFallbackPolicy::Never => false,
-                StorageFallbackPolicy::Always => true,
-                StorageFallbackPolicy::OnFailure => !primary_names.is_empty() && !primary_completed,
-            };
-            if should_run_fallback {
-                if let Err(error) =
-                    run_target_uploads(&config, &job_id, &output, &fallback_names, "fallback")
-                {
-                    let _ = tx.send(Err(error));
-                    return;
-                }
-            }
-            let _ = tx.send(Ok(()));
-        });
-        active += 1;
-    }
-    drop(tx);
-    while active > 0 {
-        match rx.recv() {
-            Ok(Ok(())) => {}
-            Ok(Err(error)) => {
-                first_error.get_or_insert(error);
-            }
-            Err(_) => break,
-        }
-        active -= 1;
-    }
-    if let Some(error) = first_error {
-        return Err(error);
-    }
-    list_output_upload_records(job_id)
-}
-
-pub fn test_storage_target(name: &str, target: &StorageTargetConfig) -> StorageTestResult {
-    let started = SystemTime::now();
-    let target_type = storage_target_type(target).to_string();
-    let mut result = match target {
-        StorageTargetConfig::Local { directory, .. } => {
-            let check = fs::create_dir_all(directory).and_then(|_| {
-                let path = directory.join(".gpt-image-2-storage-test");
-                fs::write(&path, b"ok")?;
-                let _ = fs::remove_file(&path);
-                Ok(())
-            });
-            match check {
-                Ok(()) => StorageTestResult {
-                    ok: true,
-                    target: name.to_string(),
-                    target_type,
-                    message: "本地目录可写。".to_string(),
-                    latency_ms: None,
-                    detail: Some(json!({"directory": directory.display().to_string()})),
-                    unsupported: false,
-                    local_only: true,
-                },
-                Err(error) => StorageTestResult {
-                    ok: false,
-                    target: name.to_string(),
-                    target_type,
-                    message: format!("本地目录不可写：{error}"),
-                    latency_ms: None,
-                    detail: Some(json!({"directory": directory.display().to_string()})),
-                    unsupported: false,
-                    local_only: true,
-                },
-            }
-        }
-        StorageTargetConfig::Http { url, headers, .. } => {
-            let check = validate_remote_http_target(url, "HTTP storage").and_then(
-                |(_, host_label, addrs)| {
-                    let client = pinned_http_client(
-                        &host_label,
-                        &addrs,
-                        Duration::from_secs(10),
-                        "storage_http_client_failed",
-                        "Unable to build HTTP storage client.",
-                    )?;
-                    let mut request = client.head(url);
-                    request = request.headers(resolve_storage_headers(headers)?);
-                    request.send().map_err(|error| {
-                        AppError::new("storage_http_request_failed", "HTTP storage test failed.")
-                            .with_detail(json!({
-                                "url": redact_url_for_log(url),
-                                "error": error.to_string(),
-                            }))
-                    })
-                },
-            );
-            match check {
-                Ok(response) => StorageTestResult {
-                    ok: response.status().is_success() || response.status().as_u16() == 405,
-                    target: name.to_string(),
-                    target_type,
-                    message: format!("HTTP 目标可达：{}", response.status()),
-                    latency_ms: None,
-                    detail: Some(json!({"status": response.status().as_u16()})),
-                    unsupported: false,
-                    local_only: false,
-                },
-                Err(error) => {
-                    let message = error.message.clone();
-                    StorageTestResult {
-                        ok: false,
-                        target: name.to_string(),
-                        target_type,
-                        message: format!("HTTP 目标不可达：{message}"),
-                        latency_ms: None,
-                        detail: Some(json!({"error": storage_error_message(error)})),
-                        unsupported: false,
-                        local_only: false,
-                    }
-                }
-            }
-        }
-        StorageTargetConfig::WebDav {
-            url,
-            username,
-            password,
-            ..
-        } => {
-            let check = validate_remote_http_target(url, "WebDAV storage").and_then(
-                |(_, host_label, addrs)| {
-                    let client = pinned_http_client(
-                        &host_label,
-                        &addrs,
-                        Duration::from_secs(10),
-                        "storage_webdav_client_failed",
-                        "Unable to build WebDAV client.",
-                    )?;
-                    let mut request =
-                        client.request(reqwest::Method::from_bytes(b"PROPFIND").unwrap(), url);
-                    request = request.header("Depth", "0");
-                    if let Some(username) =
-                        username.as_deref().filter(|value| !value.trim().is_empty())
-                    {
-                        let password = password
-                            .as_ref()
-                            .map(resolve_credential)
-                            .transpose()?
-                            .map(|(value, _)| value)
-                            .unwrap_or_default();
-                        request = request.basic_auth(username.to_string(), Some(password));
-                    }
-                    request.send().map_err(|error| {
-                        AppError::new(
-                            "storage_webdav_request_failed",
-                            "WebDAV storage test failed.",
-                        )
-                        .with_detail(json!({
-                            "url": redact_url_for_log(url),
-                            "error": error.to_string(),
-                        }))
-                    })
-                },
-            );
-            match check {
-                Ok(response) => StorageTestResult {
-                    ok: response.status().is_success()
-                        || matches!(response.status().as_u16(), 207 | 405),
-                    target: name.to_string(),
-                    target_type,
-                    message: format!("WebDAV 目标可达：{}", response.status()),
-                    latency_ms: None,
-                    detail: Some(json!({"status": response.status().as_u16()})),
-                    unsupported: false,
-                    local_only: false,
-                },
-                Err(error) => {
-                    let message = error.message.clone();
-                    StorageTestResult {
-                        ok: false,
-                        target: name.to_string(),
-                        target_type,
-                        message: format!("WebDAV 目标不可达：{message}"),
-                        latency_ms: None,
-                        detail: Some(json!({"error": storage_error_message(error)})),
-                        unsupported: false,
-                        local_only: false,
-                    }
-                }
-            }
-        }
-        StorageTargetConfig::Sftp {
-            host,
-            port,
-            host_key_sha256,
-            username,
-            password,
-            private_key,
-            remote_dir,
-            ..
-        } => {
-            let check = connect_sftp_session(host, *port, host_key_sha256.as_deref()).and_then(
-                |(session, fingerprint)| {
-                    authenticate_sftp_session(
-                        &session,
-                        host,
-                        username,
-                        password.as_ref(),
-                        private_key.as_ref(),
-                    )?;
-                    let sftp = session.sftp().map_err(|error| {
-                        AppError::new("storage_sftp_open_failed", "Unable to open SFTP subsystem.")
-                            .with_detail(json!({"error": error.to_string()}))
-                    })?;
-                    sftp.stat(Path::new(remote_dir)).map_err(|error| {
-                        AppError::new(
-                            "storage_sftp_remote_dir_failed",
-                            "Unable to access SFTP remote directory.",
-                        )
-                        .with_detail(json!({
-                            "remote_dir": remote_dir,
-                            "error": error.to_string(),
-                        }))
-                    })?;
-                    Ok(fingerprint)
-                },
-            );
-            match check {
-                Ok(fingerprint) => StorageTestResult {
-                    ok: true,
-                    target: name.to_string(),
-                    target_type,
-                    message: "SFTP 认证与目录访问正常。".to_string(),
-                    latency_ms: None,
-                    detail: Some(json!({
-                        "host": host,
-                        "port": port,
-                        "host_key_sha256": fingerprint,
-                    })),
-                    unsupported: false,
-                    local_only: false,
-                },
-                Err(error) => StorageTestResult {
-                    ok: false,
-                    target: name.to_string(),
-                    target_type,
-                    message: format!("SFTP 目标不可用：{}", error.message),
-                    latency_ms: None,
-                    detail: Some(json!({
-                        "host": host,
-                        "port": port,
-                        "error": storage_error_message(error),
-                    })),
-                    unsupported: false,
-                    local_only: false,
-                },
-            }
-        }
-        StorageTargetConfig::S3 {
-            bucket,
-            region,
-            endpoint,
-            access_key_id,
-            secret_access_key,
-            ..
-        } => {
-            let access_key_ready =
-                storage_credential_present_and_resolvable(access_key_id.as_ref()).is_ok();
-            let secret_key_ready =
-                storage_credential_present_and_resolvable(secret_access_key.as_ref()).is_ok();
-            let credential_ready = access_key_ready && secret_key_ready;
-            let endpoint_url = s3_endpoint_and_host(
-                bucket,
-                region.as_deref(),
-                endpoint.as_deref(),
-                ".gpt-image-2-storage-test",
-            );
-            let endpoint_ready = endpoint_url
-                .as_ref()
-                .map(|(url, _, _)| validate_remote_http_target(url, "S3 storage").is_ok())
-                .unwrap_or(false);
-            StorageTestResult {
-                ok: credential_ready && endpoint_ready,
-                target: name.to_string(),
-                target_type,
-                message: if credential_ready && endpoint_ready {
-                    "S3 配置可用于上传。".to_string()
-                } else if !credential_ready {
-                    "S3 access key / secret key 不可用。".to_string()
-                } else {
-                    "S3 endpoint 配置无效。".to_string()
-                },
-                latency_ms: None,
-                detail: Some(json!({
-                    "bucket": bucket,
-                    "region": region,
-                    "access_key_ready": access_key_ready,
-                    "secret_key_ready": secret_key_ready,
-                    "endpoint_ready": endpoint_ready,
-                })),
-                unsupported: false,
-                local_only: false,
-            }
-        }
-    };
-    result.latency_ms = Some(started.elapsed().unwrap_or_default().as_millis());
-    result
-}
-
-fn list_output_upload_records_with_conn(
-    conn: &Connection,
-    job_id: &str,
-) -> Result<Vec<OutputUploadRecord>, AppError> {
-    let mut stmt = conn
-        .prepare(
-            "SELECT job_id, output_index, target, target_type, status, url, error, bytes, attempts, updated_at, metadata
-             FROM output_uploads
-             WHERE job_id = ?1
-             ORDER BY output_index ASC, target ASC",
-        )
-        .map_err(|error| {
-            AppError::new("history_query_failed", "Unable to query output upload history.")
-                .with_detail(json!({"error": error.to_string()}))
-        })?;
-    stmt.query_map(params![job_id], row_to_upload_record)
-        .map_err(|error| {
-            AppError::new(
-                "history_query_failed",
-                "Unable to query output upload history.",
-            )
-            .with_detail(json!({"error": error.to_string()}))
-        })?
-        .collect::<Result<Vec<_>, _>>()
-        .map_err(|error| {
-            AppError::new(
-                "history_query_failed",
-                "Unable to read output upload history.",
-            )
-            .with_detail(json!({"error": error.to_string()}))
-        })
-}
-
 #[derive(Debug, Clone, Default)]
 pub struct HistoryListOptions {
     pub limit: Option<usize>,
@@ -7284,62 +5143,6 @@ pub struct HistoryListPage {
     pub next_cursor: Option<String>,
     pub has_more: bool,
     pub total: usize,
-}
-
-fn storage_status_for_uploads(uploads: &[OutputUploadRecord]) -> &'static str {
-    if uploads.is_empty() {
-        return "not_configured";
-    }
-    let completed = uploads
-        .iter()
-        .filter(|upload| upload.status == "completed")
-        .count();
-    if completed == uploads.len() {
-        "completed"
-    } else {
-        let primary_completed = uploads.iter().any(|upload| {
-            upload.status == "completed"
-                && upload.metadata.get("role").and_then(Value::as_str) == Some("primary")
-        });
-        let fallback_completed = uploads.iter().any(|upload| {
-            upload.status == "completed"
-                && upload.metadata.get("role").and_then(Value::as_str) == Some("fallback")
-        });
-        if fallback_completed && !primary_completed {
-            "fallback_completed"
-        } else if completed > 0 {
-            "partial_failed"
-        } else {
-            "failed"
-        }
-    }
-}
-
-fn enrich_outputs_with_uploads(mut outputs: Value, uploads: &[OutputUploadRecord]) -> Value {
-    let Some(output_items) = outputs.as_array_mut() else {
-        return outputs;
-    };
-    for output in output_items {
-        let Some(output_index) = output
-            .get("index")
-            .and_then(Value::as_u64)
-            .map(|value| value as usize)
-        else {
-            continue;
-        };
-        let output_uploads = uploads
-            .iter()
-            .filter(|upload| upload.output_index == output_index)
-            .map(upload_record_to_value)
-            .collect::<Vec<_>>();
-        if output_uploads.is_empty() {
-            continue;
-        }
-        if let Some(object) = output.as_object_mut() {
-            object.insert("uploads".to_string(), Value::Array(output_uploads));
-        }
-    }
-    outputs
 }
 
 fn history_row_to_value(row: &Row<'_>) -> rusqlite::Result<Value> {
@@ -8539,6 +6342,9 @@ pub fn run_json(argv: &[String]) -> CommandOutcome {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::storage::backends::{
+        pan123_file_name_from_key, s3_endpoint_and_host, sftp_host_key_matches,
+    };
     use std::sync::Mutex;
 
     static CODEX_HOME_TEST_LOCK: Mutex<()> = Mutex::new(());
@@ -9229,6 +7035,92 @@ mod tests {
     }
 
     #[test]
+    fn storage_secret_preservation_skips_ambiguous_renamed_targets() {
+        let existing = StorageConfig {
+            targets: BTreeMap::from([
+                (
+                    "s3-main".to_string(),
+                    StorageTargetConfig::S3 {
+                        bucket: "images".to_string(),
+                        region: Some("us-east-1".to_string()),
+                        endpoint: Some("https://s3.example.com".to_string()),
+                        prefix: Some("out".to_string()),
+                        access_key_id: Some(CredentialRef::File {
+                            value: "ak-main".to_string(),
+                        }),
+                        secret_access_key: Some(CredentialRef::File {
+                            value: "sk-main".to_string(),
+                        }),
+                        session_token: None,
+                        public_base_url: None,
+                    },
+                ),
+                (
+                    "s3-copy".to_string(),
+                    StorageTargetConfig::S3 {
+                        bucket: "images".to_string(),
+                        region: Some("us-east-1".to_string()),
+                        endpoint: Some("https://s3.example.com".to_string()),
+                        prefix: Some("out".to_string()),
+                        access_key_id: Some(CredentialRef::File {
+                            value: "ak-copy".to_string(),
+                        }),
+                        secret_access_key: Some(CredentialRef::File {
+                            value: "sk-copy".to_string(),
+                        }),
+                        session_token: None,
+                        public_base_url: None,
+                    },
+                ),
+            ]),
+            ..StorageConfig::default()
+        };
+        let mut renamed_target = StorageConfig {
+            targets: BTreeMap::from([(
+                "s3-archive".to_string(),
+                StorageTargetConfig::S3 {
+                    bucket: "images".to_string(),
+                    region: Some("us-east-1".to_string()),
+                    endpoint: Some("https://s3.example.com".to_string()),
+                    prefix: Some("out".to_string()),
+                    access_key_id: Some(CredentialRef::File {
+                        value: String::new(),
+                    }),
+                    secret_access_key: Some(CredentialRef::File {
+                        value: String::new(),
+                    }),
+                    session_token: None,
+                    public_base_url: None,
+                },
+            )]),
+            ..StorageConfig::default()
+        };
+
+        preserve_storage_secrets(&mut renamed_target, &existing);
+
+        let StorageTargetConfig::S3 {
+            access_key_id,
+            secret_access_key,
+            ..
+        } = renamed_target.targets.get("s3-archive").unwrap()
+        else {
+            panic!("expected s3 target");
+        };
+        assert_eq!(
+            access_key_id,
+            &Some(CredentialRef::File {
+                value: String::new()
+            })
+        );
+        assert_eq!(
+            secret_access_key,
+            &Some(CredentialRef::File {
+                value: String::new()
+            })
+        );
+    }
+
+    #[test]
     fn storage_remote_guard_blocks_internal_addresses() {
         let err = validate_remote_http_target("http://127.0.0.1/upload", "HTTP storage")
             .err()
@@ -9444,6 +7336,101 @@ mod tests {
     }
 
     #[test]
+    fn storage_upload_uses_fallback_targets_when_primary_is_empty() {
+        let _guard = CODEX_HOME_TEST_LOCK.lock().unwrap();
+        let temp_dir = tempfile::tempdir().unwrap();
+        let _home = TestCodexHome::set(temp_dir.path());
+        let source_dir = temp_dir.path().join("source");
+        fs::create_dir_all(&source_dir).unwrap();
+        let output_path = source_dir.join("out.png");
+        fs::write(&output_path, b"png").unwrap();
+        let fallback_dir = temp_dir.path().join("fallback");
+        let config = StorageConfig {
+            targets: BTreeMap::from([(
+                "local-fallback".to_string(),
+                StorageTargetConfig::Local {
+                    directory: fallback_dir.clone(),
+                    public_base_url: None,
+                },
+            )]),
+            default_targets: Vec::new(),
+            fallback_targets: vec!["local-fallback".to_string()],
+            fallback_policy: StorageFallbackPolicy::OnFailure,
+            upload_concurrency: 4,
+            target_concurrency: 2,
+        };
+        let job = json!({
+            "id": "job-default-fallback-1",
+            "outputs": [{"index": 0, "path": output_path.display().to_string(), "bytes": 3}],
+        });
+        upsert_history_job(
+            "job-default-fallback-1",
+            "images generate",
+            "openai",
+            "completed",
+            Some(&output_path),
+            Some("2026-05-08T12:30:00Z"),
+            json!({
+                "output": {
+                    "files": [{"index": 0, "path": output_path.display().to_string(), "bytes": 3}]
+                }
+            }),
+        )
+        .unwrap();
+
+        let uploads =
+            upload_job_outputs_to_storage(&config, &job, StorageUploadOverrides::default())
+                .unwrap();
+
+        assert_eq!(uploads.len(), 1);
+        let fallback = uploads.first().unwrap();
+        assert_eq!(fallback.target, "local-fallback");
+        assert_eq!(fallback.status, "completed");
+        assert_eq!(fallback.metadata["role"], "fallback");
+        assert!(
+            fallback_dir
+                .join("job-default-fallback-1")
+                .join("1-out.png")
+                .is_file()
+        );
+        assert_eq!(storage_status_for_uploads(&uploads), "fallback_completed");
+    }
+
+    #[test]
+    fn storage_upload_status_reports_running_before_failure() {
+        let uploads = vec![
+            OutputUploadRecord {
+                job_id: "job-running-1".to_string(),
+                output_index: 0,
+                target: "s3-main".to_string(),
+                target_type: "s3".to_string(),
+                status: "running".to_string(),
+                url: None,
+                error: None,
+                bytes: None,
+                attempts: 1,
+                updated_at: "2026-05-08T12:01:00Z".to_string(),
+                metadata: json!({"role": "primary"}),
+            },
+            OutputUploadRecord {
+                job_id: "job-running-1".to_string(),
+                output_index: 0,
+                target: "webdav-backup".to_string(),
+                target_type: "webdav".to_string(),
+                status: "failed".to_string(),
+                url: None,
+                error: Some("temporary failure".to_string()),
+                bytes: None,
+                attempts: 1,
+                updated_at: "2026-05-08T12:01:01Z".to_string(),
+                metadata: json!({"role": "fallback"}),
+            },
+        ];
+
+        assert_eq!(storage_status_for_uploads(&uploads), "running");
+    }
+
+    #[test]
     fn s3_endpoint_builder_supports_aws_and_compatible_styles() {
         let (url, host, canonical_uri) =
             s3_endpoint_and_host("images", Some("us-west-2"), None, "jobs/1 out.png").unwrap();
@@ -9474,6 +7461,15 @@ mod tests {
         .unwrap();
         assert_eq!(url, "https://images.storage.example.com/jobs/out.png");
         assert_eq!(host, "images.storage.example.com");
+    }
+
+    #[test]
+    fn pan123_file_name_uses_storage_key_leaf() {
+        assert_eq!(
+            pan123_file_name_from_key("job-1/2-out.png", "out.png"),
+            "2-out.png"
+        );
+        assert_eq!(pan123_file_name_from_key("", "out.png"), "out.png");
     }
 
     #[test]

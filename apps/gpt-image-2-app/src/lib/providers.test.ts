@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { defaultPathConfig, defaultStorageConfig } from "./api/shared";
 import {
   effectiveDefaultProvider,
   reconcileProviderSelection,
@@ -42,6 +43,8 @@ function config(defaultProvider: string): ServerConfig {
       },
       webhooks: [],
     },
+    storage: defaultStorageConfig(),
+    paths: defaultPathConfig(),
   };
 }
 
