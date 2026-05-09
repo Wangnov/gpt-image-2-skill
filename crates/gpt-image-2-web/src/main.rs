@@ -161,7 +161,7 @@ fn dispatch_notifications_for_job(job: &Value) -> Vec<Value> {
             return Vec::new();
         }
     };
-    let deliveries = dispatch_task_notifications(&config, job);
+    let deliveries = dispatch_task_notifications(&config.notifications, job);
     for delivery in &deliveries {
         if !delivery.ok {
             eprintln!(
@@ -1751,7 +1751,7 @@ async fn test_notifications(Json(body): Json<NotificationTestBody>) -> ApiResult
         "output_path": Value::Null,
         "error": if status == "failed" { json!({"message": "Notification test failure"}) } else { Value::Null },
     });
-    let deliveries = dispatch_task_notifications(&config, &job);
+    let deliveries = dispatch_task_notifications(&config.notifications, &job);
     // dispatch_task_notifications only fires server channels (email/webhook).
     // Toast and system notifications are delivered client-side, so a wholly
     // empty deliveries vec is OK as long as the config still has a local
