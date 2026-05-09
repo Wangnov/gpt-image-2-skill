@@ -116,16 +116,15 @@ pub(crate) fn storage_status_for_uploads(uploads: &[OutputUploadRecord]) -> &'st
         upload.status == "completed"
             && upload.metadata.get("role").and_then(Value::as_str) == Some("fallback")
     });
-    if fallback_completed && !primary_completed {
-        return "fallback_completed";
-    }
-    if completed == uploads.len() {
-        "completed"
-    } else if uploads
+    if uploads
         .iter()
         .any(|upload| matches!(upload.status.as_str(), "pending" | "running"))
     {
         "running"
+    } else if fallback_completed && !primary_completed {
+        "fallback_completed"
+    } else if completed == uploads.len() {
+        "completed"
     } else if completed > 0 {
         "partial_failed"
     } else {

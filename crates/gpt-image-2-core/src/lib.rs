@@ -5396,7 +5396,7 @@ pub fn list_history_jobs() -> Result<Vec<Value>, AppError> {
 pub fn list_active_history_jobs() -> Result<Vec<Value>, AppError> {
     let conn = open_history_db()?;
     let mut stmt = conn
-        .prepare("SELECT id, command, provider, status, output_path, created_at, metadata FROM jobs WHERE status IN ('queued', 'running') AND deleted_at IS NULL ORDER BY created_at DESC, id DESC")
+        .prepare("SELECT id, command, provider, status, output_path, created_at, metadata FROM jobs WHERE status IN ('queued', 'running', 'uploading') AND deleted_at IS NULL ORDER BY created_at DESC, id DESC")
         .map_err(|error| AppError::new("history_query_failed", "Unable to query active history.").with_detail(json!({"error": error.to_string()})))?;
     let mut jobs = stmt
         .query_map([], history_row_to_value)
@@ -7121,6 +7121,101 @@ mod tests {
     }
 
     #[test]
+    fn netdisk_access_token_preservation_requires_same_named_target() {
+        let existing = StorageConfig {
+            targets: BTreeMap::from([
+                (
+                    "baidu-personal".to_string(),
+                    StorageTargetConfig::BaiduNetdisk {
+                        auth_mode: Some(BaiduNetdiskAuthMode::Personal),
+                        app_key: String::new(),
+                        secret_key: None,
+                        access_token: Some(CredentialRef::File {
+                            value: "baidu-token".to_string(),
+                        }),
+                        refresh_token: None,
+                        app_name: "old-app".to_string(),
+                        remote_dir: None,
+                        public_base_url: None,
+                    },
+                ),
+                (
+                    "pan123-token".to_string(),
+                    StorageTargetConfig::Pan123Open {
+                        auth_mode: Some(Pan123OpenAuthMode::AccessToken),
+                        client_id: String::new(),
+                        client_secret: None,
+                        access_token: Some(CredentialRef::File {
+                            value: "pan-token".to_string(),
+                        }),
+                        parent_id: 0,
+                        use_direct_link: false,
+                    },
+                ),
+            ]),
+            ..StorageConfig::default()
+        };
+        let mut next = StorageConfig {
+            targets: BTreeMap::from([
+                (
+                    "baidu-new".to_string(),
+                    StorageTargetConfig::BaiduNetdisk {
+                        auth_mode: Some(BaiduNetdiskAuthMode::Personal),
+                        app_key: String::new(),
+                        secret_key: None,
+                        access_token: Some(CredentialRef::File {
+                            value: String::new(),
+                        }),
+                        refresh_token: None,
+                        app_name: "new-app".to_string(),
+                        remote_dir: None,
+                        public_base_url: None,
+                    },
+                ),
+                (
+                    "pan123-new".to_string(),
+                    StorageTargetConfig::Pan123Open {
+                        auth_mode: Some(Pan123OpenAuthMode::AccessToken),
+                        client_id: String::new(),
+                        client_secret: None,
+                        access_token: Some(CredentialRef::File {
+                            value: String::new(),
+                        }),
+                        parent_id: 42,
+                        use_direct_link: false,
+                    },
+                ),
+            ]),
+            ..StorageConfig::default()
+        };
+
+        preserve_storage_secrets(&mut next, &existing);
+
+        let StorageTargetConfig::BaiduNetdisk { access_token, .. } =
+            next.targets.get("baidu-new").unwrap()
+        else {
+            panic!("expected baidu target");
+        };
+        assert_eq!(
+            access_token,
+            &Some(CredentialRef::File {
+                value: String::new()
+            })
+        );
+        let StorageTargetConfig::Pan123Open { access_token, .. } =
+            next.targets.get("pan123-new").unwrap()
+        else {
+            panic!("expected 123 target");
+        };
+        assert_eq!(
+            access_token,
+            &Some(CredentialRef::File {
+                value: String::new()
+            })
+        );
+    }
+
+    #[test]
     fn storage_remote_guard_blocks_internal_addresses() {
         let err = validate_remote_http_target("http://127.0.0.1/upload", "HTTP storage")
             .err()
@@ -7423,6 +7518,61 @@ mod tests {
                 bytes: None,
                 attempts: 1,
                 updated_at: "2026-05-08T12:01:01Z".to_string(),
+                metadata: json!({"role": "fallback"}),
+            },
+        ];
+
+        assert_eq!(storage_status_for_uploads(&uploads), "running");
+    }
+
+    #[test]
+    fn list_active_history_jobs_includes_uploading_jobs() {
+        let _guard = CODEX_HOME_TEST_LOCK.lock().unwrap();
+        let temp_dir = tempfile::tempdir().unwrap();
+        let _home = TestCodexHome::set(temp_dir.path());
+
+        upsert_history_job(
+            "job-uploading-1",
+            "images generate",
+            "openai",
+            "uploading",
+            None,
+            Some("2026-05-08T13:00:00Z"),
+            json!({"output": {"files": []}}),
+        )
+        .unwrap();
+
+        let jobs = list_active_history_jobs().unwrap();
+        assert!(jobs.iter().any(|job| job["id"] == "job-uploading-1"));
+    }
+
+    #[test]
+    fn storage_upload_status_reports_running_before_fallback_completed() {
+        let uploads = vec![
+            OutputUploadRecord {
+                job_id: "job-running-fallback-1".to_string(),
+                output_index: 0,
+                target: "local-fallback".to_string(),
+                target_type: "local".to_string(),
+                status: "completed".to_string(),
+                url: None,
+                error: None,
+                bytes: Some(3),
+                attempts: 1,
+                updated_at: "2026-05-08T12:02:00Z".to_string(),
+                metadata: json!({"role": "fallback"}),
+            },
+            OutputUploadRecord {
+                job_id: "job-running-fallback-1".to_string(),
+                output_index: 0,
+                target: "s3-fallback".to_string(),
+                target_type: "s3".to_string(),
+                status: "running".to_string(),
+                url: None,
+                error: None,
+                bytes: None,
+                attempts: 1,
+                updated_at: "2026-05-08T12:02:01Z".to_string(),
                 metadata: json!({"role": "fallback"}),
             },
         ];

@@ -151,6 +151,40 @@ pub(crate) fn storage_secret_identity_matches(
     }
 }
 
+fn storage_secret_rename_identity_matches(
+    next: &StorageTargetConfig,
+    existing: &StorageTargetConfig,
+) -> bool {
+    if !storage_secret_identity_matches(next, existing) {
+        return false;
+    }
+    match (next, existing) {
+        (
+            StorageTargetConfig::BaiduNetdisk {
+                auth_mode,
+                access_token,
+                ..
+            },
+            StorageTargetConfig::BaiduNetdisk { .. },
+        ) => {
+            effective_baidu_netdisk_auth_mode(*auth_mode, access_token.as_ref())
+                != BaiduNetdiskAuthMode::Personal
+        }
+        (
+            StorageTargetConfig::Pan123Open {
+                auth_mode,
+                access_token,
+                ..
+            },
+            StorageTargetConfig::Pan123Open { .. },
+        ) => {
+            effective_pan123_open_auth_mode(*auth_mode, access_token.as_ref())
+                != Pan123OpenAuthMode::AccessToken
+        }
+        _ => true,
+    }
+}
+
 fn storage_secret_source<'a>(
     name: &str,
     target: &StorageTargetConfig,
@@ -167,7 +201,7 @@ fn storage_secret_source<'a>(
         .iter()
         .filter(|(existing_name, _)| *existing_name != name)
         .map(|(_, existing_target)| existing_target)
-        .filter(|existing_target| storage_secret_identity_matches(target, existing_target));
+        .filter(|existing_target| storage_secret_rename_identity_matches(target, existing_target));
     let first = matches.next()?;
     if matches.next().is_none() {
         Some(first)
