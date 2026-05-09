@@ -20,28 +20,30 @@ pub(crate) fn output_path_from_payload(payload: &Value) -> Option<String> {
         })
 }
 
-pub(crate) fn job_snapshot(
-    id: &str,
-    command: &str,
-    provider: &str,
-    status: &str,
-    created_at: &str,
-    metadata: Value,
-    output_path: Option<String>,
-    outputs: Value,
-    error: Value,
-) -> Value {
+pub(crate) struct JobSnapshotInput<'a> {
+    pub(crate) id: &'a str,
+    pub(crate) command: &'a str,
+    pub(crate) provider: &'a str,
+    pub(crate) status: &'a str,
+    pub(crate) created_at: &'a str,
+    pub(crate) metadata: Value,
+    pub(crate) output_path: Option<String>,
+    pub(crate) outputs: Value,
+    pub(crate) error: Value,
+}
+
+pub(crate) fn job_snapshot(input: JobSnapshotInput<'_>) -> Value {
     json!({
-        "id": id,
-        "command": command,
-        "provider": provider,
-        "status": status,
-        "created_at": created_at,
+        "id": input.id,
+        "command": input.command,
+        "provider": input.provider,
+        "status": input.status,
+        "created_at": input.created_at,
         "updated_at": chrono_like_now(),
-        "metadata": metadata,
-        "outputs": outputs,
-        "output_path": output_path,
-        "error": error,
+        "metadata": input.metadata,
+        "outputs": input.outputs,
+        "output_path": input.output_path,
+        "error": input.error,
     })
 }
 

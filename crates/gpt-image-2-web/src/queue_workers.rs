@@ -26,17 +26,17 @@ pub(crate) fn completed_job_for_queue(queued: &QueuedJob, response: &Value) -> V
             .and_then(Value::as_str)
             .map(ToString::to_string)
     });
-    job_snapshot(
-        &queued.id,
-        &queued.command,
+    job_snapshot(JobSnapshotInput {
+        id: &queued.id,
+        command: &queued.command,
         provider,
-        "completed",
-        &queued.created_at,
-        queued.metadata.clone(),
+        status: "completed",
+        created_at: &queued.created_at,
+        metadata: queued.metadata.clone(),
         output_path,
         outputs,
-        Value::Null,
-    )
+        error: Value::Null,
+    })
 }
 
 pub(crate) fn uploading_job_for_queue(queued: &QueuedJob, response: &Value) -> Value {
@@ -63,31 +63,31 @@ pub(crate) fn uploading_job_for_queue(queued: &QueuedJob, response: &Value) -> V
             .and_then(Value::as_str)
             .map(ToString::to_string)
     });
-    job_snapshot(
-        &queued.id,
-        &queued.command,
+    job_snapshot(JobSnapshotInput {
+        id: &queued.id,
+        command: &queued.command,
         provider,
-        "uploading",
-        &queued.created_at,
-        queued.metadata.clone(),
+        status: "uploading",
+        created_at: &queued.created_at,
+        metadata: queued.metadata.clone(),
         output_path,
         outputs,
-        Value::Null,
-    )
+        error: Value::Null,
+    })
 }
 
 pub(crate) fn failed_job_for_queue(queued: &QueuedJob, message: String) -> Value {
-    job_snapshot(
-        &queued.id,
-        &queued.command,
-        &queued.provider,
-        "failed",
-        &queued.created_at,
-        queued.metadata.clone(),
-        None,
-        json!([]),
-        json!({"message": message}),
-    )
+    job_snapshot(JobSnapshotInput {
+        id: &queued.id,
+        command: &queued.command,
+        provider: &queued.provider,
+        status: "failed",
+        created_at: &queued.created_at,
+        metadata: queued.metadata.clone(),
+        output_path: None,
+        outputs: json!([]),
+        error: json!({"message": message}),
+    })
 }
 
 pub(crate) fn completed_event_data(job: &Value) -> Value {
@@ -266,17 +266,17 @@ pub(crate) fn start_queued_jobs(state: JobQueueState) {
                 return;
             };
             inner.running += 1;
-            let running_job = job_snapshot(
-                &queued.id,
-                &queued.command,
-                &queued.provider,
-                "running",
-                &queued.created_at,
-                queued.metadata.clone(),
-                None,
-                json!([]),
-                Value::Null,
-            );
+            let running_job = job_snapshot(JobSnapshotInput {
+                id: &queued.id,
+                command: &queued.command,
+                provider: &queued.provider,
+                status: "running",
+                created_at: &queued.created_at,
+                metadata: queued.metadata.clone(),
+                output_path: None,
+                outputs: json!([]),
+                error: Value::Null,
+            });
             append_queue_event(
                 &mut inner,
                 &queued.id,
@@ -314,17 +314,17 @@ pub(crate) fn start_queued_jobs(state: JobQueueState) {
 }
 
 pub(crate) fn enqueue_job(state: JobQueueState, queued: QueuedJob) -> Result<Value, String> {
-    let job = job_snapshot(
-        &queued.id,
-        &queued.command,
-        &queued.provider,
-        "queued",
-        &queued.created_at,
-        queued.metadata.clone(),
-        None,
-        json!([]),
-        Value::Null,
-    );
+    let job = job_snapshot(JobSnapshotInput {
+        id: &queued.id,
+        command: &queued.command,
+        provider: &queued.provider,
+        status: "queued",
+        created_at: &queued.created_at,
+        metadata: queued.metadata.clone(),
+        output_path: None,
+        outputs: json!([]),
+        error: Value::Null,
+    });
     persist_job(&job)?;
     let job_id = queued.id.clone();
     let (event, queue) = {

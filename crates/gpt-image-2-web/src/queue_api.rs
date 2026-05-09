@@ -54,17 +54,17 @@ pub(crate) async fn cancel_job(
         );
         (queued, event)
     };
-    let job = job_snapshot(
-        &queued.id,
-        &queued.command,
-        &queued.provider,
-        "canceled",
-        &queued.created_at,
-        queued.metadata,
-        None,
-        json!([]),
-        Value::Null,
-    );
+    let job = job_snapshot(JobSnapshotInput {
+        id: &queued.id,
+        command: &queued.command,
+        provider: &queued.provider,
+        status: "canceled",
+        created_at: &queued.created_at,
+        metadata: queued.metadata,
+        output_path: None,
+        outputs: json!([]),
+        error: Value::Null,
+    });
     persist_job(&job).map_err(ApiError::internal)?;
     let notification_deliveries = dispatch_notifications_for_job(&job);
     Ok(Json(json!({

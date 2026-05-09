@@ -83,17 +83,17 @@ pub(crate) fn apply_partial_output(
         .and_then(Value::as_str)
         .map(ToString::to_string);
 
-    let parent_snapshot = job_snapshot(
-        &ctx.job_id,
-        &ctx.command,
-        &ctx.provider,
-        "running",
-        &ctx.created_at,
-        ctx.metadata.clone(),
-        first_path,
-        json!(sorted_outputs),
-        Value::Null,
-    );
+    let parent_snapshot = job_snapshot(JobSnapshotInput {
+        id: &ctx.job_id,
+        command: &ctx.command,
+        provider: &ctx.provider,
+        status: "running",
+        created_at: &ctx.created_at,
+        metadata: ctx.metadata.clone(),
+        output_path: first_path,
+        outputs: json!(sorted_outputs),
+        error: Value::Null,
+    });
     let _ = persist_job(&parent_snapshot);
 
     let payload_path = payload
