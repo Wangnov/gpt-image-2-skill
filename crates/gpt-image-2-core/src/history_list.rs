@@ -1,6 +1,14 @@
-#![allow(unused_imports)]
+use rusqlite::types::Value as SqlValue;
+use rusqlite::{Connection, Row, params, params_from_iter};
+use serde::{Deserialize, Serialize};
+use serde_json::{Value, json};
 
-use super::*;
+use crate::constants::{DEFAULT_HISTORY_PAGE_LIMIT, MAX_HISTORY_PAGE_LIMIT};
+use crate::errors::AppError;
+use crate::history_db::{
+    OutputUploadRecord, open_history_db, row_to_upload_record, upload_record_to_value,
+};
+use crate::util::now_iso;
 
 pub(crate) fn list_output_upload_records_with_conn(
     conn: &Connection,

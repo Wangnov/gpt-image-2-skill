@@ -1,6 +1,15 @@
-#![allow(unused_imports)]
+use std::fs;
+use std::path::Path;
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
-use super::*;
+use rusqlite::{Connection, Row, params};
+use serde::{Deserialize, Serialize};
+use serde_json::{Value, json};
+
+use crate::errors::AppError;
+use crate::history_list::list_output_upload_records_with_conn;
+use crate::paths::history_db_path;
+use crate::util::now_iso;
 
 pub(crate) fn open_history_db() -> Result<Connection, AppError> {
     let path = history_db_path();
