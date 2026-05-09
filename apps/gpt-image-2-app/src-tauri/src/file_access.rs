@@ -48,7 +48,7 @@ pub(crate) async fn read_image_bytes(path: String) -> Result<Vec<u8>, String> {
 #[tauri::command]
 pub(crate) async fn copy_image_to_clipboard(
     path: String,
-    prompt: Option<String>,
+    _prompt: Option<String>,
     app: tauri::AppHandle,
 ) -> Result<(), String> {
     let raw = PathBuf::from(&path);
@@ -69,14 +69,9 @@ pub(crate) async fn copy_image_to_clipboard(
     app.clipboard()
         .write_image(&image)
         .map_err(|error| format!("写入剪贴板失败：{error}"))?;
-    if let Some(text) = prompt {
-        let trimmed = text.trim();
-        if !trimmed.is_empty() {
-            app.clipboard()
-                .write_text(trimmed.to_string())
-                .map_err(|error| format!("写入提示词失败：{error}"))?;
-        }
-    }
+    // Do not write text after the image: clipboard-manager currently treats
+    // sequential writes as replacements, so a prompt write would overwrite the
+    // image. Prompt copying remains a separate front-end action.
     Ok(())
 }
 
