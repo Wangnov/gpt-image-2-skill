@@ -68,11 +68,17 @@ function StorageField({
   required?: boolean;
   children: ReactNode;
 }) {
+  // No label means there's nothing for the required star or hint to attach
+  // to; rendering them alone produced an empty leading row that knocked the
+  // grid baseline off (the lone "*" you saw above S3 bucket / WebDAV URL).
+  // For label-less fields, required-state is communicated via the input's
+  // invalid border + the trailing error text, which is sufficient.
+  const showLabelRow = Boolean(label);
   return (
     <div className="space-y-1">
-      {(label || required || hint) && (
+      {showLabelRow && (
         <div className="flex min-h-5 items-center gap-1.5 text-[11.5px] font-medium text-muted">
-          {label && <span>{label}</span>}
+          <span>{label}</span>
           {required && (
             <span
               className="text-[color:var(--accent-70)]"
@@ -84,10 +90,10 @@ function StorageField({
           {hint}
         </div>
       )}
+      {children}
       {description && (
         <p className="text-[11px] leading-snug text-faint">{description}</p>
       )}
-      {children}
       {error && (
         <div className="text-[11px] leading-snug text-status-err">{error}</div>
       )}
@@ -244,6 +250,7 @@ export function StorageTargetCard({
                 ariaLabel="查看公开访问前缀说明"
               />
             }
+            description="用于生成可访问图片 URL；没有静态访问服务时留空。"
           >
             <Input
               value={target.public_base_url ?? ""}
@@ -254,9 +261,6 @@ export function StorageTargetCard({
               size="sm"
               aria-label="公开访问前缀"
             />
-            <p className="text-[11px] leading-snug text-muted">
-              用于生成可访问图片 URL；没有静态访问服务时留空。
-            </p>
           </StorageField>
         </div>
       )}
