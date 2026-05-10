@@ -376,23 +376,23 @@ export function StoragePanel({
             description="必须是支持回读的存储类型；HTTP/Webhook 等仅推送的目标不可作为原图。"
             control={
               <ControlRail>
-                <GlassSelect
-                  value={pipeline.origin ?? ""}
-                  onValueChange={(value) =>
-                    patchPipeline({ origin: value || null })
-                  }
-                  options={
-                    originOptions.length === 0
-                      ? [{ value: "", label: "没有可用的原图位置" }]
-                      : [
-                          { value: "", label: "请选择原图位置" },
-                          ...originOptions,
-                        ]
-                  }
-                  size="sm"
-                  ariaLabel="云端原图位置"
-                  className="w-full sm:w-[280px]"
-                />
+                {originOptions.length === 0 ? (
+                  <span className="text-[12px] text-muted">
+                    没有可用的原图位置；请先在下方添加一个支持回读的存储（本地 / S3 / WebDAV / SFTP）。
+                  </span>
+                ) : (
+                  <GlassSelect
+                    value={pipeline.origin ?? ""}
+                    onValueChange={(value) =>
+                      patchPipeline({ origin: value || null })
+                    }
+                    options={originOptions}
+                    placeholder="请选择原图位置"
+                    size="sm"
+                    ariaLabel="云端原图位置"
+                    className="w-full sm:w-[280px]"
+                  />
+                )}
               </ControlRail>
             }
           />
