@@ -1,3 +1,28 @@
+//! Storage upload orchestration.
+//!
+//! ## Pipeline mode → metadata.role mapping
+//!
+//! `output_uploads.metadata.role` is a wire-format token consumed by
+//! `super::history::storage_status_for_uploads` to derive the public
+//! `Job.storage_status` (e.g. `"completed"`, `"fallback_completed"`,
+//! `"partial_failed"`), which the frontend renders as labels like
+//! "已回退". The role tokens are **stable**: only `"primary"` and
+//! `"fallback"` exist on the wire today, and changing them would require
+//! a SQLite-level backfill plus a frontend rewrite.
+//!
+//! When a `PipelineMode` is mapped onto these tokens we therefore use the
+//! following rule, regardless of the user-facing terminology:
+//!
+//! | Pipeline mode | Origin upload role | Archive uploads role |
+//! |---|---|---|
+//! | `LocalOnly` | n/a (no uploads) | n/a |
+//! | `Mirror`, `CloudArchiveOnly` | n/a (no Origin) | `"primary"` (treated as a normal completion) |
+//! | `CloudPrimary` | `"primary"` | `"fallback"` (so that origin-failure + archive-success still surfaces as `fallback_completed` to history) |
+//!
+//! In other words: in `CloudPrimary`, "fallback" really means "the Origin
+//! couldn't deliver and the archive made up for it" — exactly the original
+//! semantics the status enum was named after.
+
 use std::sync::mpsc;
 use std::thread;
 
@@ -7,10 +32,10 @@ use crate::AppError;
 
 use super::backends::upload_to_target;
 use super::history::{OutputUploadRecord, list_output_upload_records, upsert_output_upload_record};
-use super::types::{StorageConfig, StorageFallbackPolicy, StorageTargetConfig};
+use super::types::{PipelineMode, StorageConfig, StorageTargetConfig};
 use super::util::{
-    UploadOutput, storage_error_message, storage_target_type, target_names_for_upload, upload_now,
-    upload_outputs_from_job,
+    ResolvedPipeline, UploadOutput, resolve_pipeline, storage_error_message, storage_target_type,
+    upload_now, upload_outputs_from_job,
 };
 
 #[derive(Debug, Clone, Default)]
@@ -183,8 +208,8 @@ pub fn upload_job_outputs_to_storage(
     if outputs.is_empty() {
         return list_output_upload_records(job_id);
     }
-    let (primary_names, fallback_names) = target_names_for_upload(config, &overrides);
-    if primary_names.is_empty() && fallback_names.is_empty() {
+    let pipeline = resolve_pipeline(config, &overrides);
+    if matches!(pipeline.mode, PipelineMode::LocalOnly) || pipeline.is_empty() {
         return list_output_upload_records(job_id);
     }
     let upload_concurrency = config.upload_concurrency.clamp(1, 32);
@@ -205,33 +230,9 @@ pub fn upload_job_outputs_to_storage(
         let tx = tx.clone();
         let job_id = job_id.to_string();
         let config = config.clone();
-        let primary_names = primary_names.clone();
-        let fallback_names = fallback_names.clone();
+        let pipeline = pipeline.clone();
         thread::spawn(move || {
-            let primary_completed = if primary_names.is_empty() {
-                false
-            } else {
-                match run_target_uploads(&config, &job_id, &output, &primary_names, "primary") {
-                    Ok(value) => value,
-                    Err(error) => {
-                        let _ = tx.send(Err(error));
-                        return;
-                    }
-                }
-            };
-            let should_run_fallback = match config.fallback_policy {
-                StorageFallbackPolicy::Never => false,
-                StorageFallbackPolicy::Always => true,
-                StorageFallbackPolicy::OnFailure => primary_names.is_empty() || !primary_completed,
-            };
-            if should_run_fallback
-                && let Err(error) =
-                    run_target_uploads(&config, &job_id, &output, &fallback_names, "fallback")
-            {
-                let _ = tx.send(Err(error));
-                return;
-            }
-            let _ = tx.send(Ok(()));
+            let _ = tx.send(run_pipeline_for_output(&config, &job_id, &output, &pipeline));
         });
         active += 1;
     }
@@ -250,4 +251,33 @@ pub fn upload_job_outputs_to_storage(
         return Err(error);
     }
     list_output_upload_records(job_id)
+}
+
+fn run_pipeline_for_output(
+    config: &StorageConfig,
+    job_id: &str,
+    output: &UploadOutput,
+    pipeline: &ResolvedPipeline,
+) -> Result<(), AppError> {
+    match pipeline.mode {
+        PipelineMode::LocalOnly => Ok(()),
+        PipelineMode::Mirror | PipelineMode::CloudArchiveOnly => {
+            run_target_uploads(config, job_id, output, &pipeline.archives, "primary").map(|_| ())
+        }
+        PipelineMode::CloudPrimary => {
+            // Origin upload runs first and is tagged "primary" so a successful
+            // origin alone yields storage_status == "completed". Archives are
+            // tagged "fallback" so a failed-origin + succeeded-archive case
+            // still surfaces as "fallback_completed" via
+            // storage_status_for_uploads(). See module-level docs.
+            if let Some(origin) = pipeline.origin.as_deref() {
+                let origin_targets = vec![origin.to_string()];
+                run_target_uploads(config, job_id, output, &origin_targets, "primary")?;
+            }
+            if !pipeline.archives.is_empty() {
+                run_target_uploads(config, job_id, output, &pipeline.archives, "fallback")?;
+            }
+            Ok(())
+        }
+    }
 }

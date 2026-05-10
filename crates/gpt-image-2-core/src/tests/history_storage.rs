@@ -122,9 +122,18 @@ fn storage_upload_falls_back_to_local_target_after_primary_failure() {
                 },
             ),
         ]),
-        pipeline: None,
-        default_targets: vec!["missing-primary".to_string()],
-        fallback_targets: vec!["local-fallback".to_string()],
+        // CloudPrimary mode is the only one whose Origin/Archives split keeps
+        // emitting the wire token "fallback" for the archive uploads — we
+        // need the historical "fallback_completed" status to survive when
+        // the Origin upload fails and a downstream archive succeeds.
+        pipeline: Some(PipelineConfig {
+            mode: PipelineMode::CloudPrimary,
+            origin: Some("missing-primary".to_string()),
+            archives: vec!["local-fallback".to_string()],
+            cleanup: CleanupPolicy::default(),
+        }),
+        default_targets: Vec::new(),
+        fallback_targets: Vec::new(),
         fallback_policy: StorageFallbackPolicy::OnFailure,
         upload_concurrency: 2,
         target_concurrency: 2,
@@ -185,6 +194,165 @@ fn storage_upload_falls_back_to_local_target_after_primary_failure() {
             .is_file()
     );
     assert_eq!(storage_status_for_uploads(&uploads), "fallback_completed");
+}
+
+#[test]
+fn mirror_pipeline_uploads_to_all_archives_in_parallel() {
+    let _guard = CODEX_HOME_TEST_LOCK.lock().unwrap();
+    let temp_dir = tempfile::tempdir().unwrap();
+    let _home = TestCodexHome::set(temp_dir.path());
+    let source_dir = temp_dir.path().join("source");
+    fs::create_dir_all(&source_dir).unwrap();
+    let output_path = source_dir.join("out.png");
+    fs::write(&output_path, b"png").unwrap();
+    let archive_a = temp_dir.path().join("archive-a");
+    let archive_b = temp_dir.path().join("archive-b");
+
+    let config = StorageConfig {
+        targets: BTreeMap::from([
+            (
+                "archive-a".to_string(),
+                StorageTargetConfig::Local {
+                    directory: archive_a.clone(),
+                    public_base_url: None,
+                },
+            ),
+            (
+                "archive-b".to_string(),
+                StorageTargetConfig::Local {
+                    directory: archive_b.clone(),
+                    public_base_url: None,
+                },
+            ),
+        ]),
+        pipeline: Some(PipelineConfig {
+            mode: PipelineMode::Mirror,
+            origin: None,
+            archives: vec!["archive-a".to_string(), "archive-b".to_string()],
+            cleanup: CleanupPolicy::default(),
+        }),
+        default_targets: Vec::new(),
+        fallback_targets: Vec::new(),
+        fallback_policy: StorageFallbackPolicy::OnFailure,
+        upload_concurrency: 2,
+        target_concurrency: 2,
+    };
+    let job = json!({
+        "id": "job-mirror-1",
+        "outputs": [{"index": 0, "path": output_path.display().to_string(), "bytes": 3}],
+    });
+    upsert_history_job(
+        "job-mirror-1",
+        "images generate",
+        "openai",
+        "completed",
+        Some(&output_path),
+        Some("2026-05-09T10:00:00Z"),
+        json!({}),
+    )
+    .unwrap();
+
+    let uploads =
+        upload_job_outputs_to_storage(&config, &job, StorageUploadOverrides::default()).unwrap();
+
+    assert_eq!(uploads.len(), 2);
+    for upload in &uploads {
+        assert_eq!(upload.status, "completed", "target {}", upload.target);
+        assert_eq!(
+            upload.metadata.get("role").and_then(|value| value.as_str()),
+            Some("primary"),
+            "mirror archives must surface as primary on the wire (target {})",
+            upload.target
+        );
+    }
+    // Both archives succeeded as primary -> overall status is "completed",
+    // *not* "fallback_completed". Wire-format regression check (D1).
+    assert_eq!(storage_status_for_uploads(&uploads), "completed");
+    assert!(archive_a.join("job-mirror-1").join("1-out.png").is_file());
+    assert!(archive_b.join("job-mirror-1").join("1-out.png").is_file());
+}
+
+#[test]
+fn per_job_overrides_are_appended_to_archives() {
+    let _guard = CODEX_HOME_TEST_LOCK.lock().unwrap();
+    let temp_dir = tempfile::tempdir().unwrap();
+    let _home = TestCodexHome::set(temp_dir.path());
+    let source_dir = temp_dir.path().join("source");
+    fs::create_dir_all(&source_dir).unwrap();
+    let output_path = source_dir.join("out.png");
+    fs::write(&output_path, b"png").unwrap();
+
+    let dir_a = temp_dir.path().join("a");
+    let dir_b = temp_dir.path().join("b");
+    let dir_c = temp_dir.path().join("c");
+    let config = StorageConfig {
+        targets: BTreeMap::from([
+            (
+                "a".to_string(),
+                StorageTargetConfig::Local {
+                    directory: dir_a.clone(),
+                    public_base_url: None,
+                },
+            ),
+            (
+                "b".to_string(),
+                StorageTargetConfig::Local {
+                    directory: dir_b.clone(),
+                    public_base_url: None,
+                },
+            ),
+            (
+                "c".to_string(),
+                StorageTargetConfig::Local {
+                    directory: dir_c.clone(),
+                    public_base_url: None,
+                },
+            ),
+        ]),
+        pipeline: Some(PipelineConfig {
+            mode: PipelineMode::CloudArchiveOnly,
+            origin: None,
+            archives: vec!["c".to_string()],
+            cleanup: CleanupPolicy::default(),
+        }),
+        default_targets: Vec::new(),
+        fallback_targets: Vec::new(),
+        fallback_policy: StorageFallbackPolicy::OnFailure,
+        upload_concurrency: 3,
+        target_concurrency: 3,
+    };
+    let job = json!({
+        "id": "job-overrides-1",
+        "outputs": [{"index": 0, "path": output_path.display().to_string(), "bytes": 3}],
+    });
+    upsert_history_job(
+        "job-overrides-1",
+        "images generate",
+        "openai",
+        "completed",
+        Some(&output_path),
+        Some("2026-05-09T11:00:00Z"),
+        json!({}),
+    )
+    .unwrap();
+
+    let overrides = StorageUploadOverrides {
+        targets: Some(vec!["a".to_string()]),
+        fallback_targets: Some(vec!["b".to_string()]),
+    };
+    let uploads = upload_job_outputs_to_storage(&config, &job, overrides).unwrap();
+
+    let names = uploads
+        .iter()
+        .map(|upload| upload.target.clone())
+        .collect::<Vec<_>>();
+    assert!(names.contains(&"a".to_string()));
+    assert!(names.contains(&"b".to_string()));
+    assert!(names.contains(&"c".to_string()));
+    assert_eq!(uploads.len(), 3);
+    for upload in &uploads {
+        assert_eq!(upload.status, "completed", "target {}", upload.target);
+    }
 }
 
 #[test]
