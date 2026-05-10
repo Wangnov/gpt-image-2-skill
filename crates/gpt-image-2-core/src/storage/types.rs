@@ -194,14 +194,104 @@ impl Default for StorageFallbackPolicy {
     }
 }
 
+/// How `Result Origin` and `Archives` relate for a deployment. Replaces the
+/// older flat (default_targets / fallback_targets / fallback_policy) trio,
+/// whose three policy values were mutually inconsistent and easy to misuse.
+///
+/// Origin is the authoritative store the task list reads originals from;
+/// Archives are async copies that may or may not be readable. See
+/// `effective_pipeline()` for how legacy configs map onto these modes.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, Eq, PartialEq)]
+#[serde(rename_all = "snake_case")]
+pub enum PipelineMode {
+    /// Local result library is the Origin; no archives. Default for Tauri and
+    /// small-team Docker.
+    LocalOnly,
+    /// Local Origin plus N async archives — the "double-insurance" pattern.
+    /// Equivalent to today's `fallback_policy = Always` users.
+    Mirror,
+    /// A remote backend serves as Origin (must support readback). Local jobs
+    /// dir degrades into upload buffer cache. GC of the buffer is a separate
+    /// later step; this enum value reserves the schema slot now.
+    CloudPrimary,
+    /// Local Origin plus archives that are write-only (e.g. webhooks). Catches
+    /// the legacy `fallback_targets` use case where the second list contains
+    /// targets that can never serve as Origin.
+    CloudArchiveOnly,
+}
+
+/// Lifecycle policy for cached/local copies of originals. Most variants are
+/// schema placeholders for later steps; only `Never` is actually honored
+/// today.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, Eq, PartialEq)]
+#[serde(rename_all = "snake_case")]
+pub enum CleanupMode {
+    Never,
+    AfterArchiveSuccess,
+    ByAge,
+    BySize,
+}
+
+impl Default for CleanupMode {
+    fn default() -> Self {
+        Self::Never
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Eq, PartialEq, Default)]
+pub struct CleanupPolicy {
+    #[serde(default)]
+    pub mode: CleanupMode,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub retention_days: Option<u32>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub max_origin_gb: Option<u32>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Eq, PartialEq)]
+pub struct PipelineConfig {
+    pub mode: PipelineMode,
+    /// Required when `mode == CloudPrimary`; ignored otherwise. References a
+    /// target name in `StorageConfig.targets` whose `can_act_as_origin()` is
+    /// true.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub origin: Option<String>,
+    /// Async archive targets, run for every successful job. Order is the
+    /// authored order (deduplication preserves first occurrence).
+    #[serde(default)]
+    pub archives: Vec<String>,
+    #[serde(default)]
+    pub cleanup: CleanupPolicy,
+}
+
+impl Default for PipelineConfig {
+    fn default() -> Self {
+        Self {
+            mode: PipelineMode::LocalOnly,
+            origin: None,
+            archives: Vec::new(),
+            cleanup: CleanupPolicy::default(),
+        }
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct StorageConfig {
     #[serde(default)]
     pub targets: BTreeMap<String, StorageTargetConfig>,
+    /// Pipeline takes precedence over the legacy fields below; if `None`,
+    /// `effective_pipeline()` synthesises one from those fields so old
+    /// configs continue to work without manual migration.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub pipeline: Option<PipelineConfig>,
+    /// Legacy: read only via `effective_pipeline()`. Kept for back-compat
+    /// load + zero-value emit during the deprecation window.
     #[serde(default)]
     pub default_targets: Vec<String>,
+    /// Legacy: read only via `effective_pipeline()`.
     #[serde(default = "default_storage_fallback_targets")]
     pub fallback_targets: Vec<String>,
+    /// Legacy: read only via `effective_pipeline()`.
     #[serde(default)]
     pub fallback_policy: StorageFallbackPolicy,
     #[serde(default = "default_storage_upload_concurrency")]
@@ -226,11 +316,72 @@ impl Default for StorageConfig {
     fn default() -> Self {
         Self {
             targets: BTreeMap::new(),
+            pipeline: None,
             default_targets: Vec::new(),
             fallback_targets: default_storage_fallback_targets(),
             fallback_policy: StorageFallbackPolicy::default(),
             upload_concurrency: default_storage_upload_concurrency(),
             target_concurrency: default_storage_target_concurrency(),
+        }
+    }
+}
+
+impl StorageConfig {
+    /// Resolve the deployment pipeline that should drive uploads.
+    ///
+    /// If `self.pipeline` is set, it wins outright (legacy fields are ignored
+    /// even if populated — this matches the "explicit configuration is
+    /// authoritative" rule).
+    ///
+    /// Otherwise we synthesise a `PipelineConfig` from the legacy
+    /// `default_targets` / `fallback_targets` / `fallback_policy` trio:
+    ///
+    /// | Legacy state | Synthesised mode | Notes |
+    /// |---|---|---|
+    /// | both lists empty | `LocalOnly` | the default install baseline |
+    /// | only `fallback_targets` populated | `CloudArchiveOnly`, archives = fallback | the "archive only" pattern |
+    /// | only `default_targets` populated | `CloudArchiveOnly`, archives = default | "always upload to defaults" |
+    /// | both populated, `policy = Always` | `Mirror`, archives = default ∪ fallback | Always already meant "run everything" |
+    /// | both populated, `policy in {OnFailure, Never}` | `CloudArchiveOnly` | OnFailure's "run fallback only on primary failure" semantics is intentionally dropped (everyone uploads to all archives now). Never's fallback list is also discarded. |
+    pub fn effective_pipeline(&self) -> PipelineConfig {
+        if let Some(pipeline) = &self.pipeline {
+            return pipeline.clone();
+        }
+        let primary = &self.default_targets;
+        let fallback = &self.fallback_targets;
+        if primary.is_empty() && fallback.is_empty() {
+            return PipelineConfig::default();
+        }
+        let merged = match (primary.is_empty(), fallback.is_empty()) {
+            (true, false) => fallback.clone(),
+            (false, true) => primary.clone(),
+            (false, false) => match self.fallback_policy {
+                StorageFallbackPolicy::Never => primary.clone(),
+                StorageFallbackPolicy::OnFailure | StorageFallbackPolicy::Always => {
+                    let mut out = Vec::with_capacity(primary.len() + fallback.len());
+                    for name in primary.iter().chain(fallback.iter()) {
+                        if !out.iter().any(|existing: &String| existing == name) {
+                            out.push(name.clone());
+                        }
+                    }
+                    out
+                }
+            },
+            (true, true) => unreachable!("handled by the empty-empty branch above"),
+        };
+        let mode = if matches!(self.fallback_policy, StorageFallbackPolicy::Always)
+            && !primary.is_empty()
+            && !fallback.is_empty()
+        {
+            PipelineMode::Mirror
+        } else {
+            PipelineMode::CloudArchiveOnly
+        };
+        PipelineConfig {
+            mode,
+            origin: None,
+            archives: merged,
+            cleanup: CleanupPolicy::default(),
         }
     }
 }

@@ -12,7 +12,8 @@ pub use orchestrator::{StorageUploadOverrides, upload_job_outputs_to_storage};
 pub use secrets::preserve_storage_secrets;
 pub use test_target::{StorageTestResult, test_storage_target};
 pub use types::{
-    BaiduNetdiskAuthMode, Pan123OpenAuthMode, StorageConfig, StorageFallbackPolicy,
+    BackendCapabilities, BaiduNetdiskAuthMode, CleanupMode, CleanupPolicy, Pan123OpenAuthMode,
+    PipelineConfig, PipelineMode, PrimaryQuality, StorageConfig, StorageFallbackPolicy,
     StorageTargetConfig,
 };
 

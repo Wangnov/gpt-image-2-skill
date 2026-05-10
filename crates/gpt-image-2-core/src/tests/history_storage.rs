@@ -122,6 +122,7 @@ fn storage_upload_falls_back_to_local_target_after_primary_failure() {
                 },
             ),
         ]),
+        pipeline: None,
         default_targets: vec!["missing-primary".to_string()],
         fallback_targets: vec!["local-fallback".to_string()],
         fallback_policy: StorageFallbackPolicy::OnFailure,
