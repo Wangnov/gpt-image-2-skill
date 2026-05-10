@@ -34,7 +34,7 @@ import type {
 } from "@/lib/types";
 import {
   STORAGE_CLEANUP_MODE_OPTIONS,
-  STORAGE_PIPELINE_MODE_OPTIONS,
+  getStoragePipelineModeOptions,
 } from "./constants";
 import { Row, Section } from "./layout";
 import { ResultFoldersSection } from "./result-folders-section";
@@ -313,10 +313,17 @@ export function StoragePanel({
     pipeline.mode === "cloud_primary"
       ? strategyTargetEntries.filter(([name]) => name !== pipeline.origin)
       : strategyTargetEntries;
+  const pipelineModeOptions = getStoragePipelineModeOptions(copy.kind);
+  // "本地" semantics flips between Tauri (= the user's laptop) and HTTP (=
+  // the server the docker container runs on); the rest of this panel needs
+  // the same disambiguation everywhere it says 本地原图 / 本机原图.
+  const localOriginTerm = copy.kind === "http" ? "服务器" : "本机";
 
   return (
     <div className="flex-1 min-h-0 overflow-auto p-4 sm:p-5 space-y-4">
-      <ResultFoldersSection paths={paths} configPaths={configPaths} />
+      {copy.kind !== "http" && (
+        <ResultFoldersSection paths={paths} configPaths={configPaths} />
+      )}
 
       <Section
         title="结果归档策略"
@@ -330,44 +337,51 @@ export function StoragePanel({
           title="模式"
           description="决定原图位置和归档行为。"
           control={
-            <ControlRail className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-              {STORAGE_PIPELINE_MODE_OPTIONS.map((option) => {
-                const Icon = option.icon;
-                const active = pipeline.mode === option.value;
-                const disabled =
-                  option.value === "cloud_primary" && !cloudPrimaryAvailable;
-                return (
-                  <button
-                    key={option.value}
-                    type="button"
-                    disabled={disabled}
-                    onClick={() => setPipelineMode(option.value)}
-                    title={
-                      disabled
-                        ? "尚未配置任何支持回读的存储位置（如 S3 / WebDAV / SFTP / 本地）。"
-                        : undefined
-                    }
-                    className={cn(
-                      "flex h-full items-start gap-2 rounded-md border px-3 py-2 text-left transition-colors",
-                      active
-                        ? "border-[color:var(--accent-45)] bg-[color:var(--accent-10)] text-foreground"
-                        : "border-border bg-[color:var(--w-04)] text-muted hover:bg-[color:var(--w-07)] hover:text-foreground",
-                      disabled && "opacity-50 cursor-not-allowed",
-                    )}
-                  >
-                    <Icon className="mt-0.5 h-4 w-4 shrink-0" />
-                    <div className="min-w-0">
-                      <div className="text-[12.5px] font-medium leading-tight">
-                        {option.label}
+            <div className="w-full sm:w-[520px] space-y-2">
+              <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                {pipelineModeOptions.map((option) => {
+                  const Icon = option.icon;
+                  const active = pipeline.mode === option.value;
+                  const disabled =
+                    option.value === "cloud_primary" && !cloudPrimaryAvailable;
+                  return (
+                    <button
+                      key={option.value}
+                      type="button"
+                      disabled={disabled}
+                      onClick={() => setPipelineMode(option.value)}
+                      title={
+                        disabled
+                          ? "需要先在下方添加一个支持回读的存储位置（local / S3 / WebDAV / SFTP）。"
+                          : undefined
+                      }
+                      className={cn(
+                        "flex h-full items-start gap-2 rounded-md border px-3 py-2 text-left transition-colors",
+                        active
+                          ? "border-[color:var(--accent-45)] bg-[color:var(--accent-10)] text-foreground"
+                          : "border-border bg-[color:var(--w-04)] text-muted hover:bg-[color:var(--w-07)] hover:text-foreground",
+                        disabled && "opacity-50 cursor-not-allowed",
+                      )}
+                    >
+                      <Icon className="mt-0.5 h-4 w-4 shrink-0" />
+                      <div className="min-w-0">
+                        <div className="text-[12.5px] font-medium leading-tight">
+                          {option.label}
+                        </div>
+                        <div className="mt-1 text-[11.5px] text-faint leading-snug">
+                          {option.description}
+                        </div>
                       </div>
-                      <div className="mt-1 text-[11.5px] text-faint leading-snug">
-                        {option.description}
-                      </div>
-                    </div>
-                  </button>
-                );
-              })}
-            </ControlRail>
+                    </button>
+                  );
+                })}
+              </div>
+              {!cloudPrimaryAvailable && (
+                <p className="text-[11.5px] text-faint leading-snug">
+                  「云端为主」需要先在下方「位置列表」添加一个支持回读的存储（local / S3 / WebDAV / SFTP），仅推送的目标（如 HTTP/Webhook）不能作为原图。
+                </p>
+              )}
+            </div>
           }
         />
         {pipeline.mode === "cloud_primary" && (
@@ -378,7 +392,7 @@ export function StoragePanel({
               <ControlRail>
                 {originOptions.length === 0 ? (
                   <span className="text-[12px] text-muted">
-                    没有可用的原图位置；请先在下方添加一个支持回读的存储（本地 / S3 / WebDAV / SFTP）。
+                    没有可用的原图位置；请先在下方添加一个支持回读的存储（local / S3 / WebDAV / SFTP）。
                   </span>
                 ) : (
                   <GlassSelect
@@ -439,7 +453,7 @@ export function StoragePanel({
         )}
         <Row
           title="清理策略"
-          description="本地原图的清理时机。绝大多数选项即将上线。"
+          description={`${localOriginTerm}原图的清理时机。绝大多数选项即将上线。`}
           control={
             <ControlRail>
               <GlassSelect

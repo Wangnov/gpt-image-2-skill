@@ -102,35 +102,47 @@ export interface PipelineModeOption {
   icon: LucideIcon;
 }
 
-export const STORAGE_PIPELINE_MODE_OPTIONS: PipelineModeOption[] = [
-  {
-    value: "local_only",
-    label: "仅本地",
-    description: "图片只保存在本机结果库；不复制到云端。",
-    icon: HardDrive,
-  },
-  {
-    value: "mirror",
-    label: "本地为主，云端备份",
-    description:
-      "本地为原图，同时异步复制到一个或多个云端归档（双保险）。",
-    icon: Files,
-  },
-  {
-    value: "cloud_primary",
-    label: "云端为主",
-    description:
-      "云端为原图，本机仅作上传缓冲；适合多设备共享。",
-    icon: Cloud,
-  },
-  {
-    value: "cloud_archive_only",
-    label: "仅推送到云端",
-    description:
-      "本地为原图，云端目标只接收推送（如 Webhook，不可回读）。",
-    icon: Archive,
-  },
-];
+/**
+ * "本地" in this UI always means "the machine the result library lives on" —
+ * the user's own laptop in Tauri Standalone, but the **Docker server**
+ * (volume-mounted host directory) for self-hosted Web. Without runtime-aware
+ * copy a Docker user reads "图片只保存在本机" and assumes the file is on
+ * their browser machine, which is exactly wrong.
+ */
+export type StoragePipelineCopyKind = "tauri" | "http" | "browser";
+
+export function getStoragePipelineModeOptions(
+  runtimeKind: StoragePipelineCopyKind,
+): PipelineModeOption[] {
+  const onServer = runtimeKind === "http";
+  const localTerm = onServer ? "服务器" : "本机";
+  return [
+    {
+      value: "local_only",
+      label: onServer ? "仅服务器" : "仅本机",
+      description: `图片只保存在${localTerm}结果库；不复制到云端。`,
+      icon: HardDrive,
+    },
+    {
+      value: "mirror",
+      label: `${localTerm}为主，云端备份`,
+      description: `${localTerm}为原图，同时异步复制到一个或多个云端归档（双保险）。`,
+      icon: Files,
+    },
+    {
+      value: "cloud_primary",
+      label: "云端为主",
+      description: `云端为原图，${localTerm}仅作上传缓冲；适合多设备共享。`,
+      icon: Cloud,
+    },
+    {
+      value: "cloud_archive_only",
+      label: "仅推送到云端",
+      description: `${localTerm}为原图，云端目标只接收推送（如 Webhook，不可回读）。`,
+      icon: Archive,
+    },
+  ];
+}
 
 export interface CleanupModeOption {
   value: CleanupMode;
