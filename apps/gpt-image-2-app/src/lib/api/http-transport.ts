@@ -50,7 +50,11 @@ export const httpApi: ApiClient = {
   kind: "http",
   canUseLocalFiles: false,
   canRevealFiles: false,
-  canUseSystemCredentials: true,
+  // Docker images ship debian:bookworm-slim with no dbus/libsecret/keyring
+  // service available, so the keyring crate fails to open an entry.
+  // Advertising keychain support here just produces a misleading dropdown
+  // option and a confusing "keychain_error" at upload time.
+  canUseSystemCredentials: false,
   canUseCodexProvider: true,
   canExportToDownloadsFolder: false,
   canExportToConfiguredFolder: false,
