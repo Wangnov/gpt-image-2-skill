@@ -1,3 +1,4 @@
+import { api } from "./api";
 import { canActAsOrigin, storageTargetType } from "./api/shared";
 import type {
   CredentialRef,
@@ -5,6 +6,10 @@ import type {
   StorageConfig,
   StorageTargetConfig,
 } from "./types";
+
+function localDirectoryTerm() {
+  return api.kind === "http" ? "服务器目录" : "本地目录";
+}
 
 type StorageValidationOptions = {
   requireLocalDirectory?: boolean;
@@ -56,7 +61,8 @@ export function storageTargetConfigIssues(
   if (type === "local") {
     if (options.requireLocalDirectory === false) return issues;
     const directory = "directory" in target ? target.directory : "";
-    if (!hasText(directory)) issues.push(required("directory", "请填写本地目录。"));
+    if (!hasText(directory))
+      issues.push(required("directory", `请填写${localDirectoryTerm()}。`));
     return issues;
   }
   if (type === "s3" && "bucket" in target) {
@@ -146,7 +152,7 @@ export function storageTargetConfigIssue(
   const displayName = name.trim() || "未命名";
   const issue = storageTargetConfigIssues(name, target, options)[0];
   if (issue?.field === "directory") {
-    return `存储目标「${displayName}」需要填写本地目录。`;
+    return `存储目标「${displayName}」需要填写${localDirectoryTerm()}。`;
   }
   return issue ? `存储目标「${displayName}」${issue.message}` : null;
 }

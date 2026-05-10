@@ -129,6 +129,7 @@ export function StorageTargetCard({
   ) => void;
 }) {
   const type = storageTargetType(target);
+  const localDirectoryLabel = api.kind === "http" ? "服务器目录" : "本地目录";
   const webdavTarget =
     type === "webdav" ? (target as WebDavStorageTargetConfig) : undefined;
   const httpTarget =
@@ -191,11 +192,11 @@ export function StorageTargetCard({
       {type === "local" && "directory" in target && (
         <div className="grid gap-3 md:grid-cols-2">
           <StorageField
-            label={api.kind === "http" ? "服务器目录" : "本地目录"}
+            label={localDirectoryLabel}
             error={fieldError("directory")}
             description={
               api.kind === "http"
-                ? "服务器容器内路径。需要在 docker compose 配置 volume 挂载才能持久化，否则容器删除后内容丢失。"
+                ? "服务器上的路径；docker 部署需挂载为 volume。"
                 : undefined
             }
             required
@@ -211,7 +212,7 @@ export function StorageTargetCard({
                   : "/path/to/storage"
               }
               size="sm"
-              aria-label={api.kind === "http" ? "服务器目录" : "本地目录"}
+              aria-label={localDirectoryLabel}
               aria-invalid={Boolean(fieldError("directory"))}
               suffix={
                 api.canChooseExportFolder ? (
@@ -221,7 +222,7 @@ export function StorageTargetCard({
                     icon="folder"
                     className="h-6 w-6 shrink-0 text-foreground"
                     title="浏览文件夹"
-                    aria-label="浏览本地目录"
+                    aria-label={`浏览${localDirectoryLabel}`}
                     onClick={async () => {
                       const picked = await api.chooseFolder?.(
                         "directory" in target ? target.directory : undefined,
@@ -229,7 +230,7 @@ export function StorageTargetCard({
                       if (picked) onPatch(name, { directory: picked });
                     }}
                   >
-                    <span className="sr-only">浏览本地目录</span>
+                    <span className="sr-only">{`浏览${localDirectoryLabel}`}</span>
                   </Button>
                 ) : undefined
               }

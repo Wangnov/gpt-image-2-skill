@@ -211,8 +211,8 @@ export const PAN123_OPEN_HINT = [
 
 export const LOCAL_PUBLIC_BASE_URL_HINT = [
   "可选。",
-  "仅当本地目录已经通过 Nginx、CDN 或静态文件服务映射成可访问地址时填写。",
-  "上传记录会用它拼出图片 URL；留空时仍会保存到本地目录。",
+  "仅当此目录已经通过 Nginx、CDN 或静态文件服务映射成可访问地址时填写。",
+  "上传记录会用它拼出图片 URL；留空时仍会保存到目录。",
 ].join("\n");
 
 export const EXPORT_DIR_MODE_OPTIONS = [
