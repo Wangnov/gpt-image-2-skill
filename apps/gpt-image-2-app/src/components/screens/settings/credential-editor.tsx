@@ -121,7 +121,7 @@ export function CredentialEditor({
       </div>
       {source === "env" && isHttpRuntime && (
         <p className="text-[11px] leading-snug text-faint">
-          由 server 管理员通过 docker 环境变量注入；改完后需重启容器才生效。
+          由部署者注入（docker compose env / systemd unit / 启动脚本等）；改完通常需重启服务才生效。
         </p>
       )}
     </div>
