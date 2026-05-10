@@ -286,12 +286,24 @@ pub struct StorageConfig {
     pub pipeline: Option<PipelineConfig>,
     /// Legacy: read only via `effective_pipeline()`. Kept for back-compat
     /// load + zero-value emit during the deprecation window.
+    #[deprecated(
+        since = "0.5.3",
+        note = "Use StorageConfig::effective_pipeline() instead."
+    )]
     #[serde(default)]
     pub default_targets: Vec<String>,
     /// Legacy: read only via `effective_pipeline()`.
+    #[deprecated(
+        since = "0.5.3",
+        note = "Use StorageConfig::effective_pipeline() instead."
+    )]
     #[serde(default = "default_storage_fallback_targets")]
     pub fallback_targets: Vec<String>,
     /// Legacy: read only via `effective_pipeline()`.
+    #[deprecated(
+        since = "0.5.3",
+        note = "Use StorageConfig::effective_pipeline() instead."
+    )]
     #[serde(default)]
     pub fallback_policy: StorageFallbackPolicy,
     #[serde(default = "default_storage_upload_concurrency")]
@@ -313,6 +325,7 @@ fn default_storage_target_concurrency() -> usize {
 }
 
 impl Default for StorageConfig {
+    #[allow(deprecated)] // Initialising the legacy fields with empty defaults; access of deprecated fields is intentional inside this constructor.
     fn default() -> Self {
         Self {
             targets: BTreeMap::new(),
@@ -343,6 +356,7 @@ impl StorageConfig {
     /// | only `default_targets` populated | `CloudArchiveOnly`, archives = default | "always upload to defaults" |
     /// | both populated, `policy = Always` | `Mirror`, archives = default ∪ fallback | Always already meant "run everything" |
     /// | both populated, `policy in {OnFailure, Never}` | `CloudArchiveOnly` | OnFailure's "run fallback only on primary failure" semantics is intentionally dropped (everyone uploads to all archives now). Never's fallback list is also discarded. |
+    #[allow(deprecated)] // The legacy fields are read here on purpose: this is the migration shim.
     pub fn effective_pipeline(&self) -> PipelineConfig {
         if let Some(pipeline) = &self.pipeline {
             return pipeline.clone();

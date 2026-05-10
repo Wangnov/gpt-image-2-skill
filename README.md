@@ -162,7 +162,20 @@ docker run --rm -p 8787:8787 \
 | `http` | 自定义 HTTP multipart 上传 | `url`,`method`,`headers`,`public_url_json_pointer` |
 | `sftp` | SFTP 上传 | `host`,`port`,`host_key_sha256`,`username`,`password` 或 `private_key`,`remote_dir`,`public_base_url` |
 
-全局配置支持多个目标、多个默认上传目标、多个 fallback 目标、fallback 策略(`never` / `on_failure` / `always`)以及输出级/目标级并发。任务请求也可以独立传 `storage_targets` 和 `fallback_targets` 覆盖默认目标。远端 HTTP/S3/WebDAV 上传默认拒绝 loopback/private/link-local 等非公网地址并禁用重定向;SFTP 必须配置服务器 SHA256 host key 指纹。
+全局配置通过 `storage.pipeline` 选择四种归档策略,把"原图位置(Origin)"和"异步归档目标(Archives)"分开:
+
+| `pipeline.mode` | 行为 |
+|---|---|
+| `local_only` | 原图只保存在本机结果库,不复制到任何 archives(默认值) |
+| `mirror` | 本地为原图,同时异步复制到一个或多个云端 archives — 双保险 |
+| `cloud_primary` | 云端 backend 是原图(`pipeline.origin` 必须支持回读,如 S3/WebDAV/SFTP/local),本地 jobs/ 退化成上传缓冲 |
+| `cloud_archive_only` | 本地为原图,archives 只接收推送(适合 webhook 等不可回读 backend) |
+
+任务请求仍可独立传 `storage_targets` 和 `fallback_targets`,这两份列表会被并入当次任务的 archives(去重,不影响 Origin)。
+
+老 config(`storage.default_targets` / `storage.fallback_targets` / `storage.fallback_policy`)在加载时会自动迁移到 `pipeline`,无需手工修改。注意一项行为变化:旧 `fallback_policy = on_failure` 同时配置 `default_targets` + `fallback_targets` 的用户,迁移后两个列表会全部成为 archives 并每次都跑(不再是"主失败才跑 fallback"),这是一次性多上传一份。
+
+输出级/目标级并发由 `upload_concurrency` 和 `target_concurrency` 控制。远端 HTTP/S3/WebDAV 上传默认拒绝 loopback/private/link-local 等非公网地址并禁用重定向;SFTP 必须配置服务器 SHA256 host key 指纹。
 
 ## Provider 矩阵
 
@@ -711,7 +724,20 @@ Supported target types:
 | `http` | Custom multipart HTTP upload | `url`, `method`, `headers`, `public_url_json_pointer` |
 | `sftp` | SFTP upload | `host`, `port`, `host_key_sha256`, `username`, `password` or `private_key`, `remote_dir`, `public_base_url` |
 
-Global config can define many targets, multiple default upload targets, multiple fallback targets, fallback policy(`never` / `on_failure` / `always`), and output/target concurrency. Individual generation/edit requests can override target selection with `storage_targets` and `fallback_targets`. Remote HTTP/S3/WebDAV uploads reject loopback/private/link-local addresses by default and do not follow redirects; SFTP requires a pinned SHA256 server host-key fingerprint.
+Global config selects one of four pipeline modes via `storage.pipeline`, which keeps the "result Origin" and "async Archives" concepts separate:
+
+| `pipeline.mode` | Behavior |
+|---|---|
+| `local_only` | Originals only live in the local result library; nothing is copied to archives (default) |
+| `mirror` | Local stays the Origin; an asynchronous copy lands in each archive — the double-insurance pattern |
+| `cloud_primary` | A cloud backend is the Origin (`pipeline.origin` must support readback: S3/WebDAV/SFTP/local), and local jobs/ degrades into an upload buffer |
+| `cloud_archive_only` | Local is the Origin; archives only receive uploads (suitable for write-only backends like webhooks) |
+
+Individual generation/edit requests can still pass `storage_targets` and `fallback_targets`; both lists are merged (with deduplication) into the per-job archive list and never override Origin.
+
+Existing configs that use the legacy `storage.default_targets` / `storage.fallback_targets` / `storage.fallback_policy` fields are migrated transparently on load — no manual edit is required. One behavior change to call out: configs that combined `default_targets` + `fallback_targets` with `fallback_policy = on_failure` now upload to every archive on every job (the "only on primary failure" semantics is intentionally dropped). This produces one extra upload per job but is otherwise harmless.
+
+Per-output and per-target concurrency are controlled by `upload_concurrency` and `target_concurrency`. Remote HTTP/S3/WebDAV uploads reject loopback/private/link-local addresses by default and do not follow redirects; SFTP requires a pinned SHA256 server host-key fingerprint.
 
 ## Provider matrix
 

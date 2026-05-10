@@ -96,6 +96,7 @@ fn history_rows_without_upload_records_keep_legacy_outputs() {
 }
 
 #[test]
+#[allow(deprecated)]
 fn storage_upload_falls_back_to_local_target_after_primary_failure() {
     let _guard = CODEX_HOME_TEST_LOCK.lock().unwrap();
     let temp_dir = tempfile::tempdir().unwrap();
@@ -197,6 +198,7 @@ fn storage_upload_falls_back_to_local_target_after_primary_failure() {
 }
 
 #[test]
+#[allow(deprecated)]
 fn mirror_pipeline_uploads_to_all_archives_in_parallel() {
     let _guard = CODEX_HOME_TEST_LOCK.lock().unwrap();
     let temp_dir = tempfile::tempdir().unwrap();
@@ -273,6 +275,7 @@ fn mirror_pipeline_uploads_to_all_archives_in_parallel() {
 }
 
 #[test]
+#[allow(deprecated)]
 fn per_job_overrides_are_appended_to_archives() {
     let _guard = CODEX_HOME_TEST_LOCK.lock().unwrap();
     let temp_dir = tempfile::tempdir().unwrap();

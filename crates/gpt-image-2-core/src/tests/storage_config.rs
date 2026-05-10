@@ -1,6 +1,7 @@
 use super::*;
 
 #[test]
+#[allow(deprecated)]
 fn storage_config_defaults_to_no_archive_targets() {
     let _guard = CODEX_HOME_TEST_LOCK.lock().unwrap();
     let temp_dir = tempfile::tempdir().unwrap();
@@ -438,6 +439,7 @@ fn sftp_host_key_fingerprint_accepts_sha256_prefix() {
     ));
 }
 
+#[allow(deprecated)] // Helper deliberately constructs the legacy fields to drive the migration shim under test.
 fn legacy_storage(
     primary: &[&str],
     fallback: &[&str],
@@ -548,6 +550,7 @@ fn effective_pipeline_preserves_explicit_empty_archives() {
 }
 
 #[test]
+#[allow(deprecated)]
 fn legacy_config_round_trips_through_serde() {
     // Wire-format guarantee: legacy fields survive serialise/deserialise so
     // an older binary that doesn't know about `pipeline` can still load

@@ -122,6 +122,7 @@ fn redact_storage_target_config(target: &StorageTargetConfig) -> Value {
     }
 }
 
+#[allow(deprecated)] // Redacted output deliberately exposes both the new pipeline shape and the legacy fields, so external log/diff tooling stays compatible during the deprecation window.
 pub(crate) fn redact_storage_config(config: &StorageConfig) -> Value {
     let mut payload = json!({
         "targets": config.targets.iter().map(|(name, target)| {
