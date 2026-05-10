@@ -25,7 +25,7 @@ import {
   METHOD_OPTIONS,
   PAN123_AUTH_MODE_OPTIONS,
   PAN123_OPEN_HINT,
-  STORAGE_TARGET_TYPE_OPTIONS,
+  getStorageTargetTypeOptions,
 } from "./constants";
 import { CredentialEditor } from "./credential-editor";
 
@@ -56,12 +56,14 @@ function issueForField(issues: StorageFieldIssue[], field: string) {
 function StorageField({
   label,
   hint,
+  description,
   error,
   required,
   children,
 }: {
   label?: string;
   hint?: ReactNode;
+  description?: ReactNode;
   error?: string;
   required?: boolean;
   children: ReactNode;
@@ -81,6 +83,9 @@ function StorageField({
           )}
           {hint}
         </div>
+      )}
+      {description && (
+        <p className="text-[11px] leading-snug text-faint">{description}</p>
       )}
       {children}
       {error && (
@@ -156,7 +161,7 @@ export function StorageTargetCard({
           <GlassSelect
             value={type}
             onValueChange={(value) => onSetType(name, value as StorageTargetKind)}
-            options={STORAGE_TARGET_TYPE_OPTIONS}
+            options={getStorageTargetTypeOptions(api.kind)}
             size="sm"
             ariaLabel="上传位置类型"
             className="w-full"
@@ -186,8 +191,13 @@ export function StorageTargetCard({
       {type === "local" && "directory" in target && (
         <div className="grid gap-3 md:grid-cols-2">
           <StorageField
-            label="本地目录"
+            label={api.kind === "http" ? "服务器目录" : "本地目录"}
             error={fieldError("directory")}
+            description={
+              api.kind === "http"
+                ? "服务器容器内路径。需要在 docker compose 配置 volume 挂载才能持久化，否则容器删除后内容丢失。"
+                : undefined
+            }
             required
           >
             <Input
@@ -195,9 +205,13 @@ export function StorageTargetCard({
               onChange={(event) =>
                 onPatch(name, { directory: event.target.value })
               }
-              placeholder="/path/to/storage"
+              placeholder={
+                api.kind === "http"
+                  ? "/data/gpt-image-2/extra-archive"
+                  : "/path/to/storage"
+              }
               size="sm"
-              aria-label="本地目录"
+              aria-label={api.kind === "http" ? "服务器目录" : "本地目录"}
               aria-invalid={Boolean(fieldError("directory"))}
               suffix={
                 api.canChooseExportFolder ? (

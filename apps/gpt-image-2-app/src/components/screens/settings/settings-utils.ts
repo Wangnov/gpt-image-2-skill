@@ -20,7 +20,8 @@ import type {
   WebDavStorageTargetConfig,
   WebhookNotificationConfig,
 } from "@/lib/types";
-import { STORAGE_TARGET_TYPE_OPTIONS } from "./constants";
+import { api } from "@/lib/api";
+import { STORAGE_TARGET_TYPE_OPTIONS, getStorageTargetTypeOptions } from "./constants";
 
 export function cloneNotificationConfig(value?: NotificationConfig) {
   return normalizeNotificationConfig(
@@ -183,9 +184,17 @@ export function preparePathConfigForSave(config: PathConfig): PathConfig {
 
 export function storageTargetLabel(target: StorageTargetConfig) {
   const type = storageTargetType(target);
+  // Read api.kind so origin selectors and target cards display "服务器目录"
+  // for `local` under HTTP/Docker, matching the dropdown that creates them.
+  // The static STORAGE_TARGET_TYPE_OPTIONS export is kept as a fallback for
+  // any caller that might run before the runtime is detected.
+  const runtimeKind = api.kind ?? "tauri";
   return (
-    STORAGE_TARGET_TYPE_OPTIONS.find((option) => option.value === type)
-      ?.label ?? type
+    getStorageTargetTypeOptions(runtimeKind).find(
+      (option) => option.value === type,
+    )?.label ??
+    STORAGE_TARGET_TYPE_OPTIONS.find((option) => option.value === type)?.label ??
+    type
   );
 }
 

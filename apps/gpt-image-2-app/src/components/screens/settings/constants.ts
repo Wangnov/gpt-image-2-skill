@@ -85,6 +85,22 @@ export const STORAGE_TARGET_TYPE_OPTIONS = [
   { value: "pan123_open", label: "123 网盘 OpenAPI" },
 ] as const;
 
+/**
+ * Same list, but `local` reads as "服务器目录" under HTTP runtime so that
+ * Docker Web users do not assume the path resolves to their browser
+ * machine (it doesn't — it's a server-side container path that needs a
+ * volume mount to persist).
+ */
+export function getStorageTargetTypeOptions(
+  runtimeKind: StoragePipelineCopyKind,
+) {
+  return STORAGE_TARGET_TYPE_OPTIONS.map((option) =>
+    option.value === "local" && runtimeKind === "http"
+      ? { value: option.value, label: "服务器目录" }
+      : option,
+  );
+}
+
 export const BAIDU_AUTH_MODE_OPTIONS = [
   { value: "personal", label: "个人对接" },
   { value: "oauth", label: "OAuth 对接" },
