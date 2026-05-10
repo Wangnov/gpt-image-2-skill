@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
+import { defaultStorageConfig } from "./api/shared";
 import type { StorageConfig } from "./types";
 import {
+  pipelineConfigIssue,
   storageConfigIssue,
   storageTargetConfigIssues,
   storageTargetConfigIssue,
@@ -8,12 +10,7 @@ import {
 } from "./storage-validation";
 
 const baseStorageConfig: StorageConfig = {
-  targets: {},
-  default_targets: [],
-  fallback_targets: [],
-  fallback_policy: "on_failure",
-  upload_concurrency: 4,
-  target_concurrency: 2,
+  ...defaultStorageConfig(),
 };
 
 describe("storage validation", () => {
@@ -169,6 +166,69 @@ describe("storage validation", () => {
         use_direct_link: false,
       }),
     ).toEqual([]);
+  });
+
+  it("flags cloud_primary mode without an origin", () => {
+    expect(
+      pipelineConfigIssue(
+        {
+          mode: "cloud_primary",
+          origin: null,
+          archives: [],
+          cleanup: { mode: "never" },
+        },
+        {},
+      ),
+    ).toBe("云端为主模式需要选择一个原图位置。");
+  });
+
+  it("flags cloud_primary origin pointing to a webhook target", () => {
+    expect(
+      pipelineConfigIssue(
+        {
+          mode: "cloud_primary",
+          origin: "webhook",
+          archives: [],
+          cleanup: { mode: "never" },
+        },
+        {
+          webhook: {
+            type: "http",
+            url: "https://example.com",
+            method: "POST",
+            headers: {},
+          },
+        },
+      ),
+    ).toBe("所选位置不支持回读，无法作为原图位置。");
+  });
+
+  it("flags mirror mode with no archives", () => {
+    expect(
+      pipelineConfigIssue(
+        {
+          mode: "mirror",
+          origin: null,
+          archives: [],
+          cleanup: { mode: "never" },
+        },
+        {},
+      ),
+    ).toBe("请至少选择一个归档目标。");
+  });
+
+  it("accepts local_only mode with no targets", () => {
+    expect(
+      pipelineConfigIssue(
+        {
+          mode: "local_only",
+          origin: null,
+          archives: [],
+          cleanup: { mode: "never" },
+        },
+        {},
+      ),
+    ).toBeNull();
   });
 
   it("hides field issues until saving or testing the target", () => {

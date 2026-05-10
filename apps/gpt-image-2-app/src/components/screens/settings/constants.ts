@@ -1,4 +1,7 @@
 import {
+  Archive,
+  Cloud,
+  Files,
   FileText,
   HardDrive,
   Info,
@@ -7,6 +10,7 @@ import {
   Sparkles,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
+import type { CleanupMode, PipelineMode } from "@/lib/types";
 import type { ThemePreset, ThemePresetId } from "@/lib/theme-presets";
 
 // Visible preset order in the Appearance gallery. Hidden presets join
@@ -91,11 +95,71 @@ export const PAN123_AUTH_MODE_OPTIONS = [
   { value: "access_token", label: "accessToken 对接" },
 ] as const;
 
-export const STORAGE_FALLBACK_POLICY_OPTIONS = [
-  { value: "on_failure", label: "失败时" },
-  { value: "always", label: "总是" },
-  { value: "never", label: "关闭" },
-] as const;
+export interface PipelineModeOption {
+  value: PipelineMode;
+  label: string;
+  description: string;
+  icon: LucideIcon;
+}
+
+export const STORAGE_PIPELINE_MODE_OPTIONS: PipelineModeOption[] = [
+  {
+    value: "local_only",
+    label: "仅本地",
+    description: "图片只保存在本机结果库；不复制到云端。",
+    icon: HardDrive,
+  },
+  {
+    value: "mirror",
+    label: "本地为主，云端备份",
+    description:
+      "本地为原图，同时异步复制到一个或多个云端归档（双保险）。",
+    icon: Files,
+  },
+  {
+    value: "cloud_primary",
+    label: "云端为主",
+    description:
+      "云端为原图，本机仅作上传缓冲；适合多设备共享。",
+    icon: Cloud,
+  },
+  {
+    value: "cloud_archive_only",
+    label: "仅推送到云端",
+    description:
+      "本地为原图，云端目标只接收推送（如 Webhook，不可回读）。",
+    icon: Archive,
+  },
+];
+
+export interface CleanupModeOption {
+  value: CleanupMode;
+  label: string;
+  badge?: string;
+  disabled?: boolean;
+}
+
+export const STORAGE_CLEANUP_MODE_OPTIONS: CleanupModeOption[] = [
+  { value: "never", label: "不清理" },
+  {
+    value: "after_archive_success",
+    label: "归档成功后清理",
+    badge: "即将上线",
+    disabled: true,
+  },
+  {
+    value: "by_age",
+    label: "按保留天数清理",
+    badge: "即将上线",
+    disabled: true,
+  },
+  {
+    value: "by_size",
+    label: "按上限大小清理",
+    badge: "即将上线",
+    disabled: true,
+  },
+];
 
 export const CREDENTIAL_SOURCE_OPTIONS = [
   { value: "file", label: "直接填写" },

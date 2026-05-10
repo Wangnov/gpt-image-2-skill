@@ -1,5 +1,10 @@
-import { storageTargetType } from "./api/shared";
-import type { CredentialRef, StorageConfig, StorageTargetConfig } from "./types";
+import { canActAsOrigin, storageTargetType } from "./api/shared";
+import type {
+  CredentialRef,
+  PipelineConfig,
+  StorageConfig,
+  StorageTargetConfig,
+} from "./types";
 
 type StorageValidationOptions = {
   requireLocalDirectory?: boolean;
@@ -146,6 +151,38 @@ export function storageTargetConfigIssue(
   return issue ? `存储目标「${displayName}」${issue.message}` : null;
 }
 
+export function pipelineConfigIssue(
+  pipeline: PipelineConfig | null | undefined,
+  targets: Record<string, StorageTargetConfig>,
+): string | null {
+  if (!pipeline) return null;
+  if (pipeline.mode === "local_only") return null;
+  if (pipeline.mode === "cloud_primary") {
+    const origin = pipeline.origin?.trim();
+    if (!origin) {
+      return "云端为主模式需要选择一个原图位置。";
+    }
+    const target = targets[origin];
+    if (!target) {
+      return `所选原图位置「${origin}」不存在。`;
+    }
+    if (!canActAsOrigin(target)) {
+      return "所选位置不支持回读，无法作为原图位置。";
+    }
+  }
+  if (
+    (pipeline.mode === "mirror" ||
+      pipeline.mode === "cloud_primary" ||
+      pipeline.mode === "cloud_archive_only") &&
+    pipeline.archives.length === 0 &&
+    pipeline.mode !== "cloud_primary"
+  ) {
+    // cloud_primary 允许空 archives(只用 origin 也算 OK);其他模式必须有归档
+    return "请至少选择一个归档目标。";
+  }
+  return null;
+}
+
 export function storageConfigIssue(
   config: StorageConfig,
   options: StorageValidationOptions = {},
@@ -154,6 +191,8 @@ export function storageConfigIssue(
     const issue = storageTargetConfigIssue(name, target, options);
     if (issue) return issue;
   }
+  const pipelineIssue = pipelineConfigIssue(config.pipeline, config.targets);
+  if (pipelineIssue) return pipelineIssue;
   return null;
 }
 

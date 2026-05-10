@@ -390,11 +390,33 @@ export function prepareStorageConfigForSave(config: StorageConfig): StorageConfi
     names
       .map((name) => nameMap.get(name) ?? name.trim())
       .filter((name): name is string => Boolean(name) && validNames.has(name));
+  // Pipeline takes over Origin/archives selection. Filter both through the
+  // (rename-aware) valid name set so renamed/removed targets don't dangle.
+  const sourcePipeline = config.pipeline ?? {
+    mode: "local_only" as const,
+    origin: null,
+    archives: [],
+    cleanup: { mode: "never" as const },
+  };
+  const originRaw = sourcePipeline.origin?.trim();
+  const originRenamed = originRaw ? nameMap.get(originRaw) ?? originRaw : null;
+  const origin = originRenamed && validNames.has(originRenamed)
+    ? originRenamed
+    : null;
+  const pipeline = {
+    mode: sourcePipeline.mode,
+    origin,
+    archives: normalizeTargetNames(sourcePipeline.archives),
+    cleanup: sourcePipeline.cleanup,
+  };
   return {
     targets: renamedTargets,
-    default_targets: normalizeTargetNames(config.default_targets),
-    fallback_targets: normalizeTargetNames(config.fallback_targets),
-    fallback_policy: config.fallback_policy,
+    pipeline,
+    // Legacy fields are kept as zero values so older binaries (or external
+    // tools that only know the old schema) can still parse the config.
+    default_targets: [],
+    fallback_targets: [],
+    fallback_policy: "on_failure",
     upload_concurrency: Math.max(
       1,
       Math.round(config.upload_concurrency || 4),

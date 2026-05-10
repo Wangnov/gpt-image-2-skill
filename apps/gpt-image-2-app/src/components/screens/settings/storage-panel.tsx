@@ -10,7 +10,11 @@ import {
   useUpdateStorage,
 } from "@/hooks/use-config";
 import { api, type ConfigPaths } from "@/lib/api";
-import { storageTargetType } from "@/lib/api/shared";
+import {
+  canActAsOrigin,
+  defaultPipelineConfig,
+  storageTargetType,
+} from "@/lib/api/shared";
 import { cn } from "@/lib/cn";
 import { runtimeCopy } from "@/lib/runtime-copy";
 import {
@@ -19,14 +23,19 @@ import {
   visibleStorageTargetIssues,
 } from "@/lib/storage-validation";
 import type {
+  CleanupMode,
   CredentialRef,
   PathConfig,
+  PipelineConfig,
+  PipelineMode,
   StorageConfig,
-  StorageFallbackPolicy,
   StorageTargetConfig,
   StorageTargetKind,
 } from "@/lib/types";
-import { STORAGE_FALLBACK_POLICY_OPTIONS } from "./constants";
+import {
+  STORAGE_CLEANUP_MODE_OPTIONS,
+  STORAGE_PIPELINE_MODE_OPTIONS,
+} from "./constants";
 import { Row, Section } from "./layout";
 import { ResultFoldersSection } from "./result-folders-section";
 import {
@@ -149,13 +158,15 @@ export function StoragePanel({
   const removeTarget = (name: string) => {
     setDraft((current) => {
       const { [name]: _removed, ...targets } = current.targets;
+      const pipeline = current.pipeline ?? defaultPipelineConfig();
       return {
         ...current,
         targets,
-        default_targets: current.default_targets.filter((item) => item !== name),
-        fallback_targets: current.fallback_targets.filter(
-          (item) => item !== name,
-        ),
+        pipeline: {
+          ...pipeline,
+          origin: pipeline.origin === name ? null : pipeline.origin,
+          archives: pipeline.archives.filter((item) => item !== name),
+        },
       };
     });
   };
@@ -166,29 +177,51 @@ export function StoragePanel({
       const entries = Object.entries(current.targets).map(([key, target]) =>
         key === name ? ([clean, target] as const) : ([key, target] as const),
       );
+      const pipeline = current.pipeline ?? defaultPipelineConfig();
       return {
         ...current,
         targets: Object.fromEntries(entries),
-        default_targets: current.default_targets.map((item) =>
-          item === name ? clean : item,
-        ),
-        fallback_targets: current.fallback_targets.map((item) =>
-          item === name ? clean : item,
-        ),
+        pipeline: {
+          ...pipeline,
+          origin: pipeline.origin === name ? clean : pipeline.origin,
+          archives: pipeline.archives.map((item) =>
+            item === name ? clean : item,
+          ),
+        },
       };
     });
   };
-  const toggleTargetList = (
-    field: "default_targets" | "fallback_targets",
-    name: string,
-    checked: boolean,
-  ) => {
+  const patchPipeline = (next: Partial<PipelineConfig>) => {
     setDraft((current) => ({
       ...current,
-      [field]: checked
-        ? Array.from(new Set([...current[field], name]))
-        : current[field].filter((item) => item !== name),
+      pipeline: { ...(current.pipeline ?? defaultPipelineConfig()), ...next },
     }));
+  };
+  const setPipelineMode = (mode: PipelineMode) => {
+    setDraft((current) => {
+      const pipeline = current.pipeline ?? defaultPipelineConfig();
+      return {
+        ...current,
+        pipeline: {
+          ...pipeline,
+          mode,
+          // Switching out of cloud_primary clears the now-meaningless origin.
+          origin: mode === "cloud_primary" ? pipeline.origin : null,
+          // Switching to local_only clears archives so users don't see
+          // stale toggles next time they switch back.
+          archives: mode === "local_only" ? [] : pipeline.archives,
+        },
+      };
+    });
+  };
+  const toggleArchive = (name: string, checked: boolean) => {
+    setDraft((current) => {
+      const pipeline = current.pipeline ?? defaultPipelineConfig();
+      const archives = checked
+        ? Array.from(new Set([...pipeline.archives, name]))
+        : pipeline.archives.filter((item) => item !== name);
+      return { ...current, pipeline: { ...pipeline, archives } };
+    });
   };
   const addHttpHeader = (name: string) => {
     const target = draft.targets[name];
@@ -267,89 +300,165 @@ export function StoragePanel({
     }
   };
 
+  const pipeline = draft.pipeline ?? defaultPipelineConfig();
+  const originEligibleEntries = strategyTargetEntries.filter(([, target]) =>
+    canActAsOrigin(target),
+  );
+  const originOptions = originEligibleEntries.map(([name, target]) => ({
+    value: name,
+    label: `${name} · ${storageTargetLabel(target)}`,
+  }));
+  const cloudPrimaryAvailable = originEligibleEntries.length > 0;
+  const archiveEntries =
+    pipeline.mode === "cloud_primary"
+      ? strategyTargetEntries.filter(([name]) => name !== pipeline.origin)
+      : strategyTargetEntries;
+
   return (
     <div className="flex-1 min-h-0 overflow-auto p-4 sm:p-5 space-y-4">
       <ResultFoldersSection paths={paths} configPaths={configPaths} />
 
       <Section
-        title="自动上传"
+        title="结果归档策略"
         description={
           copy.kind === "browser"
             ? "网页版只存在浏览器本地，要上传云端请用桌面 App 或自建后端。"
-            : "图片保存后，再按下方设置自动上传。"
+            : "选择原图存放在哪儿，以及要不要复制到其他位置。"
         }
       >
         <Row
-          title="主上传目标"
-          description={
-            copy.kind === "browser"
-              ? "网页版不上传云端，只留浏览器本地。"
-              : "任务完成后优先上传到这里。"
-          }
+          title="模式"
+          description="决定原图位置和归档行为。"
           control={
-            <ControlRail className="flex flex-wrap items-center gap-2">
-              {strategyTargetEntries.map(([name]) => (
-                <TargetToggle
-                  key={`default-${name}`}
-                  name={name}
-                  checked={draft.default_targets.includes(name)}
-                  onChange={(checked) =>
-                    toggleTargetList("default_targets", name, checked)
-                  }
-                />
-              ))}
-              {strategyTargetEntries.length === 0 && (
-                <span className="text-[12px] text-muted">暂无上传位置。</span>
-              )}
-              {remoteDraftCount > 0 && (
-                <span className="text-[12px] text-faint">
-                  {remoteDraftCount} 个云端位置已配置但不启用。
-                </span>
-              )}
+            <ControlRail className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+              {STORAGE_PIPELINE_MODE_OPTIONS.map((option) => {
+                const Icon = option.icon;
+                const active = pipeline.mode === option.value;
+                const disabled =
+                  option.value === "cloud_primary" && !cloudPrimaryAvailable;
+                return (
+                  <button
+                    key={option.value}
+                    type="button"
+                    disabled={disabled}
+                    onClick={() => setPipelineMode(option.value)}
+                    title={
+                      disabled
+                        ? "尚未配置任何支持回读的存储位置（如 S3 / WebDAV / SFTP / 本地）。"
+                        : undefined
+                    }
+                    className={cn(
+                      "flex h-full items-start gap-2 rounded-md border px-3 py-2 text-left transition-colors",
+                      active
+                        ? "border-[color:var(--accent-45)] bg-[color:var(--accent-10)] text-foreground"
+                        : "border-border bg-[color:var(--w-04)] text-muted hover:bg-[color:var(--w-07)] hover:text-foreground",
+                      disabled && "opacity-50 cursor-not-allowed",
+                    )}
+                  >
+                    <Icon className="mt-0.5 h-4 w-4 shrink-0" />
+                    <div className="min-w-0">
+                      <div className="text-[12.5px] font-medium leading-tight">
+                        {option.label}
+                      </div>
+                      <div className="mt-1 text-[11.5px] text-faint leading-snug">
+                        {option.description}
+                      </div>
+                    </div>
+                  </button>
+                );
+              })}
             </ControlRail>
           }
         />
-        <Row
-          title="备用位置"
-          description={
-            copy.kind === "browser"
-              ? "网页版备用位置只在浏览器本地。"
-              : "上传失败时改存到这里，建议保留一个本机位置。"
-          }
-          control={
-            <ControlRail className="flex flex-wrap items-center gap-2">
-              {strategyTargetEntries.map(([name]) => (
-                <TargetToggle
-                  key={`fallback-${name}`}
-                  name={name}
-                  checked={draft.fallback_targets.includes(name)}
-                  onChange={(checked) =>
-                    toggleTargetList("fallback_targets", name, checked)
+        {pipeline.mode === "cloud_primary" && (
+          <Row
+            title="云端原图位置"
+            description="必须是支持回读的存储类型；HTTP/Webhook 等仅推送的目标不可作为原图。"
+            control={
+              <ControlRail>
+                <GlassSelect
+                  value={pipeline.origin ?? ""}
+                  onValueChange={(value) =>
+                    patchPipeline({ origin: value || null })
                   }
+                  options={
+                    originOptions.length === 0
+                      ? [{ value: "", label: "没有可用的原图位置" }]
+                      : [
+                          { value: "", label: "请选择原图位置" },
+                          ...originOptions,
+                        ]
+                  }
+                  size="sm"
+                  ariaLabel="云端原图位置"
+                  className="w-full sm:w-[280px]"
                 />
-              ))}
-              {strategyTargetEntries.length === 0 && (
-                <span className="text-[12px] text-muted">暂无备用位置。</span>
-              )}
-            </ControlRail>
-          }
-        />
+              </ControlRail>
+            }
+          />
+        )}
+        {pipeline.mode !== "local_only" && (
+          <Row
+            title={
+              pipeline.mode === "mirror"
+                ? "归档目标"
+                : pipeline.mode === "cloud_primary"
+                  ? "额外归档"
+                  : "推送目标"
+            }
+            description={
+              pipeline.mode === "mirror"
+                ? "任务完成后，会复制到这里。"
+                : pipeline.mode === "cloud_primary"
+                  ? "除原图外，还要异步复制到这些位置（可选）。"
+                  : "任务完成后推送到这些位置。"
+            }
+            control={
+              <ControlRail className="flex flex-wrap items-center gap-2">
+                {archiveEntries.map(([name]) => (
+                  <TargetToggle
+                    key={`archive-${name}`}
+                    name={name}
+                    checked={pipeline.archives.includes(name)}
+                    onChange={(checked) => toggleArchive(name, checked)}
+                  />
+                ))}
+                {archiveEntries.length === 0 && (
+                  <span className="text-[12px] text-muted">
+                    暂无可选归档位置。
+                  </span>
+                )}
+                {remoteDraftCount > 0 && (
+                  <span className="text-[12px] text-faint">
+                    {remoteDraftCount} 个云端位置已配置但不启用。
+                  </span>
+                )}
+              </ControlRail>
+            }
+          />
+        )}
         <Row
-          title="备用启用时机"
-          description="主位置不可用时改用备用。"
+          title="清理策略"
+          description="本地原图的清理时机。绝大多数选项即将上线。"
           control={
             <ControlRail>
               <GlassSelect
-                value={draft.fallback_policy}
-                onValueChange={(fallback_policy) =>
-                  patch({
-                    fallback_policy: fallback_policy as StorageFallbackPolicy,
+                value={pipeline.cleanup.mode}
+                onValueChange={(value) =>
+                  patchPipeline({
+                    cleanup: { ...pipeline.cleanup, mode: value as CleanupMode },
                   })
                 }
-                options={STORAGE_FALLBACK_POLICY_OPTIONS}
+                options={STORAGE_CLEANUP_MODE_OPTIONS.map((option) => ({
+                  value: option.value,
+                  label: option.badge
+                    ? `${option.label}（${option.badge}）`
+                    : option.label,
+                  disabled: option.disabled,
+                }))}
                 size="sm"
-                ariaLabel="备用启用时机"
-                className="w-full sm:w-[180px]"
+                ariaLabel="清理策略"
+                className="w-full sm:w-[240px]"
               />
             </ControlRail>
           }
