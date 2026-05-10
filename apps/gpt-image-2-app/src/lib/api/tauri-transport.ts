@@ -95,8 +95,13 @@ export const tauriApi: ApiClient = {
   canUseCodexProvider: true,
   canExportToDownloadsFolder: true,
   canExportToConfiguredFolder: true,
-  canChooseExportFolder: false,
+  canChooseExportFolder: true,
   canUsePersistentResultLibrary: true,
+  async chooseFolder(startDir?: string) {
+    return invoke<string | null>("pick_folder", {
+      startDir: startDir ?? null,
+    });
+  },
   async getConfig() {
     return normalizeConfig(await invoke<ServerConfig>("get_config"));
   },

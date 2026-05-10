@@ -5,6 +5,7 @@ import { GlassSelect } from "@/components/ui/select";
 import { Segmented } from "@/components/ui/segmented";
 import { Tooltip } from "@/components/ui/tooltip";
 import { Toggle } from "@/components/ui/toggle";
+import { api } from "@/lib/api";
 import { storageTargetType } from "@/lib/api/shared";
 import type { StorageFieldIssue } from "@/lib/storage-validation";
 import type {
@@ -198,6 +199,26 @@ export function StorageTargetCard({
               size="sm"
               aria-label="本地目录"
               aria-invalid={Boolean(fieldError("directory"))}
+              suffix={
+                api.canChooseExportFolder ? (
+                  <Button
+                    variant="ghost"
+                    size="iconSm"
+                    icon="folder"
+                    className="h-6 w-6 shrink-0 text-foreground"
+                    title="浏览文件夹"
+                    aria-label="浏览本地目录"
+                    onClick={async () => {
+                      const picked = await api.chooseFolder?.(
+                        "directory" in target ? target.directory : undefined,
+                      );
+                      if (picked) onPatch(name, { directory: picked });
+                    }}
+                  >
+                    <span className="sr-only">浏览本地目录</span>
+                  </Button>
+                ) : undefined
+              }
             />
           </StorageField>
           <StorageField

@@ -151,6 +151,12 @@ export type ApiClient = RuntimeCapabilities & {
   exportJobToDownloads(jobId: string): Promise<string[]>;
   exportFilesToConfiguredFolder(paths: string[]): Promise<string[]>;
   exportJobToConfiguredFolder(jobId: string): Promise<string[]>;
+  /**
+   * Open the OS-native folder picker. Returns the selected absolute path or
+   * `null` when the user cancels. Tauri-only — other runtimes do not expose
+   * this method (`canChooseExportFolder` gates UI visibility).
+   */
+  chooseFolder?(startDir?: string): Promise<string | null>;
   createGenerate(body: GenerateRequest): Promise<TauriJobResponse>;
   createEdit(form: FormData): Promise<TauriJobResponse>;
   retryJob(jobId: string): Promise<TauriJobResponse>;

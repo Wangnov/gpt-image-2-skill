@@ -28,6 +28,7 @@ use serde_json::{Value, json};
 use tauri::{Emitter, Manager};
 use tauri_plugin_clipboard_manager::ClipboardExt;
 
+mod dialog_commands;
 mod direct_commands;
 mod dropped_files;
 mod export_commands;
@@ -44,6 +45,7 @@ mod settings_commands;
 mod support;
 mod types;
 
+pub(crate) use dialog_commands::*;
 pub(crate) use direct_commands::*;
 pub(crate) use dropped_files::*;
 pub(crate) use export_commands::*;
@@ -130,6 +132,7 @@ pub fn run() {
             soft_delete_job,
             restore_deleted_job,
             hard_delete_job,
+            pick_folder,
         ])
         .run(tauri::generate_context!())
         .expect("error while running gpt-image-2-app");

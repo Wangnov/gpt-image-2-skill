@@ -181,6 +181,10 @@ export const api: ApiClient = {
     invokeClient("exportJobToConfiguredFolder", jobId) as ReturnType<
       ApiClient["exportJobToConfiguredFolder"]
     >,
+  chooseFolder: (startDir) =>
+    loadClient().then((client) =>
+      client.chooseFolder ? client.chooseFolder(startDir) : Promise.resolve(null),
+    ),
   createGenerate: (body) =>
     invokeClient("createGenerate", body) as ReturnType<
       ApiClient["createGenerate"]
