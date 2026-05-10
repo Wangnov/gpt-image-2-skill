@@ -1,4 +1,10 @@
-import { useEffect, useState, type ReactNode } from "react";
+import {
+  useEffect,
+  useMemo,
+  useState,
+  type MutableRefObject,
+  type ReactNode,
+} from "react";
 import { useQuery } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -84,9 +90,18 @@ function TargetToggle({
 export function StoragePanel({
   storage,
   paths,
+  onDirtyChange,
+  onSavingChange,
+  saveRef,
 }: {
   storage?: StorageConfig;
   paths?: PathConfig;
+  /** Reports current dirty state up to SettingsScreen so the panel header
+   *  can render the save button alongside the title rather than inside the
+   *  scrollable content area. */
+  onDirtyChange?: (dirty: boolean) => void;
+  onSavingChange?: (saving: boolean) => void;
+  saveRef?: MutableRefObject<() => void>;
 }) {
   const [draft, setDraft] = useState(() => cloneStorageConfig(storage));
   const [saveAttempted, setSaveAttempted] = useState(false);
@@ -97,6 +112,15 @@ export function StoragePanel({
   const testStorage = useTestStorageTarget();
   const copy = runtimeCopy();
   const requireLocalDirectory = copy.kind !== "browser";
+  // Treat the whole panel as a single draft (matches the actual update_storage
+  // semantics) but surface dirty state to the toolbar so users see when their
+  // mode/origin/archives picks haven't been persisted yet.
+  const isDirty = useMemo(
+    () =>
+      JSON.stringify(draft) !==
+      JSON.stringify(cloneStorageConfig(storage)),
+    [draft, storage],
+  );
   const { data: configPaths } = useQuery<ConfigPaths>({
     queryKey: ["config-paths"],
     queryFn: api.configPaths,
@@ -108,6 +132,14 @@ export function StoragePanel({
     setSaveAttempted(false);
     setTestedTargets(new Set());
   }, [storage]);
+
+  useEffect(() => {
+    onDirtyChange?.(isDirty);
+  }, [isDirty, onDirtyChange]);
+
+  useEffect(() => {
+    onSavingChange?.(updateStorage.isPending);
+  }, [updateStorage.isPending, onSavingChange]);
 
   const targetEntries = Object.entries(draft.targets);
   const strategyTargetEntries =
@@ -273,6 +305,12 @@ export function StoragePanel({
       });
     }
   };
+  // Keep the parent's save ref pointing at the latest closure so that the
+  // header save button always uses the current draft / mutation state.
+  useEffect(() => {
+    if (saveRef) saveRef.current = () => void save();
+  });
+
 
   const runTest = async (name: string) => {
     setTestedTargets((current) => new Set(current).add(name));
@@ -545,17 +583,9 @@ export function StoragePanel({
               />
             );
           })}
-          <div className="flex items-center justify-between gap-2">
+          <div className="flex items-center gap-2">
             <Button variant="secondary" size="sm" icon="plus" onClick={addTarget}>
               添加上传位置
-            </Button>
-            <Button
-              variant="primary"
-              size="sm"
-              disabled={updateStorage.isPending}
-              onClick={() => void save()}
-            >
-              保存
             </Button>
           </div>
           {targetOptions.length > 0 && (
