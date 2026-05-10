@@ -172,10 +172,39 @@ export type StorageTargetConfig =
   | BaiduNetdiskStorageTargetConfig
   | Pan123OpenStorageTargetConfig;
 
+export type PipelineMode =
+  | "local_only"
+  | "mirror"
+  | "cloud_primary"
+  | "cloud_archive_only";
+
+export type CleanupMode =
+  | "never"
+  | "after_archive_success"
+  | "by_age"
+  | "by_size";
+
+export interface CleanupPolicy {
+  mode: CleanupMode;
+  retention_days?: number | null;
+  max_origin_gb?: number | null;
+}
+
+export interface PipelineConfig {
+  mode: PipelineMode;
+  origin?: string | null;
+  archives: string[];
+  cleanup: CleanupPolicy;
+}
+
 export interface StorageConfig {
   targets: Record<string, StorageTargetConfig>;
+  pipeline?: PipelineConfig | null;
+  /** @deprecated Use `pipeline` instead. Kept for back-compat load + zero-value emit. */
   default_targets: string[];
+  /** @deprecated Use `pipeline` instead. */
   fallback_targets: string[];
+  /** @deprecated Use `pipeline` instead. */
   fallback_policy: StorageFallbackPolicy;
   upload_concurrency: number;
   target_concurrency: number;

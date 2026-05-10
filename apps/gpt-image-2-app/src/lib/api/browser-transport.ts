@@ -95,6 +95,12 @@ export const browserApi: ApiClient = {
     const normalized = normalizeStorageConfig(config);
     current.storage = {
       ...normalized,
+      pipeline: {
+        mode: "local_only",
+        origin: null,
+        archives: [],
+        cleanup: { mode: "never" },
+      },
       default_targets: [],
       fallback_targets: [],
       targets: Object.fromEntries(

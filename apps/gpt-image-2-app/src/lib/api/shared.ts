@@ -1,9 +1,13 @@
 import type {
+  CleanupMode,
+  CleanupPolicy,
   Job,
   NotificationConfig,
   OutputUploadRef,
   OutputRef,
   PathConfig,
+  PipelineConfig,
+  PipelineMode,
   ServerConfig,
   StorageConfig,
   StorageFallbackPolicy,
@@ -161,15 +165,142 @@ export function defaultNotificationConfig(): NotificationConfig {
   };
 }
 
+export function defaultPipelineConfig(): PipelineConfig {
+  return {
+    mode: "local_only",
+    origin: null,
+    archives: [],
+    cleanup: { mode: "never" },
+  };
+}
+
 export function defaultStorageConfig(): StorageConfig {
   return {
     targets: {},
+    pipeline: defaultPipelineConfig(),
     default_targets: [],
     fallback_targets: [],
     fallback_policy: "on_failure",
     upload_concurrency: 4,
     target_concurrency: 2,
   };
+}
+
+const PIPELINE_MODES: PipelineMode[] = [
+  "local_only",
+  "mirror",
+  "cloud_primary",
+  "cloud_archive_only",
+];
+
+const CLEANUP_MODES: CleanupMode[] = [
+  "never",
+  "after_archive_success",
+  "by_age",
+  "by_size",
+];
+
+function normalizeStringArray(value: unknown): string[] {
+  if (!Array.isArray(value)) return [];
+  const out: string[] = [];
+  for (const item of value) {
+    if (typeof item !== "string") continue;
+    const trimmed = item.trim();
+    if (trimmed && !out.includes(trimmed)) out.push(trimmed);
+  }
+  return out;
+}
+
+function normalizeCleanupPolicy(
+  value: Partial<CleanupPolicy> | null | undefined,
+): CleanupPolicy {
+  const mode = (
+    value && CLEANUP_MODES.includes(value.mode as CleanupMode)
+      ? value.mode
+      : "never"
+  ) as CleanupMode;
+  const policy: CleanupPolicy = { mode };
+  if (value && typeof value.retention_days === "number") {
+    policy.retention_days = Math.max(0, Math.round(value.retention_days));
+  }
+  if (value && typeof value.max_origin_gb === "number") {
+    policy.max_origin_gb = Math.max(0, Math.round(value.max_origin_gb));
+  }
+  return policy;
+}
+
+function normalizePipelineConfig(
+  value: Partial<PipelineConfig> | null | undefined,
+): PipelineConfig {
+  const fallback = defaultPipelineConfig();
+  if (!value) return fallback;
+  const mode = PIPELINE_MODES.includes(value.mode as PipelineMode)
+    ? (value.mode as PipelineMode)
+    : fallback.mode;
+  const originRaw = value.origin;
+  const origin =
+    typeof originRaw === "string" && originRaw.trim()
+      ? originRaw.trim()
+      : null;
+  return {
+    mode,
+    origin,
+    archives: normalizeStringArray(value.archives),
+    cleanup: normalizeCleanupPolicy(value.cleanup),
+  };
+}
+
+/**
+ * Mirrors Rust `StorageConfig::effective_pipeline()`. Used when a stored
+ * config still carries the legacy (default_targets / fallback_targets /
+ * fallback_policy) fields without an explicit pipeline.
+ */
+export function migrateLegacyToPipeline(
+  legacy: Pick<
+    StorageConfig,
+    "default_targets" | "fallback_targets" | "fallback_policy"
+  >,
+): PipelineConfig {
+  const primary = normalizeStringArray(legacy.default_targets);
+  const fallback = normalizeStringArray(legacy.fallback_targets);
+  if (primary.length === 0 && fallback.length === 0) {
+    return defaultPipelineConfig();
+  }
+  let archives: string[];
+  if (primary.length === 0) {
+    archives = fallback;
+  } else if (fallback.length === 0) {
+    archives = primary;
+  } else if (legacy.fallback_policy === "never") {
+    archives = primary;
+  } else {
+    archives = [];
+    for (const name of [...primary, ...fallback]) {
+      if (!archives.includes(name)) archives.push(name);
+    }
+  }
+  const mode: PipelineMode =
+    legacy.fallback_policy === "always" &&
+    primary.length > 0 &&
+    fallback.length > 0
+      ? "mirror"
+      : "cloud_archive_only";
+  return {
+    mode,
+    origin: null,
+    archives,
+    cleanup: { mode: "never" },
+  };
+}
+
+/**
+ * Type-level Origin-eligibility for a storage target. Mirrors Rust
+ * `StorageTargetConfig::can_act_as_origin()`. HTTP/Webhook targets cannot
+ * act as Origin because they do not support readback.
+ */
+export function canActAsOrigin(target: StorageTargetConfig | undefined): boolean {
+  if (!target) return false;
+  return storageTargetType(target) !== "http";
 }
 
 export function defaultPathConfig(): PathConfig {
@@ -365,17 +496,30 @@ export function normalizeStorageConfig(
   const fallbackPolicy = String(
     config?.fallback_policy ?? defaults.fallback_policy,
   ) as StorageFallbackPolicy;
+  const default_targets = Array.isArray(config?.default_targets)
+    ? config.default_targets
+    : defaults.default_targets;
+  const fallback_targets = Array.isArray(config?.fallback_targets)
+    ? config.fallback_targets
+    : defaults.fallback_targets;
+  const fallback_policy = ["never", "on_failure", "always"].includes(
+    fallbackPolicy,
+  )
+    ? fallbackPolicy
+    : defaults.fallback_policy;
+  const pipeline = config?.pipeline
+    ? normalizePipelineConfig(config.pipeline)
+    : migrateLegacyToPipeline({
+        default_targets,
+        fallback_targets,
+        fallback_policy,
+      });
   return {
     targets,
-    default_targets: Array.isArray(config?.default_targets)
-      ? config.default_targets
-      : defaults.default_targets,
-    fallback_targets: Array.isArray(config?.fallback_targets)
-      ? config.fallback_targets
-      : defaults.fallback_targets,
-    fallback_policy: ["never", "on_failure", "always"].includes(fallbackPolicy)
-      ? fallbackPolicy
-      : defaults.fallback_policy,
+    pipeline,
+    default_targets,
+    fallback_targets,
+    fallback_policy,
     upload_concurrency: Math.max(
       1,
       Math.round(

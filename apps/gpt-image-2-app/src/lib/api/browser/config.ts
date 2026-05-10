@@ -236,6 +236,12 @@ export function sanitizeStorageConfig(config: StorageConfig): StorageConfig {
   const normalized = normalizeStorageConfig(config);
   return {
     ...normalized,
+    pipeline: {
+      mode: "local_only",
+      origin: null,
+      archives: [],
+      cleanup: { mode: "never" },
+    },
     default_targets: [],
     fallback_targets: [],
     targets: Object.fromEntries(
