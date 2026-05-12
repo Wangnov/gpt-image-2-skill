@@ -64,16 +64,19 @@ function TargetToggle({
   name,
   checked,
   onChange,
+  disabled,
 }: {
   name: string;
   checked: boolean;
   onChange: (checked: boolean) => void;
+  disabled?: boolean;
 }) {
   return (
     <Toggle
       checked={checked}
       onChange={onChange}
       label={name}
+      disabled={disabled}
       className={cn(
         "h-9 rounded-md border px-3 text-[12.5px] transition-colors",
         checked
@@ -359,6 +362,22 @@ export function StoragePanel({
   };
 
   const pipeline = draft.pipeline ?? defaultPipelineConfig();
+  const policy = draft.policy;
+  const policyManaged = policy?.managed === true;
+  const policyLocked = policyManaged && policy.allow_user_overrides !== true;
+  const policyLocksMode =
+    policyLocked ||
+    (policyManaged &&
+      (Boolean(policy.locked_origin) || policy.allowed_modes.length === 1));
+  const policyLocksOrigin =
+    policyLocked || (policyManaged && Boolean(policy.locked_origin));
+  const policyLocksArchives =
+    policyLocked || (policyManaged && policy.locked_archives.length > 0);
+  const policyMessage =
+    policy?.message ||
+    (policyManaged
+      ? "存储策略由管理员管理，当前配置会按策略锁定 Origin、归档和模式。"
+      : "");
   const originEligibleEntries = strategyTargetEntries.filter(([, target]) =>
     canActAsOrigin(target),
   );
@@ -391,6 +410,21 @@ export function StoragePanel({
             : "选择原图存放在哪儿，以及要不要复制到其他位置。"
         }
       >
+        {policyManaged && (
+          <Row
+            title="由管理员管理"
+            description={policyMessage}
+            control={
+              <ControlRail>
+                <div className="rounded-md border border-[color:var(--accent-25)] bg-[color:var(--accent-08)] px-3 py-2 text-[12px] leading-snug text-muted">
+                  {policy.allow_user_overrides
+                    ? "管理员提供了默认策略，你仍可调整未锁定的字段。"
+                    : "管理员策略会在保存和任务执行时保持生效。"}
+                </div>
+              </ControlRail>
+            }
+          />
+        )}
         <Row
           title="模式"
           description="决定原图位置和归档行为。"
@@ -401,6 +435,7 @@ export function StoragePanel({
                   const Icon = option.icon;
                   const active = pipeline.mode === option.value;
                   const disabled =
+                    policyLocksMode ||
                     option.value === "cloud_primary" && !cloudPrimaryAvailable;
                   return (
                     <button
@@ -463,6 +498,7 @@ export function StoragePanel({
                     placeholder="请选择原图位置"
                     size="sm"
                     ariaLabel="云端原图位置"
+                    disabled={policyLocksOrigin}
                     className="w-full sm:w-[280px]"
                   />
                 )}
@@ -494,6 +530,7 @@ export function StoragePanel({
                     name={name}
                     checked={pipeline.archives.includes(name)}
                     onChange={(checked) => toggleArchive(name, checked)}
+                    disabled={policyLocksArchives}
                   />
                 ))}
                 {archiveEntries.length === 0 && (
@@ -512,7 +549,11 @@ export function StoragePanel({
         )}
         <Row
           title="清理策略"
-          description={`${localOriginTerm}原图的清理时机。绝大多数选项即将上线。`}
+          description={
+            pipeline.mode === "cloud_primary"
+              ? `${localOriginTerm}缓存会在远端 Origin 与归档均完成后才清理。`
+              : "只有云端为主模式会自动清理本地缓存。"
+          }
           control={
             <ControlRail>
               <GlassSelect
@@ -534,8 +575,45 @@ export function StoragePanel({
                 }))}
                 size="sm"
                 ariaLabel="清理策略"
+                disabled={policyLocked}
                 className="w-full sm:w-[240px]"
               />
+              {pipeline.cleanup.mode === "by_age" && (
+                <Input
+                  value={String(pipeline.cleanup.retention_days ?? 30)}
+                  onChange={(event) =>
+                    patchPipeline({
+                      cleanup: {
+                        ...pipeline.cleanup,
+                        retention_days: Number(event.target.value) || 0,
+                      },
+                    })
+                  }
+                  inputMode="numeric"
+                  size="sm"
+                  aria-label="保留天数"
+                  disabled={policyLocked}
+                  wrapperClassName="w-full sm:w-[120px]"
+                />
+              )}
+              {pipeline.cleanup.mode === "by_size" && (
+                <Input
+                  value={String(pipeline.cleanup.max_origin_gb ?? 10)}
+                  onChange={(event) =>
+                    patchPipeline({
+                      cleanup: {
+                        ...pipeline.cleanup,
+                        max_origin_gb: Number(event.target.value) || 0,
+                      },
+                    })
+                  }
+                  inputMode="numeric"
+                  size="sm"
+                  aria-label="本地缓存上限 GB"
+                  disabled={policyLocked}
+                  wrapperClassName="w-full sm:w-[140px]"
+                />
+              )}
             </ControlRail>
           }
         />
@@ -554,6 +632,7 @@ export function StoragePanel({
                 inputMode="numeric"
                 size="sm"
                 aria-label="并行上传图片数"
+                disabled={policyLocked}
                 wrapperClassName="w-full sm:w-[120px]"
               />
             </ControlRail>
@@ -574,6 +653,7 @@ export function StoragePanel({
                 inputMode="numeric"
                 size="sm"
                 aria-label="同图并行位置数"
+                disabled={policyLocked}
                 wrapperClassName="w-full sm:w-[120px]"
               />
             </ControlRail>
@@ -612,6 +692,7 @@ export function StoragePanel({
               variant="secondary"
               size="sm"
               icon="plus"
+              disabled={policyLocked}
               onClick={addTarget}
             >
               添加上传位置

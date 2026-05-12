@@ -172,20 +172,14 @@ export const STORAGE_CLEANUP_MODE_OPTIONS: CleanupModeOption[] = [
   {
     value: "after_archive_success",
     label: "归档成功后清理",
-    badge: "即将上线",
-    disabled: true,
   },
   {
     value: "by_age",
     label: "按保留天数清理",
-    badge: "即将上线",
-    disabled: true,
   },
   {
     value: "by_size",
     label: "按上限大小清理",
-    badge: "即将上线",
-    disabled: true,
   },
 ];
 

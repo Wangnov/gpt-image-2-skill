@@ -64,6 +64,55 @@ pub(crate) fn load_config_or_default() -> AppConfig {
     load_config().unwrap_or_default()
 }
 
+pub(crate) fn read_job_output_for_product(
+    job_id: &str,
+    output_index: usize,
+    rehydrate_local_cache: bool,
+) -> Result<StorageReadback, String> {
+    let config = load_config()?;
+    let job = show_history_job(job_id).map_err(app_error)?;
+    read_job_output_from_storage_with_options(
+        &config.storage,
+        &job,
+        output_index,
+        StorageReadbackOptions {
+            allow_archive_fallback: true,
+            rehydrate_local_cache,
+        },
+    )
+    .map_err(app_error)
+}
+
+pub(crate) fn history_output_indexes(job: &Value) -> Vec<usize> {
+    let mut indexes = job
+        .get("outputs")
+        .and_then(Value::as_array)
+        .into_iter()
+        .flatten()
+        .filter_map(|output| {
+            output
+                .get("index")
+                .and_then(Value::as_u64)
+                .and_then(|value| usize::try_from(value).ok())
+        })
+        .collect::<Vec<_>>();
+    indexes.sort_unstable();
+    indexes.dedup();
+    if indexes.is_empty() && job.get("output_path").and_then(Value::as_str).is_some() {
+        indexes.push(0);
+    }
+    indexes
+}
+
+pub(crate) fn rehydrate_history_job_outputs(job: &Value) {
+    let Some(job_id) = job.get("id").and_then(Value::as_str) else {
+        return;
+    };
+    for output_index in history_output_indexes(job) {
+        let _ = read_job_output_for_product(job_id, output_index, true);
+    }
+}
+
 pub(crate) fn result_library_dir() -> PathBuf {
     product_result_library_dir(Some(&load_config_or_default()), ProductRuntime::Tauri)
 }

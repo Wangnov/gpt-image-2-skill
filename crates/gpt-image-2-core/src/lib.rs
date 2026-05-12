@@ -140,11 +140,12 @@ pub(crate) use storage::backends::{pan123_file_name_from_key, sftp_host_key_matc
 use storage::util::redact_url_for_log;
 pub use storage::{
     BackendCapabilities, BaiduNetdiskAuthMode, CleanupMode, CleanupPolicy, OutputUploadRecord,
-    Pan123OpenAuthMode, PipelineConfig, PipelineMode, PrimaryQuality, StorageConfig,
-    StorageFallbackPolicy, StorageReadback, StorageTargetConfig, StorageTestResult,
-    StorageUploadOverrides, list_output_upload_records, preserve_storage_secrets,
-    read_job_output_from_storage, test_storage_target, upload_job_outputs_to_storage,
-    upsert_output_upload_record,
+    Pan123OpenAuthMode, PipelineConfig, PipelineMode, PrimaryQuality, StorageCacheCleanupOutcome,
+    StorageConfig, StorageFallbackPolicy, StorageManagementPolicy, StorageReadback,
+    StorageReadbackOptions, StorageTargetConfig, StorageTestResult, StorageUploadOverrides,
+    cleanup_storage_cache, list_output_upload_records, preserve_storage_secrets,
+    read_job_output_from_storage, read_job_output_from_storage_with_options, test_storage_target,
+    upload_job_outputs_to_storage, upsert_output_upload_record,
 };
 pub(crate) use storage::{
     enrich_outputs_with_uploads, list_output_upload_records_with_conn, redact_storage_config,

@@ -133,6 +133,7 @@ pub(crate) fn redact_storage_config(config: &StorageConfig) -> Value {
         "fallback_policy": config.fallback_policy,
         "upload_concurrency": config.upload_concurrency,
         "target_concurrency": config.target_concurrency,
+        "policy": &config.policy,
     });
     if let Some(pipeline) = &config.pipeline
         && let Some(object) = payload.as_object_mut()

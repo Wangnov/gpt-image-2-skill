@@ -31,7 +31,7 @@ import type {
   TauriJobResponse,
 } from "./types";
 import { isTerminalJobStatus } from "./types";
-import { fileApiUrl, jsonBody, requestJson } from "./http/client";
+import { apiResourceUrl, fileApiUrl, jsonBody, requestJson } from "./http/client";
 import { basename, downloadJobZip, downloadUrl } from "./http/downloads";
 import { formUploadPayload } from "./http/edit-payload";
 import {
@@ -238,7 +238,17 @@ export const httpApi: ApiClient = {
   },
   async exportJobToConfiguredFolder(jobId: string) {
     const { job } = await httpApi.getJob(jobId);
-    return downloadJobZip(job, httpApi.fileUrl, httpApi.jobOutputPaths);
+    return downloadJobZip(job, httpApi.fileUrl, httpApi.jobOutputPaths, httpApi.jobOutputUrl);
+  },
+  async exportJobOutputToConfiguredFolder(jobId: string, outputIndex: number) {
+    const url = apiResourceUrl(
+      `/jobs/${encodeURIComponent(jobId)}/outputs/${outputIndex}`,
+    );
+    downloadUrl(url, `${jobId}-${outputIndex + 1}.png`);
+    return [url];
+  },
+  async ensureJobOutputCached(_jobId: string, _outputIndex: number) {
+    return null;
   },
   async createGenerate(body: GenerateRequest) {
     const result = await requestJson<TauriJobResponse>("/images/generate", {
@@ -270,8 +280,9 @@ export const httpApi: ApiClient = {
     return path ? fileApiUrl(path) : "";
   },
   jobOutputUrl(job: Job, index = 0) {
-    const path = jobOutputPath(job, index);
-    return path ? httpApi.fileUrl(path) : "";
+    return apiResourceUrl(
+      `/jobs/${encodeURIComponent(job.id)}/outputs/${index}`,
+    );
   },
   jobOutputPath,
   jobOutputPaths,

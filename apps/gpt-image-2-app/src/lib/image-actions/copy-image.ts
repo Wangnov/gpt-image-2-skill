@@ -27,7 +27,12 @@ export async function copyImageToClipboard(
     if (!asset.path) {
       throw new Error("Tauri 模式需要本地文件路径来复制图片。");
     }
-    await api.copyImageToClipboard(asset.path, promptText);
+    await api.copyImageToClipboard(
+      asset.path,
+      promptText,
+      asset.jobId,
+      asset.outputIndex,
+    );
     return;
   }
 
@@ -62,4 +67,3 @@ async function fetchAsBlob(src: string, expectedMime: string): Promise<Blob> {
   if (raw.type === expectedMime) return raw;
   return new Blob([await raw.arrayBuffer()], { type: expectedMime });
 }
-

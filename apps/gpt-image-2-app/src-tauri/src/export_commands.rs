@@ -65,6 +65,7 @@ pub(crate) fn export_files_into_dir(
 #[tauri::command]
 pub(crate) fn export_job_to_configured_folder(job_id: String) -> Result<Vec<String>, String> {
     let job = show_history_job(&job_id).map_err(app_error)?;
+    rehydrate_history_job_outputs(&job);
     let paths = output_paths_from_job(&job);
     if paths.is_empty() {
         return Err("这个任务没有可保存的图片。".to_string());
@@ -89,6 +90,19 @@ pub(crate) fn export_job_to_configured_folder(job_id: String) -> Result<Vec<Stri
         saved.push(destination.display().to_string());
     }
     Ok(saved)
+}
+
+#[tauri::command]
+pub(crate) fn export_job_output_to_configured_folder(
+    job_id: String,
+    output_index: usize,
+) -> Result<Vec<String>, String> {
+    let job = show_history_job(&job_id).map_err(app_error)?;
+    let _ = read_job_output_for_product(&job_id, output_index, true)?;
+    let path = output_path_from_job(&job, output_index)
+        .ok_or_else(|| "这个输出没有可保存的图片。".to_string())?;
+    let root = configured_export_dir()?;
+    export_files_into_dir(vec![path], &root)
 }
 
 pub(crate) fn configured_export_dir() -> Result<PathBuf, String> {

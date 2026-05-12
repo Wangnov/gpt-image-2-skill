@@ -339,6 +339,14 @@ export const browserApi: ApiClient = {
     const { job } = await browserApi.getJob(jobId);
     return browser.downloadJobZip(job);
   },
+  async exportJobOutputToConfiguredFolder(jobId: string, outputIndex: number) {
+    const path = outputPath(jobId, outputIndex);
+    if (!path) throw new Error("没有可下载的图片。");
+    return browserApi.exportFilesToConfiguredFolder([path]);
+  },
+  async ensureJobOutputCached(_jobId: string, _outputIndex: number) {
+    return null;
+  },
   async createGenerate(body: GenerateRequest) {
     if (!body.prompt.trim()) throw new Error("Prompt is required.");
     const provider = browser.selectedProviderName(body.provider);

@@ -6,7 +6,7 @@ use serde_json::{Value, json};
 use crate::AppError;
 
 use super::backends::download_from_target;
-use super::history::list_output_upload_records;
+use super::history::{OutputUploadRecord, list_output_upload_records};
 use super::types::{PipelineMode, StorageConfig};
 
 #[derive(Debug, Clone)]
@@ -15,10 +15,30 @@ pub struct StorageReadback {
     pub source: Value,
 }
 
+#[derive(Debug, Clone, Copy, Default)]
+pub struct StorageReadbackOptions {
+    pub allow_archive_fallback: bool,
+    pub rehydrate_local_cache: bool,
+}
+
 pub fn read_job_output_from_storage(
     config: &StorageConfig,
     job: &Value,
     output_index: usize,
+) -> Result<StorageReadback, AppError> {
+    read_job_output_from_storage_with_options(
+        config,
+        job,
+        output_index,
+        StorageReadbackOptions::default(),
+    )
+}
+
+pub fn read_job_output_from_storage_with_options(
+    config: &StorageConfig,
+    job: &Value,
+    output_index: usize,
+    options: StorageReadbackOptions,
 ) -> Result<StorageReadback, AppError> {
     if let Some(path) = job_output_path(job, output_index) {
         let path = PathBuf::from(path);
@@ -44,29 +64,22 @@ pub fn read_job_output_from_storage(
     }
 
     let pipeline = config.effective_pipeline();
-    if !matches!(pipeline.mode, PipelineMode::CloudPrimary) {
+    if !matches!(pipeline.mode, PipelineMode::CloudPrimary) && !options.allow_archive_fallback {
         return Err(AppError::new(
             "storage_readback_unavailable",
-            "Remote readback is only available for cloud-primary storage.",
+            "Remote readback is only available for cloud-primary storage unless archive fallback is explicitly allowed.",
         ));
     }
     let origin = pipeline
         .origin
         .as_deref()
-        .filter(|value| !value.trim().is_empty())
-        .ok_or_else(|| {
-            AppError::new(
-                "storage_readback_origin_missing",
-                "Cloud-primary storage has no Origin target configured.",
-            )
-        })?;
-    let target = config.targets.get(origin).ok_or_else(|| {
-        AppError::new(
-            "storage_readback_target_missing",
-            "Cloud-primary Origin target is not configured.",
-        )
-        .with_detail(json!({"target": origin}))
-    })?;
+        .filter(|value| !value.trim().is_empty());
+    if matches!(pipeline.mode, PipelineMode::CloudPrimary) && origin.is_none() {
+        return Err(AppError::new(
+            "storage_readback_origin_missing",
+            "Cloud-primary storage has no Origin target configured.",
+        ));
+    }
     let job_id = job.get("id").and_then(Value::as_str).ok_or_else(|| {
         AppError::new(
             "storage_readback_job_invalid",
@@ -74,38 +87,77 @@ pub fn read_job_output_from_storage(
         )
     })?;
     let uploads = list_output_upload_records(job_id)?;
-    let record = uploads
-        .iter()
-        .find(|record| {
-            record.output_index == output_index
-                && record.target == origin
-                && record.status == "completed"
-                && record.metadata.get("role").and_then(Value::as_str) == Some("primary")
-        })
-        .ok_or_else(|| {
-            AppError::new(
-                "storage_readback_upload_missing",
-                "No completed Origin upload record exists for this output.",
-            )
-            .with_detail(json!({"job_id": job_id, "output_index": output_index, "target": origin}))
-        })?;
-    let detail = upload_readback_detail(&record.metadata).ok_or_else(|| {
-        AppError::new(
-            "storage_readback_manifest_missing",
-            "Origin upload record is missing readback metadata.",
+    let candidates = readback_candidates(
+        &uploads,
+        output_index,
+        origin,
+        options.allow_archive_fallback,
+    );
+    if candidates.is_empty() {
+        return Err(AppError::new(
+            "storage_readback_upload_missing",
+            "No completed readable upload record exists for this output.",
         )
-        .with_detail(json!({"job_id": job_id, "output_index": output_index, "target": origin}))
-    })?;
-    let download = download_from_target(target, detail)?;
-    Ok(StorageReadback {
-        bytes: download.bytes,
-        source: json!({
-            "kind": "origin",
-            "target": record.target,
-            "target_type": record.target_type,
-            "metadata": download.metadata,
-        }),
-    })
+        .with_detail(json!({
+            "job_id": job_id,
+            "output_index": output_index,
+            "origin": origin,
+            "allow_archive_fallback": options.allow_archive_fallback,
+        })));
+    }
+    let mut failures = Vec::new();
+    for (kind, record) in candidates {
+        let Some(target) = config.targets.get(&record.target) else {
+            failures.push(json!({
+                "kind": kind,
+                "target": record.target,
+                "code": "storage_readback_target_missing",
+                "message": "Storage target is not configured.",
+            }));
+            continue;
+        };
+        let Some(detail) = upload_readback_detail(&record.metadata) else {
+            failures.push(json!({
+                "kind": kind,
+                "target": record.target,
+                "code": "storage_readback_manifest_missing",
+                "message": "Upload record is missing readback metadata.",
+            }));
+            continue;
+        };
+        match download_from_target(target, detail) {
+            Ok(download) => {
+                let rehydrated_path =
+                    rehydrate_cache_path(job, output_index, detail, &download.bytes, options)?;
+                return Ok(StorageReadback {
+                    bytes: download.bytes,
+                    source: json!({
+                        "kind": kind,
+                        "target": record.target,
+                        "target_type": record.target_type,
+                        "metadata": download.metadata,
+                        "rehydrated_path": rehydrated_path,
+                    }),
+                });
+            }
+            Err(error) => failures.push(json!({
+                "kind": kind,
+                "target": record.target,
+                "code": error.code,
+                "message": error.message,
+                "detail": error.detail,
+            })),
+        }
+    }
+    Err(AppError::new(
+        "storage_readback_failed",
+        "Unable to read this output from configured storage.",
+    )
+    .with_detail(json!({
+        "job_id": job_id,
+        "output_index": output_index,
+        "attempts": failures,
+    })))
 }
 
 fn upload_readback_detail(metadata: &Value) -> Option<&Value> {
@@ -113,6 +165,81 @@ fn upload_readback_detail(metadata: &Value) -> Option<&Value> {
         .get("manifest")
         .or_else(|| metadata.get("detail"))
         .filter(|value| value.is_object())
+}
+
+fn readback_candidates<'a>(
+    uploads: &'a [OutputUploadRecord],
+    output_index: usize,
+    origin: Option<&str>,
+    allow_archive_fallback: bool,
+) -> Vec<(&'static str, &'a OutputUploadRecord)> {
+    let mut out = Vec::new();
+    if let Some(origin) = origin
+        && let Some(record) = uploads.iter().find(|record| {
+            record.output_index == output_index
+                && record.target == origin
+                && record.status == "completed"
+                && record.metadata.get("role").and_then(Value::as_str) == Some("primary")
+        })
+    {
+        out.push(("origin", record));
+    }
+    if allow_archive_fallback {
+        out.extend(uploads.iter().filter_map(|record| {
+            let is_origin = origin.is_some_and(|origin| record.target == origin);
+            if record.output_index == output_index && record.status == "completed" && !is_origin {
+                Some(("archive", record))
+            } else {
+                None
+            }
+        }));
+    }
+    out
+}
+
+fn rehydrate_cache_path(
+    job: &Value,
+    output_index: usize,
+    detail: &Value,
+    bytes: &[u8],
+    options: StorageReadbackOptions,
+) -> Result<Value, AppError> {
+    if !options.rehydrate_local_cache {
+        return Ok(Value::Null);
+    }
+    let path = job_output_path(job, output_index)
+        .map(PathBuf::from)
+        .or_else(|| manifest_cache_path(detail));
+    let Some(path) = path else {
+        return Ok(Value::Null);
+    };
+    if let Some(parent) = path.parent() {
+        fs::create_dir_all(parent).map_err(|error| {
+            AppError::new(
+                "storage_readback_cache_create_failed",
+                "Unable to create local cache directory.",
+            )
+            .with_detail(json!({"path": parent.display().to_string(), "error": error.to_string()}))
+        })?;
+    }
+    fs::write(&path, bytes).map_err(|error| {
+        AppError::new(
+            "storage_readback_cache_write_failed",
+            "Unable to rehydrate local output cache.",
+        )
+        .with_detail(json!({"path": path.display().to_string(), "error": error.to_string()}))
+    })?;
+    Ok(Value::String(path.display().to_string()))
+}
+
+fn manifest_cache_path(detail: &Value) -> Option<PathBuf> {
+    detail
+        .get("local_cache_path")
+        .or_else(|| detail.get("source_path"))
+        .or_else(|| detail.get("path"))
+        .and_then(Value::as_str)
+        .filter(|path| !path.trim().is_empty())
+        .map(PathBuf::from)
 }
 
 fn job_output_path(job: &Value, output_index: usize) -> Option<&str> {

@@ -216,6 +216,14 @@ describe("browserApi", () => {
       fallback_policy: "on_failure",
       upload_concurrency: 4,
       target_concurrency: 2,
+      policy: {
+        managed: false,
+        allow_user_overrides: false,
+        allowed_modes: [],
+        locked_origin: null,
+        locked_archives: [],
+        message: null,
+      },
     };
 
     expect(browserApi.updateStorage).toBeDefined();

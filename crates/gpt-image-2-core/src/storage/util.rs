@@ -41,6 +41,13 @@ pub(super) struct StorageDownloadOutcome {
     pub(super) metadata: Value,
 }
 
+#[derive(Debug, Clone)]
+#[allow(dead_code)]
+pub(crate) struct StorageHeadOutcome {
+    pub(crate) bytes: Option<u64>,
+    pub(crate) metadata: Value,
+}
+
 pub(super) fn storage_target_type(target: &StorageTargetConfig) -> &'static str {
     match target {
         StorageTargetConfig::Local { .. } => "local",

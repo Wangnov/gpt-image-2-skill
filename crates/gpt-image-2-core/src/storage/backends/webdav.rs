@@ -1,7 +1,7 @@
 use std::fs;
 use std::time::Duration;
 
-use reqwest::header::CONTENT_TYPE;
+use reqwest::header::{CONTENT_LENGTH, CONTENT_TYPE};
 use serde_json::json;
 
 use super::super::util::*;
@@ -136,6 +136,161 @@ pub(super) fn upload_to_webdav(
         metadata: json!({
             "key": key,
             "webdav_url": redact_url_for_log(&endpoint),
+            "http_status": status.as_u16(),
+        }),
+    })
+}
+
+pub(super) fn download_from_webdav(
+    url: &str,
+    username: Option<&str>,
+    password: Option<&CredentialRef>,
+    detail: &serde_json::Value,
+) -> Result<StorageDownloadOutcome, AppError> {
+    let key = detail
+        .get("key")
+        .and_then(serde_json::Value::as_str)
+        .filter(|value| !value.trim().is_empty())
+        .ok_or_else(|| {
+            AppError::new(
+                "storage_readback_missing_key",
+                "WebDAV storage upload record is missing an object key.",
+            )
+        })?;
+    let endpoint = join_storage_url(url, key);
+    let (_, host_label, addrs) = validate_remote_http_target(&endpoint, "WebDAV storage")?;
+    let client = pinned_http_client(
+        &host_label,
+        &addrs,
+        Duration::from_secs(DEFAULT_REQUEST_TIMEOUT.min(120)),
+        "storage_webdav_client_failed",
+        "Unable to build WebDAV client.",
+    )?;
+    let resolved_password = if username.is_some_and(|value| !value.trim().is_empty()) {
+        Some(
+            password
+                .map(resolve_credential)
+                .transpose()?
+                .map(|(value, _)| value)
+                .unwrap_or_default(),
+        )
+    } else {
+        None
+    };
+    let mut request = client.get(&endpoint);
+    if let Some(username) = username.filter(|value| !value.trim().is_empty()) {
+        request = request.basic_auth(username.to_string(), resolved_password);
+    }
+    let response = request.send().map_err(|error| {
+        AppError::new(
+            "storage_webdav_request_failed",
+            "WebDAV storage readback failed.",
+        )
+        .with_detail(json!({
+            "url": redact_url_for_log(&endpoint),
+            "error": sanitized_request_error(&error),
+        }))
+    })?;
+    let status = response.status();
+    let headers = response.headers().clone();
+    let bytes = response.bytes().map_err(|error| {
+        AppError::new(
+            "storage_webdav_read_failed",
+            "Unable to read WebDAV response body.",
+        )
+        .with_detail(json!({"url": redact_url_for_log(&endpoint), "error": error.to_string()}))
+    })?;
+    if !status.is_success() {
+        return Err(AppError::new(
+            "storage_webdav_status_failed",
+            format!("WebDAV storage readback returned {status}."),
+        )
+        .with_detail(json!({"url": redact_url_for_log(&endpoint)})));
+    }
+    Ok(StorageDownloadOutcome {
+        bytes: bytes.to_vec(),
+        metadata: json!({
+            "key": key,
+            "webdav_url": redact_url_for_log(&endpoint),
+            "etag": headers
+                .get("etag")
+                .and_then(|value| value.to_str().ok()),
+            "http_status": status.as_u16(),
+        }),
+    })
+}
+
+#[allow(dead_code)]
+pub(super) fn head_webdav(
+    url: &str,
+    username: Option<&str>,
+    password: Option<&CredentialRef>,
+    detail: &serde_json::Value,
+) -> Result<StorageHeadOutcome, AppError> {
+    let key = detail
+        .get("key")
+        .and_then(serde_json::Value::as_str)
+        .filter(|value| !value.trim().is_empty())
+        .ok_or_else(|| {
+            AppError::new(
+                "storage_head_missing_key",
+                "WebDAV storage upload record is missing an object key.",
+            )
+        })?;
+    let endpoint = join_storage_url(url, key);
+    let (_, host_label, addrs) = validate_remote_http_target(&endpoint, "WebDAV storage")?;
+    let client = pinned_http_client(
+        &host_label,
+        &addrs,
+        Duration::from_secs(DEFAULT_REQUEST_TIMEOUT.min(120)),
+        "storage_webdav_client_failed",
+        "Unable to build WebDAV client.",
+    )?;
+    let resolved_password = if username.is_some_and(|value| !value.trim().is_empty()) {
+        Some(
+            password
+                .map(resolve_credential)
+                .transpose()?
+                .map(|(value, _)| value)
+                .unwrap_or_default(),
+        )
+    } else {
+        None
+    };
+    let mut request = client.head(&endpoint);
+    if let Some(username) = username.filter(|value| !value.trim().is_empty()) {
+        request = request.basic_auth(username.to_string(), resolved_password);
+    }
+    let response = request.send().map_err(|error| {
+        AppError::new(
+            "storage_webdav_request_failed",
+            "WebDAV storage metadata read failed.",
+        )
+        .with_detail(json!({
+            "url": redact_url_for_log(&endpoint),
+            "error": sanitized_request_error(&error),
+        }))
+    })?;
+    let status = response.status();
+    let headers = response.headers();
+    if !status.is_success() {
+        return Err(AppError::new(
+            "storage_webdav_status_failed",
+            format!("WebDAV storage metadata read returned {status}."),
+        )
+        .with_detail(json!({"url": redact_url_for_log(&endpoint)})));
+    }
+    Ok(StorageHeadOutcome {
+        bytes: headers
+            .get(CONTENT_LENGTH)
+            .and_then(|value| value.to_str().ok())
+            .and_then(|value| value.parse::<u64>().ok()),
+        metadata: json!({
+            "key": key,
+            "webdav_url": redact_url_for_log(&endpoint),
+            "etag": headers
+                .get("etag")
+                .and_then(|value| value.to_str().ok()),
             "http_status": status.as_u16(),
         }),
     })

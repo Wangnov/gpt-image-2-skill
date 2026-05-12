@@ -197,6 +197,15 @@ export interface PipelineConfig {
   cleanup: CleanupPolicy;
 }
 
+export interface StorageManagementPolicy {
+  managed: boolean;
+  allow_user_overrides: boolean;
+  allowed_modes: PipelineMode[];
+  locked_origin?: string | null;
+  locked_archives: string[];
+  message?: string | null;
+}
+
 export interface StorageConfig {
   targets: Record<string, StorageTargetConfig>;
   pipeline?: PipelineConfig | null;
@@ -208,6 +217,7 @@ export interface StorageConfig {
   fallback_policy: StorageFallbackPolicy;
   upload_concurrency: number;
   target_concurrency: number;
+  policy: StorageManagementPolicy;
 }
 
 export type PathMode = "default" | "custom";

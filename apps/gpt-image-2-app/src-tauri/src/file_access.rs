@@ -46,17 +46,35 @@ pub(crate) async fn read_image_bytes(path: String) -> Result<Vec<u8>, String> {
 }
 
 #[tauri::command]
+pub(crate) fn ensure_job_output_cached(
+    job_id: String,
+    output_index: usize,
+) -> Result<Option<String>, String> {
+    let readback = read_job_output_for_product(&job_id, output_index, true)?;
+    Ok(readback
+        .source
+        .get("rehydrated_path")
+        .and_then(Value::as_str)
+        .map(ToString::to_string))
+}
+
+#[tauri::command]
 pub(crate) async fn copy_image_to_clipboard(
     path: String,
     _prompt: Option<String>,
+    job_id: Option<String>,
+    output_index: Option<usize>,
     app: tauri::AppHandle,
 ) -> Result<(), String> {
     let raw = PathBuf::from(&path);
-    if !raw.is_file() {
+    let bytes = if raw.is_file() {
+        let resolved = resolve_within_allowed_scope(&raw)?;
+        fs::read(&resolved).map_err(|error| format!("读取失败：{error}"))?
+    } else if let (Some(job_id), Some(output_index)) = (job_id.as_deref(), output_index) {
+        read_job_output_for_product(job_id, output_index, true)?.bytes
+    } else {
         return Err("图片文件不存在，可能已被移动或删除。".to_string());
-    }
-    let resolved = resolve_within_allowed_scope(&raw)?;
-    let bytes = fs::read(&resolved).map_err(|error| format!("读取失败：{error}"))?;
+    };
     // Decode via the `image` crate so JPEG / WEBP / GIF outputs round-trip
     // — `tauri::image::Image::from_bytes` only supports PNG/ICO with the
     // currently enabled feature set, which would otherwise hard-regress

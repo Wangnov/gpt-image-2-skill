@@ -220,9 +220,10 @@ pub enum PipelineMode {
     CloudArchiveOnly,
 }
 
-/// Lifecycle policy for cached/local copies of originals. Most variants are
-/// schema placeholders for later steps; only `Never` is actually honored
-/// today.
+/// Lifecycle policy for cached/local copies of originals when `CloudPrimary`
+/// is enabled. Cleanup only deletes local cache files after upload history
+/// proves the configured Origin and Archive targets have completed; remote
+/// objects are never deleted implicitly by these policies.
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, Eq, PartialEq)]
 #[serde(rename_all = "snake_case")]
 pub enum CleanupMode {
@@ -275,6 +276,54 @@ impl Default for PipelineConfig {
     }
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, Eq, PartialEq, Default)]
+pub struct StorageManagementPolicy {
+    /// Set by managed deployments to make config-as-code authoritative.
+    #[serde(default)]
+    pub managed: bool,
+    /// When false, UI/server save paths preserve this policy and coerce user
+    /// edits back to the managed pipeline boundary.
+    #[serde(default)]
+    pub allow_user_overrides: bool,
+    /// Restrict selectable pipeline modes. An empty list means "no mode
+    /// restriction" unless another lock (such as locked_origin) implies one.
+    #[serde(default)]
+    pub allowed_modes: Vec<PipelineMode>,
+    /// Force a target name to be the remote Result Origin.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub locked_origin: Option<String>,
+    /// Force the archive target list. Empty means the user/config may choose.
+    #[serde(default)]
+    pub locked_archives: Vec<String>,
+    /// Optional operator-facing note surfaced in UI.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub message: Option<String>,
+}
+
+impl StorageManagementPolicy {
+    fn apply_to_pipeline(&self, pipeline: &mut PipelineConfig) {
+        if !self.managed {
+            return;
+        }
+        if !self.allowed_modes.is_empty() && !self.allowed_modes.contains(&pipeline.mode) {
+            pipeline.mode = self.allowed_modes[0];
+        }
+        if let Some(origin) = normalized_policy_name(&self.locked_origin) {
+            pipeline.mode = PipelineMode::CloudPrimary;
+            pipeline.origin = Some(origin);
+        }
+        if !self.locked_archives.is_empty() {
+            pipeline.archives = dedupe_policy_names(&self.locked_archives);
+        }
+        if pipeline.mode != PipelineMode::CloudPrimary {
+            pipeline.origin = None;
+        }
+        if let Some(origin) = pipeline.origin.as_deref() {
+            pipeline.archives.retain(|archive| archive != origin);
+        }
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct StorageConfig {
     #[serde(default)]
@@ -310,6 +359,27 @@ pub struct StorageConfig {
     pub upload_concurrency: usize,
     #[serde(default = "default_storage_target_concurrency")]
     pub target_concurrency: usize,
+    #[serde(default)]
+    pub policy: StorageManagementPolicy,
+}
+
+fn normalized_policy_name(value: &Option<String>) -> Option<String> {
+    value
+        .as_deref()
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .map(ToString::to_string)
+}
+
+fn dedupe_policy_names(values: &[String]) -> Vec<String> {
+    let mut out = Vec::new();
+    for value in values {
+        let clean = value.trim();
+        if !clean.is_empty() && !out.iter().any(|existing: &String| existing == clean) {
+            out.push(clean.to_string());
+        }
+    }
+    out
 }
 
 fn default_storage_fallback_targets() -> Vec<String> {
@@ -335,6 +405,7 @@ impl Default for StorageConfig {
             fallback_policy: StorageFallbackPolicy::default(),
             upload_concurrency: default_storage_upload_concurrency(),
             target_concurrency: default_storage_target_concurrency(),
+            policy: StorageManagementPolicy::default(),
         }
     }
 }
@@ -358,44 +429,54 @@ impl StorageConfig {
     /// | both populated, `policy in {OnFailure, Never}` | `CloudArchiveOnly` | OnFailure's "run fallback only on primary failure" semantics is intentionally dropped (everyone uploads to all archives now). Never's fallback list is also discarded. |
     #[allow(deprecated)] // The legacy fields are read here on purpose: this is the migration shim.
     pub fn effective_pipeline(&self) -> PipelineConfig {
-        if let Some(pipeline) = &self.pipeline {
-            return pipeline.clone();
-        }
-        let primary = &self.default_targets;
-        let fallback = &self.fallback_targets;
-        if primary.is_empty() && fallback.is_empty() {
-            return PipelineConfig::default();
-        }
-        let merged = match (primary.is_empty(), fallback.is_empty()) {
-            (true, false) => fallback.clone(),
-            (false, true) => primary.clone(),
-            (false, false) => match self.fallback_policy {
-                StorageFallbackPolicy::Never => primary.clone(),
-                StorageFallbackPolicy::OnFailure | StorageFallbackPolicy::Always => {
-                    let mut out = Vec::with_capacity(primary.len() + fallback.len());
-                    for name in primary.iter().chain(fallback.iter()) {
-                        if !out.iter().any(|existing: &String| existing == name) {
-                            out.push(name.clone());
-                        }
-                    }
-                    out
-                }
-            },
-            (true, true) => unreachable!("handled by the empty-empty branch above"),
-        };
-        let mode = if matches!(self.fallback_policy, StorageFallbackPolicy::Always)
-            && !primary.is_empty()
-            && !fallback.is_empty()
-        {
-            PipelineMode::Mirror
+        let mut pipeline = if let Some(pipeline) = &self.pipeline {
+            pipeline.clone()
         } else {
-            PipelineMode::CloudArchiveOnly
+            let primary = &self.default_targets;
+            let fallback = &self.fallback_targets;
+            if primary.is_empty() && fallback.is_empty() {
+                PipelineConfig::default()
+            } else {
+                let merged = match (primary.is_empty(), fallback.is_empty()) {
+                    (true, false) => fallback.clone(),
+                    (false, true) => primary.clone(),
+                    (false, false) => match self.fallback_policy {
+                        StorageFallbackPolicy::Never => primary.clone(),
+                        StorageFallbackPolicy::OnFailure | StorageFallbackPolicy::Always => {
+                            let mut out = Vec::with_capacity(primary.len() + fallback.len());
+                            for name in primary.iter().chain(fallback.iter()) {
+                                if !out.iter().any(|existing: &String| existing == name) {
+                                    out.push(name.clone());
+                                }
+                            }
+                            out
+                        }
+                    },
+                    (true, true) => unreachable!("handled by the empty-empty branch above"),
+                };
+                let mode = if matches!(self.fallback_policy, StorageFallbackPolicy::Always)
+                    && !primary.is_empty()
+                    && !fallback.is_empty()
+                {
+                    PipelineMode::Mirror
+                } else {
+                    PipelineMode::CloudArchiveOnly
+                };
+                PipelineConfig {
+                    mode,
+                    origin: None,
+                    archives: merged,
+                    cleanup: CleanupPolicy::default(),
+                }
+            }
         };
-        PipelineConfig {
-            mode,
-            origin: None,
-            archives: merged,
-            cleanup: CleanupPolicy::default(),
+        self.policy.apply_to_pipeline(&mut pipeline);
+        pipeline
+    }
+
+    pub fn enforce_policy(&mut self) {
+        if self.policy.managed {
+            self.pipeline = Some(self.effective_pipeline());
         }
     }
 }
@@ -727,5 +808,30 @@ mod tests {
         assert!(pan123(false).can_act_as_origin());
         assert!(!http(false).can_act_as_origin());
         assert!(!http(true).can_act_as_origin());
+    }
+
+    #[test]
+    fn managed_policy_locks_origin_and_archive_selection() {
+        let config = StorageConfig {
+            pipeline: Some(PipelineConfig {
+                mode: PipelineMode::Mirror,
+                origin: None,
+                archives: vec!["local-copy".to_string(), "r2-origin".to_string()],
+                cleanup: CleanupPolicy::default(),
+            }),
+            policy: StorageManagementPolicy {
+                managed: true,
+                locked_origin: Some("r2-origin".to_string()),
+                locked_archives: vec!["audit-webhook".to_string(), "r2-origin".to_string()],
+                allowed_modes: vec![PipelineMode::CloudPrimary],
+                ..StorageManagementPolicy::default()
+            },
+            ..StorageConfig::default()
+        };
+
+        let pipeline = config.effective_pipeline();
+        assert_eq!(pipeline.mode, PipelineMode::CloudPrimary);
+        assert_eq!(pipeline.origin.as_deref(), Some("r2-origin"));
+        assert_eq!(pipeline.archives, vec!["audit-webhook"]);
     }
 }

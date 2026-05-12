@@ -150,7 +150,7 @@ docker run --rm -p 8787:8787 \
 
 ## 结果存储与第三方集成
 
-桌面 App(Tauri sidecar)和 Docker Web 会在生图成功后先写入产品结果库,再异步上传结果文件,最后派发通知/webhook。上传状态写入 `history.sqlite`,任务历史会返回 `storage_status` 以及每个输出的 `uploads[]` 记录,第三方服务可以在 webhook 收到 `job.outputs[].uploads[]` 后按配置的公开 URL 或存储侧 key 获取图片。静态 Web 只保存当前浏览器数据,不会保存远端存储密钥,也不会执行服务端上传。
+桌面 App(Tauri sidecar)和 Docker Web 会在生图成功后先写入产品结果库,再异步上传结果文件,最后派发通知/webhook。上传状态写入 `history.sqlite`,任务历史会返回 `storage_status` 以及每个输出的 `uploads[]` 记录;在 `cloud_primary` 下,历史预览、复制、导出和编辑引用会优先用本地缓存,缺失时从 Origin 回读,显式 fallback 时才读 Archive。通知/webhook 的 `job.storage` 会区分 `origin` 与 `archives`。静态 Web 只保存当前浏览器数据,不会保存远端存储密钥,也不会执行服务端上传。
 
 支持的目标类型:
 
@@ -175,7 +175,7 @@ docker run --rm -p 8787:8787 \
 
 老 config(`storage.default_targets` / `storage.fallback_targets` / `storage.fallback_policy`)在加载时会自动迁移到 `pipeline`,无需手工修改。注意一项行为变化:旧 `fallback_policy = on_failure` 同时配置 `default_targets` + `fallback_targets` 的用户,迁移后两个列表会全部成为 archives 并每次都跑(不再是"主失败才跑 fallback"),这是一次性多上传一份。
 
-输出级/目标级并发由 `upload_concurrency` 和 `target_concurrency` 控制。远端 HTTP/S3/WebDAV 上传默认拒绝 loopback/private/link-local 等非公网地址并禁用重定向;SFTP 必须配置服务器 SHA256 host key 指纹。
+输出级/目标级并发由 `upload_concurrency` 和 `target_concurrency` 控制。`cloud_primary` 可用 `cleanup.mode = after_archive_success | by_age | by_size` 清理本地缓存;清理只删除本地 cache,不会隐式删除远端对象。远端 HTTP/S3/WebDAV 上传默认拒绝 loopback/private/link-local 等非公网地址并禁用重定向;SFTP 必须配置服务器 SHA256 host key 指纹。
 
 ## Provider 矩阵
 
@@ -712,7 +712,7 @@ See [Skill integration](#skill-integration) and [Self-hosted Docker Web](#self-h
 
 ## Result Storage And Integrations
 
-The desktop app(Tauri sidecar)and Docker Web first write completed images into the product result library, then upload result files asynchronously, then dispatch notifications/webhooks. Upload state is stored in `history.sqlite`; history and webhook payloads include job-level `storage_status` and per-output `uploads[]`, so third-party services can fetch images through the configured public URL or storage-side key. Static Web only stores results in the current browser data and does not persist remote storage secrets or run server-side uploads.
+The desktop app(Tauri sidecar)and Docker Web first write completed images into the product result library, then upload result files asynchronously, then dispatch notifications/webhooks. Upload state is stored in `history.sqlite`; history and webhook payloads include job-level `storage_status` and per-output `uploads[]`. In `cloud_primary`, history preview, copy, export, and edit references prefer the local cache, read back from Origin when the cache is gone, and only use Archive when an explicit fallback is allowed. Notification/webhook `job.storage` separates `origin` from `archives`. Static Web only stores results in the current browser data and does not persist remote storage secrets or run server-side uploads.
 
 Supported target types:
 
@@ -737,7 +737,7 @@ Individual generation/edit requests can still pass `storage_targets` and `fallba
 
 Existing configs that use the legacy `storage.default_targets` / `storage.fallback_targets` / `storage.fallback_policy` fields are migrated transparently on load — no manual edit is required. One behavior change to call out: configs that combined `default_targets` + `fallback_targets` with `fallback_policy = on_failure` now upload to every archive on every job (the "only on primary failure" semantics is intentionally dropped). This produces one extra upload per job but is otherwise harmless.
 
-Per-output and per-target concurrency are controlled by `upload_concurrency` and `target_concurrency`. Remote HTTP/S3/WebDAV uploads reject loopback/private/link-local addresses by default and do not follow redirects; SFTP requires a pinned SHA256 server host-key fingerprint.
+Per-output and per-target concurrency are controlled by `upload_concurrency` and `target_concurrency`. `cloud_primary` can clean local caches with `cleanup.mode = after_archive_success | by_age | by_size`; cleanup only deletes local cache files and never implicitly deletes remote objects. Remote HTTP/S3/WebDAV uploads reject loopback/private/link-local addresses by default and do not follow redirects; SFTP requires a pinned SHA256 server host-key fingerprint.
 
 ## Provider matrix
 

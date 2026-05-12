@@ -149,8 +149,14 @@ export const api: ApiClient = {
     >,
   hardDeleteJob: (id) =>
     invokeClient("hardDeleteJob", id) as ReturnType<ApiClient["hardDeleteJob"]>,
-  copyImageToClipboard: (path, prompt) =>
-    invokeClient("copyImageToClipboard", path, prompt) as ReturnType<
+  copyImageToClipboard: (path, prompt, jobId, outputIndex) =>
+    invokeClient(
+      "copyImageToClipboard",
+      path,
+      prompt,
+      jobId,
+      outputIndex,
+    ) as ReturnType<
       ApiClient["copyImageToClipboard"]
     >,
   cancelJob: (id) =>
@@ -180,6 +186,16 @@ export const api: ApiClient = {
   exportJobToConfiguredFolder: (jobId) =>
     invokeClient("exportJobToConfiguredFolder", jobId) as ReturnType<
       ApiClient["exportJobToConfiguredFolder"]
+    >,
+  exportJobOutputToConfiguredFolder: (jobId, outputIndex) =>
+    invokeClient(
+      "exportJobOutputToConfiguredFolder",
+      jobId,
+      outputIndex,
+    ) as ReturnType<ApiClient["exportJobOutputToConfiguredFolder"]>,
+  ensureJobOutputCached: (jobId, outputIndex) =>
+    invokeClient("ensureJobOutputCached", jobId, outputIndex) as ReturnType<
+      ApiClient["ensureJobOutputCached"]
     >,
   chooseFolder: (startDir) =>
     loadClient().then((client) =>

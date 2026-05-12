@@ -41,6 +41,49 @@ fn webhook_notification_request_resolves_custom_headers() {
 }
 
 #[test]
+fn webhook_payload_splits_origin_and_archive_uploads() {
+    let webhook = WebhookNotificationConfig {
+        id: "ops".to_string(),
+        name: "Ops".to_string(),
+        enabled: true,
+        url: "https://hooks.example.com/task".to_string(),
+        method: "POST".to_string(),
+        headers: BTreeMap::new(),
+        timeout_seconds: 5,
+    };
+    let job = NotificationJob::from_job_value(&json!({
+        "id": "job-1",
+        "command": "images generate",
+        "provider": "openai",
+        "status": "completed",
+        "created_at": "2026-05-08T10:00:00Z",
+        "updated_at": "2026-05-08T10:01:00Z",
+        "output_path": "/tmp/out.png",
+        "outputs": [{
+            "index": 0,
+            "path": "/tmp/out.png",
+            "bytes": 12,
+            "uploads": [
+                {"target": "r2-origin", "target_type": "s3", "status": "completed", "metadata": {"role": "primary", "placement": "origin"}},
+                {"target": "audit-webhook", "target_type": "http", "status": "completed", "metadata": {"role": "primary", "placement": "archive"}}
+            ]
+        }],
+        "metadata": {"prompt": "hello"}
+    }));
+
+    let request = build_webhook_request(&webhook, &job).unwrap();
+
+    assert_eq!(
+        request.body["job"]["storage"]["origin"][0]["target"],
+        "r2-origin"
+    );
+    assert_eq!(
+        request.body["job"]["storage"]["archives"][0]["target"],
+        "audit-webhook"
+    );
+}
+
+#[test]
 fn email_notification_message_resolves_password_and_recipients() {
     let email = EmailNotificationConfig {
         enabled: true,

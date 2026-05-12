@@ -444,5 +444,6 @@ export function prepareStorageConfigForSave(
     fallback_policy: "on_failure",
     upload_concurrency: Math.max(1, Math.round(config.upload_concurrency || 4)),
     target_concurrency: Math.max(1, Math.round(config.target_concurrency || 2)),
+    policy: config.policy,
   };
 }

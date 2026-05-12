@@ -18,7 +18,7 @@ pub(crate) use sftp::{authenticate_sftp_session, connect_sftp_session};
 use crate::AppError;
 
 use super::StorageTargetConfig;
-use super::util::{StorageDownloadOutcome, StorageUploadOutcome, UploadOutput};
+use super::util::{StorageDownloadOutcome, StorageHeadOutcome, StorageUploadOutcome, UploadOutput};
 
 pub(super) fn upload_to_target(
     target: &StorageTargetConfig,
@@ -76,9 +76,38 @@ pub(super) fn download_from_target(
             local::download_from_local(directory, detail)
         }
         StorageTargetConfig::S3 { .. } => s3::download_from_s3(target, detail),
+        StorageTargetConfig::WebDav {
+            url,
+            username,
+            password,
+            ..
+        } => webdav::download_from_webdav(url, username.as_deref(), password.as_ref(), detail),
+        StorageTargetConfig::Sftp { .. } => sftp::download_from_sftp(target, detail),
         _ => Err(AppError::new(
             "storage_readback_unsupported",
             "This storage target does not support readback yet.",
+        )),
+    }
+}
+
+#[allow(dead_code)]
+pub(crate) fn head_from_target(
+    target: &StorageTargetConfig,
+    detail: &serde_json::Value,
+) -> Result<StorageHeadOutcome, AppError> {
+    match target {
+        StorageTargetConfig::Local { directory, .. } => local::head_local(directory, detail),
+        StorageTargetConfig::S3 { .. } => s3::head_s3(target, detail),
+        StorageTargetConfig::WebDav {
+            url,
+            username,
+            password,
+            ..
+        } => webdav::head_webdav(url, username.as_deref(), password.as_ref(), detail),
+        StorageTargetConfig::Sftp { .. } => sftp::head_sftp(target, detail),
+        _ => Err(AppError::new(
+            "storage_head_unsupported",
+            "This storage target does not support object metadata readback yet.",
         )),
     }
 }

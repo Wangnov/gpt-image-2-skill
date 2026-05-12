@@ -18,7 +18,7 @@ export function hasConfiguredHttpRuntime() {
   );
 }
 
-function apiUrl(path: string) {
+export function apiResourceUrl(path: string) {
   const base = configuredHttpApiBase() ?? "/api";
   const suffix = path.startsWith("/") ? path : `/${path}`;
   return `${base}${suffix}`;
@@ -52,7 +52,7 @@ export async function requestJson<T>(
   if (init.body && !headers.has("Content-Type")) {
     headers.set("Content-Type", "application/json");
   }
-  const response = await fetch(apiUrl(path), { ...init, headers });
+  const response = await fetch(apiResourceUrl(path), { ...init, headers });
   if (!response.ok) throw new Error(await parseErrorResponse(response));
   if (response.status === 204) return undefined as T;
   return (await response.json()) as T;

@@ -55,7 +55,48 @@ pub(super) fn download_from_local(
     directory: &Path,
     detail: &serde_json::Value,
 ) -> Result<StorageDownloadOutcome, AppError> {
-    let path = detail
+    let path = local_readback_path(directory, detail)?;
+    let bytes = fs::read(&path).map_err(|error| {
+        AppError::new(
+            "storage_local_read_failed",
+            "Unable to read local storage object.",
+        )
+        .with_detail(json!({"path": path.display().to_string(), "error": error.to_string()}))
+    })?;
+    Ok(StorageDownloadOutcome {
+        bytes,
+        metadata: json!({
+            "path": path.display().to_string(),
+        }),
+    })
+}
+
+#[allow(dead_code)]
+pub(super) fn head_local(
+    directory: &Path,
+    detail: &serde_json::Value,
+) -> Result<StorageHeadOutcome, AppError> {
+    let path = local_readback_path(directory, detail)?;
+    let metadata = fs::metadata(&path).map_err(|error| {
+        AppError::new(
+            "storage_local_head_failed",
+            "Unable to inspect local storage object.",
+        )
+        .with_detail(json!({"path": path.display().to_string(), "error": error.to_string()}))
+    })?;
+    Ok(StorageHeadOutcome {
+        bytes: Some(metadata.len()),
+        metadata: json!({
+            "path": path.display().to_string(),
+        }),
+    })
+}
+
+fn local_readback_path(
+    directory: &Path,
+    detail: &serde_json::Value,
+) -> Result<std::path::PathBuf, AppError> {
+    detail
         .get("path")
         .and_then(serde_json::Value::as_str)
         .map(Path::new)
@@ -71,18 +112,5 @@ pub(super) fn download_from_local(
                 "storage_readback_missing_key",
                 "Local storage upload record is missing a readable path.",
             )
-        })?;
-    let bytes = fs::read(&path).map_err(|error| {
-        AppError::new(
-            "storage_local_read_failed",
-            "Unable to read local storage object.",
-        )
-        .with_detail(json!({"path": path.display().to_string(), "error": error.to_string()}))
-    })?;
-    Ok(StorageDownloadOutcome {
-        bytes,
-        metadata: json!({
-            "path": path.display().to_string(),
-        }),
-    })
+        })
 }

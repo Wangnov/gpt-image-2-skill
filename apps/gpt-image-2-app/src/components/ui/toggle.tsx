@@ -5,15 +5,21 @@ export function Toggle({
   onChange,
   label,
   className,
+  disabled,
 }: {
   checked: boolean;
   onChange: (v: boolean) => void;
   label?: string;
   className?: string;
+  disabled?: boolean;
 }) {
   return (
     <label
-      className={cn("inline-flex items-center gap-2 cursor-pointer", className)}
+      className={cn(
+        "inline-flex items-center gap-2 cursor-pointer",
+        disabled && "cursor-not-allowed opacity-60",
+        className,
+      )}
     >
       <span
         className={cn(
@@ -41,6 +47,7 @@ export function Toggle({
         type="checkbox"
         className="sr-only"
         checked={checked}
+        disabled={disabled}
         onChange={(e) => onChange(e.target.checked)}
       />
     </label>

@@ -1,4 +1,5 @@
 pub(crate) mod backends;
+mod cleanup;
 mod history;
 mod orchestrator;
 mod readback;
@@ -8,15 +9,19 @@ mod test_target;
 mod types;
 pub(crate) mod util;
 
+pub use cleanup::{StorageCacheCleanupOutcome, cleanup_storage_cache};
 pub use history::{OutputUploadRecord, list_output_upload_records, upsert_output_upload_record};
 pub use orchestrator::{StorageUploadOverrides, upload_job_outputs_to_storage};
-pub use readback::{StorageReadback, read_job_output_from_storage};
+pub use readback::{
+    StorageReadback, StorageReadbackOptions, read_job_output_from_storage,
+    read_job_output_from_storage_with_options,
+};
 pub use secrets::preserve_storage_secrets;
 pub use test_target::{StorageTestResult, test_storage_target};
 pub use types::{
     BackendCapabilities, BaiduNetdiskAuthMode, CleanupMode, CleanupPolicy, Pan123OpenAuthMode,
     PipelineConfig, PipelineMode, PrimaryQuality, StorageConfig, StorageFallbackPolicy,
-    StorageTargetConfig,
+    StorageManagementPolicy, StorageTargetConfig,
 };
 
 pub(crate) use history::{

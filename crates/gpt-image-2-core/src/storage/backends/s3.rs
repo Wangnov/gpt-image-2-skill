@@ -2,7 +2,7 @@ use std::fs;
 use std::time::Duration;
 
 use chrono::Utc;
-use reqwest::header::{AUTHORIZATION, CONTENT_TYPE};
+use reqwest::header::{AUTHORIZATION, CONTENT_LENGTH, CONTENT_TYPE};
 use serde_json::json;
 use url::Url;
 
@@ -330,6 +330,142 @@ pub(super) fn download_from_s3(
     }
     Ok(StorageDownloadOutcome {
         bytes: bytes.to_vec(),
+        metadata: json!({
+            "bucket": bucket,
+            "key": key,
+            "endpoint": redact_url_for_log(&url),
+            "etag": headers
+                .get("etag")
+                .and_then(|value| value.to_str().ok()),
+            "http_status": status.as_u16(),
+        }),
+    })
+}
+
+#[allow(dead_code)]
+pub(super) fn head_s3(
+    target: &StorageTargetConfig,
+    detail: &serde_json::Value,
+) -> Result<StorageHeadOutcome, AppError> {
+    let StorageTargetConfig::S3 {
+        bucket,
+        region,
+        endpoint,
+        access_key_id,
+        secret_access_key,
+        session_token,
+        ..
+    } = target
+    else {
+        return Err(AppError::new(
+            "storage_target_type_mismatch",
+            "Expected S3 storage target.",
+        ));
+    };
+    let key = detail
+        .get("key")
+        .or_else(|| detail.get("object_key"))
+        .and_then(serde_json::Value::as_str)
+        .filter(|value| !value.trim().is_empty())
+        .ok_or_else(|| {
+            AppError::new(
+                "storage_head_missing_key",
+                "S3 storage upload record is missing an object key.",
+            )
+        })?;
+    let (access_key_id, _) = access_key_id
+        .as_ref()
+        .ok_or_else(|| {
+            AppError::new(
+                "storage_s3_credentials_missing",
+                "S3 access key is missing.",
+            )
+        })
+        .and_then(resolve_credential)?;
+    let (secret_access_key, _) = secret_access_key
+        .as_ref()
+        .ok_or_else(|| {
+            AppError::new(
+                "storage_s3_credentials_missing",
+                "S3 secret key is missing.",
+            )
+        })
+        .and_then(resolve_credential)?;
+    let session_token = session_token
+        .as_ref()
+        .map(resolve_credential)
+        .transpose()?
+        .map(|(value, _)| value);
+    let signing_region = region
+        .as_deref()
+        .filter(|value| !value.trim().is_empty())
+        .unwrap_or("us-east-1");
+    let (url, host, canonical_uri) =
+        s3_endpoint_and_host(bucket, Some(signing_region), endpoint.as_deref(), key)?;
+    let (_, host_label, addrs) = validate_remote_http_target(&url, "S3 storage")?;
+    let now = Utc::now();
+    let amz_date = now.format("%Y%m%dT%H%M%SZ").to_string();
+    let short_date = now.format("%Y%m%d").to_string();
+    let payload_hash = sha256_hex(b"");
+    let mut canonical_headers =
+        format!("host:{host}\nx-amz-content-sha256:{payload_hash}\nx-amz-date:{amz_date}\n");
+    let mut signed_headers = "host;x-amz-content-sha256;x-amz-date".to_string();
+    if let Some(token) = &session_token {
+        canonical_headers.push_str(&format!("x-amz-security-token:{token}\n"));
+        signed_headers.push_str(";x-amz-security-token");
+    }
+    let canonical_request =
+        format!("HEAD\n{canonical_uri}\n\n{canonical_headers}\n{signed_headers}\n{payload_hash}");
+    let credential_scope = format!("{short_date}/{signing_region}/s3/aws4_request");
+    let string_to_sign = format!(
+        "AWS4-HMAC-SHA256\n{amz_date}\n{credential_scope}\n{}",
+        sha256_hex(canonical_request.as_bytes())
+    );
+    let signing_key = s3_signing_key(&secret_access_key, &short_date, signing_region)?;
+    let signature = hex_lower(&hmac_sha256(&signing_key, &string_to_sign)?);
+    let authorization = format!(
+        "AWS4-HMAC-SHA256 Credential={access_key_id}/{credential_scope}, SignedHeaders={signed_headers}, Signature={signature}"
+    );
+    let client = pinned_http_client(
+        &host_label,
+        &addrs,
+        Duration::from_secs(DEFAULT_REQUEST_TIMEOUT.min(120)),
+        "storage_s3_client_failed",
+        "Unable to build S3 storage client.",
+    )?;
+    let mut request = client
+        .head(&url)
+        .header("Host", host.clone())
+        .header("x-amz-content-sha256", payload_hash)
+        .header("x-amz-date", amz_date)
+        .header(AUTHORIZATION, authorization);
+    if let Some(token) = session_token {
+        request = request.header("x-amz-security-token", token);
+    }
+    let response = request.send().map_err(|error| {
+        AppError::new(
+            "storage_s3_request_failed",
+            "S3 storage metadata read failed.",
+        )
+        .with_detail(json!({
+            "url": redact_url_for_log(&url),
+            "error": sanitized_request_error(&error),
+        }))
+    })?;
+    let status = response.status();
+    let headers = response.headers();
+    if !status.is_success() {
+        return Err(AppError::new(
+            "storage_s3_status_failed",
+            format!("S3 storage metadata read returned {status}."),
+        )
+        .with_detail(json!({"url": redact_url_for_log(&url)})));
+    }
+    Ok(StorageHeadOutcome {
+        bytes: headers
+            .get(CONTENT_LENGTH)
+            .and_then(|value| value.to_str().ok())
+            .and_then(|value| value.parse::<u64>().ok()),
         metadata: json!({
             "bucket": bucket,
             "key": key,

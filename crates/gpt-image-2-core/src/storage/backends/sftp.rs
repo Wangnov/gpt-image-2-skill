@@ -1,5 +1,5 @@
 use std::fs;
-use std::io::Write;
+use std::io::{Read, Write};
 use std::net::TcpStream;
 use std::path::{Path, PathBuf};
 
@@ -232,4 +232,139 @@ pub(super) fn upload_to_sftp(
             "host_key_sha256": host_key_fingerprint,
         }),
     })
+}
+
+pub(super) fn download_from_sftp(
+    target: &StorageTargetConfig,
+    detail: &serde_json::Value,
+) -> Result<StorageDownloadOutcome, AppError> {
+    let StorageTargetConfig::Sftp {
+        host,
+        port,
+        host_key_sha256,
+        username,
+        password,
+        private_key,
+        remote_dir,
+        ..
+    } = target
+    else {
+        return Err(AppError::new(
+            "storage_target_type_mismatch",
+            "Expected SFTP storage target.",
+        ));
+    };
+    let key = sftp_key(detail);
+    let remote_path = sftp_readback_path(remote_dir, detail)?;
+    let (session, host_key_fingerprint) =
+        connect_sftp_session(host, *port, host_key_sha256.as_deref())?;
+    authenticate_sftp_session(
+        &session,
+        host,
+        username,
+        password.as_ref(),
+        private_key.as_ref(),
+    )?;
+    let sftp = session.sftp().map_err(|error| {
+        AppError::new("storage_sftp_open_failed", "Unable to open SFTP subsystem.")
+            .with_detail(json!({"error": error.to_string()}))
+    })?;
+    let mut remote = sftp.open(&remote_path).map_err(|error| {
+        AppError::new(
+            "storage_sftp_read_failed",
+            "Unable to open remote SFTP file.",
+        )
+        .with_detail(json!({"path": remote_path.display().to_string(), "error": error.to_string()}))
+    })?;
+    let mut bytes = Vec::new();
+    remote.read_to_end(&mut bytes).map_err(|error| {
+        AppError::new(
+            "storage_sftp_read_failed",
+            "Unable to read remote SFTP file.",
+        )
+        .with_detail(json!({"path": remote_path.display().to_string(), "error": error.to_string()}))
+    })?;
+    Ok(StorageDownloadOutcome {
+        bytes,
+        metadata: json!({
+            "key": key,
+            "remote_path": remote_path.display().to_string(),
+            "host_key_sha256": host_key_fingerprint,
+        }),
+    })
+}
+
+#[allow(dead_code)]
+pub(super) fn head_sftp(
+    target: &StorageTargetConfig,
+    detail: &serde_json::Value,
+) -> Result<StorageHeadOutcome, AppError> {
+    let StorageTargetConfig::Sftp {
+        host,
+        port,
+        host_key_sha256,
+        username,
+        password,
+        private_key,
+        remote_dir,
+        ..
+    } = target
+    else {
+        return Err(AppError::new(
+            "storage_target_type_mismatch",
+            "Expected SFTP storage target.",
+        ));
+    };
+    let key = sftp_key(detail);
+    let remote_path = sftp_readback_path(remote_dir, detail)?;
+    let (session, host_key_fingerprint) =
+        connect_sftp_session(host, *port, host_key_sha256.as_deref())?;
+    authenticate_sftp_session(
+        &session,
+        host,
+        username,
+        password.as_ref(),
+        private_key.as_ref(),
+    )?;
+    let sftp = session.sftp().map_err(|error| {
+        AppError::new("storage_sftp_open_failed", "Unable to open SFTP subsystem.")
+            .with_detail(json!({"error": error.to_string()}))
+    })?;
+    let stat = sftp.stat(&remote_path).map_err(|error| {
+        AppError::new(
+            "storage_sftp_head_failed",
+            "Unable to inspect remote SFTP file.",
+        )
+        .with_detail(json!({"path": remote_path.display().to_string(), "error": error.to_string()}))
+    })?;
+    Ok(StorageHeadOutcome {
+        bytes: stat.size,
+        metadata: json!({
+            "key": key,
+            "remote_path": remote_path.display().to_string(),
+            "host_key_sha256": host_key_fingerprint,
+        }),
+    })
+}
+
+fn sftp_key(detail: &serde_json::Value) -> Option<&str> {
+    detail
+        .get("key")
+        .and_then(serde_json::Value::as_str)
+        .filter(|value| !value.trim().is_empty())
+}
+
+fn sftp_readback_path(remote_dir: &str, detail: &serde_json::Value) -> Result<PathBuf, AppError> {
+    detail
+        .get("remote_path")
+        .and_then(serde_json::Value::as_str)
+        .filter(|value| !value.trim().is_empty())
+        .map(PathBuf::from)
+        .or_else(|| sftp_key(detail).map(|key| PathBuf::from(remote_dir).join(key)))
+        .ok_or_else(|| {
+            AppError::new(
+                "storage_readback_missing_key",
+                "SFTP storage upload record is missing a readable remote path.",
+            )
+        })
 }

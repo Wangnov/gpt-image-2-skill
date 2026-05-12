@@ -11,6 +11,7 @@ import type {
   ServerConfig,
   StorageConfig,
   StorageFallbackPolicy,
+  StorageManagementPolicy,
   StorageTargetConfig,
 } from "../types";
 import type { TauriJobResponse } from "./types";
@@ -174,6 +175,17 @@ export function defaultPipelineConfig(): PipelineConfig {
   };
 }
 
+export function defaultStorageManagementPolicy(): StorageManagementPolicy {
+  return {
+    managed: false,
+    allow_user_overrides: false,
+    allowed_modes: [],
+    locked_origin: null,
+    locked_archives: [],
+    message: null,
+  };
+}
+
 export function defaultStorageConfig(): StorageConfig {
   return {
     targets: {},
@@ -183,6 +195,7 @@ export function defaultStorageConfig(): StorageConfig {
     fallback_policy: "on_failure",
     upload_concurrency: 4,
     target_concurrency: 2,
+    policy: defaultStorageManagementPolicy(),
   };
 }
 
@@ -248,6 +261,61 @@ function normalizePipelineConfig(
     archives: normalizeStringArray(value.archives),
     cleanup: normalizeCleanupPolicy(value.cleanup),
   };
+}
+
+function normalizeStorageManagementPolicy(
+  value: Partial<StorageManagementPolicy> | null | undefined,
+): StorageManagementPolicy {
+  const defaults = defaultStorageManagementPolicy();
+  const lockedOrigin =
+    typeof value?.locked_origin === "string" && value.locked_origin.trim()
+      ? value.locked_origin.trim()
+      : null;
+  return {
+    managed: value?.managed === true,
+    allow_user_overrides: value?.allow_user_overrides === true,
+    allowed_modes: normalizeStringArray(value?.allowed_modes).filter((mode) =>
+      PIPELINE_MODES.includes(mode as PipelineMode),
+    ) as PipelineMode[],
+    locked_origin: lockedOrigin,
+    locked_archives: normalizeStringArray(value?.locked_archives),
+    message:
+      typeof value?.message === "string" && value.message.trim()
+        ? value.message.trim()
+        : defaults.message,
+  };
+}
+
+function applyStorageManagementPolicy(
+  pipeline: PipelineConfig,
+  policy: StorageManagementPolicy,
+): PipelineConfig {
+  if (!policy.managed) return pipeline;
+  const next: PipelineConfig = {
+    ...pipeline,
+    archives: [...pipeline.archives],
+    cleanup: { ...pipeline.cleanup },
+  };
+  if (
+    policy.allowed_modes.length > 0 &&
+    !policy.allowed_modes.includes(next.mode)
+  ) {
+    next.mode = policy.allowed_modes[0];
+  }
+  if (policy.locked_origin) {
+    next.mode = "cloud_primary";
+    next.origin = policy.locked_origin;
+  }
+  if (policy.locked_archives.length > 0) {
+    next.archives = [...policy.locked_archives];
+  }
+  if (next.mode !== "cloud_primary") {
+    next.origin = null;
+  }
+  if (next.origin) {
+    next.archives = next.archives.filter((archive) => archive !== next.origin);
+  }
+  return next;
 }
 
 /**
@@ -507,13 +575,17 @@ export function normalizeStorageConfig(
   )
     ? fallbackPolicy
     : defaults.fallback_policy;
-  const pipeline = config?.pipeline
+  const policy = normalizeStorageManagementPolicy(config?.policy);
+  const pipeline = applyStorageManagementPolicy(
+    config?.pipeline
     ? normalizePipelineConfig(config.pipeline)
     : migrateLegacyToPipeline({
         default_targets,
         fallback_targets,
         fallback_policy,
-      });
+      }),
+    policy,
+  );
   return {
     targets,
     pipeline,
@@ -532,6 +604,7 @@ export function normalizeStorageConfig(
         Number(config?.target_concurrency ?? defaults.target_concurrency),
       ),
     ),
+    policy,
   };
 }
 

@@ -138,6 +138,7 @@ fn storage_upload_falls_back_to_local_target_after_primary_failure() {
         fallback_policy: StorageFallbackPolicy::OnFailure,
         upload_concurrency: 2,
         target_concurrency: 2,
+        policy: StorageManagementPolicy::default(),
     };
     let job = json!({
         "id": "job-fallback-1",
@@ -238,6 +239,7 @@ fn mirror_pipeline_uploads_to_all_archives_in_parallel() {
         fallback_policy: StorageFallbackPolicy::OnFailure,
         upload_concurrency: 2,
         target_concurrency: 2,
+        policy: StorageManagementPolicy::default(),
     };
     let job = json!({
         "id": "job-mirror-1",
@@ -305,6 +307,7 @@ fn cloud_primary_origin_is_not_replayed_as_archive() {
         fallback_policy: StorageFallbackPolicy::OnFailure,
         upload_concurrency: 2,
         target_concurrency: 2,
+        policy: StorageManagementPolicy::default(),
     };
     let job = json!({
         "id": "job-cloud-primary-dedup-1",
@@ -390,6 +393,7 @@ fn per_job_overrides_are_appended_to_archives() {
         fallback_policy: StorageFallbackPolicy::OnFailure,
         upload_concurrency: 3,
         target_concurrency: 3,
+        policy: StorageManagementPolicy::default(),
     };
     let job = json!({
         "id": "job-overrides-1",
@@ -516,6 +520,7 @@ fn cloud_primary_local_origin_readback_survives_missing_local_cache() {
         fallback_policy: StorageFallbackPolicy::OnFailure,
         upload_concurrency: 2,
         target_concurrency: 2,
+        policy: StorageManagementPolicy::default(),
     };
     let job = json!({
         "id": "job-local-readback-1",
@@ -548,12 +553,327 @@ fn cloud_primary_local_origin_readback_survives_missing_local_cache() {
             .and_then(Value::as_str),
         Some("job-local-readback-1/1-out.png")
     );
+    assert_eq!(
+        uploads[0]
+            .metadata
+            .get("manifest")
+            .and_then(|manifest| manifest.get("mime"))
+            .and_then(Value::as_str),
+        Some("image/png")
+    );
+    let head = crate::storage::backends::head_from_target(
+        config.targets.get("origin").unwrap(),
+        &uploads[0].metadata["manifest"],
+    )
+    .unwrap();
+    assert_eq!(head.bytes, Some(expected.len() as u64));
+    assert_eq!(
+        head.metadata["path"],
+        uploads[0].metadata["manifest"]["path"]
+    );
 
     fs::remove_file(&output_path).unwrap();
-    let readback = read_job_output_from_storage(&config, &job, 0).unwrap();
+    let readback = read_job_output_from_storage_with_options(
+        &config,
+        &job,
+        0,
+        StorageReadbackOptions {
+            allow_archive_fallback: false,
+            rehydrate_local_cache: true,
+        },
+    )
+    .unwrap();
     assert_eq!(readback.bytes, expected);
     assert_eq!(readback.source["kind"], "origin");
     assert_eq!(readback.source["target"], "origin");
+    assert!(output_path.is_file());
+    assert_eq!(fs::read(&output_path).unwrap(), expected);
+}
+
+#[test]
+#[allow(deprecated)]
+fn cloud_primary_archive_readback_is_explicit_fallback() {
+    let _guard = CODEX_HOME_TEST_LOCK.lock().unwrap();
+    let temp_dir = tempfile::tempdir().unwrap();
+    let _home = TestCodexHome::set(temp_dir.path());
+    let source_dir = temp_dir.path().join("source");
+    fs::create_dir_all(&source_dir).unwrap();
+    let output_path = source_dir.join("out.png");
+    let expected = b"png-archive-readback";
+    fs::write(&output_path, expected).unwrap();
+
+    let origin_dir = temp_dir.path().join("origin");
+    let archive_dir = temp_dir.path().join("archive");
+    let config = StorageConfig {
+        targets: BTreeMap::from([
+            (
+                "origin".to_string(),
+                StorageTargetConfig::Local {
+                    directory: origin_dir.clone(),
+                    public_base_url: None,
+                },
+            ),
+            (
+                "archive".to_string(),
+                StorageTargetConfig::Local {
+                    directory: archive_dir.clone(),
+                    public_base_url: None,
+                },
+            ),
+        ]),
+        pipeline: Some(PipelineConfig {
+            mode: PipelineMode::CloudPrimary,
+            origin: Some("origin".to_string()),
+            archives: vec!["archive".to_string()],
+            cleanup: CleanupPolicy::default(),
+        }),
+        default_targets: Vec::new(),
+        fallback_targets: Vec::new(),
+        fallback_policy: StorageFallbackPolicy::OnFailure,
+        upload_concurrency: 2,
+        target_concurrency: 2,
+        policy: StorageManagementPolicy::default(),
+    };
+    let job = json!({
+        "id": "job-archive-readback-1",
+        "outputs": [{"index": 0, "path": output_path.display().to_string(), "bytes": expected.len()}],
+    });
+    upsert_history_job(
+        "job-archive-readback-1",
+        "images generate",
+        "openai",
+        "completed",
+        Some(&output_path),
+        Some("2026-05-12T15:10:00Z"),
+        json!({
+            "output": {
+                "files": [{"index": 0, "path": output_path.display().to_string(), "bytes": expected.len()}]
+            }
+        }),
+    )
+    .unwrap();
+    upload_job_outputs_to_storage(&config, &job, StorageUploadOverrides::default()).unwrap();
+    fs::remove_file(origin_dir.join("job-archive-readback-1/1-out.png")).unwrap();
+    fs::remove_file(&output_path).unwrap();
+
+    let origin_only = read_job_output_from_storage(&config, &job, 0).unwrap_err();
+    assert_eq!(origin_only.code, "storage_readback_failed");
+
+    let readback = read_job_output_from_storage_with_options(
+        &config,
+        &job,
+        0,
+        StorageReadbackOptions {
+            allow_archive_fallback: true,
+            rehydrate_local_cache: false,
+        },
+    )
+    .unwrap();
+    assert_eq!(readback.bytes, expected);
+    assert_eq!(readback.source["kind"], "archive");
+    assert_eq!(readback.source["target"], "archive");
+}
+
+#[test]
+#[allow(deprecated)]
+fn cloud_primary_after_archive_success_cleanup_deletes_local_cache() {
+    let _guard = CODEX_HOME_TEST_LOCK.lock().unwrap();
+    let temp_dir = tempfile::tempdir().unwrap();
+    let _home = TestCodexHome::set(temp_dir.path());
+    let source_dir = temp_dir.path().join("source");
+    fs::create_dir_all(&source_dir).unwrap();
+    let output_path = source_dir.join("out.png");
+    let expected = b"png-cleanup-readback";
+    fs::write(&output_path, expected).unwrap();
+
+    let config = StorageConfig {
+        targets: BTreeMap::from([
+            (
+                "origin".to_string(),
+                StorageTargetConfig::Local {
+                    directory: temp_dir.path().join("origin"),
+                    public_base_url: None,
+                },
+            ),
+            (
+                "archive".to_string(),
+                StorageTargetConfig::Local {
+                    directory: temp_dir.path().join("archive"),
+                    public_base_url: None,
+                },
+            ),
+        ]),
+        pipeline: Some(PipelineConfig {
+            mode: PipelineMode::CloudPrimary,
+            origin: Some("origin".to_string()),
+            archives: vec!["archive".to_string()],
+            cleanup: CleanupPolicy {
+                mode: CleanupMode::AfterArchiveSuccess,
+                retention_days: None,
+                max_origin_gb: None,
+            },
+        }),
+        default_targets: Vec::new(),
+        fallback_targets: Vec::new(),
+        fallback_policy: StorageFallbackPolicy::OnFailure,
+        upload_concurrency: 2,
+        target_concurrency: 2,
+        policy: StorageManagementPolicy::default(),
+    };
+    let job = json!({
+        "id": "job-cleanup-readback-1",
+        "created_at": "1",
+        "outputs": [{"index": 0, "path": output_path.display().to_string(), "bytes": expected.len()}],
+    });
+    upsert_history_job(
+        "job-cleanup-readback-1",
+        "images generate",
+        "openai",
+        "completed",
+        Some(&output_path),
+        Some("1"),
+        json!({
+            "output": {
+                "files": [{"index": 0, "path": output_path.display().to_string(), "bytes": expected.len()}]
+            }
+        }),
+    )
+    .unwrap();
+
+    upload_job_outputs_to_storage(&config, &job, StorageUploadOverrides::default()).unwrap();
+    assert!(!output_path.exists());
+
+    let readback = read_job_output_from_storage_with_options(
+        &config,
+        &job,
+        0,
+        StorageReadbackOptions {
+            allow_archive_fallback: true,
+            rehydrate_local_cache: true,
+        },
+    )
+    .unwrap();
+    assert_eq!(readback.bytes, expected);
+    assert!(output_path.is_file());
+}
+
+#[test]
+#[allow(deprecated)]
+fn cloud_primary_by_age_cleanup_parses_rfc3339_history_time() {
+    let _guard = CODEX_HOME_TEST_LOCK.lock().unwrap();
+    let temp_dir = tempfile::tempdir().unwrap();
+    let _home = TestCodexHome::set(temp_dir.path());
+    let origin_dir = temp_dir.path().join("origin");
+    let config = StorageConfig {
+        targets: BTreeMap::from([(
+            "origin".to_string(),
+            StorageTargetConfig::Local {
+                directory: origin_dir,
+                public_base_url: None,
+            },
+        )]),
+        pipeline: Some(PipelineConfig {
+            mode: PipelineMode::CloudPrimary,
+            origin: Some("origin".to_string()),
+            archives: Vec::new(),
+            cleanup: CleanupPolicy {
+                mode: CleanupMode::ByAge,
+                retention_days: Some(1),
+                max_origin_gb: None,
+            },
+        }),
+        default_targets: Vec::new(),
+        fallback_targets: Vec::new(),
+        fallback_policy: StorageFallbackPolicy::OnFailure,
+        upload_concurrency: 2,
+        target_concurrency: 2,
+        policy: StorageManagementPolicy::default(),
+    };
+    let output_path = temp_dir.path().join("source").join("out.png");
+    fs::create_dir_all(output_path.parent().unwrap()).unwrap();
+    fs::write(&output_path, b"png-age-cleanup").unwrap();
+    let job = json!({
+        "id": "job-age-cleanup-1",
+        "created_at": "2020-01-01T00:00:00Z",
+        "outputs": [{"index": 0, "path": output_path.display().to_string(), "bytes": 15}],
+    });
+    upsert_history_job(
+        "job-age-cleanup-1",
+        "images generate",
+        "openai",
+        "completed",
+        Some(&output_path),
+        Some("2020-01-01T00:00:00Z"),
+        json!({
+            "output": {
+                "files": [{"index": 0, "path": output_path.display().to_string(), "bytes": 15}]
+            }
+        }),
+    )
+    .unwrap();
+
+    upload_job_outputs_to_storage(&config, &job, StorageUploadOverrides::default()).unwrap();
+
+    assert!(!output_path.exists());
+}
+
+#[test]
+#[allow(deprecated)]
+fn cloud_primary_by_size_cleanup_removes_oldest_protected_cache() {
+    let _guard = CODEX_HOME_TEST_LOCK.lock().unwrap();
+    let temp_dir = tempfile::tempdir().unwrap();
+    let _home = TestCodexHome::set(temp_dir.path());
+    let origin_dir = temp_dir.path().join("origin");
+    let config = StorageConfig {
+        targets: BTreeMap::from([(
+            "origin".to_string(),
+            StorageTargetConfig::Local {
+                directory: origin_dir,
+                public_base_url: None,
+            },
+        )]),
+        pipeline: Some(PipelineConfig {
+            mode: PipelineMode::CloudPrimary,
+            origin: Some("origin".to_string()),
+            archives: Vec::new(),
+            cleanup: CleanupPolicy {
+                mode: CleanupMode::BySize,
+                retention_days: None,
+                max_origin_gb: Some(0),
+            },
+        }),
+        default_targets: Vec::new(),
+        fallback_targets: Vec::new(),
+        fallback_policy: StorageFallbackPolicy::OnFailure,
+        upload_concurrency: 2,
+        target_concurrency: 2,
+        policy: StorageManagementPolicy::default(),
+    };
+    let output_path = temp_dir.path().join("source").join("out.png");
+    fs::create_dir_all(output_path.parent().unwrap()).unwrap();
+    fs::write(&output_path, b"png-size-cleanup").unwrap();
+    let job = json!({
+        "id": "job-size-cleanup-1",
+        "created_at": "1",
+        "outputs": [{"index": 0, "path": output_path.display().to_string(), "bytes": 16}],
+    });
+    upsert_history_job(
+        "job-size-cleanup-1",
+        "images generate",
+        "openai",
+        "completed",
+        Some(&output_path),
+        Some("1"),
+        json!({
+            "output": {
+                "files": [{"index": 0, "path": output_path.display().to_string(), "bytes": 16}]
+            }
+        }),
+    )
+    .unwrap();
+
+    upload_job_outputs_to_storage(&config, &job, StorageUploadOverrides::default()).unwrap();
+    assert!(!output_path.exists());
 }
 
 #[test]
@@ -602,6 +922,7 @@ fn cloud_primary_r2_origin_readback_survives_missing_local_cache() {
         fallback_policy: StorageFallbackPolicy::OnFailure,
         upload_concurrency: 2,
         target_concurrency: 2,
+        policy: StorageManagementPolicy::default(),
     };
     let job = json!({
         "id": job_id,
@@ -627,6 +948,12 @@ fn cloud_primary_r2_origin_readback_survives_missing_local_cache() {
     assert_eq!(uploads.len(), 1);
     assert_eq!(uploads[0].target, "r2-origin");
     assert_eq!(uploads[0].status, "completed");
+    let head = crate::storage::backends::head_from_target(
+        config.targets.get("r2-origin").unwrap(),
+        &uploads[0].metadata["manifest"],
+    )
+    .unwrap();
+    assert_eq!(head.bytes, Some(expected.len() as u64));
 
     fs::remove_file(&output_path).unwrap();
     let readback = read_job_output_from_storage(&config, &job, 0).unwrap();

@@ -89,9 +89,16 @@ function transferSourceUrl(payload: SendToEditPayload) {
 }
 
 export async function transferredImageFile(payload: SendToEditPayload) {
-  const url = transferSourceUrl(payload);
+  let url = transferSourceUrl(payload);
   if (!url) throw new Error("这张图没有可读取的文件路径或预览地址。");
-  const response = await fetch(url);
+  let response = await fetch(url);
+  if (!response.ok && payload.jobId && payload.outputIndex != null) {
+    const cached = await api.ensureJobOutputCached(payload.jobId, payload.outputIndex);
+    if (cached) {
+      url = api.fileUrl(cached);
+      response = await fetch(url);
+    }
+  }
   if (!response.ok) {
     throw new Error(`读取图片失败：${response.status} ${response.statusText}`);
   }
