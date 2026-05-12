@@ -11,10 +11,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { GlassSelect } from "@/components/ui/select";
 import { Toggle } from "@/components/ui/toggle";
-import {
-  useTestStorageTarget,
-  useUpdateStorage,
-} from "@/hooks/use-config";
+import { useTestStorageTarget, useUpdateStorage } from "@/hooks/use-config";
 import { api, type ConfigPaths } from "@/lib/api";
 import {
   canActAsOrigin,
@@ -116,9 +113,7 @@ export function StoragePanel({
   // semantics) but surface dirty state to the toolbar so users see when their
   // mode/origin/archives picks haven't been persisted yet.
   const isDirty = useMemo(
-    () =>
-      JSON.stringify(draft) !==
-      JSON.stringify(cloneStorageConfig(storage)),
+    () => JSON.stringify(draft) !== JSON.stringify(cloneStorageConfig(storage)),
     [draft, storage],
   );
   const { data: configPaths } = useQuery<ConfigPaths>({
@@ -144,7 +139,9 @@ export function StoragePanel({
   const targetEntries = Object.entries(draft.targets);
   const strategyTargetEntries =
     copy.kind === "browser"
-      ? targetEntries.filter(([, target]) => storageTargetType(target) === "local")
+      ? targetEntries.filter(
+          ([, target]) => storageTargetType(target) === "local",
+        )
       : targetEntries;
   const remoteDraftCount =
     copy.kind === "browser"
@@ -229,6 +226,22 @@ export function StoragePanel({
       pipeline: { ...(current.pipeline ?? defaultPipelineConfig()), ...next },
     }));
   };
+  const setPipelineOrigin = (nextOrigin: string | null) => {
+    const origin = nextOrigin?.trim() || null;
+    setDraft((current) => {
+      const pipeline = current.pipeline ?? defaultPipelineConfig();
+      return {
+        ...current,
+        pipeline: {
+          ...pipeline,
+          origin,
+          archives: origin
+            ? pipeline.archives.filter((item) => item !== origin)
+            : pipeline.archives,
+        },
+      };
+    });
+  };
   const setPipelineMode = (mode: PipelineMode) => {
     setDraft((current) => {
       const pipeline = current.pipeline ?? defaultPipelineConfig();
@@ -257,7 +270,11 @@ export function StoragePanel({
   };
   const addHttpHeader = (name: string) => {
     const target = draft.targets[name];
-    if (!target || storageTargetType(target) !== "http" || !("headers" in target))
+    if (
+      !target ||
+      storageTargetType(target) !== "http" ||
+      !("headers" in target)
+    )
       return;
     const headers = { ...(target.headers ?? {}) };
     let key = "Authorization";
@@ -276,7 +293,11 @@ export function StoragePanel({
     credential: CredentialRef | null,
   ) => {
     const target = draft.targets[name];
-    if (!target || storageTargetType(target) !== "http" || !("headers" in target))
+    if (
+      !target ||
+      storageTargetType(target) !== "http" ||
+      !("headers" in target)
+    )
       return;
     const headers = { ...(target.headers ?? {}) };
     delete headers[header];
@@ -310,7 +331,6 @@ export function StoragePanel({
   useEffect(() => {
     if (saveRef) saveRef.current = () => void save();
   });
-
 
   const runTest = async (name: string) => {
     setTestedTargets((current) => new Set(current).add(name));
@@ -416,7 +436,9 @@ export function StoragePanel({
               </div>
               {!cloudPrimaryAvailable && (
                 <p className="text-[11.5px] text-faint leading-snug">
-                  「云端为主」需要先在下方「位置列表」添加一个支持回读的存储（local / S3 / WebDAV / SFTP），仅推送的目标（如 HTTP/Webhook）不能作为原图。
+                  「云端为主」需要先在下方「位置列表」添加一个支持回读的存储（local
+                  / S3 / WebDAV / SFTP），仅推送的目标（如
+                  HTTP/Webhook）不能作为原图。
                 </p>
               )}
             </div>
@@ -430,14 +452,13 @@ export function StoragePanel({
               <ControlRail>
                 {originOptions.length === 0 ? (
                   <span className="text-[12px] text-muted">
-                    没有可用的原图位置；请先在下方添加一个支持回读的存储（local / S3 / WebDAV / SFTP）。
+                    没有可用的原图位置；请先在下方添加一个支持回读的存储（local
+                    / S3 / WebDAV / SFTP）。
                   </span>
                 ) : (
                   <GlassSelect
                     value={pipeline.origin ?? ""}
-                    onValueChange={(value) =>
-                      patchPipeline({ origin: value || null })
-                    }
+                    onValueChange={(value) => setPipelineOrigin(value || null)}
                     options={originOptions}
                     placeholder="请选择原图位置"
                     size="sm"
@@ -498,7 +519,10 @@ export function StoragePanel({
                 value={pipeline.cleanup.mode}
                 onValueChange={(value) =>
                   patchPipeline({
-                    cleanup: { ...pipeline.cleanup, mode: value as CleanupMode },
+                    cleanup: {
+                      ...pipeline.cleanup,
+                      mode: value as CleanupMode,
+                    },
                   })
                 }
                 options={STORAGE_CLEANUP_MODE_OPTIONS.map((option) => ({
@@ -584,13 +608,19 @@ export function StoragePanel({
             );
           })}
           <div className="flex items-center gap-2">
-            <Button variant="secondary" size="sm" icon="plus" onClick={addTarget}>
+            <Button
+              variant="secondary"
+              size="sm"
+              icon="plus"
+              onClick={addTarget}
+            >
               添加上传位置
             </Button>
           </div>
           {targetOptions.length > 0 && (
             <div className="text-[11px] text-faint">
-              当前上传位置：{targetOptions.map((item) => item.label).join(" / ")}
+              当前上传位置：
+              {targetOptions.map((item) => item.label).join(" / ")}
             </div>
           )}
         </div>

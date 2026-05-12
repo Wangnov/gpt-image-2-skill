@@ -21,7 +21,10 @@ import type {
   WebhookNotificationConfig,
 } from "@/lib/types";
 import { api } from "@/lib/api";
-import { STORAGE_TARGET_TYPE_OPTIONS, getStorageTargetTypeOptions } from "./constants";
+import {
+  STORAGE_TARGET_TYPE_OPTIONS,
+  getStorageTargetTypeOptions,
+} from "./constants";
 
 export function cloneNotificationConfig(value?: NotificationConfig) {
   return normalizeNotificationConfig(
@@ -144,9 +147,7 @@ export function cloneStorageConfig(value?: StorageConfig) {
 export function clonePathConfig(value?: PathConfig) {
   return {
     ...normalizePathConfig(
-      value
-        ? (JSON.parse(JSON.stringify(value)) as PathConfig)
-        : undefined,
+      value ? (JSON.parse(JSON.stringify(value)) as PathConfig) : undefined,
     ),
   };
 }
@@ -193,12 +194,15 @@ export function storageTargetLabel(target: StorageTargetConfig) {
     getStorageTargetTypeOptions(runtimeKind).find(
       (option) => option.value === type,
     )?.label ??
-    STORAGE_TARGET_TYPE_OPTIONS.find((option) => option.value === type)?.label ??
+    STORAGE_TARGET_TYPE_OPTIONS.find((option) => option.value === type)
+      ?.label ??
     type
   );
 }
 
-export function blankStorageTarget(type: StorageTargetKind): StorageTargetConfig {
+export function blankStorageTarget(
+  type: StorageTargetKind,
+): StorageTargetConfig {
   if (type === "s3") {
     return {
       type,
@@ -382,7 +386,9 @@ export function normalizeStorageTargetForSave(
   };
 }
 
-export function prepareStorageConfigForSave(config: StorageConfig): StorageConfig {
+export function prepareStorageConfigForSave(
+  config: StorageConfig,
+): StorageConfig {
   const renamedTargets = Object.fromEntries(
     Object.entries(config.targets)
       .map(([name, target]) => [
@@ -408,14 +414,24 @@ export function prepareStorageConfigForSave(config: StorageConfig): StorageConfi
     cleanup: { mode: "never" as const },
   };
   const originRaw = sourcePipeline.origin?.trim();
-  const originRenamed = originRaw ? nameMap.get(originRaw) ?? originRaw : null;
-  const origin = originRenamed && validNames.has(originRenamed)
-    ? originRenamed
+  const originRenamed = originRaw
+    ? (nameMap.get(originRaw) ?? originRaw)
     : null;
+  const origin =
+    sourcePipeline.mode === "cloud_primary" &&
+    originRenamed &&
+    validNames.has(originRenamed)
+      ? originRenamed
+      : null;
   const pipeline = {
     mode: sourcePipeline.mode,
     origin,
-    archives: normalizeTargetNames(sourcePipeline.archives),
+    archives:
+      sourcePipeline.mode === "local_only"
+        ? []
+        : normalizeTargetNames(sourcePipeline.archives).filter(
+            (name) => name !== origin,
+          ),
     cleanup: sourcePipeline.cleanup,
   };
   return {
@@ -426,13 +442,7 @@ export function prepareStorageConfigForSave(config: StorageConfig): StorageConfi
     default_targets: [],
     fallback_targets: [],
     fallback_policy: "on_failure",
-    upload_concurrency: Math.max(
-      1,
-      Math.round(config.upload_concurrency || 4),
-    ),
-    target_concurrency: Math.max(
-      1,
-      Math.round(config.target_concurrency || 2),
-    ),
+    upload_concurrency: Math.max(1, Math.round(config.upload_concurrency || 4)),
+    target_concurrency: Math.max(1, Math.round(config.target_concurrency || 2)),
   };
 }

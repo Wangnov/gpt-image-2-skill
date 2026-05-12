@@ -276,6 +276,73 @@ fn mirror_pipeline_uploads_to_all_archives_in_parallel() {
 
 #[test]
 #[allow(deprecated)]
+fn cloud_primary_origin_is_not_replayed_as_archive() {
+    let _guard = CODEX_HOME_TEST_LOCK.lock().unwrap();
+    let temp_dir = tempfile::tempdir().unwrap();
+    let _home = TestCodexHome::set(temp_dir.path());
+    let source_dir = temp_dir.path().join("source");
+    fs::create_dir_all(&source_dir).unwrap();
+    let output_path = source_dir.join("out.png");
+    fs::write(&output_path, b"png").unwrap();
+    let origin_dir = temp_dir.path().join("origin");
+
+    let config = StorageConfig {
+        targets: BTreeMap::from([(
+            "origin".to_string(),
+            StorageTargetConfig::Local {
+                directory: origin_dir.clone(),
+                public_base_url: None,
+            },
+        )]),
+        pipeline: Some(PipelineConfig {
+            mode: PipelineMode::CloudPrimary,
+            origin: Some("origin".to_string()),
+            archives: vec!["origin".to_string()],
+            cleanup: CleanupPolicy::default(),
+        }),
+        default_targets: Vec::new(),
+        fallback_targets: Vec::new(),
+        fallback_policy: StorageFallbackPolicy::OnFailure,
+        upload_concurrency: 2,
+        target_concurrency: 2,
+    };
+    let job = json!({
+        "id": "job-cloud-primary-dedup-1",
+        "outputs": [{"index": 0, "path": output_path.display().to_string(), "bytes": 3}],
+    });
+    upsert_history_job(
+        "job-cloud-primary-dedup-1",
+        "images generate",
+        "openai",
+        "completed",
+        Some(&output_path),
+        Some("2026-05-09T10:30:00Z"),
+        json!({}),
+    )
+    .unwrap();
+
+    let uploads =
+        upload_job_outputs_to_storage(&config, &job, StorageUploadOverrides::default()).unwrap();
+
+    assert_eq!(uploads.len(), 1);
+    let upload = uploads.first().unwrap();
+    assert_eq!(upload.target, "origin");
+    assert_eq!(upload.status, "completed");
+    assert_eq!(
+        upload.metadata.get("role").and_then(|value| value.as_str()),
+        Some("primary")
+    );
+    assert_eq!(storage_status_for_uploads(&uploads), "completed");
+    assert!(
+        origin_dir
+            .join("job-cloud-primary-dedup-1")
+            .join("1-out.png")
+            .is_file()
+    );
+}
+
+#[test]
+#[allow(deprecated)]
 fn per_job_overrides_are_appended_to_archives() {
     let _guard = CODEX_HOME_TEST_LOCK.lock().unwrap();
     let temp_dir = tempfile::tempdir().unwrap();

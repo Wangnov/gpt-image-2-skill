@@ -157,12 +157,24 @@ pub(super) fn resolve_pipeline(
     overrides: &StorageUploadOverrides,
 ) -> ResolvedPipeline {
     let pipeline = config.effective_pipeline();
-    let mut archives = pipeline
-        .archives
-        .into_iter()
-        .map(|name| name.trim().to_string())
-        .filter(|name| !name.is_empty())
-        .collect::<Vec<_>>();
+    let origin = if matches!(pipeline.mode, PipelineMode::CloudPrimary) {
+        pipeline
+            .origin
+            .map(|name| name.trim().to_string())
+            .filter(|name| !name.is_empty())
+    } else {
+        None
+    };
+    let mut archives = Vec::new();
+    for name in pipeline.archives {
+        let trimmed = name.trim().to_string();
+        if !trimmed.is_empty()
+            && origin.as_deref() != Some(trimmed.as_str())
+            && !archives.iter().any(|existing| existing == &trimmed)
+        {
+            archives.push(trimmed);
+        }
+    }
 
     let extra = overrides
         .targets
@@ -171,15 +183,13 @@ pub(super) fn resolve_pipeline(
         .flat_map(|list| list.iter().cloned());
     for name in extra {
         let trimmed = name.trim().to_string();
-        if !trimmed.is_empty() && !archives.iter().any(|existing| existing == &trimmed) {
+        if !trimmed.is_empty()
+            && origin.as_deref() != Some(trimmed.as_str())
+            && !archives.iter().any(|existing| existing == &trimmed)
+        {
             archives.push(trimmed);
         }
     }
-
-    let origin = pipeline
-        .origin
-        .map(|name| name.trim().to_string())
-        .filter(|name| !name.is_empty());
 
     ResolvedPipeline {
         mode: pipeline.mode,

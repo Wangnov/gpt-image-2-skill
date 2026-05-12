@@ -232,7 +232,9 @@ pub fn upload_job_outputs_to_storage(
         let config = config.clone();
         let pipeline = pipeline.clone();
         thread::spawn(move || {
-            let _ = tx.send(run_pipeline_for_output(&config, &job_id, &output, &pipeline));
+            let _ = tx.send(run_pipeline_for_output(
+                &config, &job_id, &output, &pipeline,
+            ));
         });
         active += 1;
     }
