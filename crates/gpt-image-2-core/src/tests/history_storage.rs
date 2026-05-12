@@ -426,6 +426,65 @@ fn per_job_overrides_are_appended_to_archives() {
 }
 
 #[test]
+#[allow(deprecated)]
+fn per_job_overrides_activate_default_local_only_pipeline() {
+    let _guard = CODEX_HOME_TEST_LOCK.lock().unwrap();
+    let temp_dir = tempfile::tempdir().unwrap();
+    let _home = TestCodexHome::set(temp_dir.path());
+    let source_dir = temp_dir.path().join("source");
+    fs::create_dir_all(&source_dir).unwrap();
+    let output_path = source_dir.join("out.png");
+    fs::write(&output_path, b"png").unwrap();
+
+    let override_dir = temp_dir.path().join("override");
+    let config = StorageConfig {
+        targets: BTreeMap::from([(
+            "override".to_string(),
+            StorageTargetConfig::Local {
+                directory: override_dir.clone(),
+                public_base_url: None,
+            },
+        )]),
+        ..StorageConfig::default()
+    };
+    let job = json!({
+        "id": "job-override-local-only-1",
+        "outputs": [{"index": 0, "path": output_path.display().to_string(), "bytes": 3}],
+    });
+    upsert_history_job(
+        "job-override-local-only-1",
+        "images generate",
+        "openai",
+        "completed",
+        Some(&output_path),
+        Some("2026-05-09T11:30:00Z"),
+        json!({}),
+    )
+    .unwrap();
+
+    let overrides = StorageUploadOverrides {
+        targets: Some(vec!["override".to_string()]),
+        fallback_targets: None,
+    };
+    let uploads = upload_job_outputs_to_storage(&config, &job, overrides).unwrap();
+
+    assert_eq!(uploads.len(), 1);
+    let upload = uploads.first().unwrap();
+    assert_eq!(upload.target, "override");
+    assert_eq!(upload.status, "completed");
+    assert_eq!(
+        upload.metadata.get("role").and_then(|value| value.as_str()),
+        Some("primary")
+    );
+    assert!(
+        override_dir
+            .join("job-override-local-only-1")
+            .join("1-out.png")
+            .is_file()
+    );
+}
+
+#[test]
 fn s3_endpoint_builder_supports_aws_and_compatible_styles() {
     let (url, host, canonical_uri) =
         s3_endpoint_and_host("images", Some("us-west-2"), None, "jobs/1 out.png").unwrap();

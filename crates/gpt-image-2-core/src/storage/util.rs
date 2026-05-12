@@ -191,8 +191,14 @@ pub(super) fn resolve_pipeline(
         }
     }
 
+    let mode = if matches!(pipeline.mode, PipelineMode::LocalOnly) && !archives.is_empty() {
+        PipelineMode::CloudArchiveOnly
+    } else {
+        pipeline.mode
+    };
+
     ResolvedPipeline {
-        mode: pipeline.mode,
+        mode,
         origin,
         archives,
     }
