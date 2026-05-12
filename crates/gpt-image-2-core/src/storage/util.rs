@@ -35,6 +35,12 @@ pub(super) struct StorageUploadOutcome {
     pub(super) metadata: Value,
 }
 
+#[derive(Debug, Clone)]
+pub(super) struct StorageDownloadOutcome {
+    pub(super) bytes: Vec<u8>,
+    pub(super) metadata: Value,
+}
+
 pub(super) fn storage_target_type(target: &StorageTargetConfig) -> &'static str {
     match target {
         StorageTargetConfig::Local { .. } => "local",

@@ -485,6 +485,161 @@ fn per_job_overrides_activate_default_local_only_pipeline() {
 }
 
 #[test]
+#[allow(deprecated)]
+fn cloud_primary_local_origin_readback_survives_missing_local_cache() {
+    let _guard = CODEX_HOME_TEST_LOCK.lock().unwrap();
+    let temp_dir = tempfile::tempdir().unwrap();
+    let _home = TestCodexHome::set(temp_dir.path());
+    let source_dir = temp_dir.path().join("source");
+    fs::create_dir_all(&source_dir).unwrap();
+    let output_path = source_dir.join("out.png");
+    let expected = b"png-local-readback";
+    fs::write(&output_path, expected).unwrap();
+
+    let origin_dir = temp_dir.path().join("origin");
+    let config = StorageConfig {
+        targets: BTreeMap::from([(
+            "origin".to_string(),
+            StorageTargetConfig::Local {
+                directory: origin_dir.clone(),
+                public_base_url: None,
+            },
+        )]),
+        pipeline: Some(PipelineConfig {
+            mode: PipelineMode::CloudPrimary,
+            origin: Some("origin".to_string()),
+            archives: Vec::new(),
+            cleanup: CleanupPolicy::default(),
+        }),
+        default_targets: Vec::new(),
+        fallback_targets: Vec::new(),
+        fallback_policy: StorageFallbackPolicy::OnFailure,
+        upload_concurrency: 2,
+        target_concurrency: 2,
+    };
+    let job = json!({
+        "id": "job-local-readback-1",
+        "outputs": [{"index": 0, "path": output_path.display().to_string(), "bytes": expected.len()}],
+    });
+    upsert_history_job(
+        "job-local-readback-1",
+        "images generate",
+        "openai",
+        "completed",
+        Some(&output_path),
+        Some("2026-05-12T15:00:00Z"),
+        json!({
+            "output": {
+                "files": [{"index": 0, "path": output_path.display().to_string(), "bytes": expected.len()}]
+            }
+        }),
+    )
+    .unwrap();
+
+    let uploads =
+        upload_job_outputs_to_storage(&config, &job, StorageUploadOverrides::default()).unwrap();
+    assert_eq!(uploads.len(), 1);
+    assert_eq!(uploads[0].target, "origin");
+    assert_eq!(
+        uploads[0]
+            .metadata
+            .get("manifest")
+            .and_then(|manifest| manifest.get("key"))
+            .and_then(Value::as_str),
+        Some("job-local-readback-1/1-out.png")
+    );
+
+    fs::remove_file(&output_path).unwrap();
+    let readback = read_job_output_from_storage(&config, &job, 0).unwrap();
+    assert_eq!(readback.bytes, expected);
+    assert_eq!(readback.source["kind"], "origin");
+    assert_eq!(readback.source["target"], "origin");
+}
+
+#[test]
+#[ignore = "requires live Cloudflare R2 credentials in GPT_IMAGE_2_R2_* env vars"]
+#[allow(deprecated)]
+fn cloud_primary_r2_origin_readback_survives_missing_local_cache() {
+    let _guard = CODEX_HOME_TEST_LOCK.lock().unwrap();
+    let temp_dir = tempfile::tempdir().unwrap();
+    let _home = TestCodexHome::set(temp_dir.path());
+    let source_dir = temp_dir.path().join("source");
+    fs::create_dir_all(&source_dir).unwrap();
+    let output_path = source_dir.join("out.png");
+    let expected = b"png-r2-readback";
+    fs::write(&output_path, expected).unwrap();
+
+    let bucket = required_env("GPT_IMAGE_2_R2_BUCKET");
+    let endpoint = required_env("GPT_IMAGE_2_R2_ENDPOINT");
+    let region = std::env::var("GPT_IMAGE_2_R2_REGION").unwrap_or_else(|_| "auto".to_string());
+    let job_id = format!("job-r2-readback-{}", std::process::id());
+    let config = StorageConfig {
+        targets: BTreeMap::from([(
+            "r2-origin".to_string(),
+            StorageTargetConfig::S3 {
+                bucket,
+                region: Some(region),
+                endpoint: Some(endpoint),
+                prefix: Some("readback-e2e".to_string()),
+                access_key_id: Some(CredentialRef::Env {
+                    env: "GPT_IMAGE_2_R2_ACCESS_KEY_ID".to_string(),
+                }),
+                secret_access_key: Some(CredentialRef::Env {
+                    env: "GPT_IMAGE_2_R2_SECRET_ACCESS_KEY".to_string(),
+                }),
+                session_token: None,
+                public_base_url: None,
+            },
+        )]),
+        pipeline: Some(PipelineConfig {
+            mode: PipelineMode::CloudPrimary,
+            origin: Some("r2-origin".to_string()),
+            archives: Vec::new(),
+            cleanup: CleanupPolicy::default(),
+        }),
+        default_targets: Vec::new(),
+        fallback_targets: Vec::new(),
+        fallback_policy: StorageFallbackPolicy::OnFailure,
+        upload_concurrency: 2,
+        target_concurrency: 2,
+    };
+    let job = json!({
+        "id": job_id,
+        "outputs": [{"index": 0, "path": output_path.display().to_string(), "bytes": expected.len()}],
+    });
+    upsert_history_job(
+        job.get("id").and_then(Value::as_str).unwrap(),
+        "images generate",
+        "openai",
+        "completed",
+        Some(&output_path),
+        Some("2026-05-12T15:05:00Z"),
+        json!({
+            "output": {
+                "files": [{"index": 0, "path": output_path.display().to_string(), "bytes": expected.len()}]
+            }
+        }),
+    )
+    .unwrap();
+
+    let uploads =
+        upload_job_outputs_to_storage(&config, &job, StorageUploadOverrides::default()).unwrap();
+    assert_eq!(uploads.len(), 1);
+    assert_eq!(uploads[0].target, "r2-origin");
+    assert_eq!(uploads[0].status, "completed");
+
+    fs::remove_file(&output_path).unwrap();
+    let readback = read_job_output_from_storage(&config, &job, 0).unwrap();
+    assert_eq!(readback.bytes, expected);
+    assert_eq!(readback.source["kind"], "origin");
+    assert_eq!(readback.source["target"], "r2-origin");
+}
+
+fn required_env(name: &str) -> String {
+    std::env::var(name).unwrap_or_else(|_| panic!("{name} must be set"))
+}
+
+#[test]
 fn s3_endpoint_builder_supports_aws_and_compatible_styles() {
     let (url, host, canonical_uri) =
         s3_endpoint_and_host("images", Some("us-west-2"), None, "jobs/1 out.png").unwrap();

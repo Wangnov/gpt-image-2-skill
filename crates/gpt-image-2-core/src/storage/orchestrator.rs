@@ -23,6 +23,7 @@
 //! couldn't deliver and the archive made up for it" — exactly the original
 //! semantics the status enum was named after.
 
+use std::fs;
 use std::sync::mpsc;
 use std::thread;
 
@@ -34,8 +35,8 @@ use super::backends::upload_to_target;
 use super::history::{OutputUploadRecord, list_output_upload_records, upsert_output_upload_record};
 use super::types::{PipelineMode, StorageConfig, StorageTargetConfig};
 use super::util::{
-    ResolvedPipeline, UploadOutput, resolve_pipeline, storage_error_message, storage_target_type,
-    upload_now, upload_outputs_from_job,
+    ResolvedPipeline, UploadOutput, resolve_pipeline, sha256_hex, storage_error_message,
+    storage_target_type, upload_now, upload_outputs_from_job,
 };
 
 #[derive(Debug, Clone, Default)]
@@ -67,16 +68,28 @@ fn record_upload_attempt(
     upsert_output_upload_record(&started)?;
     let result = upload_to_target(target, job_id, output);
     let (status, url, error, bytes, metadata) = match result {
-        Ok(outcome) => (
-            "completed".to_string(),
-            outcome.url,
-            None,
-            outcome.bytes,
-            json!({
-                "role": role,
-                "detail": outcome.metadata,
-            }),
-        ),
+        Ok(outcome) => {
+            let manifest = upload_manifest(
+                output,
+                target_name,
+                target,
+                role,
+                outcome.url.as_deref(),
+                outcome.bytes,
+                &outcome.metadata,
+            );
+            (
+                "completed".to_string(),
+                outcome.url,
+                None,
+                outcome.bytes,
+                json!({
+                    "role": role,
+                    "detail": outcome.metadata,
+                    "manifest": manifest,
+                }),
+            )
+        }
         Err(error) => (
             if error.code == "storage_target_unsupported" {
                 "unsupported".to_string()
@@ -105,6 +118,31 @@ fn record_upload_attempt(
     };
     upsert_output_upload_record(&record)?;
     Ok(completed)
+}
+
+fn upload_manifest(
+    output: &UploadOutput,
+    target_name: &str,
+    target: &StorageTargetConfig,
+    role: &str,
+    url: Option<&str>,
+    bytes: Option<u64>,
+    detail: &serde_json::Value,
+) -> serde_json::Value {
+    let source_sha256 = fs::read(&output.path).ok().map(|bytes| sha256_hex(&bytes));
+    json!({
+        "role": role,
+        "target": target_name,
+        "target_type": storage_target_type(target),
+        "output_index": output.index,
+        "source_path": output.path.display().to_string(),
+        "local_cache_path": output.path.display().to_string(),
+        "bytes": bytes.or(Some(output.bytes)),
+        "sha256": source_sha256,
+        "url": url,
+        "key": detail.get("key").cloned().unwrap_or(serde_json::Value::Null),
+        "path": detail.get("path").cloned().unwrap_or(serde_json::Value::Null),
+    })
 }
 
 fn record_missing_storage_target(

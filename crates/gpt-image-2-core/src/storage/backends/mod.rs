@@ -18,7 +18,7 @@ pub(crate) use sftp::{authenticate_sftp_session, connect_sftp_session};
 use crate::AppError;
 
 use super::StorageTargetConfig;
-use super::util::{StorageUploadOutcome, UploadOutput};
+use super::util::{StorageDownloadOutcome, StorageUploadOutcome, UploadOutput};
 
 pub(super) fn upload_to_target(
     target: &StorageTargetConfig,
@@ -64,5 +64,21 @@ pub(super) fn upload_to_target(
         StorageTargetConfig::Pan123Open { .. } => {
             pan123::upload_to_pan123_open(target, job_id, output)
         }
+    }
+}
+
+pub(super) fn download_from_target(
+    target: &StorageTargetConfig,
+    detail: &serde_json::Value,
+) -> Result<StorageDownloadOutcome, AppError> {
+    match target {
+        StorageTargetConfig::Local { directory, .. } => {
+            local::download_from_local(directory, detail)
+        }
+        StorageTargetConfig::S3 { .. } => s3::download_from_s3(target, detail),
+        _ => Err(AppError::new(
+            "storage_readback_unsupported",
+            "This storage target does not support readback yet.",
+        )),
     }
 }

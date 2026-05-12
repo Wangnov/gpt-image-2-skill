@@ -141,9 +141,10 @@ use storage::util::redact_url_for_log;
 pub use storage::{
     BackendCapabilities, BaiduNetdiskAuthMode, CleanupMode, CleanupPolicy, OutputUploadRecord,
     Pan123OpenAuthMode, PipelineConfig, PipelineMode, PrimaryQuality, StorageConfig,
-    StorageFallbackPolicy, StorageTargetConfig, StorageTestResult, StorageUploadOverrides,
-    list_output_upload_records, preserve_storage_secrets, test_storage_target,
-    upload_job_outputs_to_storage, upsert_output_upload_record,
+    StorageFallbackPolicy, StorageReadback, StorageTargetConfig, StorageTestResult,
+    StorageUploadOverrides, list_output_upload_records, preserve_storage_secrets,
+    read_job_output_from_storage, test_storage_target, upload_job_outputs_to_storage,
+    upsert_output_upload_record,
 };
 pub(crate) use storage::{
     enrich_outputs_with_uploads, list_output_upload_records_with_conn, redact_storage_config,

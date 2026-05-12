@@ -50,3 +50,39 @@ pub(super) fn upload_to_local(
         }),
     })
 }
+
+pub(super) fn download_from_local(
+    directory: &Path,
+    detail: &serde_json::Value,
+) -> Result<StorageDownloadOutcome, AppError> {
+    let path = detail
+        .get("path")
+        .and_then(serde_json::Value::as_str)
+        .map(Path::new)
+        .map(Path::to_path_buf)
+        .or_else(|| {
+            detail
+                .get("key")
+                .and_then(serde_json::Value::as_str)
+                .map(|key| directory.join(key))
+        })
+        .ok_or_else(|| {
+            AppError::new(
+                "storage_readback_missing_key",
+                "Local storage upload record is missing a readable path.",
+            )
+        })?;
+    let bytes = fs::read(&path).map_err(|error| {
+        AppError::new(
+            "storage_local_read_failed",
+            "Unable to read local storage object.",
+        )
+        .with_detail(json!({"path": path.display().to_string(), "error": error.to_string()}))
+    })?;
+    Ok(StorageDownloadOutcome {
+        bytes,
+        metadata: json!({
+            "path": path.display().to_string(),
+        }),
+    })
+}
