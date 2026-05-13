@@ -529,11 +529,7 @@ impl StorageConfig {
         }
         for archive in archives {
             if Some(archive) == origin {
-                return Err(AppError::new(
-                    "storage_origin_archive_conflict",
-                    "Storage Archive targets must not include the Origin target.",
-                )
-                .with_detail(serde_json::json!({"archive": archive})));
+                continue;
             }
             if !self.targets.contains_key(archive) {
                 return Err(AppError::new(
@@ -950,7 +946,7 @@ mod tests {
     }
 
     #[test]
-    fn validate_pipeline_rejects_origin_reused_as_archive() {
+    fn validate_pipeline_allows_origin_reused_as_archive_for_runtime_dedupe() {
         let config = StorageConfig {
             targets: BTreeMap::from([("origin".to_string(), local(None))]),
             pipeline: Some(PipelineConfig {
@@ -961,8 +957,7 @@ mod tests {
             }),
             ..StorageConfig::default()
         };
-        let err = config.validate_pipeline().unwrap_err();
-        assert_eq!(err.code, "storage_origin_archive_conflict");
+        config.validate_pipeline().unwrap();
     }
 
     #[test]
