@@ -31,8 +31,18 @@ import type {
   TauriJobResponse,
 } from "./types";
 import { isTerminalJobStatus } from "./types";
-import { apiResourceUrl, fileApiUrl, jsonBody, requestJson } from "./http/client";
-import { basename, downloadJobZip, downloadUrl } from "./http/downloads";
+import {
+  apiResourceUrl,
+  fileApiUrl,
+  jsonBody,
+  requestJson,
+} from "./http/client";
+import {
+  basename,
+  downloadJobZip,
+  downloadUrl,
+  jobOutputDownloadName,
+} from "./http/downloads";
 import { formUploadPayload } from "./http/edit-payload";
 import {
   jobUpdateSignature,
@@ -41,10 +51,7 @@ import {
   rememberEventJob,
 } from "./http/jobs";
 
-export {
-  configuredHttpApiBase,
-  hasConfiguredHttpRuntime,
-} from "./http/client";
+export { configuredHttpApiBase, hasConfiguredHttpRuntime } from "./http/client";
 
 export const httpApi: ApiClient = {
   kind: "http",
@@ -238,13 +245,14 @@ export const httpApi: ApiClient = {
   },
   async exportJobToConfiguredFolder(jobId: string) {
     const { job } = await httpApi.getJob(jobId);
-    return downloadJobZip(job, httpApi.fileUrl, httpApi.jobOutputPaths, httpApi.jobOutputUrl);
+    return downloadJobZip(job, httpApi.fileUrl, httpApi.jobOutputUrl);
   },
   async exportJobOutputToConfiguredFolder(jobId: string, outputIndex: number) {
+    const { job } = await httpApi.getJob(jobId);
     const url = apiResourceUrl(
       `/jobs/${encodeURIComponent(jobId)}/outputs/${outputIndex}`,
     );
-    downloadUrl(url, `${jobId}-${outputIndex + 1}.png`);
+    downloadUrl(url, jobOutputDownloadName(job, outputIndex));
     return [url];
   },
   async ensureJobOutputCached(_jobId: string, _outputIndex: number) {
