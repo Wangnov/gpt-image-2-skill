@@ -33,6 +33,7 @@ import type {
 import { isTerminalJobStatus } from "./types";
 import {
   apiResourceUrl,
+  configuredHttpApiBase,
   fileApiUrl,
   jsonBody,
   requestJson,
@@ -52,6 +53,14 @@ import {
 } from "./http/jobs";
 
 export { configuredHttpApiBase, hasConfiguredHttpRuntime } from "./http/client";
+
+function isHttpRuntimeUrl(value: string): boolean {
+  return (
+    value.startsWith("/api/") ||
+    value.startsWith(`${configuredHttpApiBase() ?? "/api"}/`) ||
+    /^https?:\/\//i.test(value)
+  );
+}
 
 export const httpApi: ApiClient = {
   kind: "http",
@@ -255,8 +264,14 @@ export const httpApi: ApiClient = {
     downloadUrl(url, jobOutputDownloadName(job, outputIndex));
     return [url];
   },
-  async ensureJobOutputCached(_jobId: string, _outputIndex: number) {
-    return null;
+  async ensureJobOutputCached(jobId: string, outputIndex: number) {
+    const url = apiResourceUrl(
+      `/jobs/${encodeURIComponent(jobId)}/outputs/${outputIndex}`,
+    );
+    const response = await fetch(url, { cache: "no-store" });
+    if (!response.ok) return null;
+    await response.arrayBuffer();
+    return url;
   },
   async createGenerate(body: GenerateRequest) {
     const result = await requestJson<TauriJobResponse>("/images/generate", {
@@ -285,7 +300,8 @@ export const httpApi: ApiClient = {
   },
   outputPath,
   fileUrl(path?: string | null) {
-    return path ? fileApiUrl(path) : "";
+    if (!path) return "";
+    return isHttpRuntimeUrl(path) ? path : fileApiUrl(path);
   },
   jobOutputUrl(job: Job, index = 0) {
     return apiResourceUrl(
