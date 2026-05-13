@@ -116,6 +116,9 @@ fn webhook_payload_splits_origin_and_archive_uploads() {
         }],
         "metadata": {
             "prompt": "hello",
+            "error": {
+                "message": "Unable to read reference image at /Users/alice/Pictures/gpt-image-2/metadata-ref.png"
+            },
             "image_output": {
                 "files": [{
                     "path": "/Users/alice/Pictures/gpt-image-2/legacy/out.png"
@@ -156,6 +159,7 @@ fn webhook_payload_splits_origin_and_archive_uploads() {
     assert_eq!(request.body["job"]["metadata"]["prompt"], "hello");
     assert!(request.body["job"]["metadata"]["output"].is_null());
     assert!(request.body["job"]["metadata"]["image_output"].is_null());
+    assert!(request.body["job"]["metadata"]["error"].is_null());
     assert_eq!(request.body["job"]["error"]["message"], "Job failed.");
     assert_eq!(request.body["summary"], "openai · Job failed.");
     assert!(request.body["job"]["outputs"][0]["path"].is_null());

@@ -67,6 +67,7 @@ fn metadata_payload(metadata: &Value) -> Value {
     let mut object = source.clone();
     object.remove("output");
     object.remove("image_output");
+    object.remove("error");
     Value::Object(object)
 }
 
