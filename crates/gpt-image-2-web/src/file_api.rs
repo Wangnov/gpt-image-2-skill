@@ -80,6 +80,7 @@ pub(crate) async fn job_output_response(
         StorageReadbackOptions {
             allow_archive_fallback: true,
             rehydrate_local_cache: true,
+            local_cache_roots: local_cache_roots_for_product(&config),
         },
     )
     .map_err(app_error)

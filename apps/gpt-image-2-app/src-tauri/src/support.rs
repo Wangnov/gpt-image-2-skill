@@ -71,6 +71,7 @@ pub(crate) fn read_job_output_for_product(
 ) -> Result<StorageReadback, String> {
     let config = load_config()?;
     let job = show_history_job(job_id).map_err(app_error)?;
+    let local_cache_roots = local_cache_roots_for_product(&config);
     read_job_output_from_storage_with_options(
         &config.storage,
         &job,
@@ -78,9 +79,22 @@ pub(crate) fn read_job_output_for_product(
         StorageReadbackOptions {
             allow_archive_fallback: true,
             rehydrate_local_cache,
+            local_cache_roots,
         },
     )
     .map_err(app_error)
+}
+
+pub(crate) fn local_cache_roots_for_product(config: &AppConfig) -> Vec<PathBuf> {
+    let mut roots = vec![product_result_library_dir(
+        Some(config),
+        ProductRuntime::Tauri,
+    )];
+    if config.paths.legacy_shared_codex_dir.enabled_for_read {
+        roots.push(legacy_jobs_dir(Some(config)));
+    }
+    roots.push(std::env::temp_dir());
+    roots
 }
 
 pub(crate) fn history_output_indexes(job: &Value) -> Vec<usize> {

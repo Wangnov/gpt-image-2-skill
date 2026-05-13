@@ -137,7 +137,7 @@ fn local_readback_path(directory: &Path, detail: &serde_json::Value) -> Result<P
             "path": resolved.display().to_string(),
         })));
     }
-    Ok(candidate)
+    Ok(resolved)
 }
 
 #[cfg(test)]
@@ -163,7 +163,7 @@ mod tests {
         )
         .unwrap();
 
-        assert_eq!(path, object);
+        assert_eq!(path, object.canonicalize().unwrap());
     }
 
     #[test]

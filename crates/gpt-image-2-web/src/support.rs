@@ -37,6 +37,17 @@ pub(crate) fn result_library_dir() -> PathBuf {
     product_result_library_dir(Some(&load_config_or_default()), ProductRuntime::DockerWeb)
 }
 
+pub(crate) fn local_cache_roots_for_product(config: &AppConfig) -> Vec<PathBuf> {
+    let mut roots = vec![product_result_library_dir(
+        Some(config),
+        ProductRuntime::DockerWeb,
+    )];
+    if config.paths.legacy_shared_codex_dir.enabled_for_read {
+        roots.push(legacy_jobs_dir(Some(config)));
+    }
+    roots
+}
+
 pub(crate) fn allowed_data_roots() -> Vec<PathBuf> {
     if let Ok(value) = std::env::var("GPT_IMAGE_2_ALLOWED_DATA_ROOTS") {
         let roots = value

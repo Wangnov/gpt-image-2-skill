@@ -116,10 +116,128 @@ fn readback_uses_legacy_output_path_when_outputs_are_missing() {
 
     let job = show_history_job("job-legacy-readback-1").unwrap();
     assert!(job["outputs"].as_array().unwrap().is_empty());
-    let readback = read_job_output_from_storage(&StorageConfig::default(), &job, 0).unwrap();
+    let readback = read_job_output_from_storage_with_options(
+        &StorageConfig::default(),
+        &job,
+        0,
+        StorageReadbackOptions {
+            allow_archive_fallback: false,
+            rehydrate_local_cache: false,
+            local_cache_roots: vec![temp_dir.path().to_path_buf()],
+        },
+    )
+    .unwrap();
 
     assert_eq!(readback.bytes, b"legacy-png");
     assert_eq!(readback.source["kind"], "local_cache");
+}
+
+#[test]
+fn readback_rejects_local_cache_paths_outside_allowed_roots() {
+    let _guard = CODEX_HOME_TEST_LOCK.lock().unwrap();
+    let temp_dir = tempfile::tempdir().unwrap();
+    let _home = TestCodexHome::set(temp_dir.path());
+    let root = temp_dir.path().join("result-library");
+    fs::create_dir_all(&root).unwrap();
+    let outside = temp_dir.path().join("outside").join("secret.png");
+    fs::create_dir_all(outside.parent().unwrap()).unwrap();
+    fs::write(&outside, b"secret").unwrap();
+    let job = json!({
+        "id": "job-outside-cache-1",
+        "outputs": [{"index": 0, "path": outside.display().to_string(), "bytes": 6}],
+    });
+
+    let error = read_job_output_from_storage_with_options(
+        &StorageConfig::default(),
+        &job,
+        0,
+        StorageReadbackOptions {
+            allow_archive_fallback: false,
+            rehydrate_local_cache: false,
+            local_cache_roots: vec![root],
+        },
+    )
+    .unwrap_err();
+
+    assert_eq!(error.code, "storage_readback_cache_path_outside_scope");
+}
+
+#[cfg(unix)]
+#[test]
+fn readback_rejects_symlink_cache_paths_that_resolve_outside_allowed_roots() {
+    let _guard = CODEX_HOME_TEST_LOCK.lock().unwrap();
+    let temp_dir = tempfile::tempdir().unwrap();
+    let _home = TestCodexHome::set(temp_dir.path());
+    let root = temp_dir.path().join("result-library");
+    let job_dir = root.join("job-symlink-cache-1");
+    fs::create_dir_all(&job_dir).unwrap();
+    let outside = temp_dir.path().join("outside.png");
+    fs::write(&outside, b"secret").unwrap();
+    let link = job_dir.join("out.png");
+    std::os::unix::fs::symlink(&outside, &link).unwrap();
+    let job = json!({
+        "id": "job-symlink-cache-1",
+        "outputs": [{"index": 0, "path": link.display().to_string(), "bytes": 6}],
+    });
+
+    let error = read_job_output_from_storage_with_options(
+        &StorageConfig::default(),
+        &job,
+        0,
+        StorageReadbackOptions {
+            allow_archive_fallback: false,
+            rehydrate_local_cache: false,
+            local_cache_roots: vec![root],
+        },
+    )
+    .unwrap_err();
+
+    assert_eq!(error.code, "storage_readback_cache_path_outside_scope");
+}
+
+#[test]
+fn readback_respects_legacy_cache_roots_when_enabled_by_caller() {
+    let _guard = CODEX_HOME_TEST_LOCK.lock().unwrap();
+    let temp_dir = tempfile::tempdir().unwrap();
+    let _home = TestCodexHome::set(temp_dir.path());
+    let result_root = temp_dir.path().join("result-library");
+    let legacy_root = temp_dir.path().join("legacy").join("jobs");
+    fs::create_dir_all(&result_root).unwrap();
+    fs::create_dir_all(&legacy_root).unwrap();
+    let legacy_output = legacy_root.join("job-legacy-root").join("out.png");
+    fs::create_dir_all(legacy_output.parent().unwrap()).unwrap();
+    fs::write(&legacy_output, b"legacy").unwrap();
+    let job = json!({
+        "id": "job-legacy-root",
+        "outputs": [{"index": 0, "path": legacy_output.display().to_string(), "bytes": 6}],
+    });
+
+    let disabled = read_job_output_from_storage_with_options(
+        &StorageConfig::default(),
+        &job,
+        0,
+        StorageReadbackOptions {
+            allow_archive_fallback: false,
+            rehydrate_local_cache: false,
+            local_cache_roots: vec![result_root.clone()],
+        },
+    )
+    .unwrap_err();
+    assert_eq!(disabled.code, "storage_readback_cache_path_outside_scope");
+
+    let enabled = read_job_output_from_storage_with_options(
+        &StorageConfig::default(),
+        &job,
+        0,
+        StorageReadbackOptions {
+            allow_archive_fallback: false,
+            rehydrate_local_cache: false,
+            local_cache_roots: vec![result_root, legacy_root],
+        },
+    )
+    .unwrap();
+    assert_eq!(enabled.bytes, b"legacy");
+    assert_eq!(enabled.source["kind"], "local_cache");
 }
 
 #[test]
@@ -594,10 +712,10 @@ fn cloud_primary_local_origin_readback_survives_missing_local_cache() {
     )
     .unwrap();
     assert_eq!(head.bytes, Some(expected.len() as u64));
-    assert_eq!(
-        head.metadata["path"],
-        uploads[0].metadata["manifest"]["path"]
-    );
+    let manifest_path = PathBuf::from(uploads[0].metadata["manifest"]["path"].as_str().unwrap())
+        .canonicalize()
+        .unwrap();
+    assert_eq!(head.metadata["path"], manifest_path.display().to_string());
 
     fs::remove_file(&output_path).unwrap();
     let readback = read_job_output_from_storage_with_options(
@@ -607,6 +725,7 @@ fn cloud_primary_local_origin_readback_survives_missing_local_cache() {
         StorageReadbackOptions {
             allow_archive_fallback: false,
             rehydrate_local_cache: true,
+            local_cache_roots: vec![source_dir.clone()],
         },
     )
     .unwrap();
@@ -615,6 +734,184 @@ fn cloud_primary_local_origin_readback_survives_missing_local_cache() {
     assert_eq!(readback.source["target"], "origin");
     assert!(output_path.is_file());
     assert_eq!(fs::read(&output_path).unwrap(), expected);
+}
+
+#[test]
+#[allow(deprecated)]
+fn rehydrate_ignores_manifest_cache_path_outside_allowed_roots() {
+    let _guard = CODEX_HOME_TEST_LOCK.lock().unwrap();
+    let temp_dir = tempfile::tempdir().unwrap();
+    let _home = TestCodexHome::set(temp_dir.path());
+    let origin_dir = temp_dir.path().join("origin");
+    let cache_root = temp_dir.path().join("cache");
+    let outside = temp_dir.path().join("outside").join("out.png");
+    fs::create_dir_all(&cache_root).unwrap();
+    fs::create_dir_all(origin_dir.join("job-manifest-cache-1")).unwrap();
+    fs::create_dir_all(outside.parent().unwrap()).unwrap();
+    let key = "job-manifest-cache-1/1-out.png";
+    let expected = b"png-manifest-cache";
+    fs::write(origin_dir.join(key), expected).unwrap();
+
+    let config = StorageConfig {
+        targets: BTreeMap::from([(
+            "origin".to_string(),
+            StorageTargetConfig::Local {
+                directory: origin_dir,
+                public_base_url: None,
+            },
+        )]),
+        pipeline: Some(PipelineConfig {
+            mode: PipelineMode::CloudPrimary,
+            origin: Some("origin".to_string()),
+            archives: Vec::new(),
+            cleanup: CleanupPolicy::default(),
+        }),
+        default_targets: Vec::new(),
+        fallback_targets: Vec::new(),
+        fallback_policy: StorageFallbackPolicy::OnFailure,
+        upload_concurrency: 2,
+        target_concurrency: 2,
+        policy: StorageManagementPolicy::default(),
+    };
+    upsert_history_job(
+        "job-manifest-cache-1",
+        "images generate",
+        "openai",
+        "completed",
+        None,
+        Some("2026-05-13T18:00:00Z"),
+        json!({}),
+    )
+    .unwrap();
+    upsert_output_upload_record(&OutputUploadRecord {
+        job_id: "job-manifest-cache-1".to_string(),
+        output_index: 0,
+        target: "origin".to_string(),
+        target_type: "local".to_string(),
+        status: "completed".to_string(),
+        url: None,
+        error: None,
+        bytes: Some(expected.len() as u64),
+        attempts: 1,
+        updated_at: "2026-05-13T18:00:00Z".to_string(),
+        metadata: json!({
+            "role": "primary",
+            "placement": "origin",
+            "manifest": {
+                "key": key,
+                "local_cache_path": outside.display().to_string(),
+            },
+        }),
+    })
+    .unwrap();
+    let job = json!({
+        "id": "job-manifest-cache-1",
+        "outputs": [],
+    });
+
+    let readback = read_job_output_from_storage_with_options(
+        &config,
+        &job,
+        0,
+        StorageReadbackOptions {
+            allow_archive_fallback: false,
+            rehydrate_local_cache: true,
+            local_cache_roots: vec![cache_root],
+        },
+    )
+    .unwrap();
+
+    assert_eq!(readback.bytes, expected);
+    assert!(readback.source["rehydrated_path"].is_null());
+    assert!(!outside.exists());
+}
+
+#[test]
+#[allow(deprecated)]
+fn rehydrate_does_not_use_storage_destination_path_as_cache_path() {
+    let _guard = CODEX_HOME_TEST_LOCK.lock().unwrap();
+    let temp_dir = tempfile::tempdir().unwrap();
+    let _home = TestCodexHome::set(temp_dir.path());
+    let origin_dir = temp_dir.path().join("origin");
+    let cache_root = temp_dir.path().join("cache");
+    fs::create_dir_all(&cache_root).unwrap();
+    fs::create_dir_all(origin_dir.join("job-manifest-path-1")).unwrap();
+    let key = "job-manifest-path-1/1-out.png";
+    let storage_object = origin_dir.join(key);
+    let expected = b"png-manifest-path";
+    fs::write(&storage_object, expected).unwrap();
+
+    let config = StorageConfig {
+        targets: BTreeMap::from([(
+            "origin".to_string(),
+            StorageTargetConfig::Local {
+                directory: origin_dir,
+                public_base_url: None,
+            },
+        )]),
+        pipeline: Some(PipelineConfig {
+            mode: PipelineMode::CloudPrimary,
+            origin: Some("origin".to_string()),
+            archives: Vec::new(),
+            cleanup: CleanupPolicy::default(),
+        }),
+        default_targets: Vec::new(),
+        fallback_targets: Vec::new(),
+        fallback_policy: StorageFallbackPolicy::OnFailure,
+        upload_concurrency: 2,
+        target_concurrency: 2,
+        policy: StorageManagementPolicy::default(),
+    };
+    upsert_history_job(
+        "job-manifest-path-1",
+        "images generate",
+        "openai",
+        "completed",
+        None,
+        Some("2026-05-13T18:05:00Z"),
+        json!({}),
+    )
+    .unwrap();
+    upsert_output_upload_record(&OutputUploadRecord {
+        job_id: "job-manifest-path-1".to_string(),
+        output_index: 0,
+        target: "origin".to_string(),
+        target_type: "local".to_string(),
+        status: "completed".to_string(),
+        url: None,
+        error: None,
+        bytes: Some(expected.len() as u64),
+        attempts: 1,
+        updated_at: "2026-05-13T18:05:00Z".to_string(),
+        metadata: json!({
+            "role": "primary",
+            "placement": "origin",
+            "manifest": {
+                "key": key,
+                "path": storage_object.display().to_string(),
+            },
+        }),
+    })
+    .unwrap();
+    let job = json!({
+        "id": "job-manifest-path-1",
+        "outputs": [],
+    });
+
+    let readback = read_job_output_from_storage_with_options(
+        &config,
+        &job,
+        0,
+        StorageReadbackOptions {
+            allow_archive_fallback: false,
+            rehydrate_local_cache: true,
+            local_cache_roots: vec![cache_root],
+        },
+    )
+    .unwrap();
+
+    assert_eq!(readback.bytes, expected);
+    assert!(readback.source["rehydrated_path"].is_null());
 }
 
 #[test]
@@ -693,6 +990,7 @@ fn cloud_primary_archive_readback_is_explicit_fallback() {
         StorageReadbackOptions {
             allow_archive_fallback: true,
             rehydrate_local_cache: false,
+            local_cache_roots: Vec::new(),
         },
     )
     .unwrap();
@@ -777,6 +1075,7 @@ fn cloud_primary_after_archive_success_cleanup_deletes_local_cache() {
         StorageReadbackOptions {
             allow_archive_fallback: true,
             rehydrate_local_cache: true,
+            local_cache_roots: vec![source_dir.clone()],
         },
     )
     .unwrap();

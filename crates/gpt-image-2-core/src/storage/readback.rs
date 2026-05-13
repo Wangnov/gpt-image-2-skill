@@ -1,5 +1,5 @@
 use std::fs;
-use std::path::PathBuf;
+use std::path::{Component, Path, PathBuf};
 
 use serde_json::{Value, json};
 
@@ -15,10 +15,11 @@ pub struct StorageReadback {
     pub source: Value,
 }
 
-#[derive(Debug, Clone, Copy, Default)]
+#[derive(Debug, Clone, Default)]
 pub struct StorageReadbackOptions {
     pub allow_archive_fallback: bool,
     pub rehydrate_local_cache: bool,
+    pub local_cache_roots: Vec<PathBuf>,
 }
 
 pub fn read_job_output_from_storage(
@@ -43,6 +44,7 @@ pub fn read_job_output_from_storage_with_options(
     if let Some(path) = job_output_path(job, output_index) {
         let path = PathBuf::from(path);
         if path.is_file() {
+            let path = resolve_local_cache_read_path(&path, &options.local_cache_roots)?;
             let bytes = fs::read(&path).map_err(|error| {
                 AppError::new(
                     "storage_readback_local_failed",
@@ -138,7 +140,7 @@ pub fn read_job_output_from_storage_with_options(
         match download_from_target(target, detail) {
             Ok(download) => {
                 let rehydrated_path =
-                    rehydrate_cache_path(job, output_index, detail, &download.bytes, options)?;
+                    rehydrate_cache_path(job, output_index, detail, &download.bytes, &options)?;
                 return Ok(StorageReadback {
                     bytes: download.bytes,
                     source: json!({
@@ -212,7 +214,7 @@ fn rehydrate_cache_path(
     output_index: usize,
     detail: &Value,
     bytes: &[u8],
-    options: StorageReadbackOptions,
+    options: &StorageReadbackOptions,
 ) -> Result<Value, AppError> {
     if !options.rehydrate_local_cache {
         return Ok(Value::Null);
@@ -221,6 +223,9 @@ fn rehydrate_cache_path(
         .map(PathBuf::from)
         .or_else(|| manifest_cache_path(detail));
     let Some(path) = path else {
+        return Ok(Value::Null);
+    };
+    let Some(path) = resolve_local_cache_write_path(&path, &options.local_cache_roots)? else {
         return Ok(Value::Null);
     };
     if let Some(parent) = path.parent() {
@@ -246,10 +251,100 @@ fn manifest_cache_path(detail: &Value) -> Option<PathBuf> {
     detail
         .get("local_cache_path")
         .or_else(|| detail.get("source_path"))
-        .or_else(|| detail.get("path"))
         .and_then(Value::as_str)
         .filter(|path| !path.trim().is_empty())
         .map(PathBuf::from)
+}
+
+fn resolve_local_cache_read_path(path: &Path, roots: &[PathBuf]) -> Result<PathBuf, AppError> {
+    let resolved = path.canonicalize().map_err(|error| {
+        AppError::new(
+            "storage_readback_local_failed",
+            "Unable to resolve local output.",
+        )
+        .with_detail(json!({"path": path.display().to_string(), "error": error.to_string()}))
+    })?;
+    if !resolved.is_file() {
+        return Err(AppError::new(
+            "storage_readback_local_failed",
+            "Local output path is not a file.",
+        )
+        .with_detail(json!({"path": resolved.display().to_string()})));
+    }
+    if !path_is_in_roots(&resolved, roots) {
+        return Err(AppError::new(
+            "storage_readback_cache_path_outside_scope",
+            "Local cache path is outside allowed result directories.",
+        )
+        .with_detail(json!({"path": resolved.display().to_string()})));
+    }
+    Ok(resolved)
+}
+
+fn resolve_local_cache_write_path(
+    path: &Path,
+    roots: &[PathBuf],
+) -> Result<Option<PathBuf>, AppError> {
+    if roots.is_empty() {
+        return Ok(None);
+    }
+    if path.exists() {
+        let Ok(resolved) = path.canonicalize() else {
+            return Ok(None);
+        };
+        if resolved.is_file() && path_is_in_roots(&resolved, roots) {
+            return Ok(Some(resolved));
+        }
+        return Ok(None);
+    }
+    let Some(parent) = path.parent() else {
+        return Ok(None);
+    };
+    if !relative_tail_is_safe(parent) {
+        return Ok(None);
+    }
+    let Some(existing_parent) = nearest_existing_ancestor(parent) else {
+        return Ok(None);
+    };
+    let resolved_parent = existing_parent.canonicalize().map_err(|error| {
+        AppError::new(
+            "storage_readback_cache_create_failed",
+            "Unable to resolve local cache directory.",
+        )
+        .with_detail(
+            json!({"path": existing_parent.display().to_string(), "error": error.to_string()}),
+        )
+    })?;
+    if !path_is_in_roots(&resolved_parent, roots) {
+        return Ok(None);
+    }
+    Ok(Some(path.to_path_buf()))
+}
+
+fn nearest_existing_ancestor(path: &Path) -> Option<PathBuf> {
+    let mut probe = path.to_path_buf();
+    loop {
+        if probe.exists() {
+            return Some(probe);
+        }
+        if !probe.pop() {
+            return None;
+        }
+    }
+}
+
+fn relative_tail_is_safe(path: &Path) -> bool {
+    !path
+        .components()
+        .any(|component| matches!(component, Component::ParentDir | Component::Prefix(_)))
+}
+
+fn path_is_in_roots(path: &Path, roots: &[PathBuf]) -> bool {
+    roots.iter().any(|root| {
+        root.canonicalize()
+            .map(|root| path.starts_with(root))
+            .unwrap_or(false)
+    })
 }
 
 fn job_output_path(job: &Value, output_index: usize) -> Option<&str> {
