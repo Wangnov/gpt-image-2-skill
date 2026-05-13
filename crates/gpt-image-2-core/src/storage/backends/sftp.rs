@@ -355,16 +355,106 @@ fn sftp_key(detail: &serde_json::Value) -> Option<&str> {
 }
 
 fn sftp_readback_path(remote_dir: &str, detail: &serde_json::Value) -> Result<PathBuf, AppError> {
-    detail
-        .get("remote_path")
-        .and_then(serde_json::Value::as_str)
-        .filter(|value| !value.trim().is_empty())
-        .map(PathBuf::from)
-        .or_else(|| sftp_key(detail).map(|key| PathBuf::from(remote_dir).join(key)))
+    let root = normalize_remote_path(PathBuf::from(remote_dir));
+    let candidate = sftp_key(detail)
+        .map(|key| PathBuf::from(remote_dir).join(key))
+        .or_else(|| {
+            detail
+                .get("remote_path")
+                .and_then(serde_json::Value::as_str)
+                .filter(|value| !value.trim().is_empty())
+                .map(PathBuf::from)
+        })
         .ok_or_else(|| {
             AppError::new(
                 "storage_readback_missing_key",
                 "SFTP storage upload record is missing a readable remote path.",
             )
-        })
+        })?;
+    let resolved = normalize_remote_path(candidate);
+    if !resolved.starts_with(&root) {
+        return Err(AppError::new(
+            "storage_readback_path_outside_root",
+            "SFTP storage readback path is outside the configured remote directory.",
+        )
+        .with_detail(json!({
+            "remote_dir": root.display().to_string(),
+            "remote_path": resolved.display().to_string(),
+        })));
+    }
+    Ok(resolved)
+}
+
+fn normalize_remote_path(path: PathBuf) -> PathBuf {
+    let mut normalized = PathBuf::new();
+    for component in path.components() {
+        match component {
+            std::path::Component::Prefix(prefix) => normalized.push(prefix.as_os_str()),
+            std::path::Component::RootDir => normalized.push(component.as_os_str()),
+            std::path::Component::CurDir => {}
+            std::path::Component::ParentDir => {
+                normalized.pop();
+            }
+            std::path::Component::Normal(value) => normalized.push(value),
+        }
+    }
+    normalized
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn sftp_readback_prefers_key_under_remote_dir() {
+        let path = sftp_readback_path(
+            "/uploads",
+            &json!({
+                "key": "job-1/out.png",
+                "remote_path": "/elsewhere/out.png",
+            }),
+        )
+        .unwrap();
+
+        assert_eq!(path, PathBuf::from("/uploads/job-1/out.png"));
+    }
+
+    #[test]
+    fn sftp_readback_rejects_remote_path_outside_remote_dir() {
+        let error = sftp_readback_path(
+            "/uploads",
+            &json!({
+                "remote_path": "/elsewhere/out.png",
+            }),
+        )
+        .unwrap_err();
+
+        assert_eq!(error.code, "storage_readback_path_outside_root");
+    }
+
+    #[test]
+    fn sftp_readback_rejects_traversing_keys() {
+        let error = sftp_readback_path(
+            "/uploads",
+            &json!({
+                "key": "../elsewhere/out.png",
+            }),
+        )
+        .unwrap_err();
+
+        assert_eq!(error.code, "storage_readback_path_outside_root");
+    }
+
+    #[test]
+    fn sftp_readback_allows_legacy_remote_path_under_remote_dir() {
+        let path = sftp_readback_path(
+            "/uploads",
+            &json!({
+                "remote_path": "/uploads/job-1/out.png",
+            }),
+        )
+        .unwrap();
+
+        assert_eq!(path, PathBuf::from("/uploads/job-1/out.png"));
+    }
 }

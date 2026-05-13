@@ -1,5 +1,5 @@
 use std::fs;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use serde_json::json;
 
@@ -92,25 +92,115 @@ pub(super) fn head_local(
     })
 }
 
-fn local_readback_path(
-    directory: &Path,
-    detail: &serde_json::Value,
-) -> Result<std::path::PathBuf, AppError> {
-    detail
-        .get("path")
+fn local_readback_path(directory: &Path, detail: &serde_json::Value) -> Result<PathBuf, AppError> {
+    let candidate = detail
+        .get("key")
         .and_then(serde_json::Value::as_str)
-        .map(Path::new)
-        .map(Path::to_path_buf)
+        .filter(|key| !key.trim().is_empty())
+        .map(|key| directory.join(key))
         .or_else(|| {
             detail
-                .get("key")
+                .get("path")
                 .and_then(serde_json::Value::as_str)
-                .map(|key| directory.join(key))
+                .filter(|path| !path.trim().is_empty())
+                .map(PathBuf::from)
         })
         .ok_or_else(|| {
             AppError::new(
                 "storage_readback_missing_key",
                 "Local storage upload record is missing a readable path.",
             )
-        })
+        })?;
+    let root = directory.canonicalize().map_err(|error| {
+        AppError::new(
+            "storage_readback_root_missing",
+            "Local storage directory is not available for readback.",
+        )
+        .with_detail(
+            json!({"directory": directory.display().to_string(), "error": error.to_string()}),
+        )
+    })?;
+    let resolved = candidate.canonicalize().map_err(|error| {
+        AppError::new(
+            "storage_local_read_failed",
+            "Unable to resolve local storage object.",
+        )
+        .with_detail(json!({"path": candidate.display().to_string(), "error": error.to_string()}))
+    })?;
+    if !resolved.starts_with(&root) {
+        return Err(AppError::new(
+            "storage_readback_path_outside_root",
+            "Local storage readback path is outside the configured directory.",
+        )
+        .with_detail(json!({
+            "directory": root.display().to_string(),
+            "path": resolved.display().to_string(),
+        })));
+    }
+    Ok(candidate)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn local_readback_prefers_key_inside_configured_root() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let root = temp_dir.path().join("storage");
+        let object = root.join("job-1").join("out.png");
+        fs::create_dir_all(object.parent().unwrap()).unwrap();
+        fs::write(&object, b"ok").unwrap();
+        let outside = temp_dir.path().join("outside.png");
+        fs::write(&outside, b"no").unwrap();
+
+        let path = local_readback_path(
+            &root,
+            &json!({
+                "key": "job-1/out.png",
+                "path": outside.display().to_string(),
+            }),
+        )
+        .unwrap();
+
+        assert_eq!(path, object);
+    }
+
+    #[test]
+    fn local_readback_rejects_paths_outside_configured_root() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let root = temp_dir.path().join("storage");
+        fs::create_dir_all(&root).unwrap();
+        let outside = temp_dir.path().join("outside.png");
+        fs::write(&outside, b"no").unwrap();
+
+        let error = local_readback_path(
+            &root,
+            &json!({
+                "path": outside.display().to_string(),
+            }),
+        )
+        .unwrap_err();
+
+        assert_eq!(error.code, "storage_readback_path_outside_root");
+    }
+
+    #[test]
+    fn local_readback_rejects_traversing_keys() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let root = temp_dir.path().join("storage");
+        fs::create_dir_all(&root).unwrap();
+        let outside = temp_dir.path().join("outside.png");
+        fs::write(&outside, b"no").unwrap();
+
+        let error = local_readback_path(
+            &root,
+            &json!({
+                "key": "../outside.png",
+            }),
+        )
+        .unwrap_err();
+
+        assert_eq!(error.code, "storage_readback_path_outside_root");
+    }
 }
