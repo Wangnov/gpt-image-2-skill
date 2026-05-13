@@ -75,6 +75,7 @@ fn webhook_payload_splits_origin_and_archive_uploads() {
                     "target_type": "s3",
                     "status": "completed",
                     "url": "https://cdn.example.com/job-1/out.png",
+                    "error": null,
                     "bytes": 12,
                     "updated_at": "2026-05-08T10:01:00Z",
                     "metadata": {
@@ -133,6 +134,7 @@ fn webhook_payload_splits_origin_and_archive_uploads() {
     assert_eq!(origin["mime"], "image/png");
     assert_eq!(origin["sha256"], "abc123");
     assert_eq!(origin["url"], "https://cdn.example.com/job-1/out.png");
+    assert!(origin["error"].is_null());
     assert!(origin["metadata"].is_null());
     assert!(origin["source_path"].is_null());
     assert!(origin["local_cache_path"].is_null());

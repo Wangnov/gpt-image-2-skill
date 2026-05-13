@@ -104,7 +104,11 @@ fn public_upload_payload(item: &Value, output_index: &Value) -> Value {
     copy_field(&mut object, item, "url");
     copy_field(&mut object, item, "bytes");
     copy_field(&mut object, item, "updated_at");
-    if item.get("error").is_some() {
+    if item
+        .get("error")
+        .and_then(Value::as_str)
+        .is_some_and(|value| !value.trim().is_empty())
+    {
         object.insert(
             "error".to_string(),
             Value::String("Storage upload failed.".to_string()),
