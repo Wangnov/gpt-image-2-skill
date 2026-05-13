@@ -168,7 +168,7 @@ pub(crate) fn merge_batch_payloads(
     };
 
     let mut payload = json!({
-        "ok": true,
+        "ok": ok,
         "status": status,
         "command": command,
         "provider": first.get("provider").cloned().unwrap_or(Value::Null),
@@ -298,6 +298,7 @@ mod tests {
         );
 
         assert_eq!(merged["status"], "partial_failed");
+        assert_eq!(merged["ok"], true);
         let files = merged["output"]["files"].as_array().unwrap();
         assert_eq!(files.len(), 2);
         assert_eq!(files[0]["index"], 0);
@@ -310,5 +311,33 @@ mod tests {
         assert_eq!(merged["batch"]["failure_count"], 1);
         assert_eq!(merged["batch"]["errors"][0]["index"], 1);
         assert_eq!(merged["error"]["message"], "upstream rejected candidate B");
+    }
+
+    #[test]
+    fn merge_batch_payloads_marks_total_failure_not_ok() {
+        let merged = merge_batch_payloads(
+            "images generate",
+            2,
+            vec![],
+            vec![
+                BatchItemError {
+                    index: 0,
+                    message: "candidate A failed".to_string(),
+                },
+                BatchItemError {
+                    index: 1,
+                    message: "candidate B failed".to_string(),
+                },
+            ],
+        );
+
+        assert_eq!(merged["ok"], false);
+        assert_eq!(merged["status"], "failed");
+        assert_eq!(merged["output"]["files"].as_array().unwrap().len(), 0);
+        assert!(merged["output"]["path"].is_null());
+        assert_eq!(merged["batch"]["success_count"], 0);
+        assert_eq!(merged["batch"]["failure_count"], 2);
+        assert_eq!(merged["error"]["code"], "batch_failed");
+        assert_eq!(merged["error"]["items"][0]["index"], 0);
     }
 }
