@@ -59,12 +59,13 @@ export function normalizeJob(raw: Record<string, unknown>): Job {
     : Array.isArray(output.files)
       ? normalizeOutputs(output.files)
       : [];
+  const indexZeroPath = outputs.find((item) => item.index === 0)?.path;
+  const metadataOutputPath =
+    typeof output.path === "string" ? output.path : undefined;
   const outputPath =
     typeof raw.output_path === "string"
       ? raw.output_path
-      : typeof output.path === "string"
-        ? output.path
-        : outputs[0]?.path;
+      : indexZeroPath ?? (outputs.length === 0 ? metadataOutputPath : undefined);
   const rawStatus = String(raw.status ?? "completed");
   const status = rawStatus === "canceled" ? "cancelled" : rawStatus;
   const job: Job = {

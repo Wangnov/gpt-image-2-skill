@@ -41,6 +41,9 @@ export function JobDrawerPreview({
     new Set(),
   );
   const displayUrl = rehydratedUrl || previewUrl;
+  const terminal = ["completed", "partial_failed", "failed", "cancelled"].includes(
+    job.status,
+  );
   const outputErrors = useMemo(() => jobOutputErrors(job), [job]);
   const errorsByIndex = useMemo(
     () => new Map(outputErrors.map((error) => [error.index, error])),
@@ -54,6 +57,7 @@ export function JobDrawerPreview({
     return Array.from(indexes).sort((a, b) => a - b);
   }, [job, outputErrors, planned]);
   const selectedError = errorsByIndex.get(selectedOutput);
+  const selectedMissing = terminal && !displayUrl && !selectedError;
 
   useEffect(() => {
     setRehydratedUrl("");
@@ -111,6 +115,13 @@ export function JobDrawerPreview({
               {selectedError.message}
             </div>
           </div>
+        ) : selectedMissing ? (
+          <div className="flex h-full w-full flex-col items-center justify-center gap-2 bg-sunken px-5 text-center text-faint">
+            <Icon name="circle" size={24} aria-hidden="true" />
+            <div className="text-[12.5px] font-semibold">
+              候选 {selectedLabel} 未生成
+            </div>
+          </div>
         ) : doneCount >= 1 || job.status === "completed" ? (
           <PlaceholderImage
             seed={seed + selectedOutput}
@@ -135,9 +146,10 @@ export function JobDrawerPreview({
             const path = api.jobOutputPath(job, index);
             const url = path ? api.fileUrl(path) : "";
             const slotError = errorsByIndex.get(index);
+            const missing = terminal && !url && !slotError;
             const label = outputLabel(index);
             const isSelected = index === selectedOutput;
-            const selectable = Boolean(path || slotError);
+            const selectable = Boolean(path || slotError || missing);
             return (
               <button
                 key={index}
@@ -150,6 +162,8 @@ export function JobDrawerPreview({
                 aria-label={
                   slotError
                     ? `候选 ${label} · 失败`
+                    : missing
+                      ? `候选 ${label} · 未生成`
                     : selectable
                       ? `候选 ${label}`
                       : `候选 ${label} · 等待生成`
@@ -157,6 +171,8 @@ export function JobDrawerPreview({
                 title={
                   slotError
                     ? `候选 ${label} · 失败`
+                    : missing
+                      ? `候选 ${label} · 未生成`
                     : selectable
                       ? `候选 ${label}`
                       : `候选 ${label} · 等待生成`
@@ -167,6 +183,8 @@ export function JobDrawerPreview({
                     ? "border-accent ring-2 ring-[color:var(--accent-faint)]"
                     : slotError
                       ? "cursor-pointer border-[color:var(--status-err-25)] hover:border-[color:var(--status-err)]"
+                      : missing
+                        ? "cursor-pointer border-border-faint text-faint hover:border-border"
                       : !selectable
                         ? "cursor-default border-border-faint"
                         : "cursor-pointer border-border hover:border-border-strong",
@@ -182,6 +200,10 @@ export function JobDrawerPreview({
                 ) : slotError ? (
                   <div className="flex h-full w-full items-center justify-center bg-[color:var(--status-err-08)] text-status-err">
                     <Icon name="warn" size={15} aria-hidden="true" />
+                  </div>
+                ) : missing ? (
+                  <div className="flex h-full w-full items-center justify-center bg-sunken text-faint">
+                    <Icon name="circle" size={14} aria-hidden="true" />
                   </div>
                 ) : (
                   <div

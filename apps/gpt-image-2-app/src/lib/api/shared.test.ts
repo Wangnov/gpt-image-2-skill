@@ -4,6 +4,7 @@ import {
   defaultPathConfig,
   defaultStorageConfig,
   migrateLegacyToPipeline,
+  normalizeJob,
   normalizeStorageConfig,
 } from "./shared";
 
@@ -253,5 +254,41 @@ describe("defaultPathConfig", () => {
       mode: "result_library",
       path: null,
     });
+  });
+});
+
+describe("normalizeJob", () => {
+  it("does not synthesize output_path from sparse non-zero outputs", () => {
+    const job = normalizeJob({
+      id: "job-sparse",
+      command: "images generate",
+      provider: "mock",
+      status: "partial_failed",
+      created_at: "1",
+      updated_at: "1",
+      outputs: [{ index: 2, path: "/tmp/c.png", bytes: 123 }],
+      metadata: { n: 3 },
+    });
+
+    expect(job.outputs).toEqual([
+      { index: 2, path: "/tmp/c.png", bytes: 123, uploads: [] },
+    ]);
+    expect(job.output_path).toBeUndefined();
+  });
+
+  it("keeps index-zero output_path fallbacks for legacy single outputs", () => {
+    expect(
+      normalizeJob({
+        id: "job-index-zero",
+        outputs: [{ index: 0, path: "/tmp/a.png" }],
+      }).output_path,
+    ).toBe("/tmp/a.png");
+
+    expect(
+      normalizeJob({
+        id: "job-legacy",
+        metadata: { output: { path: "/tmp/legacy.png" } },
+      }).output_path,
+    ).toBe("/tmp/legacy.png");
   });
 });
