@@ -263,6 +263,19 @@ fn job_output_path(job: &Value, output_index: usize) -> Option<&str> {
                 .and_then(Value::as_array)
                 .and_then(|outputs| output_path_from_items(outputs, output_index))
         })
+        .or_else(|| {
+            job.get("metadata")
+                .and_then(|metadata| metadata.get("image_output"))
+                .and_then(|output| output.get("files"))
+                .and_then(Value::as_array)
+                .and_then(|outputs| output_path_from_items(outputs, output_index))
+        })
+        .or_else(|| {
+            (output_index == 0)
+                .then(|| job.get("output_path").and_then(Value::as_str))
+                .flatten()
+        })
+        .filter(|path| !path.trim().is_empty())
 }
 
 fn output_path_from_items(items: &[Value], output_index: usize) -> Option<&str> {

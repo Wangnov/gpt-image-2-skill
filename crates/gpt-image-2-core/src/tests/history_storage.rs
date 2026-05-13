@@ -96,6 +96,33 @@ fn history_rows_without_upload_records_keep_legacy_outputs() {
 }
 
 #[test]
+fn readback_uses_legacy_output_path_when_outputs_are_missing() {
+    let _guard = CODEX_HOME_TEST_LOCK.lock().unwrap();
+    let temp_dir = tempfile::tempdir().unwrap();
+    let _home = TestCodexHome::set(temp_dir.path());
+    let output_path = temp_dir.path().join("legacy-output.png");
+    fs::write(&output_path, b"legacy-png").unwrap();
+
+    upsert_history_job(
+        "job-legacy-readback-1",
+        "images generate",
+        "openai",
+        "completed",
+        Some(&output_path),
+        Some("2026-05-08T10:00:00Z"),
+        json!({}),
+    )
+    .unwrap();
+
+    let job = show_history_job("job-legacy-readback-1").unwrap();
+    assert!(job["outputs"].as_array().unwrap().is_empty());
+    let readback = read_job_output_from_storage(&StorageConfig::default(), &job, 0).unwrap();
+
+    assert_eq!(readback.bytes, b"legacy-png");
+    assert_eq!(readback.source["kind"], "local_cache");
+}
+
+#[test]
 #[allow(deprecated)]
 fn storage_upload_falls_back_to_local_target_after_primary_failure() {
     let _guard = CODEX_HOME_TEST_LOCK.lock().unwrap();
