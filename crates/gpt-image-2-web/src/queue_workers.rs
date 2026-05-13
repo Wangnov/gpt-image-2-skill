@@ -373,6 +373,7 @@ pub(crate) fn enqueue_job(state: JobQueueState, queued: QueuedJob) -> Result<Val
 
 #[cfg(test)]
 mod tests {
+    use std::path::Path;
     use std::sync::Mutex;
     use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
@@ -381,6 +382,33 @@ mod tests {
     use super::*;
 
     static QUEUE_WORKER_TEST_LOCK: Mutex<()> = Mutex::new(());
+
+    struct EnvGuard {
+        key: &'static str,
+        old: Option<std::ffi::OsString>,
+    }
+
+    impl EnvGuard {
+        fn set(key: &'static str, value: &Path) -> Self {
+            let old = std::env::var_os(key);
+            unsafe {
+                std::env::set_var(key, value);
+            }
+            Self { key, old }
+        }
+    }
+
+    impl Drop for EnvGuard {
+        fn drop(&mut self) {
+            unsafe {
+                if let Some(value) = &self.old {
+                    std::env::set_var(self.key, value);
+                } else {
+                    std::env::remove_var(self.key);
+                }
+            }
+        }
+    }
 
     fn failed_batch_response() -> Value {
         json!({
@@ -435,10 +463,8 @@ mod tests {
         fs::create_dir_all(&temp_dir).unwrap();
         let config_path = temp_dir.join("config.json");
         let history_path = temp_dir.join("history.sqlite");
-        unsafe {
-            std::env::set_var(gpt_image_2_core::PRODUCT_CONFIG_FILE_ENV, &config_path);
-            std::env::set_var(gpt_image_2_core::PRODUCT_HISTORY_FILE_ENV, &history_path);
-        }
+        let _config_env = EnvGuard::set(gpt_image_2_core::PRODUCT_CONFIG_FILE_ENV, &config_path);
+        let _history_env = EnvGuard::set(gpt_image_2_core::PRODUCT_HISTORY_FILE_ENV, &history_path);
 
         let mut config = AppConfig::default();
         config.notifications.webhooks = vec![WebhookNotificationConfig {
@@ -508,10 +534,6 @@ mod tests {
         );
         assert_eq!(notification["data"]["deliveries"][0]["ok"], false);
 
-        unsafe {
-            std::env::remove_var(gpt_image_2_core::PRODUCT_CONFIG_FILE_ENV);
-            std::env::remove_var(gpt_image_2_core::PRODUCT_HISTORY_FILE_ENV);
-        }
         let _ = fs::remove_dir_all(temp_dir);
     }
 }
