@@ -5,6 +5,7 @@ import { api } from "@/lib/api";
 import { cn } from "@/lib/cn";
 import type { Job } from "@/lib/types";
 import { SHIMMER_STYLE } from "./job-drawer-utils";
+import { JobPreviewImage } from "./job-preview-image";
 
 function cacheBustedUrl(url: string): string {
   return `${url}${url.includes("?") ? "&" : "?"}rehydrated=${Date.now()}`;
@@ -48,24 +49,21 @@ export function JobDrawerPreview({
     setRehydrateAttempted(new Set());
   }, [job.id]);
 
+  const recoverOutputUrl = async (outputIndex: number) => {
+    const cachedPath = await api.ensureJobOutputCached(job.id, outputIndex);
+    if (!cachedPath) return null;
+    return api.fileUrl(cachedPath) || null;
+  };
+
   const recoverVisibleOutput = () => {
     if (rehydrateAttempted.has(selectedOutput)) {
       setImageFailed(true);
       return;
     }
     setRehydrateAttempted((prev) => new Set(prev).add(selectedOutput));
-    void api
-      .ensureJobOutputCached(job.id, selectedOutput)
-      .then((cachedPath) => {
-        if (!cachedPath) {
-          setImageFailed(true);
-          return;
-        }
-        const cachedUrl = api.fileUrl(cachedPath);
-        if (!cachedUrl) {
-          setImageFailed(true);
-          return;
-        }
+    void recoverOutputUrl(selectedOutput)
+      .then((cachedUrl) => {
+        if (!cachedUrl) return setImageFailed(true);
         setRehydratedUrl(cacheBustedUrl(cachedUrl));
         setImageFailed(false);
       })
@@ -132,12 +130,11 @@ export function JobDrawerPreview({
                 )}
               >
                 {url ? (
-                  <img
-                    src={url}
-                    alt=""
-                    loading="lazy"
-                    decoding="async"
-                    className="h-full w-full object-cover"
+                  <JobPreviewImage
+                    url={url}
+                    seed={seed + index}
+                    variant="compact"
+                    recover={() => recoverOutputUrl(index)}
                   />
                 ) : (
                   <div
