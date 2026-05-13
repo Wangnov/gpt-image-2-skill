@@ -104,7 +104,12 @@ fn public_upload_payload(item: &Value, output_index: &Value) -> Value {
     copy_field(&mut object, item, "url");
     copy_field(&mut object, item, "bytes");
     copy_field(&mut object, item, "updated_at");
-    copy_field(&mut object, item, "error");
+    if item.get("error").is_some() {
+        object.insert(
+            "error".to_string(),
+            Value::String("Storage upload failed.".to_string()),
+        );
+    }
 
     if let Some(role) = upload_metadata_field(item, "role") {
         object.insert("role".to_string(), role);

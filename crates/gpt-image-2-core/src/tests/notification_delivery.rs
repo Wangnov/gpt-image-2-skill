@@ -99,6 +99,13 @@ fn webhook_payload_splits_origin_and_archive_uploads() {
                     "target_type": "http",
                     "status": "completed",
                     "metadata": {"role": "primary", "placement": "archive"}
+                },
+                {
+                    "target": "local-archive",
+                    "target_type": "local",
+                    "status": "failed",
+                    "error": "Unable to copy output to local storage: {\"source\":\"/Users/alice/Pictures/gpt-image-2/job-1/out.png\",\"destination\":\"/mnt/private/out.png\"}",
+                    "metadata": {"role": "fallback", "placement": "archive"}
                 }
             ]
         }],
@@ -115,6 +122,9 @@ fn webhook_payload_splits_origin_and_archive_uploads() {
         request.body["job"]["storage"]["archives"][0]["target"],
         "audit-webhook"
     );
+    let failed_archive = &request.body["job"]["storage"]["archives"][1];
+    assert_eq!(failed_archive["target"], "local-archive");
+    assert_eq!(failed_archive["error"], "Storage upload failed.");
     let origin = &request.body["job"]["storage"]["origin"][0];
     assert_eq!(origin["output_index"], 0);
     assert_eq!(origin["role"], "primary");
@@ -134,6 +144,11 @@ fn webhook_payload_splits_origin_and_archive_uploads() {
     assert!(request.body["job"]["metadata"]["output"].is_null());
     assert!(request.body["job"]["outputs"][0]["path"].is_null());
     assert!(request.body["job"]["outputs"][0]["uploads"][0]["source_path"].is_null());
+    let body = serde_json::to_string(&request.body).unwrap();
+    assert!(!body.contains("/Users/alice"));
+    assert!(!body.contains("/mnt/private"));
+    assert!(!body.contains("destination"));
+    assert!(!body.contains("source"));
 }
 
 #[test]
