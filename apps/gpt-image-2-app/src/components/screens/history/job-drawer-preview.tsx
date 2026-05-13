@@ -1,12 +1,13 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Icon } from "@/components/icon";
 import { PlaceholderImage } from "@/components/screens/shared/placeholder-image";
 import { api } from "@/lib/api";
 import { cn } from "@/lib/cn";
+import { jobOutputIndexes } from "@/lib/job-outputs";
 import type { Job } from "@/lib/types";
 import { SHIMMER_STYLE } from "./job-drawer-utils";
 import { JobPreviewImage } from "./job-preview-image";
-import { outputLabel } from "./shared";
+import { jobOutputErrors, outputLabel } from "./shared";
 
 function cacheBustedUrl(url: string): string {
   return `${url}${url.includes("?") ? "&" : "?"}rehydrated=${Date.now()}`;
@@ -40,6 +41,19 @@ export function JobDrawerPreview({
     new Set(),
   );
   const displayUrl = rehydratedUrl || previewUrl;
+  const outputErrors = useMemo(() => jobOutputErrors(job), [job]);
+  const errorsByIndex = useMemo(
+    () => new Map(outputErrors.map((error) => [error.index, error])),
+    [outputErrors],
+  );
+  const slots = useMemo(() => {
+    const indexes = new Set<number>();
+    for (let index = 0; index < planned; index += 1) indexes.add(index);
+    for (const index of jobOutputIndexes(job)) indexes.add(index);
+    for (const error of outputErrors) indexes.add(error.index);
+    return Array.from(indexes).sort((a, b) => a - b);
+  }, [job, outputErrors, planned]);
+  const selectedError = errorsByIndex.get(selectedOutput);
 
   useEffect(() => {
     setRehydratedUrl("");
@@ -82,6 +96,21 @@ export function JobDrawerPreview({
             className="w-full h-full object-cover"
             onError={recoverVisibleOutput}
           />
+        ) : selectedError ? (
+          <div className="flex h-full w-full flex-col items-center justify-center gap-2 bg-[color:var(--status-err-08)] px-5 text-center">
+            <Icon
+              name="warn"
+              size={24}
+              aria-hidden="true"
+              style={{ color: "var(--status-err)" }}
+            />
+            <div className="text-[12.5px] font-semibold text-status-err">
+              候选 {selectedLabel} 失败
+            </div>
+            <div className="line-clamp-5 whitespace-pre-wrap break-words text-[12px] leading-relaxed text-muted">
+              {selectedError.message}
+            </div>
+          </div>
         ) : doneCount >= 1 || job.status === "completed" ? (
           <PlaceholderImage
             seed={seed + selectedOutput}
@@ -102,32 +131,45 @@ export function JobDrawerPreview({
 
       {planned > 1 && (
         <div className="mb-3.5 flex flex-wrap gap-1.5">
-          {Array.from({ length: planned }).map((_, index) => {
+          {slots.map((index) => {
             const path = api.jobOutputPath(job, index);
             const url = path ? api.fileUrl(path) : "";
+            const slotError = errorsByIndex.get(index);
             const label = outputLabel(index);
             const isSelected = index === selectedOutput;
-            const disabled = !path;
+            const selectable = Boolean(path || slotError);
             return (
               <button
                 key={index}
                 type="button"
                 onClick={() => {
-                  if (!disabled) setSelectedOutput(index);
+                  if (selectable) setSelectedOutput(index);
                 }}
-                disabled={disabled}
+                disabled={!selectable}
                 aria-pressed={isSelected}
                 aria-label={
-                  disabled ? `候选 ${label} · 等待生成` : `候选 ${label}`
+                  slotError
+                    ? `候选 ${label} · 失败`
+                    : selectable
+                      ? `候选 ${label}`
+                      : `候选 ${label} · 等待生成`
                 }
-                title={disabled ? `候选 ${label} · 等待生成` : `候选 ${label}`}
+                title={
+                  slotError
+                    ? `候选 ${label} · 失败`
+                    : selectable
+                      ? `候选 ${label}`
+                      : `候选 ${label} · 等待生成`
+                }
                 className={cn(
                   "relative h-12 w-12 shrink-0 overflow-hidden rounded-md border bg-raised transition-colors focus-visible:outline-none",
                   isSelected
                     ? "border-accent ring-2 ring-[color:var(--accent-faint)]"
-                    : disabled
-                      ? "cursor-default border-border-faint"
-                      : "cursor-pointer border-border hover:border-border-strong",
+                    : slotError
+                      ? "cursor-pointer border-[color:var(--status-err-25)] hover:border-[color:var(--status-err)]"
+                      : !selectable
+                        ? "cursor-default border-border-faint"
+                        : "cursor-pointer border-border hover:border-border-strong",
                 )}
               >
                 {url ? (
@@ -137,6 +179,10 @@ export function JobDrawerPreview({
                     variant="compact"
                     recover={() => recoverOutputUrl(index)}
                   />
+                ) : slotError ? (
+                  <div className="flex h-full w-full items-center justify-center bg-[color:var(--status-err-08)] text-status-err">
+                    <Icon name="warn" size={15} aria-hidden="true" />
+                  </div>
                 ) : (
                   <div
                     aria-hidden="true"

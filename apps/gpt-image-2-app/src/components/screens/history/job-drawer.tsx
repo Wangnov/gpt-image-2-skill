@@ -63,11 +63,7 @@ export function JobMetadataDrawer({
   const outputPaths = job ? api.jobOutputPaths(job) : [];
   const planned = job ? readPlannedCount(job) : 1;
   const doneCount = outputPaths.length;
-  const previewPath = job
-    ? (api.jobOutputPath(job, selectedOutput) ??
-      outputPaths[0] ??
-      job.output_path)
-    : undefined;
+  const previewPath = job ? api.jobOutputPath(job, selectedOutput) : undefined;
   const previewUrl = previewPath ? api.fileUrl(previewPath) : "";
   const selectedUploads = job ? outputUploadsFor(job, selectedOutput) : [];
 
