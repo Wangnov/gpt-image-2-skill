@@ -189,30 +189,45 @@ export function JobImageDetailDrawer({
         })
       : null);
 
-  const recoverVisibleOutput = () => {
-    if (!job || rehydrateAttempted.has(activeOutputIndex)) {
-      setImageFailed(true);
+  const recoverOutput = (targetOutputIndex: number, markFailed: () => void) => {
+    if (!job || rehydrateAttempted.has(targetOutputIndex)) {
+      markFailed();
       return;
     }
-    setRehydrateAttempted((prev) => new Set(prev).add(activeOutputIndex));
+    setRehydrateAttempted((prev) => new Set(prev).add(targetOutputIndex));
     void api
-      .ensureJobOutputCached(job.id, activeOutputIndex)
+      .ensureJobOutputCached(job.id, targetOutputIndex)
       .then((cachedPath) => {
         if (!cachedPath) {
-          setImageFailed(true);
+          markFailed();
           return;
         }
         const cachedUrl = api.fileUrl(cachedPath);
         if (!cachedUrl) {
-          setImageFailed(true);
+          markFailed();
           return;
         }
         setRehydratedUrls((prev) =>
-          new Map(prev).set(activeOutputIndex, cacheBustedUrl(cachedUrl)),
+          new Map(prev).set(targetOutputIndex, cacheBustedUrl(cachedUrl)),
         );
-        setImageFailed(false);
+        setThumbFailed((prev) => {
+          const next = new Set(prev);
+          next.delete(targetOutputIndex);
+          return next;
+        });
+        if (targetOutputIndex === activeOutputIndex) setImageFailed(false);
       })
-      .catch(() => setImageFailed(true));
+      .catch(markFailed);
+  };
+
+  const recoverVisibleOutput = () => {
+    recoverOutput(activeOutputIndex, () => setImageFailed(true));
+  };
+
+  const recoverThumbnailOutput = (targetOutputIndex: number) => {
+    recoverOutput(targetOutputIndex, () =>
+      setThumbFailed((prev) => new Set(prev).add(targetOutputIndex)),
+    );
   };
 
   const openZoom = () => {
@@ -434,11 +449,7 @@ export function JobImageDetailDrawer({
                         decoding="async"
                         className="h-full w-full object-cover"
                         draggable={false}
-                        onError={() =>
-                          setThumbFailed((prev) =>
-                            new Set(prev).add(outputIndex),
-                          )
-                        }
+                        onError={() => recoverThumbnailOutput(outputIndex)}
                       />
                     ) : (
                       <PlaceholderImage

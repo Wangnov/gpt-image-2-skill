@@ -4,8 +4,13 @@ import { Loader2 } from "lucide-react";
 import { Icon } from "@/components/icon";
 import { PlaceholderImage } from "@/components/screens/shared/placeholder-image";
 import { useReducedMotion } from "@/hooks/use-reduced-motion";
+import { api } from "@/lib/api";
 import type { Job } from "@/lib/types";
 import { jobPlaceholderSeed } from "./shared";
+
+function cacheBustedUrl(url: string): string {
+  return `${url}${url.includes("?") ? "&" : "?"}rehydrated=${Date.now()}`;
+}
 
 export function RecentWorkTile({
   job,
@@ -28,11 +33,40 @@ export function RecentWorkTile({
   const [hover, setHover] = useState(false);
   const [focusWithin, setFocusWithin] = useState(false);
   const [imageFailed, setImageFailed] = useState(false);
+  const [recoveredUrl, setRecoveredUrl] = useState<string | null>(null);
+  const [recoverAttempted, setRecoverAttempted] = useState(false);
+  const displayUrl = recoveredUrl ?? url;
   const canSendToEdit = Boolean(onSendToEdit && (path || url));
 
   useEffect(() => {
     setImageFailed(false);
+    setRecoveredUrl(null);
+    setRecoverAttempted(false);
   }, [url]);
+
+  const recoverImage = () => {
+    if (recoverAttempted) {
+      setImageFailed(true);
+      return;
+    }
+    setRecoverAttempted(true);
+    void api
+      .ensureJobOutputCached(job.id, outputIndex)
+      .then((cachedPath) => {
+        if (!cachedPath) {
+          setImageFailed(true);
+          return;
+        }
+        const cachedUrl = api.fileUrl(cachedPath);
+        if (!cachedUrl) {
+          setImageFailed(true);
+          return;
+        }
+        setRecoveredUrl(cacheBustedUrl(cachedUrl));
+        setImageFailed(false);
+      })
+      .catch(() => setImageFailed(true));
+  };
 
   return (
     <motion.div
@@ -60,21 +94,21 @@ export function RecentWorkTile({
       title={promptText.slice(0, 80)}
       aria-label={`打开作品 ${outputIndex + 1}:${promptText.slice(0, 40)}`}
     >
-      {url && !imageFailed ? (
+      {displayUrl && !imageFailed ? (
         <img
-          src={url}
+          src={displayUrl}
           alt=""
           loading="lazy"
           decoding="async"
           className="h-full w-full object-cover"
           draggable={false}
-          onError={() => setImageFailed(true)}
+          onError={recoverImage}
         />
       ) : (
         <PlaceholderImage
           seed={jobPlaceholderSeed(job)}
           variant="recent"
-          label={url && imageFailed ? "远端不可用" : undefined}
+          label={displayUrl && imageFailed ? "远端不可用" : undefined}
         />
       )}
       {canSendToEdit && (hover || focusWithin) && (
