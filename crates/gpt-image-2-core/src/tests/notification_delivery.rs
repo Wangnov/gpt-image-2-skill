@@ -25,7 +25,13 @@ fn webhook_notification_request_resolves_custom_headers() {
         "updated_at": "2026-05-08T10:01:00Z",
         "output_path": "/tmp/out.png",
         "outputs": [{"index": 0, "path": "/tmp/out.png", "bytes": 12}],
-        "metadata": {"prompt": "hello"}
+        "metadata": {
+            "prompt": "hello",
+            "output": {
+                "path": "/Users/alice/Pictures/gpt-image-2/job-1/out.png",
+                "files": [{"index": 0, "path": "/Users/alice/Pictures/gpt-image-2/job-1/out.png"}]
+            }
+        }
     }));
 
     let request = build_webhook_request(&webhook, &job).unwrap();
@@ -64,8 +70,36 @@ fn webhook_payload_splits_origin_and_archive_uploads() {
             "path": "/tmp/out.png",
             "bytes": 12,
             "uploads": [
-                {"target": "r2-origin", "target_type": "s3", "status": "completed", "metadata": {"role": "primary", "placement": "origin"}},
-                {"target": "audit-webhook", "target_type": "http", "status": "completed", "metadata": {"role": "primary", "placement": "archive"}}
+                {
+                    "target": "r2-origin",
+                    "target_type": "s3",
+                    "status": "completed",
+                    "url": "https://cdn.example.com/job-1/out.png",
+                    "bytes": 12,
+                    "updated_at": "2026-05-08T10:01:00Z",
+                    "metadata": {
+                        "role": "primary",
+                        "placement": "origin",
+                        "detail": {"key": "job-1/out.png", "path": "/mnt/r2/job-1/out.png"},
+                        "manifest": {
+                            "role": "primary",
+                            "placement": "origin",
+                            "key": "job-1/out.png",
+                            "mime": "image/png",
+                            "sha256": "abc123",
+                            "source_path": "/Users/alice/Pictures/gpt-image-2/job-1/out.png",
+                            "local_cache_path": "/Users/alice/Pictures/gpt-image-2/job-1/out.png",
+                            "path": "/mnt/r2/job-1/out.png",
+                            "remote_path": "/internal/remote/job-1/out.png"
+                        }
+                    }
+                },
+                {
+                    "target": "audit-webhook",
+                    "target_type": "http",
+                    "status": "completed",
+                    "metadata": {"role": "primary", "placement": "archive"}
+                }
             ]
         }],
         "metadata": {"prompt": "hello"}
@@ -81,6 +115,25 @@ fn webhook_payload_splits_origin_and_archive_uploads() {
         request.body["job"]["storage"]["archives"][0]["target"],
         "audit-webhook"
     );
+    let origin = &request.body["job"]["storage"]["origin"][0];
+    assert_eq!(origin["output_index"], 0);
+    assert_eq!(origin["role"], "primary");
+    assert_eq!(origin["placement"], "origin");
+    assert_eq!(origin["key"], "job-1/out.png");
+    assert_eq!(origin["mime"], "image/png");
+    assert_eq!(origin["sha256"], "abc123");
+    assert_eq!(origin["url"], "https://cdn.example.com/job-1/out.png");
+    assert!(origin["metadata"].is_null());
+    assert!(origin["source_path"].is_null());
+    assert!(origin["local_cache_path"].is_null());
+    assert!(origin["path"].is_null());
+    assert!(origin["remote_path"].is_null());
+    assert!(origin["detail"].is_null());
+    assert!(request.body["job"]["output_path"].is_null());
+    assert_eq!(request.body["job"]["metadata"]["prompt"], "hello");
+    assert!(request.body["job"]["metadata"]["output"].is_null());
+    assert!(request.body["job"]["outputs"][0]["path"].is_null());
+    assert!(request.body["job"]["outputs"][0]["uploads"][0]["source_path"].is_null());
 }
 
 #[test]
