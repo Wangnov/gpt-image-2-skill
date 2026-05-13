@@ -1,7 +1,7 @@
 use std::fs;
 use std::io::{Read, Write};
 use std::net::TcpStream;
-use std::path::{Path, PathBuf};
+use std::path::{Component, Path, PathBuf};
 
 use base64::Engine;
 use base64::engine::general_purpose::STANDARD;
@@ -355,22 +355,22 @@ fn sftp_key(detail: &serde_json::Value) -> Option<&str> {
 }
 
 fn sftp_readback_path(remote_dir: &str, detail: &serde_json::Value) -> Result<PathBuf, AppError> {
-    let root = normalize_remote_path(PathBuf::from(remote_dir));
-    let candidate = sftp_key(detail)
-        .map(|key| PathBuf::from(remote_dir).join(key))
-        .or_else(|| {
-            detail
-                .get("remote_path")
-                .and_then(serde_json::Value::as_str)
-                .filter(|value| !value.trim().is_empty())
-                .map(PathBuf::from)
-        })
-        .ok_or_else(|| {
-            AppError::new(
-                "storage_readback_missing_key",
-                "SFTP storage upload record is missing a readable remote path.",
-            )
-        })?;
+    let root = stable_remote_dir(remote_dir)?;
+    let candidate = if let Some(key) = sftp_key(detail) {
+        root.join(safe_relative_remote_key(key)?)
+    } else {
+        detail
+            .get("remote_path")
+            .and_then(serde_json::Value::as_str)
+            .filter(|value| !value.trim().is_empty())
+            .map(PathBuf::from)
+            .ok_or_else(|| {
+                AppError::new(
+                    "storage_readback_missing_key",
+                    "SFTP storage upload record is missing a readable remote path.",
+                )
+            })?
+    };
     let resolved = normalize_remote_path(candidate);
     if !resolved.starts_with(&root) {
         return Err(AppError::new(
@@ -383,6 +383,44 @@ fn sftp_readback_path(remote_dir: &str, detail: &serde_json::Value) -> Result<Pa
         })));
     }
     Ok(resolved)
+}
+
+fn stable_remote_dir(remote_dir: &str) -> Result<PathBuf, AppError> {
+    let value = remote_dir.trim();
+    let path = PathBuf::from(value);
+    if value.is_empty()
+        || value == "."
+        || path.components().any(|component| {
+            matches!(
+                component,
+                Component::ParentDir | Component::Prefix(_) | Component::CurDir
+            )
+        })
+    {
+        return Err(AppError::new(
+            "storage_readback_remote_dir_invalid",
+            "SFTP storage remote directory is not stable enough for readback.",
+        )
+        .with_detail(json!({"remote_dir": remote_dir})));
+    }
+    Ok(normalize_remote_path(path))
+}
+
+fn safe_relative_remote_key(key: &str) -> Result<PathBuf, AppError> {
+    let path = PathBuf::from(key);
+    if path.components().any(|component| {
+        matches!(
+            component,
+            Component::ParentDir | Component::Prefix(_) | Component::RootDir | Component::CurDir
+        )
+    }) {
+        return Err(AppError::new(
+            "storage_readback_key_invalid",
+            "SFTP storage readback key must be a relative path under remote_dir.",
+        )
+        .with_detail(json!({"key": key})));
+    }
+    Ok(path)
 }
 
 fn normalize_remote_path(path: PathBuf) -> PathBuf {
@@ -433,6 +471,21 @@ mod tests {
     }
 
     #[test]
+    fn sftp_readback_rejects_unstable_remote_dir() {
+        for remote_dir in ["", ".", "../uploads", "/uploads/../elsewhere"] {
+            let error = sftp_readback_path(
+                remote_dir,
+                &json!({
+                    "key": "job-1/out.png",
+                }),
+            )
+            .unwrap_err();
+
+            assert_eq!(error.code, "storage_readback_remote_dir_invalid");
+        }
+    }
+
+    #[test]
     fn sftp_readback_rejects_traversing_keys() {
         let error = sftp_readback_path(
             "/uploads",
@@ -442,7 +495,7 @@ mod tests {
         )
         .unwrap_err();
 
-        assert_eq!(error.code, "storage_readback_path_outside_root");
+        assert_eq!(error.code, "storage_readback_key_invalid");
     }
 
     #[test]

@@ -263,11 +263,12 @@ pub fn upload_job_outputs_to_storage(
             "Job id is required before uploading outputs.",
         ));
     };
+    config.validate_targets()?;
+    config.validate_pipeline()?;
     let outputs = upload_outputs_from_job(job);
     if outputs.is_empty() {
         return list_output_upload_records(job_id);
     }
-    config.validate_pipeline()?;
     let pipeline = resolve_pipeline(config, &overrides);
     if matches!(pipeline.mode, PipelineMode::LocalOnly) || pipeline.is_empty() {
         return list_output_upload_records(job_id);

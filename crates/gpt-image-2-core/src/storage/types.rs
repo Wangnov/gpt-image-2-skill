@@ -1,7 +1,8 @@
 use std::collections::BTreeMap;
-use std::path::PathBuf;
+use std::path::{Component, PathBuf};
 
 use serde::{Deserialize, Serialize};
+use url::Url;
 
 use crate::{AppError, CredentialRef};
 
@@ -541,9 +542,289 @@ impl StorageConfig {
         }
         Ok(())
     }
+
+    pub fn validate_targets(&self) -> Result<(), AppError> {
+        for (name, target) in &self.targets {
+            target.validate_for_save(name)?;
+        }
+        Ok(())
+    }
+}
+
+fn target_validation_error<T>(
+    name: &str,
+    field: &str,
+    code: &'static str,
+    message: &'static str,
+) -> Result<T, AppError> {
+    Err(AppError::new(code, message)
+        .with_detail(serde_json::json!({"target": name, "field": field})))
+}
+
+fn credential_has_reference(credential: Option<&CredentialRef>) -> bool {
+    match credential {
+        Some(CredentialRef::File { value }) => !value.trim().is_empty(),
+        Some(CredentialRef::Env { env }) => !env.trim().is_empty(),
+        Some(CredentialRef::Keychain { service, account }) => {
+            !account.trim().is_empty()
+                && service
+                    .as_deref()
+                    .map(str::trim)
+                    .is_none_or(|value| !value.is_empty())
+        }
+        None => false,
+    }
+}
+
+fn validate_http_url_field(
+    name: &str,
+    field: &str,
+    value: &str,
+    code: &'static str,
+    message: &'static str,
+) -> Result<(), AppError> {
+    let url = Url::parse(value.trim()).map_err(|error| {
+        AppError::new(code, message).with_detail(
+            serde_json::json!({"target": name, "field": field, "error": error.to_string()}),
+        )
+    })?;
+    if !matches!(url.scheme(), "http" | "https") || url.host_str().is_none() {
+        return target_validation_error(name, field, code, message);
+    }
+    Ok(())
+}
+
+fn validate_remote_dir_field(name: &str, remote_dir: &str) -> Result<(), AppError> {
+    let value = remote_dir.trim();
+    if value.is_empty() || value == "." {
+        return target_validation_error(
+            name,
+            "remote_dir",
+            "storage_target_sftp_remote_dir_invalid",
+            "SFTP storage target requires a stable remote directory.",
+        );
+    }
+    let path = PathBuf::from(value);
+    if path.components().any(|component| {
+        matches!(
+            component,
+            Component::ParentDir | Component::Prefix(_) | Component::CurDir
+        )
+    }) {
+        return target_validation_error(
+            name,
+            "remote_dir",
+            "storage_target_sftp_remote_dir_invalid",
+            "SFTP storage remote directory must not contain parent or current-directory components.",
+        );
+    }
+    Ok(())
 }
 
 impl StorageTargetConfig {
+    pub fn validate_for_save(&self, name: &str) -> Result<(), AppError> {
+        match self {
+            Self::Local { directory, .. } => {
+                if directory.as_os_str().is_empty() {
+                    return target_validation_error(
+                        name,
+                        "directory",
+                        "storage_target_directory_missing",
+                        "Local storage target requires a directory.",
+                    );
+                }
+            }
+            Self::S3 {
+                bucket,
+                access_key_id,
+                secret_access_key,
+                ..
+            } => {
+                if bucket.trim().is_empty() {
+                    return target_validation_error(
+                        name,
+                        "bucket",
+                        "storage_target_bucket_missing",
+                        "S3 storage target requires a bucket.",
+                    );
+                }
+                if !credential_has_reference(access_key_id.as_ref()) {
+                    return target_validation_error(
+                        name,
+                        "access_key_id",
+                        "storage_target_access_key_missing",
+                        "S3 storage target requires an access key id.",
+                    );
+                }
+                if !credential_has_reference(secret_access_key.as_ref()) {
+                    return target_validation_error(
+                        name,
+                        "secret_access_key",
+                        "storage_target_secret_key_missing",
+                        "S3 storage target requires a secret access key.",
+                    );
+                }
+            }
+            Self::WebDav { url, .. } => validate_http_url_field(
+                name,
+                "url",
+                url,
+                "storage_target_webdav_url_invalid",
+                "WebDAV storage target requires a valid http or https URL.",
+            )?,
+            Self::Http { url, .. } => validate_http_url_field(
+                name,
+                "url",
+                url,
+                "storage_target_http_url_invalid",
+                "HTTP storage target requires a valid http or https URL.",
+            )?,
+            Self::Sftp {
+                host,
+                host_key_sha256,
+                username,
+                password,
+                private_key,
+                remote_dir,
+                ..
+            } => {
+                if host.trim().is_empty() {
+                    return target_validation_error(
+                        name,
+                        "host",
+                        "storage_target_sftp_host_missing",
+                        "SFTP storage target requires a host.",
+                    );
+                }
+                if host_key_sha256
+                    .as_deref()
+                    .map(str::trim)
+                    .filter(|value| !value.is_empty())
+                    .is_none()
+                {
+                    return target_validation_error(
+                        name,
+                        "host_key_sha256",
+                        "storage_target_sftp_host_key_missing",
+                        "SFTP storage target requires a host key fingerprint.",
+                    );
+                }
+                if username.trim().is_empty() {
+                    return target_validation_error(
+                        name,
+                        "username",
+                        "storage_target_sftp_username_missing",
+                        "SFTP storage target requires a username.",
+                    );
+                }
+                validate_remote_dir_field(name, remote_dir)?;
+                if !credential_has_reference(password.as_ref())
+                    && !credential_has_reference(private_key.as_ref())
+                {
+                    return target_validation_error(
+                        name,
+                        "sftp_auth",
+                        "storage_target_sftp_auth_missing",
+                        "SFTP storage target requires a password or private key.",
+                    );
+                }
+            }
+            Self::BaiduNetdisk {
+                auth_mode,
+                app_key,
+                secret_key,
+                access_token,
+                refresh_token,
+                app_name,
+                ..
+            } => {
+                if app_name.trim().is_empty() {
+                    return target_validation_error(
+                        name,
+                        "app_name",
+                        "storage_target_baidu_app_name_missing",
+                        "Baidu Netdisk storage target requires an app directory name.",
+                    );
+                }
+                match effective_baidu_netdisk_auth_mode(*auth_mode, access_token.as_ref()) {
+                    BaiduNetdiskAuthMode::Personal => {
+                        if !credential_has_reference(access_token.as_ref()) {
+                            return target_validation_error(
+                                name,
+                                "access_token",
+                                "storage_target_baidu_access_token_missing",
+                                "Baidu Netdisk personal auth requires an access token.",
+                            );
+                        }
+                    }
+                    BaiduNetdiskAuthMode::Oauth => {
+                        if app_key.trim().is_empty() {
+                            return target_validation_error(
+                                name,
+                                "app_key",
+                                "storage_target_baidu_app_key_missing",
+                                "Baidu Netdisk OAuth auth requires an app key.",
+                            );
+                        }
+                        if !credential_has_reference(secret_key.as_ref()) {
+                            return target_validation_error(
+                                name,
+                                "secret_key",
+                                "storage_target_baidu_secret_key_missing",
+                                "Baidu Netdisk OAuth auth requires a secret key.",
+                            );
+                        }
+                        if !credential_has_reference(refresh_token.as_ref()) {
+                            return target_validation_error(
+                                name,
+                                "refresh_token",
+                                "storage_target_baidu_refresh_token_missing",
+                                "Baidu Netdisk OAuth auth requires a refresh token.",
+                            );
+                        }
+                    }
+                }
+            }
+            Self::Pan123Open {
+                auth_mode,
+                client_id,
+                client_secret,
+                access_token,
+                ..
+            } => match effective_pan123_open_auth_mode(*auth_mode, access_token.as_ref()) {
+                Pan123OpenAuthMode::AccessToken => {
+                    if !credential_has_reference(access_token.as_ref()) {
+                        return target_validation_error(
+                            name,
+                            "access_token",
+                            "storage_target_pan123_access_token_missing",
+                            "123 Pan access-token auth requires an access token.",
+                        );
+                    }
+                }
+                Pan123OpenAuthMode::Client => {
+                    if client_id.trim().is_empty() {
+                        return target_validation_error(
+                            name,
+                            "client_id",
+                            "storage_target_pan123_client_id_missing",
+                            "123 Pan client auth requires a client id.",
+                        );
+                    }
+                    if !credential_has_reference(client_secret.as_ref()) {
+                        return target_validation_error(
+                            name,
+                            "client_secret",
+                            "storage_target_pan123_client_secret_missing",
+                            "123 Pan client auth requires a client secret.",
+                        );
+                    }
+                }
+            },
+        }
+        Ok(())
+    }
+
     pub fn capabilities(&self) -> BackendCapabilities {
         match self {
             Self::Local {
@@ -792,6 +1073,12 @@ mod tests {
         }
     }
 
+    fn credential(value: &str) -> CredentialRef {
+        CredentialRef::File {
+            value: value.to_string(),
+        }
+    }
+
     #[test]
     fn local_capabilities_are_full_with_optional_public_url() {
         let caps = local(None).capabilities();
@@ -873,6 +1160,168 @@ mod tests {
         assert!(!pan123(false).can_act_as_origin());
         assert!(!http(false).can_act_as_origin());
         assert!(!http(true).can_act_as_origin());
+    }
+
+    #[test]
+    fn validate_targets_accepts_complete_targets() {
+        let config = StorageConfig {
+            targets: BTreeMap::from([
+                ("local".to_string(), local(None)),
+                (
+                    "s3".to_string(),
+                    StorageTargetConfig::S3 {
+                        bucket: "bucket".to_string(),
+                        region: None,
+                        endpoint: None,
+                        prefix: None,
+                        access_key_id: Some(credential("access")),
+                        secret_access_key: Some(credential("secret")),
+                        session_token: None,
+                        public_base_url: None,
+                    },
+                ),
+                ("webdav".to_string(), webdav(None)),
+                ("http".to_string(), http(false)),
+                (
+                    "sftp".to_string(),
+                    StorageTargetConfig::Sftp {
+                        host: "sftp.example.com".to_string(),
+                        port: 22,
+                        host_key_sha256: Some("SHA256:abc".to_string()),
+                        username: "user".to_string(),
+                        password: Some(credential("password")),
+                        private_key: None,
+                        remote_dir: "/uploads".to_string(),
+                        public_base_url: None,
+                    },
+                ),
+                (
+                    "baidu".to_string(),
+                    StorageTargetConfig::BaiduNetdisk {
+                        auth_mode: Some(BaiduNetdiskAuthMode::Personal),
+                        app_key: String::new(),
+                        secret_key: None,
+                        access_token: Some(credential("access")),
+                        refresh_token: None,
+                        app_name: "gpt-image-2".to_string(),
+                        remote_dir: None,
+                        public_base_url: None,
+                    },
+                ),
+                (
+                    "pan123".to_string(),
+                    StorageTargetConfig::Pan123Open {
+                        auth_mode: Some(Pan123OpenAuthMode::AccessToken),
+                        client_id: String::new(),
+                        client_secret: None,
+                        access_token: Some(credential("access")),
+                        parent_id: 0,
+                        use_direct_link: false,
+                    },
+                ),
+            ]),
+            ..StorageConfig::default()
+        };
+
+        config.validate_targets().unwrap();
+    }
+
+    #[test]
+    fn validate_targets_rejects_incomplete_s3_credentials() {
+        let config = StorageConfig {
+            targets: BTreeMap::from([("s3".to_string(), s3(None))]),
+            ..StorageConfig::default()
+        };
+
+        let err = config.validate_targets().unwrap_err();
+        assert_eq!(err.code, "storage_target_access_key_missing");
+    }
+
+    #[test]
+    fn validate_targets_rejects_invalid_urls() {
+        let config = StorageConfig {
+            targets: BTreeMap::from([(
+                "webdav".to_string(),
+                StorageTargetConfig::WebDav {
+                    url: "ftp://example.com/upload".to_string(),
+                    username: None,
+                    password: None,
+                    public_base_url: None,
+                },
+            )]),
+            ..StorageConfig::default()
+        };
+
+        let err = config.validate_targets().unwrap_err();
+        assert_eq!(err.code, "storage_target_webdav_url_invalid");
+    }
+
+    #[test]
+    fn validate_targets_rejects_unstable_sftp_remote_dir() {
+        for remote_dir in ["", ".", "../uploads", "/uploads/../elsewhere"] {
+            let config = StorageConfig {
+                targets: BTreeMap::from([(
+                    "sftp".to_string(),
+                    StorageTargetConfig::Sftp {
+                        host: "sftp.example.com".to_string(),
+                        port: 22,
+                        host_key_sha256: Some("SHA256:abc".to_string()),
+                        username: "user".to_string(),
+                        password: Some(credential("password")),
+                        private_key: None,
+                        remote_dir: remote_dir.to_string(),
+                        public_base_url: None,
+                    },
+                )]),
+                ..StorageConfig::default()
+            };
+
+            let err = config.validate_targets().unwrap_err();
+            assert_eq!(err.code, "storage_target_sftp_remote_dir_invalid");
+        }
+    }
+
+    #[test]
+    fn validate_targets_rejects_netdisk_auth_specific_missing_fields() {
+        let baidu = StorageConfig {
+            targets: BTreeMap::from([(
+                "baidu".to_string(),
+                StorageTargetConfig::BaiduNetdisk {
+                    auth_mode: Some(BaiduNetdiskAuthMode::Oauth),
+                    app_key: "app".to_string(),
+                    secret_key: Some(credential("secret")),
+                    access_token: None,
+                    refresh_token: None,
+                    app_name: "gpt-image-2".to_string(),
+                    remote_dir: None,
+                    public_base_url: None,
+                },
+            )]),
+            ..StorageConfig::default()
+        };
+        assert_eq!(
+            baidu.validate_targets().unwrap_err().code,
+            "storage_target_baidu_refresh_token_missing"
+        );
+
+        let pan123 = StorageConfig {
+            targets: BTreeMap::from([(
+                "pan123".to_string(),
+                StorageTargetConfig::Pan123Open {
+                    auth_mode: Some(Pan123OpenAuthMode::Client),
+                    client_id: "client".to_string(),
+                    client_secret: None,
+                    access_token: None,
+                    parent_id: 0,
+                    use_direct_link: false,
+                },
+            )]),
+            ..StorageConfig::default()
+        };
+        assert_eq!(
+            pan123.validate_targets().unwrap_err().code,
+            "storage_target_pan123_client_secret_missing"
+        );
     }
 
     #[test]
