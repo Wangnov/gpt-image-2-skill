@@ -11,7 +11,7 @@ export const FILTERS: { value: FilterValue; label: string }[] = [
   { value: "all", label: "全部" },
   { value: "running", label: "进行中" },
   { value: "completed", label: "已完成" },
-  { value: "failed", label: "失败" },
+  { value: "failed", label: "失败/部分失败" },
 ];
 
 export function outputLabel(outputIndex: number): string {
@@ -76,6 +76,16 @@ export function jobMatchesSearch(job: Job, query: string) {
     .join(" ")
     .toLowerCase()
     .includes(needle);
+}
+
+export function isClearableTerminalJob(job: Job) {
+  return [
+    "completed",
+    "partial_failed",
+    "failed",
+    "cancelled",
+    "canceled",
+  ].includes(job.status);
 }
 
 export function totalBytes(job: Job): string {

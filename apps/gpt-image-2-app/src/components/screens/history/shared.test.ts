@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { Job } from "@/lib/types";
 import {
+  isClearableTerminalJob,
   jobErrorMessage,
   jobMetaItems,
   jobOutputErrors,
@@ -49,5 +50,16 @@ describe("history job display helpers", () => {
     expect(jobOutputErrors(value)).toEqual([
       { index: 1, message: "upstream rejected candidate B", code: undefined },
     ]);
+  });
+
+  it("treats all terminal statuses as clearable", () => {
+    expect(isClearableTerminalJob(job({ status: "completed" }))).toBe(true);
+    expect(isClearableTerminalJob(job({ status: "partial_failed" }))).toBe(
+      true,
+    );
+    expect(isClearableTerminalJob(job({ status: "failed" }))).toBe(true);
+    expect(isClearableTerminalJob(job({ status: "cancelled" }))).toBe(true);
+    expect(isClearableTerminalJob(job({ status: "running" }))).toBe(false);
+    expect(isClearableTerminalJob(job({ status: "uploading" }))).toBe(false);
   });
 });
