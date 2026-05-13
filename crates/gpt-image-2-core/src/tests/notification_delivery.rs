@@ -110,7 +110,14 @@ fn webhook_payload_splits_origin_and_archive_uploads() {
                 }
             ]
         }],
-        "metadata": {"prompt": "hello"}
+        "metadata": {
+            "prompt": "hello",
+            "image_output": {
+                "files": [{
+                    "path": "/Users/alice/Pictures/gpt-image-2/legacy/out.png"
+                }]
+            }
+        }
     }));
 
     let request = build_webhook_request(&webhook, &job).unwrap();
@@ -144,6 +151,7 @@ fn webhook_payload_splits_origin_and_archive_uploads() {
     assert!(request.body["job"]["output_path"].is_null());
     assert_eq!(request.body["job"]["metadata"]["prompt"], "hello");
     assert!(request.body["job"]["metadata"]["output"].is_null());
+    assert!(request.body["job"]["metadata"]["image_output"].is_null());
     assert!(request.body["job"]["outputs"][0]["path"].is_null());
     assert!(request.body["job"]["outputs"][0]["uploads"][0]["source_path"].is_null());
     let body = serde_json::to_string(&request.body).unwrap();
