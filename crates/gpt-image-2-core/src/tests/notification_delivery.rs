@@ -116,6 +116,9 @@ fn webhook_payload_splits_origin_and_archive_uploads() {
         }],
         "metadata": {
             "prompt": "hello",
+            "size": "1024x1024",
+            "debug": {"trace_id": "internal"},
+            "mask_path": "/Users/alice/Pictures/gpt-image-2/mask.png",
             "error": {
                 "message": "Unable to read reference image at /Users/alice/Pictures/gpt-image-2/metadata-ref.png"
             },
@@ -157,11 +160,14 @@ fn webhook_payload_splits_origin_and_archive_uploads() {
     assert!(origin["detail"].is_null());
     assert!(request.body["job"]["output_path"].is_null());
     assert_eq!(request.body["job"]["metadata"]["prompt"], "hello");
+    assert_eq!(request.body["job"]["metadata"]["size"], "1024x1024");
+    assert!(request.body["job"]["metadata"]["debug"].is_null());
+    assert!(request.body["job"]["metadata"]["mask_path"].is_null());
     assert!(request.body["job"]["metadata"]["output"].is_null());
     assert!(request.body["job"]["metadata"]["image_output"].is_null());
     assert!(request.body["job"]["metadata"]["error"].is_null());
     assert_eq!(request.body["job"]["error"]["message"], "Job failed.");
-    assert_eq!(request.body["summary"], "openai · Job failed.");
+    assert_eq!(request.body["summary"], "openai · 1024x1024 · Job failed.");
     assert!(request.body["job"]["outputs"][0]["path"].is_null());
     assert_eq!(request.body["job"]["outputs"][0]["error"], "Output failed.");
     assert!(request.body["job"]["outputs"][0]["uploads"][0]["source_path"].is_null());

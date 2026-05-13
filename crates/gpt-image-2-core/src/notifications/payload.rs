@@ -61,13 +61,17 @@ fn public_job_error(job: &NotificationJob) -> Value {
 }
 
 fn metadata_payload(metadata: &Value) -> Value {
-    let Some(source) = metadata.as_object() else {
-        return metadata.clone();
-    };
-    let mut object = source.clone();
-    object.remove("output");
-    object.remove("image_output");
-    object.remove("error");
+    let mut object = Map::new();
+    copy_field(&mut object, metadata, "prompt");
+    copy_field(&mut object, metadata, "size");
+    copy_field(&mut object, metadata, "quality");
+    copy_field(&mut object, metadata, "format");
+    copy_field(&mut object, metadata, "n");
+    copy_field(&mut object, metadata, "edit_mode");
+    copy_field(&mut object, metadata, "edit_region_mode");
+    copy_field(&mut object, metadata, "ref_count");
+    copy_field(&mut object, metadata, "has_mask");
+    copy_field(&mut object, metadata, "selection_hint");
     Value::Object(object)
 }
 
