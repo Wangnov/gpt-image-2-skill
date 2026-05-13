@@ -104,6 +104,7 @@ pub(crate) fn completed_event_data(job: &Value) -> Value {
             "path": job.get("output_path").cloned().unwrap_or(Value::Null),
             "files": job.get("outputs").cloned().unwrap_or_else(|| json!([])),
         },
+        "error": job.get("error").cloned().unwrap_or(Value::Null),
         "job": job,
     })
 }
@@ -129,14 +130,15 @@ pub(crate) fn finish_queued_job(
             let payload = response.get("payload").unwrap_or(&response);
             cleanup_child_history(payload, &queued.id);
             let job = completed_job_for_queue(&queued, &response);
-            let uploading_job = uploading_job_for_queue(&queued, &response);
-            let _ = persist_job(&uploading_job);
             let data = completed_event_data(&job);
-            let event_type = match job.get("status").and_then(Value::as_str) {
-                Some("partial_failed") => "job.partial_failed",
-                _ => "job.completed",
-            };
-            (job, event_type, data, true)
+            let status = job.get("status").and_then(Value::as_str);
+            let event_type = terminal_event_type(status);
+            let completed = terminal_status_runs_storage_upload(status);
+            if completed {
+                let uploading_job = uploading_job_for_queue(&queued, &response);
+                let _ = persist_job(&uploading_job);
+            }
+            (job, event_type, data, completed)
         }
         Err(message) => {
             let job = failed_job_for_queue(&queued, message.clone());
@@ -240,7 +242,7 @@ pub(crate) fn spawn_storage_upload_then_notify(state: JobQueueState, job_id: Str
         append_terminal_queue_event(
             &state,
             &job_id,
-            "job.completed",
+            terminal_event_type(notify_job.get("status").and_then(Value::as_str)),
             completed_event_data(&notify_job),
         );
         spawn_notification_dispatch(state, job_id, notify_job);

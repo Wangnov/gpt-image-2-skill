@@ -290,5 +290,10 @@ mod tests {
         assert_eq!(merged["batch"]["failure_count"], 2);
         assert_eq!(merged["error"]["code"], "batch_failed");
         assert_eq!(merged["error"]["items"][0]["index"], 0);
+
+        let job = job_from_payload(&merged, "job-1", "images generate", json!({}));
+        assert_eq!(job["status"], "failed");
+        assert_eq!(terminal_event_type(job["status"].as_str()), "job.failed");
+        assert!(!terminal_status_runs_storage_upload(job["status"].as_str()));
     }
 }

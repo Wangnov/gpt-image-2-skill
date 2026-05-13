@@ -33,3 +33,45 @@ pub(crate) fn append_queue_event(
     }
     event
 }
+
+pub(crate) fn terminal_event_type(status: Option<&str>) -> &'static str {
+    match status {
+        Some("failed") => "job.failed",
+        Some("cancelled") | Some("canceled") => "job.cancelled",
+        Some("partial_failed") => "job.partial_failed",
+        _ => "job.completed",
+    }
+}
+
+pub(crate) fn terminal_status_runs_storage_upload(status: Option<&str>) -> bool {
+    !matches!(
+        status,
+        Some("failed") | Some("cancelled") | Some("canceled")
+    )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn terminal_event_type_tracks_terminal_status() {
+        assert_eq!(terminal_event_type(Some("completed")), "job.completed");
+        assert_eq!(
+            terminal_event_type(Some("partial_failed")),
+            "job.partial_failed"
+        );
+        assert_eq!(terminal_event_type(Some("failed")), "job.failed");
+        assert_eq!(terminal_event_type(Some("cancelled")), "job.cancelled");
+        assert_eq!(terminal_event_type(Some("canceled")), "job.cancelled");
+    }
+
+    #[test]
+    fn terminal_storage_upload_skips_failed_and_cancelled_statuses() {
+        assert!(terminal_status_runs_storage_upload(Some("completed")));
+        assert!(terminal_status_runs_storage_upload(Some("partial_failed")));
+        assert!(!terminal_status_runs_storage_upload(Some("failed")));
+        assert!(!terminal_status_runs_storage_upload(Some("cancelled")));
+        assert!(!terminal_status_runs_storage_upload(Some("canceled")));
+    }
+}

@@ -142,13 +142,14 @@ pub(crate) fn run_edit_request(
     };
     let request_meta = edit_request_metadata(&request);
     let job = job_from_payload(&payload, &fallback_id, "images edit", request_meta);
+    let event_type = terminal_event_type(job.get("status").and_then(Value::as_str));
     Ok(json!({
         "job_id": job.get("id").cloned().unwrap_or(Value::Null),
         "job": job,
         "events": [{
             "seq": 1,
             "kind": "local",
-            "type": if job.get("status").and_then(Value::as_str) == Some("partial_failed") { "job.partial_failed" } else { "job.completed" },
+            "type": event_type,
             "data": {"status": job.get("status"), "output": payload.get("output"), "error": payload.get("error")}
         }],
         "payload": payload,

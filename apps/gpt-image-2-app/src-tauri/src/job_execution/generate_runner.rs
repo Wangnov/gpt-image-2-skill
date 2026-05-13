@@ -52,13 +52,14 @@ pub(crate) fn run_generate_request(
     };
     let request_meta = serde_json::to_value(&request).unwrap_or_else(|_| json!({}));
     let job = job_from_payload(&payload, &fallback_id, "images generate", request_meta);
+    let event_type = terminal_event_type(job.get("status").and_then(Value::as_str));
     Ok(json!({
         "job_id": job.get("id").cloned().unwrap_or(Value::Null),
         "job": job,
         "events": [{
             "seq": 1,
             "kind": "local",
-            "type": if job.get("status").and_then(Value::as_str) == Some("partial_failed") { "job.partial_failed" } else { "job.completed" },
+            "type": event_type,
             "data": {"status": job.get("status"), "output": payload.get("output"), "error": payload.get("error")}
         }],
         "payload": payload,
