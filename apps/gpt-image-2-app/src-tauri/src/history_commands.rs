@@ -46,7 +46,6 @@ pub(crate) fn history_show(
         .and_then(|inner| inner.events.get(&job_id).cloned())
         .unwrap_or_default();
     let job = show_history_job(&job_id).map_err(app_error)?;
-    rehydrate_history_job_outputs(&job);
     Ok(json!({
         "history_file": history_db_path().display().to_string(),
         "job": job,

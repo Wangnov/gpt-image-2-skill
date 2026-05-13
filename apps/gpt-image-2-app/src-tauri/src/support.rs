@@ -104,12 +104,35 @@ pub(crate) fn history_output_indexes(job: &Value) -> Vec<usize> {
     indexes
 }
 
-pub(crate) fn rehydrate_history_job_outputs(job: &Value) {
+pub(crate) fn history_output_label(index: usize) -> String {
+    if index < 26 {
+        char::from(b'A' + u8::try_from(index).unwrap_or(0)).to_string()
+    } else {
+        format!("#{}", index + 1)
+    }
+}
+
+pub(crate) fn rehydrate_history_job_outputs_for_export(job: &Value) -> Result<(), String> {
     let Some(job_id) = job.get("id").and_then(Value::as_str) else {
-        return;
+        return Ok(());
     };
+    let mut failures = Vec::new();
     for output_index in history_output_indexes(job) {
-        let _ = read_job_output_for_product(job_id, output_index, true);
+        if let Err(error) = read_job_output_for_product(job_id, output_index, true) {
+            failures.push(format!(
+                "候选 {}：{}",
+                history_output_label(output_index),
+                error
+            ));
+        }
+    }
+    if failures.is_empty() {
+        Ok(())
+    } else {
+        Err(format!(
+            "远端图片不可用，无法导出整个任务。{}",
+            failures.join("；")
+        ))
     }
 }
 

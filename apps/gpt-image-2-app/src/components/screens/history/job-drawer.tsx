@@ -137,6 +137,7 @@ export function JobMetadataDrawer({
         job={job}
         planned={planned}
         selectedLabel={selectedLabel}
+        selectedOutput={selectedOutput}
         previewPath={previewPath}
         outputPaths={outputPaths}
         prompt={prompt}

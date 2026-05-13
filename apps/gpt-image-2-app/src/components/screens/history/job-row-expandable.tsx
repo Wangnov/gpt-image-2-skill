@@ -19,8 +19,8 @@ import { isDesktopRuntime, runtimeCopy } from "@/lib/runtime-copy";
 import {
   copyText,
   revealPath,
-  saveImages,
   saveJobImages,
+  saveJobOutputImage,
 } from "@/lib/user-actions";
 import type { Job } from "@/lib/types";
 import { JobPreviewImage } from "./job-preview-image";
@@ -95,13 +95,14 @@ export function JobRowExpandable({
   const errorMessage = jobErrorMessage(job);
   const errorDetail = jobErrorDetailText(job);
   const showPromptToggle = prompt.length > 240 || prompt.split("\n").length > 6;
+  const primaryOutputIndex = outputIndexes[0] ?? 0;
 
   const saveResult = () => {
     if (outputCount > 1) {
       void saveJobImages(job.id, "任务图片");
       return;
     }
-    void saveImages([thumbPath], "图片");
+    void saveJobOutputImage(job.id, primaryOutputIndex);
   };
 
   return (

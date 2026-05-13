@@ -1,9 +1,14 @@
+import { useEffect, useState } from "react";
 import { Icon } from "@/components/icon";
 import { PlaceholderImage } from "@/components/screens/shared/placeholder-image";
 import { api } from "@/lib/api";
 import { cn } from "@/lib/cn";
 import type { Job } from "@/lib/types";
 import { SHIMMER_STYLE } from "./job-drawer-utils";
+
+function cacheBustedUrl(url: string): string {
+  return `${url}${url.includes("?") ? "&" : "?"}rehydrated=${Date.now()}`;
+}
 
 export function JobDrawerPreview({
   job,
@@ -28,21 +33,60 @@ export function JobDrawerPreview({
   setImageFailed: (failed: boolean) => void;
   setSelectedOutput: (index: number) => void;
 }) {
+  const [rehydratedUrl, setRehydratedUrl] = useState("");
+  const [rehydrateAttempted, setRehydrateAttempted] = useState<Set<number>>(
+    new Set(),
+  );
+  const displayUrl = rehydratedUrl || previewUrl;
+
+  useEffect(() => {
+    setRehydratedUrl("");
+    setImageFailed(false);
+  }, [previewUrl, selectedOutput, setImageFailed]);
+
+  useEffect(() => {
+    setRehydrateAttempted(new Set());
+  }, [job.id]);
+
+  const recoverVisibleOutput = () => {
+    if (rehydrateAttempted.has(selectedOutput)) {
+      setImageFailed(true);
+      return;
+    }
+    setRehydrateAttempted((prev) => new Set(prev).add(selectedOutput));
+    void api
+      .ensureJobOutputCached(job.id, selectedOutput)
+      .then((cachedPath) => {
+        if (!cachedPath) {
+          setImageFailed(true);
+          return;
+        }
+        const cachedUrl = api.fileUrl(cachedPath);
+        if (!cachedUrl) {
+          setImageFailed(true);
+          return;
+        }
+        setRehydratedUrl(cacheBustedUrl(cachedUrl));
+        setImageFailed(false);
+      })
+      .catch(() => setImageFailed(true));
+  };
+
   return (
     <>
       <div className="aspect-square rounded-[10px] overflow-hidden border border-border mb-3 bg-sunken">
-        {previewUrl && !imageFailed ? (
+        {displayUrl && !imageFailed ? (
           <img
-            src={previewUrl}
+            src={displayUrl}
             alt={`生成图片预览 · 候选 ${selectedLabel}`}
             decoding="async"
             className="w-full h-full object-cover"
-            onError={() => setImageFailed(true)}
+            onError={recoverVisibleOutput}
           />
         ) : doneCount >= 1 || job.status === "completed" ? (
           <PlaceholderImage
             seed={seed + selectedOutput}
-            label={previewUrl && imageFailed ? "远端不可用" : undefined}
+            label={displayUrl && imageFailed ? "远端不可用" : undefined}
           />
         ) : job.status === "failed" || job.status === "cancelled" ? (
           <div className="flex h-full w-full items-center justify-center text-faint">

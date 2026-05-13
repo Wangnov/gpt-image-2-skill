@@ -6,12 +6,18 @@ import { Tooltip } from "@/components/ui/tooltip";
 import { ImageContextMenu } from "@/components/ui/image-context-menu";
 import { openQuickLook } from "@/components/ui/quick-look";
 import TiltedCard from "@/components/reactbits/components/TiltedCard";
-import { copyText, openPath, revealPath, saveImages } from "@/lib/user-actions";
+import {
+  copyText,
+  openPath,
+  revealPath,
+  saveJobOutputImage,
+} from "@/lib/user-actions";
 import { useConfirm } from "@/hooks/use-confirm";
 import { isDesktopRuntime, runtimeCopy } from "@/lib/runtime-copy";
 import type { Job } from "@/lib/types";
 import { cn } from "@/lib/cn";
 import { formatDateTime } from "@/lib/format";
+import { api } from "@/lib/api";
 import {
   jobOutputIndexes,
   jobOutputPath,
@@ -37,6 +43,10 @@ type Props = {
 
 const RERUN_STORAGE_KEY = "gpt2.pendingRerun";
 const DETAIL_IMAGE_SIZE = "min(340px, calc(100vw - 88px))";
+
+function cacheBustedUrl(url: string): string {
+  return `${url}${url.includes("?") ? "&" : "?"}rehydrated=${Date.now()}`;
+}
 
 function fmtBytes(bytes?: number): string {
   if (!bytes || !Number.isFinite(bytes) || bytes <= 0) return "—";
@@ -71,6 +81,12 @@ export function JobImageDetailDrawer({
   const confirm = useConfirm();
   const [imageFailed, setImageFailed] = useState(false);
   const [thumbFailed, setThumbFailed] = useState<Set<number>>(new Set());
+  const [rehydratedUrls, setRehydratedUrls] = useState<Map<number, string>>(
+    new Map(),
+  );
+  const [rehydrateAttempted, setRehydrateAttempted] = useState<Set<number>>(
+    new Set(),
+  );
   const copy = runtimeCopy();
   const canShowFileLocation = isDesktopRuntime();
 
@@ -102,14 +118,17 @@ export function JobImageDetailDrawer({
     : (outputIndexes[0] ?? 0);
   const activePosition = Math.max(0, outputIndexes.indexOf(activeOutputIndex));
   const url = job ? jobOutputUrl(job, activeOutputIndex) : null;
+  const displayUrl = rehydratedUrls.get(activeOutputIndex) ?? url;
   const path = job ? jobOutputPath(job, activeOutputIndex) : null;
 
   useEffect(() => {
     setImageFailed(false);
-  }, [url]);
+  }, [displayUrl]);
 
   useEffect(() => {
     setThumbFailed(new Set());
+    setRehydratedUrls(new Map());
+    setRehydrateAttempted(new Set());
   }, [job?.id, outputCount]);
 
   const md = (job?.metadata ?? {}) as Record<string, unknown>;
@@ -140,12 +159,15 @@ export function JobImageDetailDrawer({
   // QuickLook owns its own ArrowLeft/ArrowRight handling; the drawer no
   // longer needs a parallel keyboard listener.
 
+  const outputUrlFor = (idx: number) =>
+    rehydratedUrls.get(idx) ?? (job ? jobOutputUrl(job, idx) : null);
+
   const peerAssets: ImageAsset[] = job
     ? outputIndexes.map((idx) =>
         imageAssetFromOutput({
           jobId: job.id,
           outputIndex: idx,
-          src: jobOutputUrl(job, idx) ?? "",
+          src: outputUrlFor(idx) ?? "",
           path: jobOutputPath(job, idx) ?? null,
           prompt: prompt || undefined,
           command: job.command,
@@ -155,17 +177,43 @@ export function JobImageDetailDrawer({
     : [];
   const activeAsset =
     peerAssets[activePosition] ??
-    (job && url
+    (job && displayUrl
       ? imageAssetFromOutput({
           jobId: job.id,
           outputIndex: activeOutputIndex,
-          src: url,
+          src: displayUrl,
           path: path ?? null,
           prompt: prompt || undefined,
           command: job.command,
           job,
         })
       : null);
+
+  const recoverVisibleOutput = () => {
+    if (!job || rehydrateAttempted.has(activeOutputIndex)) {
+      setImageFailed(true);
+      return;
+    }
+    setRehydrateAttempted((prev) => new Set(prev).add(activeOutputIndex));
+    void api
+      .ensureJobOutputCached(job.id, activeOutputIndex)
+      .then((cachedPath) => {
+        if (!cachedPath) {
+          setImageFailed(true);
+          return;
+        }
+        const cachedUrl = api.fileUrl(cachedPath);
+        if (!cachedUrl) {
+          setImageFailed(true);
+          return;
+        }
+        setRehydratedUrls((prev) =>
+          new Map(prev).set(activeOutputIndex, cacheBustedUrl(cachedUrl)),
+        );
+        setImageFailed(false);
+      })
+      .catch(() => setImageFailed(true));
+  };
 
   const openZoom = () => {
     if (!activeAsset) return;
@@ -289,9 +337,9 @@ export function JobImageDetailDrawer({
                 size="iconSm"
                 icon="download"
                 aria-label={copy.saveImageLabel}
-                disabled={!path}
+                disabled={!job || (!path && !url)}
                 onClick={() => {
-                  if (path) void saveImages([path], "图片");
+                  if (job) void saveJobOutputImage(job.id, activeOutputIndex);
                 }}
               />
             </Tooltip>
@@ -302,7 +350,7 @@ export function JobImageDetailDrawer({
           {/* Big image — TiltedCard for the brand "liquid" hover-tilt feel,
             wrapped in a button so click still escalates to fullscreen zoom. */}
           <div className="relative flex min-w-0 items-center justify-center overflow-hidden">
-            {url && !imageFailed && activeAsset ? (
+            {displayUrl && !imageFailed && activeAsset ? (
               <ImageContextMenu asset={activeAsset}>
                 <button
                   type="button"
@@ -311,7 +359,7 @@ export function JobImageDetailDrawer({
                   aria-label={`查看第 ${letter} 张大图`}
                 >
                   <TiltedCard
-                    imageSrc={url}
+                    imageSrc={displayUrl}
                     altText={`第 ${letter} 张`}
                     containerWidth="100%"
                     containerHeight={DETAIL_IMAGE_SIZE}
@@ -321,7 +369,7 @@ export function JobImageDetailDrawer({
                     scaleOnHover={1.04}
                     showMobileWarning={false}
                     showTooltip={false}
-                    onImageError={() => setImageFailed(true)}
+                    onImageError={recoverVisibleOutput}
                   />
                 </button>
               </ImageContextMenu>
@@ -330,7 +378,7 @@ export function JobImageDetailDrawer({
                 <PlaceholderImage
                   seed={activeOutputIndex + 23}
                   variant={`detail-${job?.id ?? "empty"}`}
-                  label={url && imageFailed ? "远端不可用" : undefined}
+                  label={displayUrl && imageFailed ? "远端不可用" : undefined}
                 />
               </div>
             )}
@@ -361,7 +409,7 @@ export function JobImageDetailDrawer({
           {outputCount > 1 && job && (
             <div className="flex items-center gap-1.5 overflow-x-auto scrollbar-none pb-1">
               {outputIndexes.map((outputIndex, i) => {
-                const tUrl = jobOutputUrl(job, outputIndex);
+                const tUrl = outputUrlFor(outputIndex);
                 const isActive = outputIndex === activeOutputIndex;
                 const thumbAsset = peerAssets[i] ?? activeAsset;
                 const button = (
