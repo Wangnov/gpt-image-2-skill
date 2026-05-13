@@ -370,3 +370,148 @@ pub(crate) fn enqueue_job(state: JobQueueState, queued: QueuedJob) -> Result<Val
         "queued": true,
     }))
 }
+
+#[cfg(test)]
+mod tests {
+    use std::sync::Mutex;
+    use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
+
+    use gpt_image_2_core::WebhookNotificationConfig;
+
+    use super::*;
+
+    static QUEUE_WORKER_TEST_LOCK: Mutex<()> = Mutex::new(());
+
+    fn failed_batch_response() -> Value {
+        json!({
+            "payload": {
+                "ok": false,
+                "status": "failed",
+                "output": {
+                    "path": null,
+                    "files": []
+                },
+                "error": {
+                    "code": "batch_failed",
+                    "message": "candidate A failed"
+                }
+            }
+        })
+    }
+
+    fn queued_job(id: &str) -> QueuedJob {
+        QueuedJob {
+            id: id.to_string(),
+            command: "images generate".to_string(),
+            provider: "mock".to_string(),
+            created_at: "2026-05-13T17:23:00Z".to_string(),
+            dir: PathBuf::from("/tmp"),
+            metadata: json!({"prompt": "test"}),
+            task: QueuedTask::Generate(GenerateRequest {
+                prompt: "test".to_string(),
+                provider: Some("mock".to_string()),
+                size: None,
+                format: None,
+                quality: None,
+                background: None,
+                n: Some(2),
+                compression: None,
+                moderation: None,
+                storage_targets: None,
+                fallback_targets: None,
+            }),
+        }
+    }
+
+    #[test]
+    fn finish_queued_job_keeps_ok_failed_payload_on_failed_path() {
+        let _guard = QUEUE_WORKER_TEST_LOCK.lock().unwrap();
+        let suffix = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        let temp_dir =
+            std::env::temp_dir().join(format!("gpt-image-2-web-queue-worker-test-{suffix}"));
+        fs::create_dir_all(&temp_dir).unwrap();
+        let config_path = temp_dir.join("config.json");
+        let history_path = temp_dir.join("history.sqlite");
+        unsafe {
+            std::env::set_var(gpt_image_2_core::PRODUCT_CONFIG_FILE_ENV, &config_path);
+            std::env::set_var(gpt_image_2_core::PRODUCT_HISTORY_FILE_ENV, &history_path);
+        }
+
+        let mut config = AppConfig::default();
+        config.notifications.webhooks = vec![WebhookNotificationConfig {
+            id: "invalid-webhook".to_string(),
+            name: "Invalid webhook".to_string(),
+            enabled: true,
+            url: "not-a-url".to_string(),
+            method: "POST".to_string(),
+            headers: BTreeMap::new(),
+            timeout_seconds: 1,
+        }];
+        save_config(&config).unwrap();
+
+        let state = JobQueueState::default();
+        {
+            let mut inner = state.inner.lock().unwrap();
+            inner.running = 1;
+        }
+
+        finish_queued_job(
+            state.clone(),
+            queued_job("job-batch-failed"),
+            Ok(failed_batch_response()),
+        );
+
+        let job = show_history_job("job-batch-failed").unwrap();
+        assert_eq!(job["status"], "failed");
+        assert_eq!(job["error"]["code"], "batch_failed");
+
+        let deadline = Instant::now() + Duration::from_secs(2);
+        loop {
+            let has_notification = {
+                let inner = state.inner.lock().unwrap();
+                let events = inner
+                    .events
+                    .get("job-batch-failed")
+                    .cloned()
+                    .unwrap_or_default();
+                assert!(events.iter().any(|event| event["type"] == "job.failed"));
+                assert!(!events.iter().any(|event| event["type"] == "job.storage"));
+                events
+                    .iter()
+                    .any(|event| event["type"] == "job.notifications")
+            };
+            if has_notification {
+                break;
+            }
+            assert!(
+                Instant::now() < deadline,
+                "timed out waiting for failed notification dispatch"
+            );
+            std::thread::sleep(Duration::from_millis(10));
+        }
+
+        let inner = state.inner.lock().unwrap();
+        let events = inner.events.get("job-batch-failed").unwrap();
+        assert_eq!(events[0]["type"], "job.failed");
+        assert_eq!(events[0]["data"]["status"], "failed");
+        assert_eq!(events[0]["data"]["error"]["code"], "batch_failed");
+        let notification = events
+            .iter()
+            .find(|event| event["type"] == "job.notifications")
+            .unwrap();
+        assert_eq!(
+            notification["data"]["deliveries"][0]["name"],
+            "Invalid webhook"
+        );
+        assert_eq!(notification["data"]["deliveries"][0]["ok"], false);
+
+        unsafe {
+            std::env::remove_var(gpt_image_2_core::PRODUCT_CONFIG_FILE_ENV);
+            std::env::remove_var(gpt_image_2_core::PRODUCT_HISTORY_FILE_ENV);
+        }
+        let _ = fs::remove_dir_all(temp_dir);
+    }
+}

@@ -44,10 +44,7 @@ pub(crate) fn terminal_event_type(status: Option<&str>) -> &'static str {
 }
 
 pub(crate) fn terminal_status_runs_storage_upload(status: Option<&str>) -> bool {
-    !matches!(
-        status,
-        Some("failed") | Some("cancelled") | Some("canceled")
-    )
+    matches!(status, Some("completed") | Some("partial_failed"))
 }
 
 pub(crate) fn emit_queue_event(app: &tauri::AppHandle, job_id: &str, event: &Value) {
@@ -83,5 +80,9 @@ mod tests {
         assert!(!terminal_status_runs_storage_upload(Some("failed")));
         assert!(!terminal_status_runs_storage_upload(Some("cancelled")));
         assert!(!terminal_status_runs_storage_upload(Some("canceled")));
+        assert!(!terminal_status_runs_storage_upload(Some("running")));
+        assert!(!terminal_status_runs_storage_upload(Some("uploading")));
+        assert!(!terminal_status_runs_storage_upload(Some("unknown")));
+        assert!(!terminal_status_runs_storage_upload(None));
     }
 }
