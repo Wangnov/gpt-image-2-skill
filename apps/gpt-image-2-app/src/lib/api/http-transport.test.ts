@@ -9,23 +9,19 @@ afterEach(() => {
 });
 
 describe("HTTP transport readback recovery", () => {
-  it("rehydrates job outputs through the output endpoint", async () => {
-    const fetch = vi.fn(async () => new Response("png", { status: 200 }));
+  it("returns the readback endpoint without prefetching the image body", async () => {
+    const fetch = vi.fn();
     globalThis.fetch = fetch as typeof globalThis.fetch;
 
     const url = await httpApi.ensureJobOutputCached("job 1", 2);
 
-    expect(fetch).toHaveBeenCalledWith("/api/jobs/job%201/outputs/2", {
-      cache: "no-store",
-    });
+    expect(fetch).not.toHaveBeenCalled();
     expect(url).toBe("/api/jobs/job%201/outputs/2");
     expect(httpApi.fileUrl(url)).toBe(url);
   });
 
-  it("keeps returning null when readback cannot recover the output", async () => {
-    const fetch = vi.fn(async () => new Response("missing", { status: 404 }));
-    globalThis.fetch = fetch as typeof globalThis.fetch;
-
-    await expect(httpApi.ensureJobOutputCached("job-1", 0)).resolves.toBeNull();
+  it("returns null for invalid output references", async () => {
+    await expect(httpApi.ensureJobOutputCached("", 0)).resolves.toBeNull();
+    await expect(httpApi.ensureJobOutputCached("job-1", -1)).resolves.toBeNull();
   });
 });

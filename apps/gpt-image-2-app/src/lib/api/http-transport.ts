@@ -265,12 +265,12 @@ export const httpApi: ApiClient = {
     return [url];
   },
   async ensureJobOutputCached(jobId: string, outputIndex: number) {
+    if (!jobId.trim() || !Number.isFinite(outputIndex) || outputIndex < 0) {
+      return null;
+    }
     const url = apiResourceUrl(
       `/jobs/${encodeURIComponent(jobId)}/outputs/${outputIndex}`,
     );
-    const response = await fetch(url, { cache: "no-store" });
-    if (!response.ok) return null;
-    await response.arrayBuffer();
     return url;
   },
   async createGenerate(body: GenerateRequest) {
