@@ -196,17 +196,21 @@ pub(crate) fn storage_overrides_from_job(job: &Value) -> StorageUploadOverrides 
 
 pub(crate) fn upload_completed_job_outputs(job: &Value) -> Result<Value, String> {
     let _ = persist_job(job);
-    let config = load_config()?;
-    let overrides = storage_overrides_from_job(job);
-    upload_job_outputs_to_storage(&config.storage, job, overrides)
-        .map_err(app_error)
-        .map(|_| ())
-        .map_err(|error| format!("Storage upload failed: {error}"))?;
     let job_id = job
         .get("id")
         .and_then(Value::as_str)
         .ok_or_else(|| "Job id is missing.".to_string())?;
-    show_history_job(job_id).map_err(app_error)
+    let config = load_config()?;
+    let overrides = storage_overrides_from_job(job);
+    let upload_result = upload_job_outputs_to_storage(&config.storage, job, overrides)
+        .map_err(app_error)
+        .map(|_| ())
+        .map_err(|error| format!("Storage upload failed: {error}"));
+    let enriched = show_history_job(job_id).map_err(app_error)?;
+    if let Err(error) = upload_result {
+        eprintln!("storage upload failed before notification dispatch: {error}");
+    }
+    Ok(enriched)
 }
 
 pub(crate) fn spawn_storage_upload_then_notify(state: JobQueueState, job_id: String, job: Value) {
