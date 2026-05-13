@@ -72,6 +72,58 @@ describe("normalizeStorageConfig", () => {
     });
   });
 
+  it("treats managed policy as advisory when user overrides are allowed", () => {
+    const normalized = normalizeStorageConfig({
+      pipeline: {
+        mode: "mirror",
+        origin: null,
+        archives: ["user-archive"],
+        cleanup: { mode: "never" },
+      },
+      policy: {
+        managed: true,
+        allow_user_overrides: true,
+        allowed_modes: ["cloud_primary"],
+        locked_origin: "r2-origin",
+        locked_archives: ["audit-webhook"],
+        message: null,
+      },
+    });
+
+    expect(normalized.pipeline).toEqual({
+      mode: "mirror",
+      origin: null,
+      archives: ["user-archive"],
+      cleanup: { mode: "never" },
+    });
+  });
+
+  it("enforces managed policy only when user overrides are disabled", () => {
+    const normalized = normalizeStorageConfig({
+      pipeline: {
+        mode: "mirror",
+        origin: null,
+        archives: ["user-archive"],
+        cleanup: { mode: "never" },
+      },
+      policy: {
+        managed: true,
+        allow_user_overrides: false,
+        allowed_modes: ["cloud_primary"],
+        locked_origin: "r2-origin",
+        locked_archives: ["audit-webhook", "r2-origin"],
+        message: null,
+      },
+    });
+
+    expect(normalized.pipeline).toEqual({
+      mode: "cloud_primary",
+      origin: "r2-origin",
+      archives: ["audit-webhook"],
+      cleanup: { mode: "never" },
+    });
+  });
+
   it("infers netdisk auth modes from saved credential fields", () => {
     const normalized = normalizeStorageConfig({
       targets: {

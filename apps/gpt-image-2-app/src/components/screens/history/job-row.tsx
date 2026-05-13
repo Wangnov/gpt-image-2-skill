@@ -171,6 +171,7 @@ function ExpandedOutputs({
           const path = byIndex.get(index);
           const url = path ? api.fileUrl(path) : "";
           const hasImage = Boolean(url) && !failed.has(index);
+          const remoteUnavailable = Boolean(url) && failed.has(index);
           const label = `候选 ${String.fromCharCode(65 + index)}`;
           const disabled = !path;
           return (
@@ -198,6 +199,12 @@ function ExpandedOutputs({
                   decoding="async"
                   className="h-full w-full object-cover"
                   onError={() => setFailed((prev) => new Set(prev).add(index))}
+                />
+              ) : remoteUnavailable ? (
+                <PlaceholderImage
+                  seed={jobSeed(job) + index}
+                  variant={`row-${index}`}
+                  label="远端不可用"
                 />
               ) : (
                 <div

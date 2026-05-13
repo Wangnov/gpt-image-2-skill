@@ -17,6 +17,7 @@ const pendingHardDeletes = new Map<string, number>();
  * `deleted_at` in the history DB; if the user clicks "撤回" within 5s the
  * folder is moved back and the row is unmarked. Otherwise after 5s the row
  * and folder are permanently removed.
+ * Remote Origin/Archive objects are intentionally never deleted by this flow.
  *
  * Non-Tauri runtimes have no recoverable trash — the call falls through to a
  * hard delete and the toast omits the undo button.

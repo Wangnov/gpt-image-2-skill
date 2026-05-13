@@ -290,7 +290,7 @@ function applyStorageManagementPolicy(
   pipeline: PipelineConfig,
   policy: StorageManagementPolicy,
 ): PipelineConfig {
-  if (!policy.managed) return pipeline;
+  if (!policy.managed || policy.allow_user_overrides) return pipeline;
   const next: PipelineConfig = {
     ...pipeline,
     archives: [...pipeline.archives],

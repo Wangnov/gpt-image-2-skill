@@ -278,21 +278,25 @@ impl Default for PipelineConfig {
 
 #[derive(Debug, Clone, Serialize, Deserialize, Eq, PartialEq, Default)]
 pub struct StorageManagementPolicy {
-    /// Set by managed deployments to make config-as-code authoritative.
+    /// Set by managed deployments to surface config-as-code defaults or locks.
     #[serde(default)]
     pub managed: bool,
-    /// When false, UI/server save paths preserve this policy and coerce user
-    /// edits back to the managed pipeline boundary.
+    /// When true, the policy is advisory: UI can label the defaults as
+    /// administrator-provided, but user edits remain authoritative. When
+    /// false, UI/server save paths preserve this policy and coerce user edits
+    /// back to the managed pipeline boundary.
     #[serde(default)]
     pub allow_user_overrides: bool,
-    /// Restrict selectable pipeline modes. An empty list means "no mode
-    /// restriction" unless another lock (such as locked_origin) implies one.
+    /// Restrict selectable pipeline modes for locked policies. An empty list
+    /// means "no mode restriction" unless another lock (such as locked_origin)
+    /// implies one.
     #[serde(default)]
     pub allowed_modes: Vec<PipelineMode>,
-    /// Force a target name to be the remote Result Origin.
+    /// Force a target name to be the remote Result Origin for locked policies.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub locked_origin: Option<String>,
-    /// Force the archive target list. Empty means the user/config may choose.
+    /// Force the archive target list for locked policies. Empty means the
+    /// user/config may choose.
     #[serde(default)]
     pub locked_archives: Vec<String>,
     /// Optional operator-facing note surfaced in UI.
@@ -302,7 +306,7 @@ pub struct StorageManagementPolicy {
 
 impl StorageManagementPolicy {
     fn apply_to_pipeline(&self, pipeline: &mut PipelineConfig) {
-        if !self.managed {
+        if !self.managed || self.allow_user_overrides {
             return;
         }
         if !self.allowed_modes.is_empty() && !self.allowed_modes.contains(&pipeline.mode) {
@@ -475,7 +479,7 @@ impl StorageConfig {
     }
 
     pub fn enforce_policy(&mut self) {
-        if self.policy.managed {
+        if self.policy.managed && !self.policy.allow_user_overrides {
             self.pipeline = Some(self.effective_pipeline());
         }
     }
@@ -833,5 +837,34 @@ mod tests {
         assert_eq!(pipeline.mode, PipelineMode::CloudPrimary);
         assert_eq!(pipeline.origin.as_deref(), Some("r2-origin"));
         assert_eq!(pipeline.archives, vec!["audit-webhook"]);
+    }
+
+    #[test]
+    fn managed_policy_with_user_overrides_is_advisory() {
+        let mut config = StorageConfig {
+            pipeline: Some(PipelineConfig {
+                mode: PipelineMode::Mirror,
+                origin: None,
+                archives: vec!["user-archive".to_string()],
+                cleanup: CleanupPolicy::default(),
+            }),
+            policy: StorageManagementPolicy {
+                managed: true,
+                allow_user_overrides: true,
+                locked_origin: Some("r2-origin".to_string()),
+                locked_archives: vec!["audit-webhook".to_string()],
+                allowed_modes: vec![PipelineMode::CloudPrimary],
+                ..StorageManagementPolicy::default()
+            },
+            ..StorageConfig::default()
+        };
+
+        let pipeline = config.effective_pipeline();
+        assert_eq!(pipeline.mode, PipelineMode::Mirror);
+        assert_eq!(pipeline.origin, None);
+        assert_eq!(pipeline.archives, vec!["user-archive"]);
+
+        config.enforce_policy();
+        assert_eq!(config.pipeline.unwrap().archives, vec!["user-archive"]);
     }
 }

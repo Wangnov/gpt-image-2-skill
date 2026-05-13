@@ -39,7 +39,9 @@ Open [http://localhost:8787](http://localhost:8787). The browser talks to `/api`
 
 ## Storage Policy Templates
 
-Managed deployments can commit a config template with `storage.policy.managed = true`. The UI will show `由管理员管理`; save paths preserve the policy and runtime planning enforces locked Origin / archive selections.
+Managed deployments can commit a config template with `storage.policy.managed = true` and `allow_user_overrides = true` to provide administrator defaults without locking the user out. The UI shows `管理员默认值`; save paths preserve the policy, but the user's current Origin / Archive / mode choices remain editable. Only set `allow_user_overrides = false` for a genuinely locked deployment.
+
+Deleting local history/cache in Docker Web or Desktop only removes local records and files; uploaded Origin/Archive objects are intentionally left intact.
 
 Small-team local library, with optional local archive:
 
@@ -58,7 +60,7 @@ Small-team local library, with optional local archive:
     },
     "policy": {
       "managed": true,
-      "allowed_modes": ["local_only", "mirror"],
+      "allow_user_overrides": true,
       "message": "Small-team install: local result library stays authoritative."
     }
   }
@@ -89,9 +91,7 @@ Enterprise cloud-primary library:
     },
     "policy": {
       "managed": true,
-      "allowed_modes": ["cloud_primary"],
-      "locked_origin": "r2-origin",
-      "locked_archives": ["audit-webhook"],
+      "allow_user_overrides": true,
       "message": "Enterprise install: R2 is the authoritative result Origin."
     }
   }
@@ -120,8 +120,7 @@ Webhook audit archive, while local results remain Origin:
     },
     "policy": {
       "managed": true,
-      "allowed_modes": ["cloud_archive_only"],
-      "locked_archives": ["audit-webhook"],
+      "allow_user_overrides": true,
       "message": "Audit install: every output is pushed to the webhook archive."
     }
   }

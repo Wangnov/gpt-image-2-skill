@@ -268,8 +268,8 @@ export function JobImageDetailDrawer({
                     const outputCount = job.outputs?.length ?? 1;
                     const description =
                       outputCount > 1
-                        ? `这是包含 ${outputCount} 张图的任务，删除会移除整个任务记录和全部 ${outputCount} 张图，无法分别删除单张。`
-                        : "这会删除这张图和它的任务记录。图片文件会移到回收站。";
+                        ? `这是包含 ${outputCount} 张图的任务，删除会移除本地任务记录和全部 ${outputCount} 张图；远端 Origin/Archive 不会被删除，且无法分别删除单张。`
+                        : "这会删除本地任务记录和这张图；远端 Origin/Archive 不会被删除。桌面端本地文件会先移到回收站。";
                     const ok = await confirm({
                       title: "删除任务？",
                       description,
@@ -330,6 +330,7 @@ export function JobImageDetailDrawer({
                 <PlaceholderImage
                   seed={activeOutputIndex + 23}
                   variant={`detail-${job?.id ?? "empty"}`}
+                  label={url && imageFailed ? "远端不可用" : undefined}
                 />
               </div>
             )}
@@ -395,6 +396,11 @@ export function JobImageDetailDrawer({
                       <PlaceholderImage
                         seed={outputIndex + i + 19}
                         variant={`detail-thumb-${job.id}`}
+                        label={
+                          tUrl && thumbFailed.has(outputIndex)
+                            ? "远端不可用"
+                            : undefined
+                        }
                       />
                     )}
                     <span

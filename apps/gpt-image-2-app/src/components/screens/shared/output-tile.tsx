@@ -145,6 +145,7 @@ export function OutputTile({
         <PlaceholderImage
           seed={output.seed ?? output.index * 11 + 7}
           variant={letter}
+          label={output.url && imageFailed ? "远端不可用" : undefined}
         />
       )}
       <div

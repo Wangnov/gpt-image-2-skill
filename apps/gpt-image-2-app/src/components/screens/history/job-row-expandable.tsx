@@ -506,7 +506,7 @@ export function JobRowExpandable({
                             <span className="text-foreground font-medium">
                               「{summary}」
                             </span>
-                            。图片文件不会被删除。
+                            。远端 Origin/Archive 不会被删除。
                           </>
                         ),
                         confirmText: "删除",

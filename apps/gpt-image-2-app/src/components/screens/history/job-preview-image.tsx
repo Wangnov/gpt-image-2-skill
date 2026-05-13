@@ -37,7 +37,11 @@ export function JobPreviewImage({
 
   return (
     <div className={placeholderClassName}>
-      <PlaceholderImage seed={seed} variant={variant} />
+      <PlaceholderImage
+        seed={seed}
+        variant={variant}
+        label={url && failed ? "远端不可用" : undefined}
+      />
     </div>
   );
 }

@@ -77,8 +77,8 @@ export function ClassicHistoryScreen({
 
   const handleDelete = async (job: Job) => {
     const ok = await confirm({
-      title: "删除任务记录",
-      description: "只会删除历史记录，已经保存的图片文件不会被删除。",
+    title: "删除任务记录",
+    description: "只会删除历史记录，远端 Origin/Archive 不会被删除。",
       confirmText: "删除",
       variant: "danger",
     });
@@ -109,7 +109,7 @@ export function ClassicHistoryScreen({
     );
     const ok = await confirm({
       title: "清理任务记录",
-      description: `将清理 ${finished.length} 条已结束任务。图片文件不会被删除。`,
+    description: `将清理 ${finished.length} 条已结束任务。远端 Origin/Archive 不会被删除。`,
       confirmText: "清理",
       variant: "danger",
     });

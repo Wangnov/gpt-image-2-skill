@@ -95,6 +95,9 @@ pub(crate) async fn copy_image_to_clipboard(
 
 #[tauri::command]
 pub(crate) fn soft_delete_job(job_id: String) -> Result<(), String> {
+    // This flow only moves local result-library files into local trash and
+    // marks the local history row. Remote Origin/Archive objects are never
+    // deleted implicitly.
     let job_root = result_library_dir().join(&job_id);
     if job_root.exists() {
         let trash_root = jobs_trash_dir();
@@ -127,6 +130,8 @@ pub(crate) fn restore_deleted_job(job_id: String) -> Result<(), String> {
 
 #[tauri::command]
 pub(crate) fn hard_delete_job(job_id: String) -> Result<(), String> {
+    // Hard delete is still local-only: remove local trash/cache plus the DB
+    // row, but leave any uploaded Origin/Archive objects intact.
     let trash_path = jobs_trash_dir().join(&job_id);
     if trash_path.exists() {
         fs::remove_dir_all(&trash_path).map_err(|error| format!("清空回收目录失败：{error}"))?;

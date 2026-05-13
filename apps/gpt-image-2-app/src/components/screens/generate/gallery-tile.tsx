@@ -71,7 +71,11 @@ export function RecentWorkTile({
           onError={() => setImageFailed(true)}
         />
       ) : (
-        <PlaceholderImage seed={jobPlaceholderSeed(job)} variant="recent" />
+        <PlaceholderImage
+          seed={jobPlaceholderSeed(job)}
+          variant="recent"
+          label={url && imageFailed ? "远端不可用" : undefined}
+        />
       )}
       {canSendToEdit && (hover || focusWithin) && (
         <button

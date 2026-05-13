@@ -40,7 +40,10 @@ export function JobDrawerPreview({
             onError={() => setImageFailed(true)}
           />
         ) : doneCount >= 1 || job.status === "completed" ? (
-          <PlaceholderImage seed={seed + selectedOutput} />
+          <PlaceholderImage
+            seed={seed + selectedOutput}
+            label={previewUrl && imageFailed ? "远端不可用" : undefined}
+          />
         ) : job.status === "failed" || job.status === "cancelled" ? (
           <div className="flex h-full w-full items-center justify-center text-faint">
             <Icon name="warn" size={24} aria-hidden="true" />

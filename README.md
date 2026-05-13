@@ -173,6 +173,8 @@ docker run --rm -p 8787:8787 \
 
 任务请求仍可独立传 `storage_targets` 和 `fallback_targets`,这两份列表会被并入当次任务的 archives(去重,不影响 Origin)。
 
+托管部署如果只是想提供默认值,应设置 `storage.policy.managed = true` 且 `allow_user_overrides = true`;UI 会显示"管理员默认值",但用户仍可调整模式、Origin 和 Archive。删除本地历史/缓存只影响本地 result library、trash 和 SQLite 记录,不会删除远端 Origin/Archive 对象。
+
 老 config(`storage.default_targets` / `storage.fallback_targets` / `storage.fallback_policy`)在加载时会自动迁移到 `pipeline`,无需手工修改。注意一项行为变化:旧 `fallback_policy = on_failure` 同时配置 `default_targets` + `fallback_targets` 的用户,迁移后两个列表会全部成为 archives 并每次都跑(不再是"主失败才跑 fallback"),这是一次性多上传一份。
 
 输出级/目标级并发由 `upload_concurrency` 和 `target_concurrency` 控制。`cloud_primary` 可用 `cleanup.mode = after_archive_success | by_age | by_size` 清理本地缓存;清理只删除本地 cache,不会隐式删除远端对象。远端 HTTP/S3/WebDAV 上传默认拒绝 loopback/private/link-local 等非公网地址并禁用重定向;SFTP 必须配置服务器 SHA256 host key 指纹。
@@ -734,6 +736,8 @@ Global config selects one of four pipeline modes via `storage.pipeline`, which k
 | `cloud_archive_only` | Local is the Origin; archives only receive uploads (suitable for write-only backends like webhooks) |
 
 Individual generation/edit requests can still pass `storage_targets` and `fallback_targets`; both lists are merged (with deduplication) into the per-job archive list and never override Origin.
+
+Managed deployments that only want to provide defaults should set `storage.policy.managed = true` with `allow_user_overrides = true`; the UI shows "administrator defaults" while leaving mode, Origin, and Archive choices editable. Deleting local history/cache only affects the local result library, trash, and SQLite rows; it does not delete remote Origin/Archive objects.
 
 Existing configs that use the legacy `storage.default_targets` / `storage.fallback_targets` / `storage.fallback_policy` fields are migrated transparently on load — no manual edit is required. One behavior change to call out: configs that combined `default_targets` + `fallback_targets` with `fallback_policy = on_failure` now upload to every archive on every job (the "only on primary failure" semantics is intentionally dropped). This produces one extra upload per job but is otherwise harmless.
 

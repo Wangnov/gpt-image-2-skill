@@ -129,7 +129,7 @@ export function HistoryScreen({
           <span className="text-foreground font-medium">
             {finished.length} 条
           </span>{" "}
-          当前已加载的已完成 / 已失败任务。图片文件不会被删除，此操作不可撤销。
+          当前已加载的已完成 / 已失败任务。远端 Origin/Archive 不会被删除，此操作不可撤销。
         </>
       ),
       confirmText: "清理",

@@ -128,7 +128,7 @@ export type ApiClient = RuntimeCapabilities & {
   restoreDeletedJob(id: string): Promise<void>;
   /**
    * Permanently delete a job from the result library and then DELETE the
-   * history row. Remote uploaded objects are not deleted by default.
+   * history row. Remote Origin/Archive objects are intentionally not deleted.
    */
   hardDeleteJob(id: string): Promise<void>;
   /**

@@ -366,17 +366,16 @@ export function StoragePanel({
   const policyManaged = policy?.managed === true;
   const policyLocked = policyManaged && policy.allow_user_overrides !== true;
   const policyLocksMode =
-    policyLocked ||
-    (policyManaged &&
-      (Boolean(policy.locked_origin) || policy.allowed_modes.length === 1));
-  const policyLocksOrigin =
-    policyLocked || (policyManaged && Boolean(policy.locked_origin));
-  const policyLocksArchives =
-    policyLocked || (policyManaged && policy.locked_archives.length > 0);
+    policyLocked &&
+    (Boolean(policy.locked_origin) || policy.allowed_modes.length > 0);
+  const policyLocksOrigin = policyLocked && Boolean(policy.locked_origin);
+  const policyLocksArchives = policyLocked && policy.locked_archives.length > 0;
   const policyMessage =
     policy?.message ||
     (policyManaged
-      ? "存储策略由管理员管理，当前配置会按策略锁定 Origin、归档和模式。"
+      ? policy.allow_user_overrides
+        ? "管理员提供了默认存储策略，你可以按需要调整。"
+        : "存储策略由管理员管理，当前配置会按策略锁定 Origin、归档和模式。"
       : "");
   const originEligibleEntries = strategyTargetEntries.filter(([, target]) =>
     canActAsOrigin(target),
@@ -412,13 +411,15 @@ export function StoragePanel({
       >
         {policyManaged && (
           <Row
-            title="由管理员管理"
+            title={
+              policy.allow_user_overrides ? "管理员默认值" : "由管理员管理"
+            }
             description={policyMessage}
             control={
               <ControlRail>
                 <div className="rounded-md border border-[color:var(--accent-25)] bg-[color:var(--accent-08)] px-3 py-2 text-[12px] leading-snug text-muted">
                   {policy.allow_user_overrides
-                    ? "管理员提供了默认策略，你仍可调整未锁定的字段。"
+                    ? "管理员提供了默认策略，你仍可按当前工作流调整。"
                     : "管理员策略会在保存和任务执行时保持生效。"}
                 </div>
               </ControlRail>
