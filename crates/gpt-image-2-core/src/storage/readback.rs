@@ -80,6 +80,16 @@ pub fn read_job_output_from_storage_with_options(
             "Cloud-primary storage has no Origin target configured.",
         ));
     }
+    if let Some(origin) = origin
+        && let Some(target) = config.targets.get(origin)
+        && !target.can_act_as_origin()
+    {
+        return Err(AppError::new(
+            "storage_readback_origin_unsupported",
+            "Cloud-primary Origin does not support implemented readback.",
+        )
+        .with_detail(json!({"origin": origin})));
+    }
     let job_id = job.get("id").and_then(Value::as_str).ok_or_else(|| {
         AppError::new(
             "storage_readback_job_invalid",

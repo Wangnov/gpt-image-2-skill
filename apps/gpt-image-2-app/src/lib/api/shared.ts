@@ -363,12 +363,14 @@ export function migrateLegacyToPipeline(
 
 /**
  * Type-level Origin-eligibility for a storage target. Mirrors Rust
- * `StorageTargetConfig::can_act_as_origin()`. HTTP/Webhook targets cannot
- * act as Origin because they do not support readback.
+ * `StorageTargetConfig::can_act_as_origin()`. Origin is limited to backends
+ * with implemented readback in this build.
  */
 export function canActAsOrigin(target: StorageTargetConfig | undefined): boolean {
   if (!target) return false;
-  return storageTargetType(target) !== "http";
+  return ["local", "s3", "webdav", "sftp"].includes(
+    storageTargetType(target),
+  );
 }
 
 export function defaultPathConfig(): PathConfig {

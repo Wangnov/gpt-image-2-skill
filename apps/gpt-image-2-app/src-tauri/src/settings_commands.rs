@@ -63,6 +63,7 @@ pub(crate) fn update_storage(mut config: StorageConfig) -> Result<Value, String>
     preserve_storage_secrets(&mut config, &app_config.storage);
     config.policy = app_config.storage.policy.clone();
     config.enforce_policy();
+    config.validate_pipeline().map_err(app_error)?;
     app_config.storage = config;
     save_config(&app_config)?;
     Ok(config_for_ui(&app_config))

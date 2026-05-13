@@ -203,6 +203,38 @@ describe("storage validation", () => {
     ).toBe("所选位置不支持回读，无法作为原图位置。");
   });
 
+  it("flags cloud_primary origin pointing to netdisk targets without readback", () => {
+    for (const [name, target] of Object.entries({
+      baidu: {
+        type: "baidu_netdisk" as const,
+        auth_mode: "personal" as const,
+        app_key: "",
+        app_name: "gpt-image-2",
+        access_token: { source: "file" as const, value: "token" },
+      },
+      pan123: {
+        type: "pan123_open" as const,
+        auth_mode: "access_token" as const,
+        client_id: "",
+        access_token: { source: "env" as const, env: "PAN123_TOKEN" },
+        parent_id: 0,
+        use_direct_link: true,
+      },
+    })) {
+      expect(
+        pipelineConfigIssue(
+          {
+            mode: "cloud_primary",
+            origin: name,
+            archives: [],
+            cleanup: { mode: "never" },
+          },
+          { [name]: target },
+        ),
+      ).toBe("所选位置不支持回读，无法作为原图位置。");
+    }
+  });
+
   it("flags mirror mode with no archives", () => {
     expect(
       pipelineConfigIssue(

@@ -3,7 +3,7 @@ use std::path::PathBuf;
 
 use serde::{Deserialize, Serialize};
 
-use crate::CredentialRef;
+use crate::{AppError, CredentialRef};
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, Eq, PartialEq)]
 #[serde(rename_all = "snake_case")]
@@ -483,6 +483,39 @@ impl StorageConfig {
             self.pipeline = Some(self.effective_pipeline());
         }
     }
+
+    pub fn validate_pipeline(&self) -> Result<(), AppError> {
+        let pipeline = self.effective_pipeline();
+        if !matches!(pipeline.mode, PipelineMode::CloudPrimary) {
+            return Ok(());
+        }
+        let origin = pipeline
+            .origin
+            .as_deref()
+            .map(str::trim)
+            .filter(|value| !value.is_empty())
+            .ok_or_else(|| {
+                AppError::new(
+                    "storage_origin_missing",
+                    "Cloud-primary storage requires an Origin target.",
+                )
+            })?;
+        let target = self.targets.get(origin).ok_or_else(|| {
+            AppError::new(
+                "storage_origin_missing",
+                "Cloud-primary Origin target is not configured.",
+            )
+            .with_detail(serde_json::json!({"origin": origin}))
+        })?;
+        if !target.can_act_as_origin() {
+            return Err(AppError::new(
+                "storage_origin_readback_unsupported",
+                "Cloud-primary Origin must support implemented readback.",
+            )
+            .with_detail(serde_json::json!({"origin": origin})));
+        }
+        Ok(())
+    }
 }
 
 impl StorageTargetConfig {
@@ -532,11 +565,11 @@ impl StorageTargetConfig {
                 public_base_url, ..
             } => BackendCapabilities {
                 can_upload: true,
-                can_read_back: true,
+                can_read_back: false,
                 can_delete: true,
-                // Baidu OpenAPI exposes file listing, but the SDK shipped here
-                // does not wire it up; mark as false until that lands rather
-                // than promising what we cannot deliver.
+                // Baidu OpenAPI has read/list APIs, but this build has only
+                // wired upload. Do not advertise Origin readback until
+                // download/head support lands.
                 can_list: false,
                 has_public_url: public_base_url.is_some(),
                 primary_quality: PrimaryQuality::Degraded,
@@ -545,7 +578,7 @@ impl StorageTargetConfig {
                 use_direct_link, ..
             } => BackendCapabilities {
                 can_upload: true,
-                can_read_back: true,
+                can_read_back: false,
                 can_delete: true,
                 can_list: false,
                 has_public_url: *use_direct_link,
@@ -776,7 +809,8 @@ mod tests {
     #[test]
     fn baidu_capabilities_are_degraded_without_listing() {
         let caps = baidu(None).capabilities();
-        assert!(caps.can_upload && caps.can_read_back && caps.can_delete);
+        assert!(caps.can_upload && caps.can_delete);
+        assert!(!caps.can_read_back);
         assert!(!caps.can_list);
         assert_eq!(caps.primary_quality, PrimaryQuality::Degraded);
     }
@@ -785,6 +819,7 @@ mod tests {
     fn pan123_public_url_follows_direct_link_flag() {
         assert!(!pan123(false).capabilities().has_public_url);
         assert!(pan123(true).capabilities().has_public_url);
+        assert!(!pan123(false).capabilities().can_read_back);
         assert_eq!(
             pan123(false).capabilities().primary_quality,
             PrimaryQuality::Degraded
@@ -803,15 +838,52 @@ mod tests {
     }
 
     #[test]
-    fn can_act_as_origin_excludes_only_http() {
+    fn can_act_as_origin_matches_implemented_readback_backends() {
         assert!(local(None).can_act_as_origin());
         assert!(s3(None).can_act_as_origin());
         assert!(webdav(None).can_act_as_origin());
         assert!(sftp(None).can_act_as_origin());
-        assert!(baidu(None).can_act_as_origin());
-        assert!(pan123(false).can_act_as_origin());
+        assert!(!baidu(None).can_act_as_origin());
+        assert!(!pan123(false).can_act_as_origin());
         assert!(!http(false).can_act_as_origin());
         assert!(!http(true).can_act_as_origin());
+    }
+
+    #[test]
+    fn validate_pipeline_rejects_cloud_primary_origin_without_readback() {
+        let mut config = StorageConfig {
+            targets: BTreeMap::from([
+                ("baidu".to_string(), baidu(None)),
+                ("pan123".to_string(), pan123(true)),
+                ("webhook".to_string(), http(false)),
+            ]),
+            ..StorageConfig::default()
+        };
+        for origin in ["baidu", "pan123", "webhook"] {
+            config.pipeline = Some(PipelineConfig {
+                mode: PipelineMode::CloudPrimary,
+                origin: Some(origin.to_string()),
+                archives: Vec::new(),
+                cleanup: CleanupPolicy::default(),
+            });
+            let err = config.validate_pipeline().unwrap_err();
+            assert_eq!(err.code, "storage_origin_readback_unsupported");
+        }
+    }
+
+    #[test]
+    fn validate_pipeline_accepts_implemented_readback_origin() {
+        let config = StorageConfig {
+            targets: BTreeMap::from([("origin".to_string(), local(None))]),
+            pipeline: Some(PipelineConfig {
+                mode: PipelineMode::CloudPrimary,
+                origin: Some("origin".to_string()),
+                archives: Vec::new(),
+                cleanup: CleanupPolicy::default(),
+            }),
+            ..StorageConfig::default()
+        };
+        config.validate_pipeline().unwrap();
     }
 
     #[test]

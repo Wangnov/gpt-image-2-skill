@@ -203,6 +203,28 @@ describe("canActAsOrigin", () => {
     ).toBe(false);
   });
 
+  it("rejects netdisk targets until readback is implemented", () => {
+    expect(
+      canActAsOrigin({
+        type: "baidu_netdisk",
+        auth_mode: "personal",
+        app_key: "",
+        app_name: "gpt-image-2",
+        access_token: { source: "file", value: "token" },
+      }),
+    ).toBe(false);
+    expect(
+      canActAsOrigin({
+        type: "pan123_open",
+        auth_mode: "access_token",
+        client_id: "",
+        access_token: { source: "env", env: "PAN123_TOKEN" },
+        parent_id: 0,
+        use_direct_link: true,
+      }),
+    ).toBe(false);
+  });
+
   it("accepts local / s3 / webdav / sftp targets as Origin", () => {
     expect(canActAsOrigin({ type: "local", directory: "/data" })).toBe(true);
     expect(canActAsOrigin({ type: "s3", bucket: "b" })).toBe(true);
