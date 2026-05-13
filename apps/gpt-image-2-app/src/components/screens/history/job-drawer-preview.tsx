@@ -6,6 +6,7 @@ import { cn } from "@/lib/cn";
 import type { Job } from "@/lib/types";
 import { SHIMMER_STYLE } from "./job-drawer-utils";
 import { JobPreviewImage } from "./job-preview-image";
+import { outputLabel } from "./shared";
 
 function cacheBustedUrl(url: string): string {
   return `${url}${url.includes("?") ? "&" : "?"}rehydrated=${Date.now()}`;
@@ -104,7 +105,7 @@ export function JobDrawerPreview({
           {Array.from({ length: planned }).map((_, index) => {
             const path = api.jobOutputPath(job, index);
             const url = path ? api.fileUrl(path) : "";
-            const label = String.fromCharCode(65 + index);
+            const label = outputLabel(index);
             const isSelected = index === selectedOutput;
             const disabled = !path;
             return (

@@ -26,6 +26,7 @@ import {
 import { imageAssetFromOutput } from "@/lib/image-actions/asset";
 import type { ImageAsset } from "@/lib/image-actions/types";
 import { PlaceholderImage } from "@/components/screens/shared/placeholder-image";
+import { outputLabel } from "./shared";
 
 type Props = {
   job: Job | null;
@@ -142,8 +143,7 @@ export function JobImageDetailDrawer({
   )?.bytes;
   const created = formatDateTime(job?.created_at);
   const updated = formatDateTime(job?.updated_at);
-  const letter =
-    outputCount > 0 ? String.fromCharCode(65 + activePosition) : "—";
+  const letter = outputCount > 0 ? outputLabel(activeOutputIndex) : "—";
 
   const goPrev = () => {
     if (outputCount <= 1) return;
@@ -427,6 +427,7 @@ export function JobImageDetailDrawer({
                 const tUrl = outputUrlFor(outputIndex);
                 const isActive = outputIndex === activeOutputIndex;
                 const thumbAsset = peerAssets[i] ?? activeAsset;
+                const label = outputLabel(outputIndex);
                 const button = (
                   <button
                     key={outputIndex}
@@ -438,8 +439,8 @@ export function JobImageDetailDrawer({
                         ? "ring-[color:var(--accent-55)] scale-[1.04]"
                         : "ring-[color:var(--w-10)] opacity-65 hover:opacity-100",
                     )}
-                    aria-label={`第 ${i + 1} 张`}
-                    title={`第 ${i + 1} 张`}
+                    aria-label={`第 ${label} 张`}
+                    title={`第 ${label} 张`}
                   >
                     {tUrl && !thumbFailed.has(outputIndex) ? (
                       <img
@@ -469,7 +470,7 @@ export function JobImageDetailDrawer({
                           "linear-gradient(to top, var(--k-70), transparent)",
                       }}
                     >
-                      {String.fromCharCode(65 + i)}
+                      {label}
                     </span>
                   </button>
                 );

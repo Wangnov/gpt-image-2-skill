@@ -14,6 +14,12 @@ export const FILTERS: { value: FilterValue; label: string }[] = [
   { value: "failed", label: "失败" },
 ];
 
+export function outputLabel(outputIndex: number): string {
+  return outputIndex >= 0 && outputIndex < 26
+    ? String.fromCharCode(65 + outputIndex)
+    : `#${outputIndex + 1}`;
+}
+
 export function jobThumbUrl(job: Job): string | null {
   const index = jobOutputIndexes(job)[0];
   return index === undefined ? null : jobOutputUrl(job, index);

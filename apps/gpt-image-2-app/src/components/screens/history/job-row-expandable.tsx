@@ -36,6 +36,7 @@ import {
   jobStatusLabel,
   jobThumbPath,
   jobThumbUrl,
+  outputLabel,
   plannedOutputCount,
   totalBytes,
 } from "./shared";
@@ -376,7 +377,7 @@ export function JobRowExpandable({
                       const url = jobOutputUrl(job, outputIndex);
                       const path = jobOutputPath(job, outputIndex);
                       const slotError = errorsByIndex.get(outputIndex);
-                      const letter = String.fromCharCode(65 + i);
+                      const letter = outputLabel(outputIndex);
                       if (!path && slotError) {
                         return (
                           <div

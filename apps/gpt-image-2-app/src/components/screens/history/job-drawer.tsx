@@ -21,6 +21,7 @@ import {
   outputUploadsFor,
   readPlannedCount,
 } from "./job-drawer-utils";
+import { outputLabel } from "./shared";
 
 export function JobMetadataDrawer({
   job,
@@ -88,7 +89,7 @@ export function JobMetadataDrawer({
       />
     );
 
-  const selectedLabel = String.fromCharCode(65 + selectedOutput);
+  const selectedLabel = outputLabel(selectedOutput);
   const canSave = job.status === "completed" && Boolean(previewPath);
   const canCancel = isActiveJobStatus(job.status);
   const copy = runtimeCopy();

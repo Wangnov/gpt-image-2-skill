@@ -13,6 +13,7 @@ import { api } from "@/lib/api";
 import { isActiveJobStatus } from "@/lib/api/types";
 import type { Job } from "@/lib/types";
 import { JobPreviewImage } from "./job-preview-image";
+import { outputLabel } from "./shared";
 
 const CMD_ICON: Record<string, IconName> = {
   "images generate": "generate",
@@ -161,7 +162,7 @@ function ExpandedOutputs({
         {Array.from({ length: planned }).map((_, index) => {
           const path = byIndex.get(index);
           const url = path ? api.fileUrl(path) : "";
-          const label = `候选 ${String.fromCharCode(65 + index)}`;
+          const label = `候选 ${outputLabel(index)}`;
           const disabled = !path;
           return (
             <button
