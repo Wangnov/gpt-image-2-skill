@@ -61,10 +61,13 @@ fn webhook_payload_splits_origin_and_archive_uploads() {
         "id": "job-1",
         "command": "images generate",
         "provider": "openai",
-        "status": "completed",
+        "status": "failed",
         "created_at": "2026-05-08T10:00:00Z",
         "updated_at": "2026-05-08T10:01:00Z",
         "output_path": "/tmp/out.png",
+        "error": {
+            "message": "Unable to read reference image at /Users/alice/Pictures/gpt-image-2/ref.png"
+        },
         "outputs": [{
             "index": 0,
             "path": "/tmp/out.png",
@@ -153,6 +156,8 @@ fn webhook_payload_splits_origin_and_archive_uploads() {
     assert_eq!(request.body["job"]["metadata"]["prompt"], "hello");
     assert!(request.body["job"]["metadata"]["output"].is_null());
     assert!(request.body["job"]["metadata"]["image_output"].is_null());
+    assert_eq!(request.body["job"]["error"]["message"], "Job failed.");
+    assert_eq!(request.body["summary"], "openai · Job failed.");
     assert!(request.body["job"]["outputs"][0]["path"].is_null());
     assert_eq!(request.body["job"]["outputs"][0]["error"], "Output failed.");
     assert!(request.body["job"]["outputs"][0]["uploads"][0]["source_path"].is_null());

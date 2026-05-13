@@ -6,7 +6,7 @@ pub(crate) fn notification_payload(job: &NotificationJob) -> Value {
     json!({
         "event": job.event_name(),
         "title": job.title(),
-        "summary": job.summary(),
+        "summary": public_summary(job),
         "job": {
             "id": job.id,
             "command": job.command,
@@ -18,9 +18,46 @@ pub(crate) fn notification_payload(job: &NotificationJob) -> Value {
             "outputs": outputs_payload(&job.outputs),
             "storage": storage_payload(&job.outputs),
             "metadata": metadata_payload(&job.metadata),
-            "error": job.error_message.as_ref().map(|message| json!({"message": message})).unwrap_or(Value::Null),
+            "error": public_job_error(job),
         }
     })
+}
+
+fn public_summary(job: &NotificationJob) -> String {
+    let mut parts = vec![job.provider.clone()];
+    if let Some(size) = job.metadata.get("size").and_then(Value::as_str)
+        && !size.trim().is_empty()
+    {
+        parts.push(size.to_string());
+    }
+    if job.status == "completed" || job.status == "partial_failed" {
+        let count = if job.outputs.is_empty() {
+            usize::from(job.output_path.is_some())
+        } else {
+            job.outputs.len()
+        };
+        if count > 0 {
+            parts.push(if count > 1 {
+                format!("{count} 张图片")
+            } else {
+                "1 张图片".to_string()
+            });
+        }
+        if job.status == "partial_failed" && job.error_message.is_some() {
+            parts.push("Some outputs failed.".to_string());
+        }
+    } else if job.error_message.is_some() {
+        parts.push("Job failed.".to_string());
+    }
+    parts.join(" · ")
+}
+
+fn public_job_error(job: &NotificationJob) -> Value {
+    if job.error_message.is_some() {
+        json!({"message": "Job failed."})
+    } else {
+        Value::Null
+    }
 }
 
 fn metadata_payload(metadata: &Value) -> Value {
