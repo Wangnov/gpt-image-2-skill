@@ -161,15 +161,10 @@ pub enum PrimaryQuality {
     Unsupported,
 }
 
-/// What a backend instance is *capable of doing in principle*, independent of
-/// whether the current code path implements it. Pipeline planning, UI
-/// gating, and policy enforcement should consult `capabilities()` rather than
-/// matching `StorageTargetConfig` variants directly — that keeps decision
-/// sites stable as new backends are added.
-///
-/// The flags describe protocol-level affordances; whether a particular
-/// operation is wired up in this build is a separate concern tracked by the
-/// individual backend modules.
+/// What a backend instance is capable of doing through product-wired code paths
+/// in this build. Pipeline planning, UI gating, and policy enforcement should
+/// consult `capabilities()` rather than matching `StorageTargetConfig` variants
+/// directly — that keeps decision sites stable as new backends are added.
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, Eq, PartialEq)]
 pub struct BackendCapabilities {
     pub can_upload: bool,
@@ -486,33 +481,67 @@ impl StorageConfig {
 
     pub fn validate_pipeline(&self) -> Result<(), AppError> {
         let pipeline = self.effective_pipeline();
-        if !matches!(pipeline.mode, PipelineMode::CloudPrimary) {
-            return Ok(());
-        }
-        let origin = pipeline
-            .origin
-            .as_deref()
-            .map(str::trim)
-            .filter(|value| !value.is_empty())
-            .ok_or_else(|| {
+        let origin = if matches!(pipeline.mode, PipelineMode::CloudPrimary) {
+            let origin = pipeline
+                .origin
+                .as_deref()
+                .map(str::trim)
+                .filter(|value| !value.is_empty())
+                .ok_or_else(|| {
+                    AppError::new(
+                        "storage_origin_missing",
+                        "Cloud-primary storage requires an Origin target.",
+                    )
+                })?;
+            let target = self.targets.get(origin).ok_or_else(|| {
                 AppError::new(
                     "storage_origin_missing",
-                    "Cloud-primary storage requires an Origin target.",
+                    "Cloud-primary Origin target is not configured.",
                 )
+                .with_detail(serde_json::json!({"origin": origin}))
             })?;
-        let target = self.targets.get(origin).ok_or_else(|| {
-            AppError::new(
-                "storage_origin_missing",
-                "Cloud-primary Origin target is not configured.",
-            )
-            .with_detail(serde_json::json!({"origin": origin}))
-        })?;
-        if !target.can_act_as_origin() {
+            if !target.can_act_as_origin() {
+                return Err(AppError::new(
+                    "storage_origin_readback_unsupported",
+                    "Cloud-primary Origin must support implemented readback.",
+                )
+                .with_detail(serde_json::json!({"origin": origin})));
+            }
+            Some(origin)
+        } else {
+            None
+        };
+        let archives = pipeline
+            .archives
+            .iter()
+            .map(|archive| archive.trim())
+            .filter(|archive| !archive.is_empty())
+            .collect::<Vec<_>>();
+        if matches!(
+            pipeline.mode,
+            PipelineMode::Mirror | PipelineMode::CloudArchiveOnly
+        ) && archives.is_empty()
+        {
             return Err(AppError::new(
-                "storage_origin_readback_unsupported",
-                "Cloud-primary Origin must support implemented readback.",
-            )
-            .with_detail(serde_json::json!({"origin": origin})));
+                "storage_archives_missing",
+                "This storage pipeline requires at least one Archive target.",
+            ));
+        }
+        for archive in archives {
+            if Some(archive) == origin {
+                return Err(AppError::new(
+                    "storage_origin_archive_conflict",
+                    "Storage Archive targets must not include the Origin target.",
+                )
+                .with_detail(serde_json::json!({"archive": archive})));
+            }
+            if !self.targets.contains_key(archive) {
+                return Err(AppError::new(
+                    "storage_archive_missing",
+                    "Storage Archive target is not configured.",
+                )
+                .with_detail(serde_json::json!({"archive": archive})));
+            }
         }
         Ok(())
     }
@@ -526,8 +555,8 @@ impl StorageTargetConfig {
             } => BackendCapabilities {
                 can_upload: true,
                 can_read_back: true,
-                can_delete: true,
-                can_list: true,
+                can_delete: false,
+                can_list: false,
                 has_public_url: public_base_url.is_some(),
                 primary_quality: PrimaryQuality::Full,
             },
@@ -536,8 +565,8 @@ impl StorageTargetConfig {
             } => BackendCapabilities {
                 can_upload: true,
                 can_read_back: true,
-                can_delete: true,
-                can_list: true,
+                can_delete: false,
+                can_list: false,
                 has_public_url: public_base_url.is_some(),
                 primary_quality: PrimaryQuality::Full,
             },
@@ -546,8 +575,8 @@ impl StorageTargetConfig {
             } => BackendCapabilities {
                 can_upload: true,
                 can_read_back: true,
-                can_delete: true,
-                can_list: true,
+                can_delete: false,
+                can_list: false,
                 has_public_url: public_base_url.is_some(),
                 primary_quality: PrimaryQuality::Full,
             },
@@ -556,8 +585,8 @@ impl StorageTargetConfig {
             } => BackendCapabilities {
                 can_upload: true,
                 can_read_back: true,
-                can_delete: true,
-                can_list: true,
+                can_delete: false,
+                can_list: false,
                 has_public_url: public_base_url.is_some(),
                 primary_quality: PrimaryQuality::Full,
             },
@@ -566,10 +595,7 @@ impl StorageTargetConfig {
             } => BackendCapabilities {
                 can_upload: true,
                 can_read_back: false,
-                can_delete: true,
-                // Baidu OpenAPI has read/list APIs, but this build has only
-                // wired upload. Do not advertise Origin readback until
-                // download/head support lands.
+                can_delete: false,
                 can_list: false,
                 has_public_url: public_base_url.is_some(),
                 primary_quality: PrimaryQuality::Degraded,
@@ -579,7 +605,7 @@ impl StorageTargetConfig {
             } => BackendCapabilities {
                 can_upload: true,
                 can_read_back: false,
-                can_delete: true,
+                can_delete: false,
                 can_list: false,
                 has_public_url: *use_direct_link,
                 primary_quality: PrimaryQuality::Degraded,
@@ -606,7 +632,6 @@ impl StorageTargetConfig {
         caps.can_read_back && !matches!(caps.primary_quality, PrimaryQuality::Unsupported)
     }
 }
-
 #[cfg(test)]
 mod tests {
     use serde_json::json;
@@ -774,7 +799,8 @@ mod tests {
     #[test]
     fn local_capabilities_are_full_with_optional_public_url() {
         let caps = local(None).capabilities();
-        assert!(caps.can_upload && caps.can_read_back && caps.can_delete && caps.can_list);
+        assert!(caps.can_upload && caps.can_read_back);
+        assert!(!caps.can_delete && !caps.can_list);
         assert!(!caps.has_public_url);
         assert_eq!(caps.primary_quality, PrimaryQuality::Full);
 
@@ -786,7 +812,8 @@ mod tests {
     #[test]
     fn s3_capabilities_are_full() {
         let caps = s3(Some("https://cdn.example.com")).capabilities();
-        assert!(caps.can_upload && caps.can_read_back && caps.can_delete && caps.can_list);
+        assert!(caps.can_upload && caps.can_read_back);
+        assert!(!caps.can_delete && !caps.can_list);
         assert!(caps.has_public_url);
         assert_eq!(caps.primary_quality, PrimaryQuality::Full);
     }
@@ -794,7 +821,8 @@ mod tests {
     #[test]
     fn webdav_capabilities_are_full() {
         let caps = webdav(None).capabilities();
-        assert!(caps.can_upload && caps.can_read_back && caps.can_delete && caps.can_list);
+        assert!(caps.can_upload && caps.can_read_back);
+        assert!(!caps.can_delete && !caps.can_list);
         assert!(!caps.has_public_url);
         assert_eq!(caps.primary_quality, PrimaryQuality::Full);
     }
@@ -802,14 +830,16 @@ mod tests {
     #[test]
     fn sftp_capabilities_are_full() {
         let caps = sftp(None).capabilities();
-        assert!(caps.can_upload && caps.can_read_back && caps.can_delete && caps.can_list);
+        assert!(caps.can_upload && caps.can_read_back);
+        assert!(!caps.can_delete && !caps.can_list);
         assert_eq!(caps.primary_quality, PrimaryQuality::Full);
     }
 
     #[test]
     fn baidu_capabilities_are_degraded_without_listing() {
         let caps = baidu(None).capabilities();
-        assert!(caps.can_upload && caps.can_delete);
+        assert!(caps.can_upload);
+        assert!(!caps.can_delete);
         assert!(!caps.can_read_back);
         assert!(!caps.can_list);
         assert_eq!(caps.primary_quality, PrimaryQuality::Degraded);
@@ -884,6 +914,71 @@ mod tests {
             ..StorageConfig::default()
         };
         config.validate_pipeline().unwrap();
+    }
+
+    #[test]
+    fn validate_pipeline_rejects_archive_modes_without_archives() {
+        for mode in [PipelineMode::Mirror, PipelineMode::CloudArchiveOnly] {
+            let config = StorageConfig {
+                pipeline: Some(PipelineConfig {
+                    mode,
+                    origin: None,
+                    archives: Vec::new(),
+                    cleanup: CleanupPolicy::default(),
+                }),
+                ..StorageConfig::default()
+            };
+            let err = config.validate_pipeline().unwrap_err();
+            assert_eq!(err.code, "storage_archives_missing");
+        }
+    }
+
+    #[test]
+    fn validate_pipeline_rejects_missing_archive_targets() {
+        let config = StorageConfig {
+            targets: BTreeMap::from([("origin".to_string(), local(None))]),
+            pipeline: Some(PipelineConfig {
+                mode: PipelineMode::CloudPrimary,
+                origin: Some("origin".to_string()),
+                archives: vec!["missing-archive".to_string()],
+                cleanup: CleanupPolicy::default(),
+            }),
+            ..StorageConfig::default()
+        };
+        let err = config.validate_pipeline().unwrap_err();
+        assert_eq!(err.code, "storage_archive_missing");
+    }
+
+    #[test]
+    fn validate_pipeline_rejects_origin_reused_as_archive() {
+        let config = StorageConfig {
+            targets: BTreeMap::from([("origin".to_string(), local(None))]),
+            pipeline: Some(PipelineConfig {
+                mode: PipelineMode::CloudPrimary,
+                origin: Some("origin".to_string()),
+                archives: vec!["origin".to_string()],
+                cleanup: CleanupPolicy::default(),
+            }),
+            ..StorageConfig::default()
+        };
+        let err = config.validate_pipeline().unwrap_err();
+        assert_eq!(err.code, "storage_origin_archive_conflict");
+    }
+
+    #[test]
+    fn validate_pipeline_checks_managed_locked_archives() {
+        let config = StorageConfig {
+            targets: BTreeMap::from([("origin".to_string(), local(None))]),
+            policy: StorageManagementPolicy {
+                managed: true,
+                locked_origin: Some("origin".to_string()),
+                locked_archives: vec!["missing-archive".to_string()],
+                ..StorageManagementPolicy::default()
+            },
+            ..StorageConfig::default()
+        };
+        let err = config.validate_pipeline().unwrap_err();
+        assert_eq!(err.code, "storage_archive_missing");
     }
 
     #[test]
