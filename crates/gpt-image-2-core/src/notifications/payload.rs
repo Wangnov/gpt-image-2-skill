@@ -41,7 +41,16 @@ fn public_output_payload(output: &Value) -> Value {
     let mut object = Map::new();
     copy_field(&mut object, output, "index");
     copy_field(&mut object, output, "bytes");
-    copy_field(&mut object, output, "error");
+    if output
+        .get("error")
+        .and_then(Value::as_str)
+        .is_some_and(|value| !value.trim().is_empty())
+    {
+        object.insert(
+            "error".to_string(),
+            Value::String("Output failed.".to_string()),
+        );
+    }
     if let Some(items) = output.get("uploads").and_then(Value::as_array) {
         let output_index = output.get("index").cloned().unwrap_or(Value::Null);
         object.insert(

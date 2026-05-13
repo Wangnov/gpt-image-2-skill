@@ -69,6 +69,7 @@ fn webhook_payload_splits_origin_and_archive_uploads() {
             "index": 0,
             "path": "/tmp/out.png",
             "bytes": 12,
+            "error": "Unable to read output: {\"path\":\"/Users/alice/Pictures/gpt-image-2/job-1/out.png\"}",
             "uploads": [
                 {
                     "target": "r2-origin",
@@ -153,6 +154,7 @@ fn webhook_payload_splits_origin_and_archive_uploads() {
     assert!(request.body["job"]["metadata"]["output"].is_null());
     assert!(request.body["job"]["metadata"]["image_output"].is_null());
     assert!(request.body["job"]["outputs"][0]["path"].is_null());
+    assert_eq!(request.body["job"]["outputs"][0]["error"], "Output failed.");
     assert!(request.body["job"]["outputs"][0]["uploads"][0]["source_path"].is_null());
     let body = serde_json::to_string(&request.body).unwrap();
     assert!(!body.contains("/Users/alice"));
