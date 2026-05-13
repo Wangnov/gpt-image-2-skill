@@ -7,6 +7,7 @@ import { ImageContextMenu } from "@/components/ui/image-context-menu";
 import { useConfirm } from "@/hooks/use-confirm";
 import { useReducedMotion } from "@/hooks/use-reduced-motion";
 import { imageAssetFromOutput } from "@/lib/image-actions/asset";
+import { api } from "@/lib/api";
 import { isActiveJobStatus } from "@/lib/api/types";
 import { cn } from "@/lib/cn";
 import { formatTime } from "@/lib/format";
@@ -97,6 +98,11 @@ export function JobRowExpandable({
   const showPromptToggle = prompt.length > 240 || prompt.split("\n").length > 6;
   const primaryOutputIndex = outputIndexes[0] ?? 0;
 
+  const recoverOutputUrl = async (outputIndex: number) => {
+    const cachedPath = await api.ensureJobOutputCached(job.id, outputIndex);
+    return cachedPath ? api.fileUrl(cachedPath) : null;
+  };
+
   const saveResult = () => {
     if (outputCount > 1) {
       void saveJobImages(job.id, "任务图片");
@@ -155,6 +161,7 @@ export function JobRowExpandable({
             url={thumbUrl}
             seed={index * 17 + outputCount}
             variant={`history-thumb-${job.id}`}
+            recover={() => recoverOutputUrl(primaryOutputIndex)}
           />
           {(isRunning || isQueueing) && (
             <div className="absolute inset-0 backdrop-blur-[2px] bg-[color:var(--k-40)] flex items-center justify-center">
@@ -420,6 +427,7 @@ export function JobRowExpandable({
                                 url={url}
                                 seed={index * 37 + outputIndex + i}
                                 variant={`history-output-${job.id}-${outputIndex}`}
+                                recover={() => recoverOutputUrl(outputIndex)}
                                 imageClassName="absolute inset-0 h-full w-full object-contain bg-[color:var(--k-18)]"
                                 placeholderClassName="absolute inset-0"
                               />
