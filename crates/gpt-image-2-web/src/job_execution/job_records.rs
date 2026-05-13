@@ -13,7 +13,11 @@ pub(crate) fn output_path_from_payload(payload: &Value) -> Option<String> {
                 .get("output")
                 .and_then(|output| output.get("files"))
                 .and_then(Value::as_array)
-                .and_then(|files| files.first())
+                .and_then(|files| {
+                    files
+                        .iter()
+                        .find(|file| file.get("index").and_then(Value::as_u64) == Some(0))
+                })
                 .and_then(|file| file.get("path"))
                 .and_then(Value::as_str)
                 .map(ToString::to_string)
@@ -123,7 +127,11 @@ pub(crate) fn job_from_payload(
         output
             .get("files")
             .and_then(Value::as_array)
-            .and_then(|files| files.first())
+            .and_then(|files| {
+                files
+                    .iter()
+                    .find(|file| file.get("index").and_then(Value::as_u64) == Some(0))
+            })
             .and_then(|file| file.get("path"))
             .and_then(Value::as_str)
     });
@@ -131,7 +139,10 @@ pub(crate) fn job_from_payload(
         "id": job_id,
         "command": command,
         "provider": payload.get("provider").cloned().unwrap_or(Value::Null),
-        "status": if payload.get("ok").and_then(Value::as_bool).unwrap_or(false) { "completed" } else { "failed" },
+        "status": payload
+            .get("status")
+            .and_then(Value::as_str)
+            .unwrap_or_else(|| if payload.get("ok").and_then(Value::as_bool).unwrap_or(false) { "completed" } else { "failed" }),
         "created_at": chrono_like_now(),
         "updated_at": chrono_like_now(),
         "metadata": request,

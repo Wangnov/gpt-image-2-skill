@@ -20,7 +20,7 @@ pub(crate) struct BatchItemError {
 
 #[derive(Debug, Clone)]
 pub(crate) struct BatchRunResult {
-    pub(crate) payloads: Vec<Value>,
+    pub(crate) payloads: Vec<(usize, Value)>,
     pub(crate) errors: Vec<BatchItemError>,
 }
 
@@ -62,7 +62,11 @@ pub(crate) fn run_payloads_concurrently_streaming(
         received += 1;
     }
     BatchRunResult {
-        payloads: results.into_iter().flatten().collect(),
+        payloads: results
+            .into_iter()
+            .enumerate()
+            .filter_map(|(index, payload)| payload.map(|payload| (index, payload)))
+            .collect(),
         errors,
     }
 }
