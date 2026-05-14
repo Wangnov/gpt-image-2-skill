@@ -67,24 +67,44 @@ pub(crate) fn allowed_data_roots() -> Vec<PathBuf> {
 }
 
 pub(crate) fn path_under_allowed_root(path: &FsPath) -> bool {
-    // Walk up to the first ancestor we can canonicalize — that's where
-    // create_dir_all will start creating directories, so it's the location
-    // we actually need to confine. Falling back to the raw user path here
-    // is unsafe: a path like `/data/gpt-image-2/../outside/newdir` would
-    // pass `starts_with("/data/gpt-image-2")` lexically while
-    // create_dir_all would resolve the `..` and write outside the root.
+    let Some(path) = virtual_canonical_path(path) else {
+        return false;
+    };
+    allowed_data_roots()
+        .into_iter()
+        .filter_map(|root| virtual_canonical_path(&root))
+        .any(|root| path.starts_with(root))
+}
+
+fn virtual_canonical_path(path: &FsPath) -> Option<PathBuf> {
     let mut probe = path.to_path_buf();
     loop {
         if let Ok(canonical) = probe.canonicalize() {
-            return allowed_data_roots().into_iter().any(|root| {
-                let root = root.canonicalize().unwrap_or(root);
-                canonical.starts_with(&root)
-            });
+            let tail = path
+                .strip_prefix(&probe)
+                .unwrap_or_else(|_| FsPath::new(""));
+            return normalize_virtual_tail(canonical, tail);
         }
         if !probe.pop() {
-            return false;
+            return None;
         }
     }
+}
+
+fn normalize_virtual_tail(mut base: PathBuf, tail: &FsPath) -> Option<PathBuf> {
+    for component in tail.components() {
+        match component {
+            std::path::Component::Normal(part) => base.push(part),
+            std::path::Component::CurDir => {}
+            std::path::Component::ParentDir => {
+                if !base.pop() {
+                    return None;
+                }
+            }
+            std::path::Component::Prefix(_) | std::path::Component::RootDir => return None,
+        }
+    }
+    Some(base)
 }
 
 pub(crate) fn validate_server_writable_dir(path: &FsPath, label: &str) -> Result<(), String> {
@@ -210,5 +230,87 @@ pub(crate) fn cli_json_result(args: &[String]) -> Result<Value, String> {
             .and_then(Value::as_str)
             .unwrap_or("Command failed")
             .to_string())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::sync::Mutex;
+
+    static SUPPORT_TEST_LOCK: Mutex<()> = Mutex::new(());
+
+    struct EnvGuard {
+        key: &'static str,
+        old: Option<String>,
+    }
+
+    impl EnvGuard {
+        fn set(key: &'static str, value: &FsPath) -> Self {
+            let old = std::env::var(key).ok();
+            unsafe { std::env::set_var(key, value) };
+            Self { key, old }
+        }
+    }
+
+    impl Drop for EnvGuard {
+        fn drop(&mut self) {
+            match &self.old {
+                Some(value) => unsafe { std::env::set_var(self.key, value) },
+                None => unsafe { std::env::remove_var(self.key) },
+            }
+        }
+    }
+
+    struct TempTree {
+        path: PathBuf,
+    }
+
+    impl TempTree {
+        fn new(name: &str) -> Self {
+            let unique = SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .expect("system clock before unix epoch")
+                .as_nanos();
+            let path = std::env::temp_dir().join(format!(
+                "gpt-image-2-web-support-{name}-{}-{unique}",
+                std::process::id()
+            ));
+            fs::create_dir_all(&path).expect("create temp tree");
+            Self { path }
+        }
+    }
+
+    impl Drop for TempTree {
+        fn drop(&mut self) {
+            let _ = fs::remove_dir_all(&self.path);
+        }
+    }
+
+    #[test]
+    fn path_under_allowed_root_allows_new_directory_under_nonexistent_root() {
+        let _guard = SUPPORT_TEST_LOCK.lock().expect("support test lock");
+        let temp = TempTree::new("nonexistent-root");
+        let allowed_root = temp.path.join("data").join("gpt-image-2");
+        let requested = allowed_root.join("results");
+        assert!(!allowed_root.exists());
+        let _env = EnvGuard::set("GPT_IMAGE_2_ALLOWED_DATA_ROOTS", &allowed_root);
+
+        assert!(path_under_allowed_root(&requested));
+        validate_server_writable_dir(&requested, "结果库目录").expect("validate requested path");
+        assert!(requested.is_dir());
+    }
+
+    #[test]
+    fn path_under_allowed_root_rejects_traversal_from_nonexistent_root() {
+        let _guard = SUPPORT_TEST_LOCK.lock().expect("support test lock");
+        let temp = TempTree::new("nonexistent-root-traversal");
+        let allowed_root = temp.path.join("data").join("gpt-image-2");
+        let requested = allowed_root.join("..").join("outside").join("results");
+        assert!(!allowed_root.exists());
+        let _env = EnvGuard::set("GPT_IMAGE_2_ALLOWED_DATA_ROOTS", &allowed_root);
+
+        assert!(!path_under_allowed_root(&requested));
+        assert!(validate_server_writable_dir(&requested, "结果库目录").is_err());
     }
 }
