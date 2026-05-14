@@ -122,8 +122,9 @@ fn redact_storage_target_config(target: &StorageTargetConfig) -> Value {
     }
 }
 
+#[allow(deprecated)] // Redacted output deliberately exposes both the new pipeline shape and the legacy fields, so external log/diff tooling stays compatible during the deprecation window.
 pub(crate) fn redact_storage_config(config: &StorageConfig) -> Value {
-    json!({
+    let mut payload = json!({
         "targets": config.targets.iter().map(|(name, target)| {
             (name.clone(), redact_storage_target_config(target))
         }).collect::<Map<String, Value>>(),
@@ -132,5 +133,15 @@ pub(crate) fn redact_storage_config(config: &StorageConfig) -> Value {
         "fallback_policy": config.fallback_policy,
         "upload_concurrency": config.upload_concurrency,
         "target_concurrency": config.target_concurrency,
-    })
+        "policy": &config.policy,
+    });
+    if let Some(pipeline) = &config.pipeline
+        && let Some(object) = payload.as_object_mut()
+    {
+        object.insert(
+            "pipeline".to_string(),
+            serde_json::to_value(pipeline).unwrap_or(Value::Null),
+        );
+    }
+    payload
 }

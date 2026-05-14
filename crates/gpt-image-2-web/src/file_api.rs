@@ -65,3 +65,60 @@ pub(crate) async fn file_response(Query(query): Query<FileQuery>) -> Result<Resp
         .body(Body::from(bytes))
         .map_err(|error| ApiError::internal(error.to_string()))
 }
+
+pub(crate) async fn job_output_response(
+    Path((job_id, output_index)): Path<(String, usize)>,
+) -> Result<Response, ApiError> {
+    let config = load_config().map_err(ApiError::internal)?;
+    let job = show_history_job(&job_id)
+        .map_err(app_error)
+        .map_err(ApiError::not_found)?;
+    let readback = read_job_output_from_storage_with_options(
+        &config.storage,
+        &job,
+        output_index,
+        StorageReadbackOptions {
+            allow_archive_fallback: true,
+            rehydrate_local_cache: true,
+            local_cache_roots: local_cache_roots_for_product(&config),
+        },
+    )
+    .map_err(app_error)
+    .map_err(ApiError::not_found)?;
+    let file_name = output_file_name_from_job(&job, output_index);
+    let mime = mime_guess::from_path(&file_name).first_or_octet_stream();
+    Response::builder()
+        .status(StatusCode::OK)
+        .header(header::CONTENT_TYPE, mime.as_ref())
+        .header(header::CACHE_CONTROL, "private, max-age=31536000")
+        .header(
+            header::CONTENT_DISPOSITION,
+            format!("inline; filename=\"{file_name}\""),
+        )
+        .body(Body::from(readback.bytes))
+        .map_err(|error| ApiError::internal(error.to_string()))
+}
+
+fn output_file_name_from_job(job: &Value, output_index: usize) -> String {
+    job.get("outputs")
+        .and_then(Value::as_array)
+        .and_then(|outputs| {
+            outputs.iter().find_map(|output| {
+                let index = output
+                    .get("index")
+                    .and_then(Value::as_u64)
+                    .map(|value| value as usize)?;
+                if index == output_index {
+                    output
+                        .get("path")
+                        .and_then(Value::as_str)
+                        .and_then(|path| FsPath::new(path).file_name())
+                        .and_then(|name| name.to_str())
+                        .map(ToString::to_string)
+                } else {
+                    None
+                }
+            })
+        })
+        .unwrap_or_else(|| format!("output-{}.png", output_index + 1))
+}

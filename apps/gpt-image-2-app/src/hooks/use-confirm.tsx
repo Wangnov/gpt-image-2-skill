@@ -39,7 +39,7 @@ interface PendingState {
  *   const confirm = useConfirm();
  *   const ok = await confirm({
  *     title: "删除任务记录",
- *     description: "图片文件不会被删除。",
+ *     description: "远端 Origin/Archive 不会被删除。",
  *     variant: "danger",
  *   });
  *   if (ok) deleteJob(id);

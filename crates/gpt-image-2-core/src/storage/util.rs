@@ -17,7 +17,7 @@ use crate::{
     AppError, CredentialRef, DEFAULT_REQUEST_TIMEOUT, build_user_agent, resolve_credential,
 };
 
-use super::{StorageConfig, StorageTargetConfig, StorageUploadOverrides};
+use super::{PipelineMode, StorageConfig, StorageTargetConfig, StorageUploadOverrides};
 
 pub(crate) const BAIDU_NETDISK_CHUNK_SIZE: usize = 4 * 1024 * 1024;
 
@@ -33,6 +33,19 @@ pub(super) struct StorageUploadOutcome {
     pub(super) url: Option<String>,
     pub(super) bytes: Option<u64>,
     pub(super) metadata: Value,
+}
+
+#[derive(Debug, Clone)]
+pub(super) struct StorageDownloadOutcome {
+    pub(super) bytes: Vec<u8>,
+    pub(super) metadata: Value,
+}
+
+#[derive(Debug, Clone)]
+#[allow(dead_code)]
+pub(crate) struct StorageHeadOutcome {
+    pub(crate) bytes: Option<u64>,
+    pub(crate) metadata: Value,
 }
 
 pub(super) fn storage_target_type(target: &StorageTargetConfig) -> &'static str {
@@ -133,30 +146,75 @@ pub(super) fn join_storage_url(base: &str, key: &str) -> String {
     )
 }
 
-pub(super) fn target_names_for_upload(
+/// What the upload pipeline should actually do for one job, after merging
+/// the deployment config with any per-job overrides.
+///
+/// Origin is the authoritative store (only set when `mode == CloudPrimary`).
+/// Archives are async copies. Per-job overrides only contribute to archives —
+/// the Origin choice is a deployment-level decision.
+#[derive(Debug, Clone)]
+pub(super) struct ResolvedPipeline {
+    pub(super) mode: PipelineMode,
+    pub(super) origin: Option<String>,
+    pub(super) archives: Vec<String>,
+}
+
+impl ResolvedPipeline {
+    pub(super) fn is_empty(&self) -> bool {
+        self.origin.is_none() && self.archives.is_empty()
+    }
+}
+
+pub(super) fn resolve_pipeline(
     config: &StorageConfig,
     overrides: &StorageUploadOverrides,
-) -> (Vec<String>, Vec<String>) {
-    let primary = overrides
+) -> ResolvedPipeline {
+    let pipeline = config.effective_pipeline();
+    let origin = if matches!(pipeline.mode, PipelineMode::CloudPrimary) {
+        pipeline
+            .origin
+            .map(|name| name.trim().to_string())
+            .filter(|name| !name.is_empty())
+    } else {
+        None
+    };
+    let mut archives = Vec::new();
+    for name in pipeline.archives {
+        let trimmed = name.trim().to_string();
+        if !trimmed.is_empty()
+            && origin.as_deref() != Some(trimmed.as_str())
+            && !archives.iter().any(|existing| existing == &trimmed)
+        {
+            archives.push(trimmed);
+        }
+    }
+
+    let extra = overrides
         .targets
-        .clone()
-        .unwrap_or_else(|| config.default_targets.clone());
-    let fallback = overrides
-        .fallback_targets
-        .clone()
-        .unwrap_or_else(|| config.fallback_targets.clone());
-    (
-        primary
-            .into_iter()
-            .map(|name| name.trim().to_string())
-            .filter(|name| !name.is_empty())
-            .collect(),
-        fallback
-            .into_iter()
-            .map(|name| name.trim().to_string())
-            .filter(|name| !name.is_empty())
-            .collect(),
-    )
+        .iter()
+        .chain(overrides.fallback_targets.iter())
+        .flat_map(|list| list.iter().cloned());
+    for name in extra {
+        let trimmed = name.trim().to_string();
+        if !trimmed.is_empty()
+            && origin.as_deref() != Some(trimmed.as_str())
+            && !archives.iter().any(|existing| existing == &trimmed)
+        {
+            archives.push(trimmed);
+        }
+    }
+
+    let mode = if matches!(pipeline.mode, PipelineMode::LocalOnly) && !archives.is_empty() {
+        PipelineMode::CloudArchiveOnly
+    } else {
+        pipeline.mode
+    };
+
+    ResolvedPipeline {
+        mode,
+        origin,
+        archives,
+    }
 }
 
 pub(super) fn resolve_storage_headers(

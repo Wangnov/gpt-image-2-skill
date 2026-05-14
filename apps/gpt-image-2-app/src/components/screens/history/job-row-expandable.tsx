@@ -7,6 +7,7 @@ import { ImageContextMenu } from "@/components/ui/image-context-menu";
 import { useConfirm } from "@/hooks/use-confirm";
 import { useReducedMotion } from "@/hooks/use-reduced-motion";
 import { imageAssetFromOutput } from "@/lib/image-actions/asset";
+import { api } from "@/lib/api";
 import { isActiveJobStatus } from "@/lib/api/types";
 import { cn } from "@/lib/cn";
 import { formatTime } from "@/lib/format";
@@ -19,8 +20,8 @@ import { isDesktopRuntime, runtimeCopy } from "@/lib/runtime-copy";
 import {
   copyText,
   revealPath,
-  saveImages,
   saveJobImages,
+  saveJobOutputImage,
 } from "@/lib/user-actions";
 import type { Job } from "@/lib/types";
 import { JobPreviewImage } from "./job-preview-image";
@@ -35,6 +36,7 @@ import {
   jobStatusLabel,
   jobThumbPath,
   jobThumbUrl,
+  outputLabel,
   plannedOutputCount,
   totalBytes,
 } from "./shared";
@@ -95,13 +97,19 @@ export function JobRowExpandable({
   const errorMessage = jobErrorMessage(job);
   const errorDetail = jobErrorDetailText(job);
   const showPromptToggle = prompt.length > 240 || prompt.split("\n").length > 6;
+  const primaryOutputIndex = outputIndexes[0] ?? 0;
+
+  const recoverOutputUrl = async (outputIndex: number) => {
+    const cachedPath = await api.ensureJobOutputCached(job.id, outputIndex);
+    return cachedPath ? api.fileUrl(cachedPath) : null;
+  };
 
   const saveResult = () => {
     if (outputCount > 1) {
       void saveJobImages(job.id, "任务图片");
       return;
     }
-    void saveImages([thumbPath], "图片");
+    void saveJobOutputImage(job.id, primaryOutputIndex);
   };
 
   return (
@@ -154,6 +162,7 @@ export function JobRowExpandable({
             url={thumbUrl}
             seed={index * 17 + outputCount}
             variant={`history-thumb-${job.id}`}
+            recover={() => recoverOutputUrl(primaryOutputIndex)}
           />
           {(isRunning || isQueueing) && (
             <div className="absolute inset-0 backdrop-blur-[2px] bg-[color:var(--k-40)] flex items-center justify-center">
@@ -368,7 +377,7 @@ export function JobRowExpandable({
                       const url = jobOutputUrl(job, outputIndex);
                       const path = jobOutputPath(job, outputIndex);
                       const slotError = errorsByIndex.get(outputIndex);
-                      const letter = String.fromCharCode(65 + i);
+                      const letter = outputLabel(outputIndex);
                       if (!path && slotError) {
                         return (
                           <div
@@ -419,6 +428,7 @@ export function JobRowExpandable({
                                 url={url}
                                 seed={index * 37 + outputIndex + i}
                                 variant={`history-output-${job.id}-${outputIndex}`}
+                                recover={() => recoverOutputUrl(outputIndex)}
                                 imageClassName="absolute inset-0 h-full w-full object-contain bg-[color:var(--k-18)]"
                                 placeholderClassName="absolute inset-0"
                               />
@@ -506,7 +516,7 @@ export function JobRowExpandable({
                             <span className="text-foreground font-medium">
                               「{summary}」
                             </span>
-                            。图片文件不会被删除。
+                            。远端 Origin/Archive 不会被删除。
                           </>
                         ),
                         confirmText: "删除",

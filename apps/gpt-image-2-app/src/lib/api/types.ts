@@ -128,7 +128,7 @@ export type ApiClient = RuntimeCapabilities & {
   restoreDeletedJob(id: string): Promise<void>;
   /**
    * Permanently delete a job from the result library and then DELETE the
-   * history row. Remote uploaded objects are not deleted by default.
+   * history row. Remote Origin/Archive objects are intentionally not deleted.
    */
   hardDeleteJob(id: string): Promise<void>;
   /**
@@ -141,7 +141,12 @@ export type ApiClient = RuntimeCapabilities & {
    * `navigator.clipboard.write([new ClipboardItem(...)])` directly instead of
    * calling this method.
    */
-  copyImageToClipboard(path: string, prompt?: string | null): Promise<void>;
+  copyImageToClipboard(
+    path: string,
+    prompt?: string | null,
+    jobId?: string,
+    outputIndex?: number,
+  ): Promise<void>;
   cancelJob(id: string): Promise<TauriJobResponse>;
   queueStatus(): Promise<QueueStatus>;
   setQueueConcurrency(maxParallel: number): Promise<QueueStatus>;
@@ -151,6 +156,17 @@ export type ApiClient = RuntimeCapabilities & {
   exportJobToDownloads(jobId: string): Promise<string[]>;
   exportFilesToConfiguredFolder(paths: string[]): Promise<string[]>;
   exportJobToConfiguredFolder(jobId: string): Promise<string[]>;
+  exportJobOutputToConfiguredFolder(
+    jobId: string,
+    outputIndex: number,
+  ): Promise<string[]>;
+  ensureJobOutputCached(jobId: string, outputIndex: number): Promise<string | null>;
+  /**
+   * Open the OS-native folder picker. Returns the selected absolute path or
+   * `null` when the user cancels. Tauri-only — other runtimes do not expose
+   * this method (`canChooseExportFolder` gates UI visibility).
+   */
+  chooseFolder?(startDir?: string): Promise<string | null>;
   createGenerate(body: GenerateRequest): Promise<TauriJobResponse>;
   createEdit(form: FormData): Promise<TauriJobResponse>;
   retryJob(jobId: string): Promise<TauriJobResponse>;

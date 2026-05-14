@@ -19,7 +19,11 @@ pub(crate) fn output_path_from_payload(payload: &Value) -> Option<String> {
                 .get("output")
                 .and_then(|output| output.get("files"))
                 .and_then(Value::as_array)
-                .and_then(|files| files.first())
+                .and_then(|files| {
+                    files
+                        .iter()
+                        .find(|file| file.get("index").and_then(Value::as_u64) == Some(0))
+                })
                 .and_then(|file| file.get("path"))
                 .and_then(Value::as_str)
                 .map(ToString::to_string)

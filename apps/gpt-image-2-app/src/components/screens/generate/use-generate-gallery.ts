@@ -40,7 +40,7 @@ export function useGenerateGallery() {
     return jobs
       .filter(
         (job) =>
-          job.status === "completed" &&
+          (job.status === "completed" || job.status === "partial_failed") &&
           ((job.outputs?.length ?? 0) > 0 || Boolean(job.output_path)),
       )
       .slice(0, Math.max(0, GALLERY_MAX - pendingPlaceholders.length));

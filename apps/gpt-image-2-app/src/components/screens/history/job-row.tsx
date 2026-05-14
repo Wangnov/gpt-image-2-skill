@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useMemo, useState } from "react";
+import { Fragment, useMemo, useState } from "react";
 import { AnimatePresence, motion } from "motion/react";
 import { useReducedMotion } from "@/hooks/use-reduced-motion";
 import { cn } from "@/lib/cn";
@@ -12,6 +12,8 @@ import { promptSummary } from "@/lib/prompt-display";
 import { api } from "@/lib/api";
 import { isActiveJobStatus } from "@/lib/api/types";
 import type { Job } from "@/lib/types";
+import { JobPreviewImage } from "./job-preview-image";
+import { outputLabel } from "./shared";
 
 const CMD_ICON: Record<string, IconName> = {
   "images generate": "generate",
@@ -49,25 +51,25 @@ function storageStatusLabel(status?: string) {
   return "";
 }
 
-function firstAvailablePath(job: Job) {
-  return (
-    job.outputs
-      .slice()
-      .sort((a, b) => a.index - b.index)
-      .find((output) => output.path)?.path ?? job.output_path
-  );
+function firstAvailableOutput(job: Job) {
+  const output = job.outputs
+    .slice()
+    .sort((a, b) => a.index - b.index)
+    .find((output) => output.path);
+  if (output?.path) return { index: output.index, path: output.path };
+  return job.output_path ? { index: 0, path: job.output_path } : null;
 }
 
-function JobAvatar({ job, promptTitle }: { job: Job; promptTitle: string }) {
+async function recoverJobOutputUrl(job: Job, outputIndex: number) {
+  const cachedPath = await api.ensureJobOutputCached(job.id, outputIndex);
+  return cachedPath ? api.fileUrl(cachedPath) : null;
+}
+
+function JobAvatar({ job }: { job: Job }) {
   const doneCount = api.jobOutputPaths(job).length;
   const planned = plannedCount(job);
-  const firstPath = firstAvailablePath(job);
-  const firstUrl = firstPath ? api.fileUrl(firstPath) : "";
-  const [failed, setFailed] = useState(false);
-
-  useEffect(() => {
-    setFailed(false);
-  }, [firstUrl]);
+  const firstOutput = firstAvailableOutput(job);
+  const firstUrl = firstOutput ? api.fileUrl(firstOutput.path) : "";
 
   const isFailure = job.status === "failed" || job.status === "cancelled";
   const isRunning = isActiveJobStatus(job.status);
@@ -80,16 +82,12 @@ function JobAvatar({ job, promptTitle }: { job: Job; promptTitle: string }) {
   return (
     <div className="relative h-9 w-9 shrink-0">
       <div className="h-9 w-9 overflow-hidden rounded-[5px] border border-border bg-sunken">
-        {firstUrl && !failed ? (
-          <img
-            src={firstUrl}
-            alt={`生成结果缩略图：${promptTitle}`}
-            loading="lazy"
-            decoding="async"
-            width={36}
-            height={36}
-            className="h-full w-full object-cover"
-            onError={() => setFailed(true)}
+        {firstUrl && firstOutput ? (
+          <JobPreviewImage
+            url={firstUrl}
+            seed={jobSeed(job)}
+            variant={`classic-avatar-${job.id}`}
+            recover={() => recoverJobOutputUrl(job, firstOutput.index)}
           />
         ) : isFailure ? (
           <div className="flex h-full w-full items-center justify-center text-faint">
@@ -138,12 +136,6 @@ function ExpandedOutputs({
   onOpenIndex: (index: number) => void;
 }) {
   const planned = plannedCount(job);
-  const [failed, setFailed] = useState<Set<number>>(new Set());
-
-  useEffect(() => {
-    setFailed(new Set());
-  }, [job.id, planned]);
-
   const byIndex = useMemo(() => {
     const map = new Map<number, string>();
     for (const output of job.outputs) {
@@ -170,8 +162,7 @@ function ExpandedOutputs({
         {Array.from({ length: planned }).map((_, index) => {
           const path = byIndex.get(index);
           const url = path ? api.fileUrl(path) : "";
-          const hasImage = Boolean(url) && !failed.has(index);
-          const label = `候选 ${String.fromCharCode(65 + index)}`;
+          const label = `候选 ${outputLabel(index)}`;
           const disabled = !path;
           return (
             <button
@@ -190,14 +181,12 @@ function ExpandedOutputs({
               aria-label={`查看${label}`}
               title={disabled ? `${label} · 等待生成` : label}
             >
-              {hasImage ? (
-                <img
-                  src={url}
-                  alt=""
-                  loading="lazy"
-                  decoding="async"
-                  className="h-full w-full object-cover"
-                  onError={() => setFailed((prev) => new Set(prev).add(index))}
+              {url ? (
+                <JobPreviewImage
+                  url={url}
+                  seed={jobSeed(job) + index}
+                  variant={`row-${index}`}
+                  recover={() => recoverJobOutputUrl(job, index)}
                 />
               ) : (
                 <div
@@ -299,7 +288,7 @@ export function JobRow({
         )}
         style={{ gridTemplateColumns: "44px 1fr 130px 120px 100px 80px" }}
       >
-        <JobAvatar job={job} promptTitle={title} />
+        <JobAvatar job={job} />
         <div className="min-w-0">
           <div className="flex items-center gap-1.5">
             <Icon
@@ -377,13 +366,9 @@ export function JobRow({
         {expanded && (
           <motion.div
             key="expanded"
-            initial={
-              reducedMotion ? false : { height: 0, opacity: 0 }
-            }
+            initial={reducedMotion ? false : { height: 0, opacity: 0 }}
             animate={{ height: "auto", opacity: 1 }}
-            exit={
-              reducedMotion ? { opacity: 0 } : { height: 0, opacity: 0 }
-            }
+            exit={reducedMotion ? { opacity: 0 } : { height: 0, opacity: 0 }}
             transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }}
             style={{ overflow: "hidden" }}
           >

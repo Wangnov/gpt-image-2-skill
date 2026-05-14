@@ -10,6 +10,7 @@ import { cn } from "@/lib/cn";
 import { isActiveJobStatus } from "@/lib/api/types";
 import { OPEN_JOB_EVENT } from "@/lib/job-navigation";
 import type { Job } from "@/lib/types";
+import { isClearableTerminalJob } from "@/components/screens/history/shared";
 
 type FilterValue = "all" | "running" | "completed" | "failed";
 
@@ -17,13 +18,21 @@ const FILTERS = [
   { value: "all", label: "全部" },
   { value: "running", label: "进行中" },
   { value: "completed", label: "已完成" },
-  { value: "failed", label: "失败" },
+  { value: "failed", label: "失败/部分失败" },
 ] as const;
 
 function matchesFilter(job: Job, filter: FilterValue) {
   if (filter === "running") return isActiveJobStatus(job.status);
-  if (filter === "completed") return job.status === "completed";
-  if (filter === "failed") return job.status === "failed" || job.status === "cancelled";
+  if (filter === "completed") {
+    return job.status === "completed" || job.status === "partial_failed";
+  }
+  if (filter === "failed") {
+    return (
+      job.status === "failed" ||
+      job.status === "partial_failed" ||
+      job.status === "cancelled"
+    );
+  }
   return true;
 }
 
@@ -77,8 +86,8 @@ export function ClassicHistoryScreen({
 
   const handleDelete = async (job: Job) => {
     const ok = await confirm({
-      title: "删除任务记录",
-      description: "只会删除历史记录，已经保存的图片文件不会被删除。",
+    title: "删除任务记录",
+    description: "只会删除历史记录，远端 Origin/Archive 不会被删除。",
       confirmText: "删除",
       variant: "danger",
     });
@@ -98,18 +107,14 @@ export function ClassicHistoryScreen({
     cancelJob.mutate(id);
   };
 
-  const clearable = jobs.some(
-    (job) => job.status === "completed" || job.status === "failed" || job.status === "cancelled",
-  );
+  const clearable = jobs.some(isClearableTerminalJob);
 
   const handleClearFinished = async () => {
     if (!clearable) return;
-    const finished = jobs.filter(
-      (job) => job.status === "completed" || job.status === "failed" || job.status === "cancelled",
-    );
+    const finished = jobs.filter(isClearableTerminalJob);
     const ok = await confirm({
       title: "清理任务记录",
-      description: `将清理 ${finished.length} 条已结束任务。图片文件不会被删除。`,
+    description: `将清理 ${finished.length} 条已结束任务。远端 Origin/Archive 不会被删除。`,
       confirmText: "清理",
       variant: "danger",
     });

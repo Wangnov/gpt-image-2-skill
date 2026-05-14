@@ -94,6 +94,10 @@ pub(crate) fn api_router(state: JobQueueState) -> Router {
         .route("/jobs", get(history_list))
         .route("/jobs/active", get(history_active_list))
         .route("/jobs/{job_id}", get(history_show).delete(history_delete))
+        .route(
+            "/jobs/{job_id}/outputs/{output_index}",
+            get(job_output_response),
+        )
         .route("/jobs/{job_id}/cancel", post(cancel_job))
         .route("/jobs/{job_id}/retry", post(retry_job))
         .route("/queue", get(queue_status))

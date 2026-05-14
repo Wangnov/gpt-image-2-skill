@@ -39,6 +39,36 @@ pub(crate) fn output_paths_from_job(job: &Value) -> Vec<String> {
     paths
 }
 
+pub(crate) fn output_path_from_job(job: &Value, output_index: usize) -> Option<String> {
+    job.get("outputs")
+        .and_then(Value::as_array)
+        .and_then(|outputs| {
+            outputs.iter().find_map(|output| {
+                let index = output
+                    .get("index")
+                    .and_then(Value::as_u64)
+                    .map(|value| value as usize)?;
+                if index == output_index {
+                    output
+                        .get("path")
+                        .and_then(Value::as_str)
+                        .map(ToString::to_string)
+                } else {
+                    None
+                }
+            })
+        })
+        .or_else(|| {
+            if output_index == 0 {
+                job.get("output_path")
+                    .and_then(Value::as_str)
+                    .map(ToString::to_string)
+            } else {
+                None
+            }
+        })
+}
+
 pub(crate) fn job_prompt(job: &Value) -> String {
     job.get("metadata")
         .and_then(|metadata| metadata.get("prompt"))

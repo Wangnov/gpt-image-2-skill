@@ -104,13 +104,11 @@ const saveAs: ImageAction = {
   isAvailable: () => true,
   execute: async ({ asset, runtime }) => {
     if (runtime === "tauri") {
-      if (asset.path) {
-        const saved = await api.exportFilesToConfiguredFolder([asset.path]);
-        toast.success(`已保存 ${saved.length} 张图片`, { duration: 2_000 });
-      } else {
-        const saved = await api.exportJobToConfiguredFolder(asset.jobId);
-        toast.success(`已保存 ${saved.length} 张图片`, { duration: 2_000 });
-      }
+      const saved = await api.exportJobOutputToConfiguredFolder(
+        asset.jobId,
+        asset.outputIndex,
+      );
+      toast.success(`已保存 ${saved.length} 张图片`, { duration: 2_000 });
       return;
     }
     // Web fallback — trigger an anchor download. Modern Chromium / Safari
@@ -265,8 +263,8 @@ const deleteAction: ImageAction = {
     const outputCount = asset.job?.outputs?.length ?? 1;
     const description =
       outputCount > 1
-        ? `这是包含 ${outputCount} 张图的任务，删除会移除整个任务记录和全部 ${outputCount} 张图，无法分别删除单张。`
-        : "这会删除这张图和它的任务记录。";
+        ? `这是包含 ${outputCount} 张图的任务，删除会移除本地任务记录和全部 ${outputCount} 张图；远端 Origin/Archive 不会被删除，且无法分别删除单张。`
+        : "这会删除本地任务记录和这张图；远端 Origin/Archive 不会被删除。";
     const ok = await actionsConfirm({
       title: "删除任务？",
       description,

@@ -37,6 +37,96 @@ The project shortcut is `just dev-http-backend`; it creates the local product da
 
 Open [http://localhost:8787](http://localhost:8787). The browser talks to `/api`, while image files are served only from the server-side result library or the read-only legacy jobs directory.
 
+## Storage Policy Templates
+
+Managed deployments can commit a config template with `storage.policy.managed = true` and `allow_user_overrides = true` to provide administrator defaults without locking the user out. The UI shows `管理员默认值`; save paths preserve the policy, but the user's current Origin / Archive / mode choices remain editable. Only set `allow_user_overrides = false` for a genuinely locked deployment.
+
+Deleting local history/cache in Docker Web or Desktop only removes local records and files; uploaded Origin/Archive objects are intentionally left intact.
+
+Small-team local library, with optional local archive:
+
+```json
+{
+  "storage": {
+    "targets": {
+      "team-nas": { "type": "local", "directory": "/data/gpt-image-2/jobs" },
+      "audit-copy": { "type": "local", "directory": "/data/gpt-image-2/archive" }
+    },
+    "pipeline": {
+      "mode": "mirror",
+      "origin": null,
+      "archives": ["audit-copy"],
+      "cleanup": { "mode": "never" }
+    },
+    "policy": {
+      "managed": true,
+      "allow_user_overrides": true,
+      "message": "Small-team install: local result library stays authoritative."
+    }
+  }
+}
+```
+
+Enterprise cloud-primary library:
+
+```json
+{
+  "storage": {
+    "targets": {
+      "r2-origin": {
+        "type": "s3",
+        "bucket": "gpt-image-2-prod",
+        "endpoint": "https://<account-id>.r2.cloudflarestorage.com",
+        "prefix": "outputs/",
+        "access_key_id": { "source": "env", "env": "R2_ACCESS_KEY_ID" },
+        "secret_access_key": { "source": "env", "env": "R2_SECRET_ACCESS_KEY" }
+      },
+      "audit-webhook": { "type": "http", "url": "https://audit.example.com/storage" }
+    },
+    "pipeline": {
+      "mode": "cloud_primary",
+      "origin": "r2-origin",
+      "archives": ["audit-webhook"],
+      "cleanup": { "mode": "after_archive_success" }
+    },
+    "policy": {
+      "managed": true,
+      "allow_user_overrides": true,
+      "message": "Enterprise install: R2 is the authoritative result Origin."
+    }
+  }
+}
+```
+
+Webhook audit archive, while local results remain Origin:
+
+```json
+{
+  "storage": {
+    "targets": {
+      "audit-webhook": {
+        "type": "http",
+        "url": "https://audit.example.com/gpt-image-2",
+        "headers": {
+          "Authorization": { "source": "env", "env": "AUDIT_WEBHOOK_AUTH" }
+        }
+      }
+    },
+    "pipeline": {
+      "mode": "cloud_archive_only",
+      "origin": null,
+      "archives": ["audit-webhook"],
+      "cleanup": { "mode": "never" }
+    },
+    "policy": {
+      "managed": true,
+      "allow_user_overrides": true,
+      "message": "Audit install: every output is pushed to the webhook archive."
+    }
+  }
+}
+```
+
 ## Local Smoke
 
 ```bash

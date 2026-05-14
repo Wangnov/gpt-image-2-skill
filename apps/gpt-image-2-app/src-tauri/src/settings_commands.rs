@@ -61,6 +61,10 @@ pub(crate) fn update_paths(config: PathConfig, app: tauri::AppHandle) -> Result<
 pub(crate) fn update_storage(mut config: StorageConfig) -> Result<Value, String> {
     let mut app_config = load_config()?;
     preserve_storage_secrets(&mut config, &app_config.storage);
+    config.policy = app_config.storage.policy.clone();
+    config.enforce_policy();
+    config.validate_targets().map_err(app_error)?;
+    config.validate_pipeline().map_err(app_error)?;
     app_config.storage = config;
     save_config(&app_config)?;
     Ok(config_for_ui(&app_config))

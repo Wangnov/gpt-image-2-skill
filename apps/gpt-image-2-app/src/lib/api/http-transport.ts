@@ -31,8 +31,19 @@ import type {
   TauriJobResponse,
 } from "./types";
 import { isTerminalJobStatus } from "./types";
-import { fileApiUrl, jsonBody, requestJson } from "./http/client";
-import { basename, downloadJobZip, downloadUrl } from "./http/downloads";
+import {
+  apiResourceUrl,
+  configuredHttpApiBase,
+  fileApiUrl,
+  jsonBody,
+  requestJson,
+} from "./http/client";
+import {
+  basename,
+  downloadJobZip,
+  downloadUrl,
+  jobOutputDownloadName,
+} from "./http/downloads";
 import { formUploadPayload } from "./http/edit-payload";
 import {
   jobUpdateSignature,
@@ -41,16 +52,28 @@ import {
   rememberEventJob,
 } from "./http/jobs";
 
-export {
-  configuredHttpApiBase,
-  hasConfiguredHttpRuntime,
-} from "./http/client";
+export { configuredHttpApiBase, hasConfiguredHttpRuntime } from "./http/client";
+
+function isHttpRuntimeUrl(value: string): boolean {
+  return (
+    value.startsWith("/api/") ||
+    value.startsWith(`${configuredHttpApiBase() ?? "/api"}/`) ||
+    /^https?:\/\//i.test(value)
+  );
+}
 
 export const httpApi: ApiClient = {
   kind: "http",
   canUseLocalFiles: false,
   canRevealFiles: false,
-  canUseSystemCredentials: true,
+  // HTTP deployments (Docker Web, bare-server systemd, K8s pod, serverless)
+  // typically lack a running dbus/libsecret/keyring service and a user
+  // session for it to attach to, so the keyring crate fails to open an
+  // entry. Advertising keychain here just produces a misleading dropdown
+  // option and a confusing "keychain_error" at upload time. A future
+  // capability probe can flip this back on for self-hosters that did wire
+  // a real keyring into their server.
+  canUseSystemCredentials: false,
   canUseCodexProvider: true,
   canExportToDownloadsFolder: false,
   canExportToConfiguredFolder: false,
@@ -231,7 +254,24 @@ export const httpApi: ApiClient = {
   },
   async exportJobToConfiguredFolder(jobId: string) {
     const { job } = await httpApi.getJob(jobId);
-    return downloadJobZip(job, httpApi.fileUrl, httpApi.jobOutputPaths);
+    return downloadJobZip(job, httpApi.fileUrl, httpApi.jobOutputUrl);
+  },
+  async exportJobOutputToConfiguredFolder(jobId: string, outputIndex: number) {
+    const { job } = await httpApi.getJob(jobId);
+    const url = apiResourceUrl(
+      `/jobs/${encodeURIComponent(jobId)}/outputs/${outputIndex}`,
+    );
+    downloadUrl(url, jobOutputDownloadName(job, outputIndex));
+    return [url];
+  },
+  async ensureJobOutputCached(jobId: string, outputIndex: number) {
+    if (!jobId.trim() || !Number.isFinite(outputIndex) || outputIndex < 0) {
+      return null;
+    }
+    const url = apiResourceUrl(
+      `/jobs/${encodeURIComponent(jobId)}/outputs/${outputIndex}`,
+    );
+    return url;
   },
   async createGenerate(body: GenerateRequest) {
     const result = await requestJson<TauriJobResponse>("/images/generate", {
@@ -260,11 +300,13 @@ export const httpApi: ApiClient = {
   },
   outputPath,
   fileUrl(path?: string | null) {
-    return path ? fileApiUrl(path) : "";
+    if (!path) return "";
+    return isHttpRuntimeUrl(path) ? path : fileApiUrl(path);
   },
   jobOutputUrl(job: Job, index = 0) {
-    const path = jobOutputPath(job, index);
-    return path ? httpApi.fileUrl(path) : "";
+    return apiResourceUrl(
+      `/jobs/${encodeURIComponent(job.id)}/outputs/${index}`,
+    );
   },
   jobOutputPath,
   jobOutputPaths,

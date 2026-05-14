@@ -207,7 +207,13 @@ export function SettingsNav({
 
 /* ── Panel header (inside the right surface) ──────────── */
 
-export function PanelHeader({ tab }: { tab: SettingsTab }) {
+export function PanelHeader({
+  tab,
+  action,
+}: {
+  tab: SettingsTab;
+  action?: ReactNode;
+}) {
   const copy = runtimeCopy();
   const meta =
     tab === "about"
@@ -222,9 +228,14 @@ export function PanelHeader({ tab }: { tab: SettingsTab }) {
         }
       : TAB_TITLES[tab];
   return (
-    <header className="border-b border-border-faint px-4 pb-3 pt-4 sm:px-6 sm:pb-4 sm:pt-5">
-      <div className="t-h2">{meta.title}</div>
-      <div className="mt-0.5 text-[12px] text-muted">{meta.subtitle}</div>
+    <header className="flex items-start justify-between gap-3 border-b border-border-faint px-4 pb-3 pt-4 sm:px-6 sm:pb-4 sm:pt-5">
+      <div className="min-w-0">
+        <div className="t-h2">{meta.title}</div>
+        <div className="mt-0.5 text-[12px] text-muted">{meta.subtitle}</div>
+      </div>
+      {action && (
+        <div className="flex shrink-0 items-center gap-3">{action}</div>
+      )}
     </header>
   );
 }

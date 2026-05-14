@@ -211,6 +211,8 @@ pub fn upsert_history_job(
 }
 
 pub fn delete_history_job(job_id: &str) -> Result<usize, AppError> {
+    // This only deletes local SQLite history. Remote Origin/Archive objects
+    // referenced by output_uploads stay untouched by design.
     let conn = open_history_db()?;
     conn.execute(
         "DELETE FROM output_uploads WHERE job_id = ?1",

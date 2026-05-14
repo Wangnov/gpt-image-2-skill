@@ -1,12 +1,18 @@
 import { Button } from "@/components/ui/button";
 import { api } from "@/lib/api";
-import { copyText, openPath, saveImages, saveJobImages } from "@/lib/user-actions";
+import {
+  copyText,
+  openPath,
+  saveJobImages,
+  saveJobOutputImage,
+} from "@/lib/user-actions";
 import type { Job } from "@/lib/types";
 
 export function JobDrawerFooter({
   job,
   planned,
   selectedLabel,
+  selectedOutput,
   previewPath,
   outputPaths,
   prompt,
@@ -19,6 +25,7 @@ export function JobDrawerFooter({
   job: Job;
   planned: number;
   selectedLabel: string;
+  selectedOutput: number;
   previewPath?: string;
   outputPaths: string[];
   prompt: string;
@@ -48,7 +55,7 @@ export function JobDrawerFooter({
           variant="secondary"
           icon="download"
           className="w-full justify-center"
-          onClick={() => saveImages([previewPath], "图片")}
+          onClick={() => saveJobOutputImage(job.id, selectedOutput)}
           disabled={!canSave}
         >
           {planned > 1
@@ -84,7 +91,9 @@ export function JobDrawerFooter({
             icon="external"
             onClick={() => openPath(previewPath)}
             title={api.canUseLocalFiles ? "在系统查看器中打开" : "打开图片"}
-            aria-label={api.canUseLocalFiles ? "在系统查看器中打开" : "打开图片"}
+            aria-label={
+              api.canUseLocalFiles ? "在系统查看器中打开" : "打开图片"
+            }
           />
         )}
         {onDelete && (

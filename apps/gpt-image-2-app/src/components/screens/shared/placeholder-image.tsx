@@ -75,7 +75,7 @@ export function PlaceholderImage({
       </div>
       {label && (
         <span
-          className="absolute bottom-2 left-2 max-w-[calc(100%-var(--d-pad))] truncate rounded-[var(--r-sm)] border border-[color:var(--w-10)] px-1.5 py-0.5 font-mono text-[10px] text-faint"
+          className="absolute bottom-2 left-2 z-10 max-w-[calc(100%-var(--d-pad))] truncate rounded-[var(--r-sm)] border border-[color:var(--w-10)] px-1.5 py-0.5 font-mono text-[10px] text-faint"
           style={{
             background: "var(--k-45)",
             backdropFilter: "blur(8px)",

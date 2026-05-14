@@ -205,11 +205,25 @@ describe("browserApi", () => {
           use_direct_link: true,
         },
       },
+      pipeline: {
+        mode: "mirror",
+        origin: null,
+        archives: ["archive", "baidu", "pan123"],
+        cleanup: { mode: "never" },
+      },
       default_targets: ["archive"],
       fallback_targets: ["archive", "local-default", "baidu", "pan123"],
       fallback_policy: "on_failure",
       upload_concurrency: 4,
       target_concurrency: 2,
+      policy: {
+        managed: false,
+        allow_user_overrides: false,
+        allowed_modes: [],
+        locked_origin: null,
+        locked_archives: [],
+        message: null,
+      },
     };
 
     expect(browserApi.updateStorage).toBeDefined();
@@ -219,6 +233,12 @@ describe("browserApi", () => {
 
     expect(saved.storage.default_targets).toEqual([]);
     expect(saved.storage.fallback_targets).toEqual([]);
+    expect(saved.storage.pipeline).toEqual({
+      mode: "local_only",
+      origin: null,
+      archives: [],
+      cleanup: { mode: "never" },
+    });
     expect(saved.storage.targets.archive).toMatchObject({
       type: "s3",
       bucket: "images",
@@ -249,6 +269,9 @@ describe("browserApi", () => {
     const reloaded = await browserApi.getConfig();
     expect(reloaded.storage.default_targets).toEqual([]);
     expect(reloaded.storage.fallback_targets).toEqual([]);
+    expect(reloaded.storage.pipeline?.mode).toBe("local_only");
+    expect(reloaded.storage.pipeline?.archives).toEqual([]);
+    expect(reloaded.storage.pipeline?.origin).toBeNull();
     expect(JSON.stringify(reloaded.storage)).not.toContain("ak-test");
     expect(JSON.stringify(reloaded.storage)).not.toContain("sk-test");
     expect(JSON.stringify(reloaded.storage)).not.toContain("session-test");

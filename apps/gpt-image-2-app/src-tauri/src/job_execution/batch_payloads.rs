@@ -51,7 +51,9 @@ pub(crate) fn normalize_batch_output(files: Vec<Value>) -> Value {
         .enumerate()
         .map(|(index, mut file)| {
             if let Value::Object(object) = &mut file {
-                object.insert("index".to_string(), json!(index));
+                object
+                    .entry("index".to_string())
+                    .or_insert_with(|| json!(index));
             }
             file
         })
@@ -61,7 +63,8 @@ pub(crate) fn normalize_batch_output(files: Vec<Value>) -> Value {
         .filter_map(|file| file.get("bytes").and_then(Value::as_u64))
         .sum::<u64>();
     let primary_path = indexed_files
-        .first()
+        .iter()
+        .find(|file| file.get("index").and_then(Value::as_u64) == Some(0))
         .and_then(|file| file.get("path"))
         .cloned()
         .unwrap_or(Value::Null);
@@ -104,18 +107,30 @@ pub(crate) fn batch_error_summary(errors: &[BatchItemError]) -> Option<String> {
 pub(crate) fn merge_batch_payloads(
     command: &str,
     request_count: usize,
-    payloads: Vec<Value>,
+    payloads: Vec<(usize, Value)>,
     errors: Vec<BatchItemError>,
 ) -> Value {
-    let first = payloads.first().cloned().unwrap_or_else(|| json!({}));
+    let first = payloads
+        .first()
+        .map(|(_, payload)| payload.clone())
+        .unwrap_or_else(|| json!({}));
     let files = payloads
         .iter()
-        .flat_map(output_files_from_payload)
+        .flat_map(|(batch_index, payload)| {
+            output_files_from_payload(payload)
+                .into_iter()
+                .map(move |mut file| {
+                    if let Value::Object(object) = &mut file {
+                        object.insert("index".to_string(), json!(batch_index));
+                    }
+                    file
+                })
+        })
         .collect::<Vec<_>>();
     let mut history_job_ids = Vec::new();
     let mut revised_prompts = Vec::new();
 
-    for payload in &payloads {
+    for (_, payload) in &payloads {
         history_job_ids.extend(collect_history_ids(payload));
         if let Some(prompts) = payload
             .get("response")
@@ -153,7 +168,7 @@ pub(crate) fn merge_batch_payloads(
     };
 
     let mut payload = json!({
-        "ok": true,
+        "ok": ok,
         "status": status,
         "command": command,
         "provider": first.get("provider").cloned().unwrap_or(Value::Null),
@@ -216,7 +231,11 @@ pub(crate) fn job_from_payload(
         output
             .get("files")
             .and_then(Value::as_array)
-            .and_then(|files| files.first())
+            .and_then(|files| {
+                files
+                    .iter()
+                    .find(|file| file.get("index").and_then(Value::as_u64) == Some(0))
+            })
             .and_then(|file| file.get("path"))
             .and_then(Value::as_str)
     });
@@ -271,7 +290,7 @@ mod tests {
         let merged = merge_batch_payloads(
             "images generate",
             3,
-            vec![payload("/tmp/a.png"), payload("/tmp/c.png")],
+            vec![(0, payload("/tmp/a.png")), (2, payload("/tmp/c.png"))],
             vec![BatchItemError {
                 index: 1,
                 message: "upstream rejected candidate B".to_string(),
@@ -279,11 +298,51 @@ mod tests {
         );
 
         assert_eq!(merged["status"], "partial_failed");
-        assert_eq!(merged["output"]["files"].as_array().unwrap().len(), 2);
+        assert_eq!(merged["ok"], true);
+        let files = merged["output"]["files"].as_array().unwrap();
+        assert_eq!(files.len(), 2);
+        assert_eq!(files[0]["index"], 0);
+        assert_eq!(files[0]["path"], "/tmp/a.png");
+        assert_eq!(files[1]["index"], 2);
+        assert_eq!(files[1]["path"], "/tmp/c.png");
+        assert_eq!(merged["output"]["path"], "/tmp/a.png");
         assert_eq!(merged["batch"]["request_count"], 3);
         assert_eq!(merged["batch"]["success_count"], 2);
         assert_eq!(merged["batch"]["failure_count"], 1);
         assert_eq!(merged["batch"]["errors"][0]["index"], 1);
         assert_eq!(merged["error"]["message"], "upstream rejected candidate B");
+    }
+
+    #[test]
+    fn merge_batch_payloads_marks_total_failure_not_ok() {
+        let merged = merge_batch_payloads(
+            "images generate",
+            2,
+            vec![],
+            vec![
+                BatchItemError {
+                    index: 0,
+                    message: "candidate A failed".to_string(),
+                },
+                BatchItemError {
+                    index: 1,
+                    message: "candidate B failed".to_string(),
+                },
+            ],
+        );
+
+        assert_eq!(merged["ok"], false);
+        assert_eq!(merged["status"], "failed");
+        assert_eq!(merged["output"]["files"].as_array().unwrap().len(), 0);
+        assert!(merged["output"]["path"].is_null());
+        assert_eq!(merged["batch"]["success_count"], 0);
+        assert_eq!(merged["batch"]["failure_count"], 2);
+        assert_eq!(merged["error"]["code"], "batch_failed");
+        assert_eq!(merged["error"]["items"][0]["index"], 0);
+
+        let job = job_from_payload(&merged, "job-1", "images generate", json!({}));
+        assert_eq!(job["status"], "failed");
+        assert_eq!(terminal_event_type(job["status"].as_str()), "job.failed");
+        assert!(!terminal_status_runs_storage_upload(job["status"].as_str()));
     }
 }

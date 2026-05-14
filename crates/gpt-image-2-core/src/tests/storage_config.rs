@@ -1,6 +1,7 @@
 use super::*;
 
 #[test]
+#[allow(deprecated)]
 fn storage_config_defaults_to_no_archive_targets() {
     let _guard = CODEX_HOME_TEST_LOCK.lock().unwrap();
     let temp_dir = tempfile::tempdir().unwrap();
@@ -436,4 +437,154 @@ fn sftp_host_key_fingerprint_accepts_sha256_prefix() {
         "deadbeef",
         "YWJjZA=="
     ));
+}
+
+#[allow(deprecated)] // Helper deliberately constructs the legacy fields to drive the migration shim under test.
+fn legacy_storage(
+    primary: &[&str],
+    fallback: &[&str],
+    policy: StorageFallbackPolicy,
+) -> StorageConfig {
+    StorageConfig {
+        default_targets: primary.iter().map(|s| (*s).to_string()).collect(),
+        fallback_targets: fallback.iter().map(|s| (*s).to_string()).collect(),
+        fallback_policy: policy,
+        ..StorageConfig::default()
+    }
+}
+
+#[test]
+fn effective_pipeline_for_default_config_is_local_only() {
+    let pipeline = StorageConfig::default().effective_pipeline();
+    assert_eq!(pipeline.mode, PipelineMode::LocalOnly);
+    assert!(pipeline.archives.is_empty());
+    assert!(pipeline.origin.is_none());
+    assert_eq!(pipeline.cleanup.mode, CleanupMode::Never);
+}
+
+#[test]
+fn effective_pipeline_for_fallback_only_is_archive_only() {
+    let config = legacy_storage(&[], &["a"], StorageFallbackPolicy::OnFailure);
+    let pipeline = config.effective_pipeline();
+    assert_eq!(pipeline.mode, PipelineMode::CloudArchiveOnly);
+    assert_eq!(pipeline.archives, vec!["a".to_string()]);
+    assert!(pipeline.origin.is_none());
+}
+
+#[test]
+fn effective_pipeline_for_default_only_is_archive_only() {
+    let config = legacy_storage(&["a"], &[], StorageFallbackPolicy::OnFailure);
+    let pipeline = config.effective_pipeline();
+    assert_eq!(pipeline.mode, PipelineMode::CloudArchiveOnly);
+    assert_eq!(pipeline.archives, vec!["a".to_string()]);
+}
+
+#[test]
+fn effective_pipeline_for_on_failure_with_both_lists_merges_into_archive_only() {
+    // D2: OnFailure's "only run fallback when primary fails" semantics is
+    // dropped on migration; both lists are merged into a single archive set.
+    let config = legacy_storage(&["a"], &["b"], StorageFallbackPolicy::OnFailure);
+    let pipeline = config.effective_pipeline();
+    assert_eq!(pipeline.mode, PipelineMode::CloudArchiveOnly);
+    assert_eq!(pipeline.archives, vec!["a".to_string(), "b".to_string()]);
+}
+
+#[test]
+fn effective_pipeline_for_always_with_both_lists_is_mirror() {
+    // D3: Always already meant "run all targets"; surface as Mirror so the
+    // UI label reads truthfully when a user reopens the panel.
+    let config = legacy_storage(&["a"], &["b"], StorageFallbackPolicy::Always);
+    let pipeline = config.effective_pipeline();
+    assert_eq!(pipeline.mode, PipelineMode::Mirror);
+    assert_eq!(pipeline.archives, vec!["a".to_string(), "b".to_string()]);
+}
+
+#[test]
+fn effective_pipeline_for_never_with_both_lists_drops_fallback() {
+    let config = legacy_storage(&["a"], &["b"], StorageFallbackPolicy::Never);
+    let pipeline = config.effective_pipeline();
+    assert_eq!(pipeline.mode, PipelineMode::CloudArchiveOnly);
+    assert_eq!(pipeline.archives, vec!["a".to_string()]);
+}
+
+#[test]
+fn effective_pipeline_dedups_overlapping_targets() {
+    let config = legacy_storage(&["a", "b"], &["a"], StorageFallbackPolicy::OnFailure);
+    let pipeline = config.effective_pipeline();
+    assert_eq!(pipeline.archives, vec!["a".to_string(), "b".to_string()]);
+}
+
+#[test]
+fn effective_pipeline_with_explicit_pipeline_ignores_legacy_fields() {
+    let mut config = legacy_storage(
+        &["junk-a", "junk-b"],
+        &["junk-c"],
+        StorageFallbackPolicy::Always,
+    );
+    config.pipeline = Some(PipelineConfig {
+        mode: PipelineMode::CloudPrimary,
+        origin: Some("s3-main".to_string()),
+        archives: vec!["webdav-1".to_string()],
+        cleanup: CleanupPolicy::default(),
+    });
+    let pipeline = config.effective_pipeline();
+    assert_eq!(pipeline.mode, PipelineMode::CloudPrimary);
+    assert_eq!(pipeline.origin, Some("s3-main".to_string()));
+    assert_eq!(pipeline.archives, vec!["webdav-1".to_string()]);
+}
+
+#[test]
+fn effective_pipeline_preserves_explicit_empty_archives() {
+    // Explicitly empty Mirror archives is allowed at the type level — the UI
+    // validator (pipelineConfigIssue) is responsible for warning the user.
+    let mut config = StorageConfig::default();
+    config.pipeline = Some(PipelineConfig {
+        mode: PipelineMode::Mirror,
+        origin: None,
+        archives: Vec::new(),
+        cleanup: CleanupPolicy::default(),
+    });
+    let pipeline = config.effective_pipeline();
+    assert_eq!(pipeline.mode, PipelineMode::Mirror);
+    assert!(pipeline.archives.is_empty());
+}
+
+#[test]
+#[allow(deprecated)]
+fn legacy_config_round_trips_through_serde() {
+    // Wire-format guarantee: legacy fields survive serialise/deserialise so
+    // an older binary that doesn't know about `pipeline` can still load
+    // configs saved by this build.
+    let original = legacy_storage(&["a"], &["b"], StorageFallbackPolicy::OnFailure);
+    let serialised = serde_json::to_string(&original).expect("serialise legacy config");
+    let reloaded: StorageConfig = serde_json::from_str(&serialised).expect("deserialise");
+    assert_eq!(reloaded.default_targets, vec!["a".to_string()]);
+    assert_eq!(reloaded.fallback_targets, vec!["b".to_string()]);
+    assert_eq!(reloaded.fallback_policy, StorageFallbackPolicy::OnFailure);
+    assert!(reloaded.pipeline.is_none());
+
+    let pipeline = reloaded.effective_pipeline();
+    assert_eq!(pipeline.mode, PipelineMode::CloudArchiveOnly);
+    assert_eq!(pipeline.archives, vec!["a".to_string(), "b".to_string()]);
+}
+
+#[test]
+fn explicit_pipeline_serialises_without_legacy_pollution() {
+    // When `pipeline` is set, serialised output should keep both new and
+    // legacy fields so back-compat readers still see something — but
+    // `pipeline` should appear and be re-readable on the other side.
+    let mut config = StorageConfig::default();
+    config.pipeline = Some(PipelineConfig {
+        mode: PipelineMode::CloudPrimary,
+        origin: Some("s3-main".to_string()),
+        archives: vec!["webdav-1".to_string()],
+        cleanup: CleanupPolicy::default(),
+    });
+    let value = serde_json::to_value(&config).expect("serialise");
+    assert_eq!(value["pipeline"]["mode"], "cloud_primary");
+    assert_eq!(value["pipeline"]["origin"], "s3-main");
+    assert_eq!(value["pipeline"]["archives"][0], "webdav-1");
+    let reloaded: StorageConfig = serde_json::from_value(value).expect("deserialise");
+    let pipeline = reloaded.effective_pipeline();
+    assert_eq!(pipeline.mode, PipelineMode::CloudPrimary);
 }

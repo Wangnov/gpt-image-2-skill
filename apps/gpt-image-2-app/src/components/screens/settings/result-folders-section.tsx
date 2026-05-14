@@ -142,17 +142,37 @@ export function ResultFoldersSection({
                 (!customExport || !canSave) && "text-muted cursor-default",
               )}
               suffix={
-                <Button
-                  variant="ghost"
-                  size="iconSm"
-                  icon="copy"
-                  className="h-6 w-6 shrink-0 text-foreground"
-                  title="复制默认保存位置"
-                  aria-label="复制默认保存位置"
-                  onClick={() => void copyText(previewExportDir, "默认保存位置")}
-                >
-                  <span className="sr-only">复制默认保存位置</span>
-                </Button>
+                <div className="flex items-center gap-1">
+                  {customExport && api.canChooseExportFolder && (
+                    <Button
+                      variant="ghost"
+                      size="iconSm"
+                      icon="folder"
+                      className="h-6 w-6 shrink-0 text-foreground"
+                      title="浏览文件夹"
+                      aria-label="浏览文件夹"
+                      onClick={async () => {
+                        const picked = await api.chooseFolder?.(
+                          draft.default_export_dir.path ?? previewExportDir,
+                        );
+                        if (picked) patchExportDir({ path: picked });
+                      }}
+                    >
+                      <span className="sr-only">浏览文件夹</span>
+                    </Button>
+                  )}
+                  <Button
+                    variant="ghost"
+                    size="iconSm"
+                    icon="copy"
+                    className="h-6 w-6 shrink-0 text-foreground"
+                    title="复制默认保存位置"
+                    aria-label="复制默认保存位置"
+                    onClick={() => void copyText(previewExportDir, "默认保存位置")}
+                  >
+                    <span className="sr-only">复制默认保存位置</span>
+                  </Button>
+                </div>
               }
               size="sm"
               aria-label="自定义保存文件夹"

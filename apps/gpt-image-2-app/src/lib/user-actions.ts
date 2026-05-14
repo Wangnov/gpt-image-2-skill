@@ -23,7 +23,10 @@ export async function copyText(text?: string | null, label = "内容") {
   }
 }
 
-export async function saveImages(paths: Array<string | undefined | null>, label = "图片") {
+export async function saveImages(
+  paths: Array<string | undefined | null>,
+  label = "图片",
+) {
   const validPaths = paths.filter((path): path is string => Boolean(path));
   const copy = runtimeCopy();
   if (validPaths.length === 0) {
@@ -61,6 +64,37 @@ export async function saveJobImages(jobId: string, label = "任务图片") {
     toast.success(copy.savedJobTitle, {
       id: toastId,
       description: copy.savedJobDescription,
+    });
+    return saved;
+  } catch (error) {
+    toast.error(`${label}${copy.actionVerb}失败`, {
+      id: toastId,
+      description: messageFromError(error),
+    });
+    return [];
+  }
+}
+
+export async function saveJobOutputImage(
+  jobId: string,
+  outputIndex: number,
+  label = "图片",
+) {
+  const copy = runtimeCopy();
+  if (!jobId) {
+    toast.error(`没有可${copy.actionVerb}的图片`);
+    return [];
+  }
+
+  const toastId = toast.loading(copy.savingImages(1));
+  try {
+    const saved = await api.exportJobOutputToConfiguredFolder(
+      jobId,
+      outputIndex,
+    );
+    toast.success(copy.savedImagesTitle(saved.length || 1), {
+      id: toastId,
+      description: copy.savedImagesDescription,
     });
     return saved;
   } catch (error) {

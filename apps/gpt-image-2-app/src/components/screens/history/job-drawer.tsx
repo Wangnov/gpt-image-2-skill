@@ -21,6 +21,7 @@ import {
   outputUploadsFor,
   readPlannedCount,
 } from "./job-drawer-utils";
+import { outputLabel } from "./shared";
 
 export function JobMetadataDrawer({
   job,
@@ -62,11 +63,7 @@ export function JobMetadataDrawer({
   const outputPaths = job ? api.jobOutputPaths(job) : [];
   const planned = job ? readPlannedCount(job) : 1;
   const doneCount = outputPaths.length;
-  const previewPath = job
-    ? (api.jobOutputPath(job, selectedOutput) ??
-      outputPaths[0] ??
-      job.output_path)
-    : undefined;
+  const previewPath = job ? api.jobOutputPath(job, selectedOutput) : undefined;
   const previewUrl = previewPath ? api.fileUrl(previewPath) : "";
   const selectedUploads = job ? outputUploadsFor(job, selectedOutput) : [];
 
@@ -88,7 +85,7 @@ export function JobMetadataDrawer({
       />
     );
 
-  const selectedLabel = String.fromCharCode(65 + selectedOutput);
+  const selectedLabel = outputLabel(selectedOutput);
   const canSave = job.status === "completed" && Boolean(previewPath);
   const canCancel = isActiveJobStatus(job.status);
   const copy = runtimeCopy();
@@ -137,6 +134,7 @@ export function JobMetadataDrawer({
         job={job}
         planned={planned}
         selectedLabel={selectedLabel}
+        selectedOutput={selectedOutput}
         previewPath={previewPath}
         outputPaths={outputPaths}
         prompt={prompt}

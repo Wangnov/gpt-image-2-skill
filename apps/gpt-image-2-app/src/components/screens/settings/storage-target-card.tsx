@@ -5,6 +5,7 @@ import { GlassSelect } from "@/components/ui/select";
 import { Segmented } from "@/components/ui/segmented";
 import { Tooltip } from "@/components/ui/tooltip";
 import { Toggle } from "@/components/ui/toggle";
+import { api } from "@/lib/api";
 import { storageTargetType } from "@/lib/api/shared";
 import type { StorageFieldIssue } from "@/lib/storage-validation";
 import type {
@@ -24,7 +25,7 @@ import {
   METHOD_OPTIONS,
   PAN123_AUTH_MODE_OPTIONS,
   PAN123_OPEN_HINT,
-  STORAGE_TARGET_TYPE_OPTIONS,
+  getStorageTargetTypeOptions,
 } from "./constants";
 import { CredentialEditor } from "./credential-editor";
 
@@ -55,21 +56,29 @@ function issueForField(issues: StorageFieldIssue[], field: string) {
 function StorageField({
   label,
   hint,
+  description,
   error,
   required,
   children,
 }: {
   label?: string;
   hint?: ReactNode;
+  description?: ReactNode;
   error?: string;
   required?: boolean;
   children: ReactNode;
 }) {
+  // No label means there's nothing for the required star or hint to attach
+  // to; rendering them alone produced an empty leading row that knocked the
+  // grid baseline off (the lone "*" you saw above S3 bucket / WebDAV URL).
+  // For label-less fields, required-state is communicated via the input's
+  // invalid border + the trailing error text, which is sufficient.
+  const showLabelRow = Boolean(label);
   return (
     <div className="space-y-1">
-      {(label || required || hint) && (
+      {showLabelRow && (
         <div className="flex min-h-5 items-center gap-1.5 text-[11.5px] font-medium text-muted">
-          {label && <span>{label}</span>}
+          <span>{label}</span>
           {required && (
             <span
               className="text-[color:var(--accent-70)]"
@@ -82,6 +91,9 @@ function StorageField({
         </div>
       )}
       {children}
+      {description && (
+        <p className="text-[11px] leading-snug text-faint">{description}</p>
+      )}
       {error && (
         <div className="text-[11px] leading-snug text-status-err">{error}</div>
       )}
@@ -123,6 +135,7 @@ export function StorageTargetCard({
   ) => void;
 }) {
   const type = storageTargetType(target);
+  const localDirectoryLabel = api.kind === "http" ? "服务器目录" : "本地目录";
   const webdavTarget =
     type === "webdav" ? (target as WebDavStorageTargetConfig) : undefined;
   const httpTarget =
@@ -155,7 +168,7 @@ export function StorageTargetCard({
           <GlassSelect
             value={type}
             onValueChange={(value) => onSetType(name, value as StorageTargetKind)}
-            options={STORAGE_TARGET_TYPE_OPTIONS}
+            options={getStorageTargetTypeOptions(api.kind)}
             size="sm"
             ariaLabel="上传位置类型"
             className="w-full"
@@ -185,8 +198,13 @@ export function StorageTargetCard({
       {type === "local" && "directory" in target && (
         <div className="grid gap-3 md:grid-cols-2">
           <StorageField
-            label="本地目录"
+            label={localDirectoryLabel}
             error={fieldError("directory")}
+            description={
+              api.kind === "http"
+                ? "服务器上的路径；docker 部署需挂载为 volume。"
+                : undefined
+            }
             required
           >
             <Input
@@ -194,10 +212,34 @@ export function StorageTargetCard({
               onChange={(event) =>
                 onPatch(name, { directory: event.target.value })
               }
-              placeholder="/path/to/storage"
+              placeholder={
+                api.kind === "http"
+                  ? "/data/gpt-image-2/extra-archive"
+                  : "/path/to/storage"
+              }
               size="sm"
-              aria-label="本地目录"
+              aria-label={localDirectoryLabel}
               aria-invalid={Boolean(fieldError("directory"))}
+              suffix={
+                api.canChooseExportFolder ? (
+                  <Button
+                    variant="ghost"
+                    size="iconSm"
+                    icon="folder"
+                    className="h-6 w-6 shrink-0 text-foreground"
+                    title="浏览文件夹"
+                    aria-label={`浏览${localDirectoryLabel}`}
+                    onClick={async () => {
+                      const picked = await api.chooseFolder?.(
+                        "directory" in target ? target.directory : undefined,
+                      );
+                      if (picked) onPatch(name, { directory: picked });
+                    }}
+                  >
+                    <span className="sr-only">{`浏览${localDirectoryLabel}`}</span>
+                  </Button>
+                ) : undefined
+              }
             />
           </StorageField>
           <StorageField
@@ -208,6 +250,7 @@ export function StorageTargetCard({
                 ariaLabel="查看公开访问前缀说明"
               />
             }
+            description="用于生成可访问图片 URL；没有静态访问服务时留空。"
           >
             <Input
               value={target.public_base_url ?? ""}
@@ -218,9 +261,6 @@ export function StorageTargetCard({
               size="sm"
               aria-label="公开访问前缀"
             />
-            <p className="text-[11px] leading-snug text-muted">
-              用于生成可访问图片 URL；没有静态访问服务时留空。
-            </p>
           </StorageField>
         </div>
       )}

@@ -95,8 +95,13 @@ export const tauriApi: ApiClient = {
   canUseCodexProvider: true,
   canExportToDownloadsFolder: true,
   canExportToConfiguredFolder: true,
-  canChooseExportFolder: false,
+  canChooseExportFolder: true,
   canUsePersistentResultLibrary: true,
+  async chooseFolder(startDir?: string) {
+    return invoke<string | null>("pick_folder", {
+      startDir: startDir ?? null,
+    });
+  },
   async getConfig() {
     return normalizeConfig(await invoke<ServerConfig>("get_config"));
   },
@@ -202,8 +207,18 @@ export const tauriApi: ApiClient = {
   async hardDeleteJob(id: string) {
     await invoke("hard_delete_job", { jobId: id });
   },
-  async copyImageToClipboard(path: string, prompt?: string | null) {
-    await invoke("copy_image_to_clipboard", { path, prompt: prompt ?? null });
+  async copyImageToClipboard(
+    path: string,
+    prompt?: string | null,
+    jobId?: string,
+    outputIndex?: number,
+  ) {
+    await invoke("copy_image_to_clipboard", {
+      path,
+      prompt: prompt ?? null,
+      jobId: jobId ?? null,
+      outputIndex: outputIndex ?? null,
+    });
   },
   async cancelJob(id: string) {
     const result = await invoke<TauriJobResponse>("cancel_job", { jobId: id });
@@ -232,6 +247,18 @@ export const tauriApi: ApiClient = {
   },
   async exportJobToConfiguredFolder(jobId: string) {
     return invoke<string[]>("export_job_to_configured_folder", { jobId });
+  },
+  async exportJobOutputToConfiguredFolder(jobId: string, outputIndex: number) {
+    return invoke<string[]>("export_job_output_to_configured_folder", {
+      jobId,
+      outputIndex,
+    });
+  },
+  async ensureJobOutputCached(jobId: string, outputIndex: number) {
+    return invoke<string | null>("ensure_job_output_cached", {
+      jobId,
+      outputIndex,
+    });
   },
   async createGenerate(body: GenerateRequest) {
     const result = await invoke<TauriJobResponse>("enqueue_generate_image", {

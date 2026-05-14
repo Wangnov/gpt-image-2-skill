@@ -22,6 +22,7 @@ import { JobImageDetailDrawer } from "./job-image-detail-drawer";
 import { JobRowExpandable } from "./job-row-expandable";
 import {
   FILTERS,
+  isClearableTerminalJob,
   jobMatchesSearch,
   jobTimestamp,
   type FilterValue,
@@ -112,15 +113,11 @@ export function HistoryScreen({
       : jobPages.isLoading;
   const hasMore = filter !== "running" && Boolean(jobPages.hasNextPage);
 
-  const clearable = jobs.some(
-    (j) => j.status === "completed" || j.status === "failed",
-  );
+  const clearable = jobs.some(isClearableTerminalJob);
 
   const handleClearFinished = async () => {
     if (!clearable) return;
-    const finished = jobs.filter(
-      (j) => j.status === "completed" || j.status === "failed",
-    );
+    const finished = jobs.filter(isClearableTerminalJob);
     const ok = await confirm({
       title: "清理任务记录",
       description: (
@@ -129,7 +126,7 @@ export function HistoryScreen({
           <span className="text-foreground font-medium">
             {finished.length} 条
           </span>{" "}
-          当前已加载的已完成 / 已失败任务。图片文件不会被删除，此操作不可撤销。
+          当前已加载的已完成 / 已失败任务。远端 Origin/Archive 不会被删除，此操作不可撤销。
         </>
       ),
       confirmText: "清理",

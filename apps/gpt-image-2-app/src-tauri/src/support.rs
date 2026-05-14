@@ -64,6 +64,92 @@ pub(crate) fn load_config_or_default() -> AppConfig {
     load_config().unwrap_or_default()
 }
 
+pub(crate) fn read_job_output_for_product(
+    job_id: &str,
+    output_index: usize,
+    rehydrate_local_cache: bool,
+) -> Result<StorageReadback, String> {
+    let config = load_config()?;
+    let job = show_history_job(job_id).map_err(app_error)?;
+    let local_cache_roots = local_cache_roots_for_product(&config);
+    read_job_output_from_storage_with_options(
+        &config.storage,
+        &job,
+        output_index,
+        StorageReadbackOptions {
+            allow_archive_fallback: true,
+            rehydrate_local_cache,
+            local_cache_roots,
+        },
+    )
+    .map_err(app_error)
+}
+
+pub(crate) fn local_cache_roots_for_product(config: &AppConfig) -> Vec<PathBuf> {
+    let mut roots = vec![product_result_library_dir(
+        Some(config),
+        ProductRuntime::Tauri,
+    )];
+    if config.paths.legacy_shared_codex_dir.enabled_for_read {
+        roots.push(legacy_jobs_dir(Some(config)));
+    }
+    roots.push(std::env::temp_dir());
+    roots
+}
+
+pub(crate) fn history_output_indexes(job: &Value) -> Vec<usize> {
+    let mut indexes = job
+        .get("outputs")
+        .and_then(Value::as_array)
+        .into_iter()
+        .flatten()
+        .filter_map(|output| {
+            output
+                .get("index")
+                .and_then(Value::as_u64)
+                .and_then(|value| usize::try_from(value).ok())
+        })
+        .collect::<Vec<_>>();
+    indexes.sort_unstable();
+    indexes.dedup();
+    if indexes.is_empty() && job.get("output_path").and_then(Value::as_str).is_some() {
+        indexes.push(0);
+    }
+    indexes
+}
+
+pub(crate) fn history_output_label(index: usize) -> String {
+    if index < 26 {
+        char::from(b'A' + u8::try_from(index).unwrap_or(0)).to_string()
+    } else {
+        format!("#{}", index + 1)
+    }
+}
+
+pub(crate) fn rehydrate_history_job_outputs_for_export(job: &Value) -> Result<(), String> {
+    let Some(job_id) = job.get("id").and_then(Value::as_str) else {
+        return Ok(());
+    };
+    let mut failures = Vec::new();
+    for output_index in history_output_indexes(job) {
+        if let Err(error) = read_job_output_for_product(job_id, output_index, true) {
+            failures.push(format!(
+                "候选 {}：{}",
+                history_output_label(output_index),
+                error
+            ));
+        }
+    }
+    if failures.is_empty() {
+        Ok(())
+    } else {
+        Err(format!(
+            "远端图片不可用，无法导出整个任务。{}",
+            failures.join("；")
+        ))
+    }
+}
+
 pub(crate) fn result_library_dir() -> PathBuf {
     product_result_library_dir(Some(&load_config_or_default()), ProductRuntime::Tauri)
 }

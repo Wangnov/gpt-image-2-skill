@@ -1,4 +1,7 @@
 import {
+  Archive,
+  Cloud,
+  Files,
   FileText,
   HardDrive,
   Info,
@@ -7,6 +10,7 @@ import {
   Sparkles,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
+import type { CleanupMode, PipelineMode } from "@/lib/types";
 import type { ThemePreset, ThemePresetId } from "@/lib/theme-presets";
 
 // Visible preset order in the Appearance gallery. Hidden presets join
@@ -81,6 +85,22 @@ export const STORAGE_TARGET_TYPE_OPTIONS = [
   { value: "pan123_open", label: "123 网盘 OpenAPI" },
 ] as const;
 
+/**
+ * Same list, but `local` reads as "服务器目录" under HTTP runtime so that
+ * Docker Web users do not assume the path resolves to their browser
+ * machine (it doesn't — it's a server-side container path that needs a
+ * volume mount to persist).
+ */
+export function getStorageTargetTypeOptions(
+  runtimeKind: StoragePipelineCopyKind,
+) {
+  return STORAGE_TARGET_TYPE_OPTIONS.map((option) =>
+    option.value === "local" && runtimeKind === "http"
+      ? { value: option.value, label: "服务器目录" }
+      : option,
+  );
+}
+
 export const BAIDU_AUTH_MODE_OPTIONS = [
   { value: "personal", label: "个人对接" },
   { value: "oauth", label: "OAuth 对接" },
@@ -91,11 +111,77 @@ export const PAN123_AUTH_MODE_OPTIONS = [
   { value: "access_token", label: "accessToken 对接" },
 ] as const;
 
-export const STORAGE_FALLBACK_POLICY_OPTIONS = [
-  { value: "on_failure", label: "失败时" },
-  { value: "always", label: "总是" },
-  { value: "never", label: "关闭" },
-] as const;
+export interface PipelineModeOption {
+  value: PipelineMode;
+  label: string;
+  description: string;
+  icon: LucideIcon;
+}
+
+/**
+ * "本地" in this UI always means "the machine the result library lives on" —
+ * the user's own laptop in Tauri Standalone, but the **Docker server**
+ * (volume-mounted host directory) for self-hosted Web. Without runtime-aware
+ * copy a Docker user reads "图片只保存在本机" and assumes the file is on
+ * their browser machine, which is exactly wrong.
+ */
+export type StoragePipelineCopyKind = "tauri" | "http" | "browser";
+
+export function getStoragePipelineModeOptions(
+  runtimeKind: StoragePipelineCopyKind,
+): PipelineModeOption[] {
+  const onServer = runtimeKind === "http";
+  const localTerm = onServer ? "服务器" : "本机";
+  return [
+    {
+      value: "local_only",
+      label: onServer ? "仅服务器" : "仅本机",
+      description: `图片只保存在${localTerm}结果库；不复制到云端。`,
+      icon: HardDrive,
+    },
+    {
+      value: "mirror",
+      label: `${localTerm}为主，云端备份`,
+      description: `${localTerm}为原图，同时异步复制到一个或多个云端归档（双保险）。`,
+      icon: Files,
+    },
+    {
+      value: "cloud_primary",
+      label: "云端为主",
+      description: `云端为原图，${localTerm}仅作上传缓冲；适合多设备共享。`,
+      icon: Cloud,
+    },
+    {
+      value: "cloud_archive_only",
+      label: "仅推送到云端",
+      description: `${localTerm}为原图，云端目标只接收推送（如 Webhook，不可回读）。`,
+      icon: Archive,
+    },
+  ];
+}
+
+export interface CleanupModeOption {
+  value: CleanupMode;
+  label: string;
+  badge?: string;
+  disabled?: boolean;
+}
+
+export const STORAGE_CLEANUP_MODE_OPTIONS: CleanupModeOption[] = [
+  { value: "never", label: "不清理" },
+  {
+    value: "after_archive_success",
+    label: "归档成功后清理",
+  },
+  {
+    value: "by_age",
+    label: "按保留天数清理",
+  },
+  {
+    value: "by_size",
+    label: "按上限大小清理",
+  },
+];
 
 export const CREDENTIAL_SOURCE_OPTIONS = [
   { value: "file", label: "直接填写" },
@@ -119,8 +205,8 @@ export const PAN123_OPEN_HINT = [
 
 export const LOCAL_PUBLIC_BASE_URL_HINT = [
   "可选。",
-  "仅当本地目录已经通过 Nginx、CDN 或静态文件服务映射成可访问地址时填写。",
-  "上传记录会用它拼出图片 URL；留空时仍会保存到本地目录。",
+  "仅当此目录已经通过 Nginx、CDN 或静态文件服务映射成可访问地址时填写。",
+  "上传记录会用它拼出图片 URL；留空时仍会保存到目录。",
 ].join("\n");
 
 export const EXPORT_DIR_MODE_OPTIONS = [

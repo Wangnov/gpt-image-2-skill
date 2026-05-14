@@ -1,3 +1,29 @@
+//! Storage upload orchestration.
+//!
+//! ## Pipeline mode → metadata.role mapping
+//!
+//! `output_uploads.metadata.role` is a wire-format token consumed by
+//! `super::history::storage_status_for_uploads` to derive the public
+//! `Job.storage_status` (e.g. `"completed"`, `"fallback_completed"`,
+//! `"partial_failed"`), which the frontend renders as labels like
+//! "已回退". The role tokens are **stable**: only `"primary"` and
+//! `"fallback"` exist on the wire today, and changing them would require
+//! a SQLite-level backfill plus a frontend rewrite.
+//!
+//! When a `PipelineMode` is mapped onto these tokens we therefore use the
+//! following rule, regardless of the user-facing terminology:
+//!
+//! | Pipeline mode | Origin upload role | Archive uploads role |
+//! |---|---|---|
+//! | `LocalOnly` | n/a (no uploads) | n/a |
+//! | `Mirror`, `CloudArchiveOnly` | n/a (no Origin) | `"primary"` (treated as a normal completion) |
+//! | `CloudPrimary` | `"primary"` | `"fallback"` (so that origin-failure + archive-success still surfaces as `fallback_completed` to history) |
+//!
+//! In other words: in `CloudPrimary`, "fallback" really means "the Origin
+//! couldn't deliver and the archive made up for it" — exactly the original
+//! semantics the status enum was named after.
+
+use std::fs;
 use std::sync::mpsc;
 use std::thread;
 
@@ -6,11 +32,12 @@ use serde_json::{Value, json};
 use crate::AppError;
 
 use super::backends::upload_to_target;
+use super::cleanup::cleanup_storage_cache;
 use super::history::{OutputUploadRecord, list_output_upload_records, upsert_output_upload_record};
-use super::types::{StorageConfig, StorageFallbackPolicy, StorageTargetConfig};
+use super::types::{PipelineMode, StorageConfig, StorageTargetConfig};
 use super::util::{
-    UploadOutput, storage_error_message, storage_target_type, target_names_for_upload, upload_now,
-    upload_outputs_from_job,
+    ResolvedPipeline, UploadOutput, resolve_pipeline, sha256_hex, storage_error_message,
+    storage_target_type, upload_now, upload_outputs_from_job,
 };
 
 #[derive(Debug, Clone, Default)]
@@ -25,6 +52,7 @@ fn record_upload_attempt(
     target_name: &str,
     target: &StorageTargetConfig,
     role: &str,
+    placement: &str,
 ) -> Result<bool, AppError> {
     let started = OutputUploadRecord {
         job_id: job_id.to_string(),
@@ -37,21 +65,35 @@ fn record_upload_attempt(
         bytes: None,
         attempts: 1,
         updated_at: upload_now(),
-        metadata: json!({"role": role}),
+        metadata: json!({"role": role, "placement": placement}),
     };
     upsert_output_upload_record(&started)?;
     let result = upload_to_target(target, job_id, output);
     let (status, url, error, bytes, metadata) = match result {
-        Ok(outcome) => (
-            "completed".to_string(),
-            outcome.url,
-            None,
-            outcome.bytes,
-            json!({
-                "role": role,
-                "detail": outcome.metadata,
-            }),
-        ),
+        Ok(outcome) => {
+            let manifest = upload_manifest(
+                output,
+                target_name,
+                target,
+                role,
+                placement,
+                outcome.url.as_deref(),
+                outcome.bytes,
+                &outcome.metadata,
+            );
+            (
+                "completed".to_string(),
+                outcome.url,
+                None,
+                outcome.bytes,
+                json!({
+                    "role": role,
+                    "placement": placement,
+                    "detail": outcome.metadata,
+                    "manifest": manifest,
+                }),
+            )
+        }
         Err(error) => (
             if error.code == "storage_target_unsupported" {
                 "unsupported".to_string()
@@ -61,7 +103,7 @@ fn record_upload_attempt(
             None,
             Some(storage_error_message(error)),
             None,
-            json!({"role": role}),
+            json!({"role": role, "placement": placement}),
         ),
     };
     let completed = status == "completed";
@@ -82,11 +124,43 @@ fn record_upload_attempt(
     Ok(completed)
 }
 
+fn upload_manifest(
+    output: &UploadOutput,
+    target_name: &str,
+    target: &StorageTargetConfig,
+    role: &str,
+    placement: &str,
+    url: Option<&str>,
+    bytes: Option<u64>,
+    detail: &serde_json::Value,
+) -> serde_json::Value {
+    let source_sha256 = fs::read(&output.path).ok().map(|bytes| sha256_hex(&bytes));
+    let mime = mime_guess::from_path(&output.path)
+        .first_or_octet_stream()
+        .to_string();
+    json!({
+        "role": role,
+        "placement": placement,
+        "target": target_name,
+        "target_type": storage_target_type(target),
+        "output_index": output.index,
+        "mime": mime,
+        "source_path": output.path.display().to_string(),
+        "local_cache_path": output.path.display().to_string(),
+        "bytes": bytes.or(Some(output.bytes)),
+        "sha256": source_sha256,
+        "url": url,
+        "key": detail.get("key").cloned().unwrap_or(serde_json::Value::Null),
+        "path": detail.get("path").cloned().unwrap_or(serde_json::Value::Null),
+    })
+}
+
 fn record_missing_storage_target(
     job_id: &str,
     output: &UploadOutput,
     target_name: &str,
     role: &str,
+    placement: &str,
 ) -> Result<(), AppError> {
     let record = OutputUploadRecord {
         job_id: job_id.to_string(),
@@ -99,7 +173,7 @@ fn record_missing_storage_target(
         bytes: None,
         attempts: 0,
         updated_at: upload_now(),
-        metadata: json!({"role": role}),
+        metadata: json!({"role": role, "placement": placement}),
     };
     upsert_output_upload_record(&record)
 }
@@ -110,6 +184,7 @@ fn run_target_uploads(
     output: &UploadOutput,
     target_names: &[String],
     role: &str,
+    placement: &str,
 ) -> Result<bool, AppError> {
     let target_concurrency = config.target_concurrency.clamp(1, 32);
     let (tx, rx) = mpsc::channel::<Result<bool, AppError>>();
@@ -137,12 +212,21 @@ fn run_target_uploads(
             let target_name = target_name.clone();
             let target = target.clone();
             let role = role.to_string();
+            let placement = placement.to_string();
             thread::spawn(move || {
-                let result = record_upload_attempt(&job_id, &output, &target_name, &target, &role);
+                let result = record_upload_attempt(
+                    &job_id,
+                    &output,
+                    &target_name,
+                    &target,
+                    &role,
+                    &placement,
+                );
                 let _ = tx.send(result);
             });
             active += 1;
-        } else if let Err(error) = record_missing_storage_target(job_id, output, target_name, role)
+        } else if let Err(error) =
+            record_missing_storage_target(job_id, output, target_name, role, placement)
         {
             first_error.get_or_insert(error);
         }
@@ -179,12 +263,14 @@ pub fn upload_job_outputs_to_storage(
             "Job id is required before uploading outputs.",
         ));
     };
+    config.validate_targets()?;
+    config.validate_pipeline()?;
     let outputs = upload_outputs_from_job(job);
     if outputs.is_empty() {
         return list_output_upload_records(job_id);
     }
-    let (primary_names, fallback_names) = target_names_for_upload(config, &overrides);
-    if primary_names.is_empty() && fallback_names.is_empty() {
+    let pipeline = resolve_pipeline(config, &overrides);
+    if matches!(pipeline.mode, PipelineMode::LocalOnly) || pipeline.is_empty() {
         return list_output_upload_records(job_id);
     }
     let upload_concurrency = config.upload_concurrency.clamp(1, 32);
@@ -205,33 +291,11 @@ pub fn upload_job_outputs_to_storage(
         let tx = tx.clone();
         let job_id = job_id.to_string();
         let config = config.clone();
-        let primary_names = primary_names.clone();
-        let fallback_names = fallback_names.clone();
+        let pipeline = pipeline.clone();
         thread::spawn(move || {
-            let primary_completed = if primary_names.is_empty() {
-                false
-            } else {
-                match run_target_uploads(&config, &job_id, &output, &primary_names, "primary") {
-                    Ok(value) => value,
-                    Err(error) => {
-                        let _ = tx.send(Err(error));
-                        return;
-                    }
-                }
-            };
-            let should_run_fallback = match config.fallback_policy {
-                StorageFallbackPolicy::Never => false,
-                StorageFallbackPolicy::Always => true,
-                StorageFallbackPolicy::OnFailure => primary_names.is_empty() || !primary_completed,
-            };
-            if should_run_fallback
-                && let Err(error) =
-                    run_target_uploads(&config, &job_id, &output, &fallback_names, "fallback")
-            {
-                let _ = tx.send(Err(error));
-                return;
-            }
-            let _ = tx.send(Ok(()));
+            let _ = tx.send(run_pipeline_for_output(
+                &config, &job_id, &output, &pipeline,
+            ));
         });
         active += 1;
     }
@@ -249,5 +313,48 @@ pub fn upload_job_outputs_to_storage(
     if let Some(error) = first_error {
         return Err(error);
     }
+    let _ = cleanup_storage_cache(config, Some(job));
     list_output_upload_records(job_id)
+}
+
+fn run_pipeline_for_output(
+    config: &StorageConfig,
+    job_id: &str,
+    output: &UploadOutput,
+    pipeline: &ResolvedPipeline,
+) -> Result<(), AppError> {
+    match pipeline.mode {
+        PipelineMode::LocalOnly => Ok(()),
+        PipelineMode::Mirror | PipelineMode::CloudArchiveOnly => run_target_uploads(
+            config,
+            job_id,
+            output,
+            &pipeline.archives,
+            "primary",
+            "archive",
+        )
+        .map(|_| ()),
+        PipelineMode::CloudPrimary => {
+            // Origin upload runs first and is tagged "primary" so a successful
+            // origin alone yields storage_status == "completed". Archives are
+            // tagged "fallback" so a failed-origin + succeeded-archive case
+            // still surfaces as "fallback_completed" via
+            // storage_status_for_uploads(). See module-level docs.
+            if let Some(origin) = pipeline.origin.as_deref() {
+                let origin_targets = vec![origin.to_string()];
+                run_target_uploads(config, job_id, output, &origin_targets, "primary", "origin")?;
+            }
+            if !pipeline.archives.is_empty() {
+                run_target_uploads(
+                    config,
+                    job_id,
+                    output,
+                    &pipeline.archives,
+                    "fallback",
+                    "archive",
+                )?;
+            }
+            Ok(())
+        }
+    }
 }

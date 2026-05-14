@@ -70,6 +70,12 @@ pub(crate) async fn update_paths(Json(body): Json<PathConfig>) -> ApiResult {
 pub(crate) async fn update_storage(Json(mut body): Json<StorageConfig>) -> ApiResult {
     let mut config = load_config().map_err(ApiError::internal)?;
     preserve_storage_secrets(&mut body, &config.storage);
+    body.policy = config.storage.policy.clone();
+    body.enforce_policy();
+    body.validate_targets()
+        .map_err(|error| ApiError::bad_request(app_error(error)))?;
+    body.validate_pipeline()
+        .map_err(|error| ApiError::bad_request(app_error(error)))?;
     config.storage = body;
     save_config(&config).map_err(ApiError::internal)?;
     Ok(Json(config_for_ui(&config)))

@@ -50,14 +50,20 @@ export function submittedEvent(message: string): JobEvent {
   };
 }
 
+export function terminalEventType(status: string | undefined): JobEvent["type"] {
+  if (status === "failed") return "job.failed";
+  if (status === "cancelled" || status === "canceled") return "job.cancelled";
+  if (status === "partial_failed") return "job.partial_failed";
+  return "job.completed";
+}
+
 export function completedEvent(response: TauriJobResponse): JobEvent {
   const status = response.job?.status ?? "completed";
   return (
     response.events?.[0] ?? {
       seq: 2,
       kind: "local",
-      type:
-        status === "partial_failed" ? "job.partial_failed" : "job.completed",
+      type: terminalEventType(status),
       data: {
         status,
         output: { path: responseOutputPath(response) },
