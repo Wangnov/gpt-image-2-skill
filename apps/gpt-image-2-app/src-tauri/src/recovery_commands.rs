@@ -371,17 +371,22 @@ fn reupload_job(job_id: &str) -> Result<Value, String> {
         return Err("这个任务没有可重新上传的本地输出。".to_string());
     }
     let uploaded = upload_completed_job_outputs(&job)?;
+    let storage_status = uploaded
+        .get("storage_status")
+        .and_then(Value::as_str)
+        .unwrap_or("not_configured")
+        .to_string();
     let event = next_recovery_event(
         job_id,
         "job.storage",
         json!({
-            "status": uploaded
-                .get("storage_status")
-                .cloned()
-                .unwrap_or_else(|| json!("not_configured")),
+            "status": storage_status.clone(),
             "job": uploaded,
         }),
     );
+    if matches!(storage_status.as_str(), "failed" | "partial_failed") {
+        return Err(format!("重新上传未完成，当前存储状态为 {storage_status}。"));
+    }
     Ok(json!({
         "job_id": job_id,
         "job": uploaded,

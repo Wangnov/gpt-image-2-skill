@@ -47,6 +47,30 @@ fn recovery_descriptor_offers_fill_missing_for_partial_outputs() {
 }
 
 #[test]
+fn recovery_descriptor_keeps_fill_missing_when_partial_outputs_have_upload_failures() {
+    let slots = generation_slots_from_outputs(
+        3,
+        &[json!({"index": 0, "path": "/tmp/a.png", "bytes": 10})],
+        &[json!({"index": 1, "message": "candidate B failed"})],
+        &[],
+    );
+    let descriptor = build_recovery_descriptor(&json!({
+        "id": "job-partial-upload",
+        "status": "partial_failed",
+        "storage_status": "failed",
+        "outputs": [{"index": 0, "path": "/tmp/a.png", "bytes": 10}],
+        "metadata": {
+            "n": 3,
+            "recoverability": "recoverable.partial_outputs",
+            "generation_slots": slots,
+        },
+    }));
+
+    assert_eq!(descriptor["recoverability"], "recoverable.partial_outputs");
+    assert_eq!(descriptor["primary_action"]["id"], "fill_missing");
+}
+
+#[test]
 fn recovery_descriptor_offers_reupload_for_completed_upload_failures() {
     let descriptor = build_recovery_descriptor(&json!({
         "id": "job-upload",

@@ -840,15 +840,6 @@ pub fn build_recovery_descriptor(job: &Value) -> Value {
         .and_then(Value::as_array)
         .map(Vec::len)
         .unwrap_or(0);
-    let upload_failed = outputs_present > 0
-        && job
-            .get("storage_status")
-            .and_then(Value::as_str)
-            .map(|status| matches!(status, "failed" | "partial_failed"))
-            .unwrap_or(false);
-    if upload_failed {
-        recoverability = Recoverability::UploadFailed;
-    }
     let generation_slots = metadata
         .get("generation_slots")
         .and_then(Value::as_array)
@@ -859,6 +850,18 @@ pub fn build_recovery_descriptor(job: &Value) -> Value {
     } else {
         generation_slots.len() as u64
     };
+    let upload_failed = outputs_present > 0
+        && job
+            .get("storage_status")
+            .and_then(Value::as_str)
+            .map(|status| matches!(status, "failed" | "partial_failed"))
+            .unwrap_or(false);
+    if upload_failed
+        && !matches!(recoverability, Recoverability::PartialOutputs)
+        && outputs_present as u64 >= outputs_expected
+    {
+        recoverability = Recoverability::UploadFailed;
+    }
     let is_completed = job
         .get("status")
         .and_then(Value::as_str)
