@@ -172,3 +172,48 @@ fn history_job_events_survive_status_updates() {
     assert_eq!(events.len(), 1);
     assert_eq!(events[0]["type"], "job.queued");
 }
+
+#[test]
+fn history_job_events_do_not_replace_on_duplicate_seq() {
+    let _guard = CODEX_HOME_TEST_LOCK.lock().unwrap();
+    let temp_dir = tempfile::tempdir().unwrap();
+    let _home = TestCodexHome::set(temp_dir.path());
+
+    upsert_history_job(
+        "job-events-duplicate-seq",
+        "images generate",
+        "openai",
+        "running",
+        None,
+        Some("2026-05-16T00:00:00Z"),
+        json!({}),
+    )
+    .unwrap();
+    append_history_job_event(
+        "job-events-duplicate-seq",
+        &json!({
+            "seq": 1,
+            "kind": "local",
+            "type": "job.queued",
+            "data": {"status": "queued"},
+        }),
+    )
+    .unwrap();
+    append_history_job_event(
+        "job-events-duplicate-seq",
+        &json!({
+            "seq": 1,
+            "kind": "local",
+            "type": "job.running",
+            "data": {"status": "running"},
+        }),
+    )
+    .unwrap();
+
+    let events = list_history_job_events("job-events-duplicate-seq").unwrap();
+    assert_eq!(events.len(), 2);
+    assert_eq!(events[0]["seq"], 1);
+    assert_eq!(events[0]["type"], "job.queued");
+    assert_eq!(events[1]["seq"], 2);
+    assert_eq!(events[1]["type"], "job.running");
+}

@@ -294,20 +294,42 @@ pub fn append_history_job_event(job_id: &str, event: &Value) -> Result<(), AppEr
         .filter(|value| !value.is_empty())
         .unwrap_or("job.event");
     let data = event.get("data").cloned().unwrap_or_else(|| json!({}));
-    let conn = open_history_db()?;
-    conn.execute(
-        "INSERT OR REPLACE INTO job_events (job_id, seq, kind, event_type, data, created_at)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
-        params![
-            job_id,
-            seq,
-            kind,
-            event_type,
-            serde_json::to_string(&data).unwrap_or_else(|_| "{}".to_string()),
-            now_iso(),
-        ],
-    )
-    .map_err(|error| {
+    let data = serde_json::to_string(&data).unwrap_or_else(|_| "{}".to_string());
+    let mut conn = open_history_db()?;
+    let tx = conn.transaction().map_err(|error| {
+        AppError::new("history_write_failed", "Unable to record job event.")
+            .with_detail(json!({"error": error.to_string()}))
+    })?;
+    let mut insert_seq = seq;
+    loop {
+        let inserted = tx
+            .execute(
+                "INSERT OR IGNORE INTO job_events (job_id, seq, kind, event_type, data, created_at)
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+                params![job_id, insert_seq, kind, event_type, &data, now_iso()],
+            )
+            .map_err(|error| {
+                AppError::new("history_write_failed", "Unable to record job event.")
+                    .with_detail(json!({"error": error.to_string()}))
+            })?;
+        if inserted == 1 {
+            break;
+        }
+        insert_seq = tx
+            .query_row(
+                "SELECT COALESCE(MAX(seq), 0) + 1 FROM job_events WHERE job_id = ?1",
+                params![job_id],
+                |row| row.get::<_, i64>(0),
+            )
+            .map_err(|error| {
+                AppError::new(
+                    "history_query_failed",
+                    "Unable to allocate job event sequence.",
+                )
+                .with_detail(json!({"error": error.to_string()}))
+            })?;
+    }
+    tx.commit().map_err(|error| {
         AppError::new("history_write_failed", "Unable to record job event.")
             .with_detail(json!({"error": error.to_string()}))
     })?;

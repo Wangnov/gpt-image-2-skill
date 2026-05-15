@@ -18,7 +18,17 @@ pub(crate) fn append_queue_event(
     event_type: &str,
     data: Value,
 ) -> Value {
-    let seq = inner.next_seq.entry(job_id.to_string()).or_insert(0);
+    let seq = inner.next_seq.entry(job_id.to_string()).or_insert_with(|| {
+        list_history_job_events(job_id)
+            .ok()
+            .and_then(|events| {
+                events
+                    .iter()
+                    .filter_map(|event| event.get("seq").and_then(Value::as_u64))
+                    .max()
+            })
+            .unwrap_or(0)
+    });
     *seq += 1;
     let event = json!({
         "seq": *seq,
