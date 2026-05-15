@@ -567,6 +567,116 @@ pub fn raw_response_sha256(job_dir: &Path) -> Result<String, AppError> {
     Ok(format!("{digest:x}"))
 }
 
+pub fn batch_recovery_job_id(parent_job_id: &str, index: u8) -> String {
+    format!("{parent_job_id}-part-{}", index + 1)
+}
+
+pub fn batch_recovery_job_dir(parent_dir: &Path, index: u8) -> PathBuf {
+    parent_dir.join(format!("recovery-part-{}", index + 1))
+}
+
+pub fn write_batch_recovery_summary(
+    parent_job_id: &str,
+    parent_dir: &Path,
+    child_dirs: &[PathBuf],
+    outputs_present: usize,
+    failures: usize,
+) -> Result<(), AppError> {
+    let mut attempts = Vec::new();
+    let mut attempts_truncated_count = 0usize;
+    let mut child_recoverabilities = Vec::new();
+    let mut any_body_completed = false;
+
+    for child_dir in child_dirs {
+        let Some(state) = load_recovery_state(child_dir) else {
+            continue;
+        };
+        any_body_completed |= state
+            .attempts
+            .iter()
+            .any(|attempt| attempt.response_body_completed_at.is_some());
+        let recoverability = state
+            .recoverability
+            .as_deref()
+            .and_then(Recoverability::from_str)
+            .unwrap_or_else(|| {
+                classify_from_state_and_evidence(&state, raw_response_path(child_dir).is_file())
+            });
+        child_recoverabilities.push(recoverability);
+        attempts_truncated_count += state.attempts_truncated_count;
+        for attempt in state.attempts {
+            if attempts.len() >= RECOVERY_ATTEMPTS_LIMIT {
+                attempts.remove(0);
+                attempts_truncated_count += 1;
+            }
+            attempts.push(attempt);
+        }
+    }
+
+    if attempts.is_empty() && child_recoverabilities.is_empty() {
+        return Ok(());
+    }
+
+    let recoverability = batch_recoverability(&child_recoverabilities, outputs_present, failures);
+    let stage = if failures == 0 {
+        RecoveryStage::Completed
+    } else if outputs_present > 0 {
+        RecoveryStage::Materialized
+    } else if any_body_completed {
+        RecoveryStage::ResponseReceived
+    } else {
+        RecoveryStage::Submitted
+    };
+    let state = RecoveryState {
+        job_id: Some(parent_job_id.to_string()),
+        job_dir: Some(parent_dir.display().to_string()),
+        stage: Some(stage.as_str().to_string()),
+        recoverability: Some(recoverability.as_str().to_string()),
+        attempts,
+        attempts_truncated_count,
+        interrupted_reason: None,
+    };
+    atomic_write_json(
+        &recovery_state_path(parent_dir),
+        &serde_json::to_value(state).unwrap_or_else(|_| json!({})),
+    )
+}
+
+fn batch_recoverability(
+    child_recoverabilities: &[Recoverability],
+    outputs_present: usize,
+    failures: usize,
+) -> Recoverability {
+    if failures > 0 && outputs_present > 0 {
+        return Recoverability::PartialOutputs;
+    }
+    if failures == 0 {
+        return child_recoverabilities
+            .iter()
+            .find(|recoverability| matches!(recoverability, Recoverability::LocalResponseCached))
+            .cloned()
+            .unwrap_or(Recoverability::NeverDispatched);
+    }
+    if child_recoverabilities.iter().any(|recoverability| {
+        matches!(
+            recoverability,
+            Recoverability::LocalResponseCached
+                | Recoverability::RemoteMaybeAccepted
+                | Recoverability::LocalRecoveryUnavailable
+                | Recoverability::RemoteInProgress
+        )
+    }) {
+        return Recoverability::RemoteMaybeAccepted;
+    }
+    if child_recoverabilities
+        .iter()
+        .any(|recoverability| matches!(recoverability, Recoverability::ProviderRejected))
+    {
+        return Recoverability::ProviderRejected;
+    }
+    Recoverability::NeverDispatched
+}
+
 pub fn recovery_attempts_from_metadata(metadata: &Value) -> (Vec<Value>, usize) {
     if let Some(job_dir) = recovery_job_dir(metadata)
         && let Some(state) = load_recovery_state(&job_dir)

@@ -127,9 +127,10 @@ pub use provider_types::ProviderConfig;
 pub(crate) use provider_types::*;
 pub use recovery::{
     Recoverability, RecoveryAttempt, RecoveryContext, RecoveryStage, RecoveryState,
-    annotate_recovery_job_dir, build_recovery_descriptor, mark_interrupted_jobs_on_startup,
-    materialize_openai_raw_response, merge_recovery_metadata, raw_response_sha256,
-    recovery_attempts_from_metadata, recovery_job_dir, test_fault,
+    annotate_recovery_job_dir, batch_recovery_job_dir, batch_recovery_job_id,
+    build_recovery_descriptor, mark_interrupted_jobs_on_startup, materialize_openai_raw_response,
+    merge_recovery_metadata, raw_response_sha256, recovery_attempts_from_metadata,
+    recovery_job_dir, test_fault, write_batch_recovery_summary,
 };
 pub(crate) use request_commands::*;
 pub use request_commands::{run, run_json};
