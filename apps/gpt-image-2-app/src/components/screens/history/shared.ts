@@ -1,3 +1,4 @@
+import type { TauriJobResponse } from "@/lib/api";
 import type { Job } from "@/lib/types";
 import {
   jobOutputIndexes,
@@ -133,6 +134,12 @@ export type RecoveryActionCopy = {
   loading: string;
   success: string;
   description: (resultJobId: string | undefined, originalJobId: string) => string;
+};
+
+export type RecoveryToastNotice = {
+  kind: "success" | "warning" | "error";
+  title: string;
+  description: string;
 };
 
 function objectValue(value: unknown): Record<string, unknown> | null {
@@ -284,6 +291,35 @@ export function jobRecoveryAction(job: Job): RecoveryActionCopy {
     success: "已重新生成",
     description: (resultJobId, originalJobId) =>
       `任务 ${resultJobId || originalJobId} 已进入队列，将再次调用 API。`,
+  };
+}
+
+export function recoveryToastNotice(
+  recovery: RecoveryActionCopy,
+  result: TauriJobResponse,
+  originalJobId: string,
+): RecoveryToastNotice {
+  if (recovery.action === "fill_missing" && result.recovered === false) {
+    const status = result.job?.status;
+    const jobId = result.job_id || originalJobId;
+    if (status === "partial_failed") {
+      return {
+        kind: "warning",
+        title: "仍有图片未补齐",
+        description: `任务 ${jobId} 已保存本次成功补齐的图片，但仍有槽位失败。`,
+      };
+    }
+    return {
+      kind: "error",
+      title: "补齐未完成",
+      description: `任务 ${jobId} 本次补齐失败，请查看错误详情后重试。`,
+    };
+  }
+
+  return {
+    kind: "success",
+    title: recovery.success,
+    description: recovery.description(result.job_id, originalJobId),
   };
 }
 

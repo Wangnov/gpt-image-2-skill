@@ -30,10 +30,10 @@ use gpt_image_2_core::{
     notification_status_allowed, output_extension, preserve_notification_secrets,
     preserve_storage_secrets, product_app_data_dir, product_default_export_dir,
     product_default_export_dirs, product_result_library_dir, product_storage_fallback_dir,
-    read_job_output_from_storage_with_options, read_keychain_secret, recovery_job_dir,
-    redact_app_config, requested_n, run_json, save_app_config, shared_config_dir, show_history_job,
-    test_fault, test_storage_target, upload_job_outputs_to_storage, upsert_history_job,
-    write_batch_recovery_summary, write_keychain_secret,
+    raw_response_path, read_job_output_from_storage_with_options, read_keychain_secret,
+    recovery_job_dir, redact_app_config, requested_n, run_json, save_app_config, shared_config_dir,
+    show_history_job, test_fault, test_storage_target, upload_job_outputs_to_storage,
+    upsert_history_job, write_batch_recovery_summary, write_keychain_secret,
 };
 use serde::Deserialize;
 use serde_json::{Value, json};

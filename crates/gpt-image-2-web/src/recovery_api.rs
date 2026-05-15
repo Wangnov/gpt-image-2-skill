@@ -185,6 +185,20 @@ fn merge_output_files(existing: Vec<Value>, filled: Vec<(usize, Value)>) -> Vec<
     by_index.into_values().collect()
 }
 
+fn materialize_cached_slot_payload(
+    child_dir: &std::path::Path,
+    output_path: &std::path::Path,
+) -> Option<Result<Value, String>> {
+    if !raw_response_path(child_dir).is_file() {
+        return None;
+    }
+    Some(
+        materialize_openai_raw_response(child_dir, output_path)
+            .map(|files| json!({ "output": normalize_batch_output(files) }))
+            .map_err(app_error),
+    )
+}
+
 fn fill_missing_job(job_id: &str) -> Result<Value, String> {
     let job = show_history_job(job_id).map_err(app_error)?;
     let metadata = job.get("metadata").cloned().unwrap_or_else(|| json!({}));
@@ -222,6 +236,16 @@ fn fill_missing_job(job_id: &str) -> Result<Value, String> {
                 let child_id = batch_recovery_job_id(job_id, slot);
                 let child_dir = batch_recovery_job_dir(&job_dir, slot);
                 let out = batch_output_path(&job_dir, request.format.as_deref().or(format), slot);
+                if let Some(cached) = materialize_cached_slot_payload(&child_dir, &out) {
+                    match cached {
+                        Ok(payload) => payloads.push((*index, payload)),
+                        Err(message) => errors.push(BatchItemError {
+                            index: *index,
+                            message,
+                        }),
+                    }
+                    continue;
+                }
                 match cli_json_result(&generate_args_with_recovery(
                     &request,
                     &out,
@@ -246,6 +270,16 @@ fn fill_missing_job(job_id: &str) -> Result<Value, String> {
                 let child_id = batch_recovery_job_id(job_id, slot);
                 let child_dir = batch_recovery_job_dir(&job_dir, slot);
                 let out = batch_output_path(&job_dir, request.format.as_deref().or(format), slot);
+                if let Some(cached) = materialize_cached_slot_payload(&child_dir, &out) {
+                    match cached {
+                        Ok(payload) => payloads.push((*index, payload)),
+                        Err(message) => errors.push(BatchItemError {
+                            index: *index,
+                            message,
+                        }),
+                    }
+                    continue;
+                }
                 match cli_json_result(&edit_args_with_recovery(
                     &request,
                     &ref_paths,

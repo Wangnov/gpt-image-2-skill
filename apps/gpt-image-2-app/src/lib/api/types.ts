@@ -38,6 +38,7 @@ export type TauriJobResponse = {
   queue?: QueueStatus;
   queued?: boolean;
   canceled?: boolean;
+  recovered?: boolean;
   payload?: {
     output?: {
       path?: string | null;

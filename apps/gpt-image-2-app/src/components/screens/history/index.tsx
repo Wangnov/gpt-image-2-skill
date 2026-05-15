@@ -26,6 +26,7 @@ import {
   jobRecoveryAction,
   jobMatchesSearch,
   jobTimestamp,
+  recoveryToastNotice,
   type FilterValue,
 } from "./shared";
 
@@ -145,10 +146,23 @@ export function HistoryScreen({
         id: job.id,
         action: recovery.action,
       });
-      toast.success(recovery.success, {
-        id: toastId,
-        description: recovery.description(result.job_id, job.id),
-      });
+      const notice = recoveryToastNotice(recovery, result, job.id);
+      if (notice.kind === "warning") {
+        toast.warning(notice.title, {
+          id: toastId,
+          description: notice.description,
+        });
+      } else if (notice.kind === "error") {
+        toast.error(notice.title, {
+          id: toastId,
+          description: notice.description,
+        });
+      } else {
+        toast.success(notice.title, {
+          id: toastId,
+          description: notice.description,
+        });
+      }
       setExpandedIds((prev) => {
         const next = new Set(prev);
         next.add(result.job_id ?? job.id);

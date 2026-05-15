@@ -10,6 +10,7 @@ import {
   jobRecoveryAction,
   jobStatusLabel,
   plannedOutputCount,
+  recoveryToastNotice,
 } from "./shared";
 
 function job(overrides: Partial<Job> = {}): Job {
@@ -115,5 +116,52 @@ describe("history job display helpers", () => {
     expect(derivedRecoverability(value)).toBe("recoverable.partial_outputs");
     expect(jobCanShowRecoveryAction(value)).toBe(true);
     expect(jobRecoveryAction(value).action).toBe("fill_missing");
+  });
+
+  it("does not report partial fill_missing recovery as success", () => {
+    const value = job({
+      id: "job-fill-missing",
+      status: "partial_failed",
+      metadata: {
+        prompt: "make it",
+        n: 3,
+        recoverability: "recoverable.partial_outputs",
+        generation_slots: [
+          { index: 0, status: "completed", path: "/tmp/a.png" },
+          { index: 1, status: "failed", error: "upstream rejected" },
+          { index: 2, status: "missing" },
+        ],
+      },
+    });
+    const recovery = jobRecoveryAction(value);
+
+    expect(
+      recoveryToastNotice(
+        recovery,
+        {
+          job_id: "job-fill-missing",
+          job: value,
+          recovered: false,
+        },
+        value.id,
+      ),
+    ).toMatchObject({
+      kind: "warning",
+      title: "仍有图片未补齐",
+    });
+    expect(
+      recoveryToastNotice(
+        recovery,
+        {
+          job_id: "job-fill-missing",
+          job: { ...value, status: "failed", outputs: [] },
+          recovered: false,
+        },
+        value.id,
+      ),
+    ).toMatchObject({
+      kind: "error",
+      title: "补齐未完成",
+    });
   });
 });

@@ -131,8 +131,8 @@ pub use recovery::{
     annotate_recovery_job_dir, batch_recovery_job_dir, batch_recovery_job_id,
     build_recovery_descriptor, generation_slots_from_batch_payload, generation_slots_from_outputs,
     mark_interrupted_jobs_on_startup, materialize_openai_raw_response, merge_recovery_metadata,
-    missing_generation_slot_indices, raw_response_sha256, recovery_attempts_from_metadata,
-    recovery_job_dir, test_fault, write_batch_recovery_summary,
+    missing_generation_slot_indices, raw_response_path, raw_response_sha256,
+    recovery_attempts_from_metadata, recovery_job_dir, test_fault, write_batch_recovery_summary,
 };
 pub(crate) use request_commands::*;
 pub use request_commands::{run, run_json};
