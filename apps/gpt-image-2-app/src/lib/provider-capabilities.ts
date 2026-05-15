@@ -1,5 +1,16 @@
 import type { ProviderConfig, ServerConfig } from "./types";
 
+export function providerNativeSupportsMultipleOutputs(
+  config: ServerConfig | undefined,
+  provider: string,
+) {
+  if (provider === "openai") return true;
+  if (provider === "codex") return false;
+  const cfg = provider ? config?.providers[provider] : undefined;
+  if (!cfg) return true;
+  return cfg.supports_n ?? cfg.type === "openai";
+}
+
 export function providerSupportsMultipleOutputs(_config: ServerConfig | undefined, _provider: string) {
   return true;
 }
@@ -20,4 +31,21 @@ export function providerEditRegionMode(config: ServerConfig | undefined, provide
   if (cfg?.type === "openai") return "native-mask";
   if (cfg?.type === "codex") return "reference-hint";
   return "reference-hint";
+}
+
+export function providerCapabilityBadges(
+  config: ServerConfig | undefined,
+  provider: string,
+) {
+  const nativeN = providerNativeSupportsMultipleOutputs(config, provider);
+  const editMode = providerEditRegionMode(config, provider);
+  return [
+    nativeN ? "接口多图" : "App 并发多图",
+    editMode === "native-mask"
+      ? "原生遮罩"
+      : editMode === "reference-hint"
+        ? "参考图局部编辑"
+        : "不支持局部编辑",
+    "失败可分类",
+  ];
 }

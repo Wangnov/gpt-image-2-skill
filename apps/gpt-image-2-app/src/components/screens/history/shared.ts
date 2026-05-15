@@ -110,7 +110,65 @@ export type JobOutputError = {
   detail?: unknown;
 };
 
+export type GenerationSlot = {
+  index: number;
+  status: string;
+  path?: string | null;
+  bytes?: number | null;
+  error?: string | null;
+  recoverability?: string | null;
+  raw_response_present?: boolean;
+};
+
+export type RecoveryActionId =
+  | "continue_save"
+  | "fill_missing"
+  | "reupload"
+  | "resubmit";
+
+export type RecoveryActionCopy = {
+  action: RecoveryActionId;
+  label: string;
+  title: string;
+  loading: string;
+  success: string;
+  description: (resultJobId: string | undefined, originalJobId: string) => string;
+};
+
+function objectValue(value: unknown): Record<string, unknown> | null {
+  return value && typeof value === "object"
+    ? (value as Record<string, unknown>)
+    : null;
+}
+
+export function generationSlots(job: Job): GenerationSlot[] {
+  const slots = Array.isArray(job.metadata?.generation_slots)
+    ? job.metadata.generation_slots
+    : [];
+  return slots
+    .map((value): GenerationSlot | null => {
+      const raw = objectValue(value);
+      if (!raw) return null;
+      const index = Number(raw.index);
+      if (!Number.isFinite(index)) return null;
+      return {
+        index,
+        status: typeof raw.status === "string" ? raw.status : "missing",
+        path: typeof raw.path === "string" ? raw.path : null,
+        bytes: Number.isFinite(Number(raw.bytes)) ? Number(raw.bytes) : null,
+        error: typeof raw.error === "string" ? raw.error : null,
+        recoverability:
+          typeof raw.recoverability === "string" ? raw.recoverability : null,
+        raw_response_present: raw.raw_response_present === true,
+      };
+    })
+    .filter((slot): slot is GenerationSlot => Boolean(slot))
+    .sort((a, b) => a.index - b.index);
+}
+
 export function plannedOutputCount(job: Job): number {
+  const slots = generationSlots(job);
+  if (slots.length > 0) return slots.length;
   const raw = (job.metadata ?? {}).n;
   if (typeof raw === "number" && Number.isFinite(raw) && raw > 0) {
     return Math.min(16, Math.floor(raw));
@@ -143,11 +201,19 @@ export function jobOutputErrors(job: Job): JobOutputError[] {
     job.metadata.batch && typeof job.metadata.batch === "object"
       ? (job.metadata.batch as Record<string, unknown>)
       : null;
+  const slotErrors = generationSlots(job)
+    .filter((slot) => slot.status !== "completed")
+    .map((slot) => ({
+      index: slot.index,
+      message: slot.error || "未生成",
+      code: slot.status,
+    }));
   const candidates = [
     error && Array.isArray(error.items) ? error.items : null,
     metadataBatch && Array.isArray(metadataBatch.errors)
       ? metadataBatch.errors
       : null,
+    slotErrors,
   ];
   const byIndex = new Map<number, JobOutputError>();
   for (const values of candidates) {
@@ -157,6 +223,58 @@ export function jobOutputErrors(job: Job): JobOutputError[] {
     }
   }
   return Array.from(byIndex.values()).sort((a, b) => a.index - b.index);
+}
+
+export function jobRecoveryAction(job: Job): RecoveryActionCopy {
+  const recoverability = String(job.metadata?.recoverability ?? "");
+  if (recoverability === "recoverable.local_response_cached") {
+    return {
+      action: "continue_save",
+      label: "继续完成",
+      title: "使用已收到的响应继续完成，不再次调用 API",
+      loading: "正在继续完成任务",
+      success: "已继续完成",
+      description: () => "已使用本地缓存响应完成保存，未再次调用 API。",
+    };
+  }
+  if (recoverability === "recoverable.partial_outputs") {
+    const missing = generationSlots(job).filter(
+      (slot) => slot.status !== "completed",
+    ).length;
+    return {
+      action: "fill_missing",
+      label: `生成缺失的 ${Math.max(1, missing)} 张`,
+      title: "只为缺失图片再次调用 API",
+      loading: "正在生成缺失图片",
+      success: "缺失图片已补齐",
+      description: () => "已有图片保持不变，只为缺失槽位发起新请求。",
+    };
+  }
+  if (recoverability === "recoverable.upload_failed") {
+    return {
+      action: "reupload",
+      label: "重新上传",
+      title: "不重新生成，只重传本地已有图片",
+      loading: "正在重新上传",
+      success: "已重新上传",
+      description: () => "图片已在本地生成，本次未再次调用 API。",
+    };
+  }
+  return {
+    action: "resubmit",
+    label: "重新生成",
+    title: "重新生成 · 将再次调用 API",
+    loading: "正在重新生成任务",
+    success: "已重新生成",
+    description: (resultJobId, originalJobId) =>
+      `任务 ${resultJobId || originalJobId} 已进入队列，将再次调用 API。`,
+  };
+}
+
+export function jobCanShowRecoveryAction(job: Job) {
+  const recoverability = String(job.metadata?.recoverability ?? "");
+  if (recoverability === "recoverable.upload_failed") return true;
+  return ["failed", "partial_failed", "cancelled"].includes(job.status);
 }
 
 export function jobStatusLabel(job: Job): string {

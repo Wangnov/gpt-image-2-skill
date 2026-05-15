@@ -298,7 +298,10 @@ export const tauriApi: ApiClient = {
     const result = await invoke<TauriJobResponse>("retry_job", { jobId });
     return normalizeJobResponse(result);
   },
-  async resumeJob(jobId: string, action: "continue_save" | "resubmit" | "discard") {
+  async resumeJob(
+    jobId: string,
+    action: "continue_save" | "fill_missing" | "reupload" | "resubmit" | "discard",
+  ) {
     const result = await invoke<TauriJobResponse>("resume_job", {
       jobId,
       action,

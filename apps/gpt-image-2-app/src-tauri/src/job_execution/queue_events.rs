@@ -26,6 +26,7 @@ pub(crate) fn append_queue_event(
         "type": event_type,
         "data": data,
     });
+    let _ = append_history_job_event(job_id, &event);
     let events = inner.events.entry(job_id.to_string()).or_default();
     events.push(event.clone());
     if events.len() > 200 {

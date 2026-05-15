@@ -2,6 +2,7 @@ const DB_NAME = "gpt-image-2-drafts";
 const DB_VERSION = 1;
 const GENERATE_KEY = "generateDraft";
 const EDIT_KEY = "editDraft";
+const OFFLINE_GENERATE_QUEUE_KEY = "offlineGenerateQueue";
 
 type MaskMode = "paint" | "erase";
 type MaskTool = "brush" | "erase" | "rect" | "ellipse";
@@ -14,6 +15,12 @@ export type GenerateDraft = {
   quality: string;
   n: number;
   updatedAt: number;
+};
+
+export type OfflineGenerateDraft = GenerateDraft & {
+  id: string;
+  createdAt: number;
+  reason?: string;
 };
 
 type StoredRef = {
@@ -179,6 +186,42 @@ export async function saveGenerateDraft(
 
 export function loadGenerateDraft() {
   return readKv<GenerateDraft>(GENERATE_KEY);
+}
+
+export async function enqueueOfflineGenerateDraft(
+  draft: Omit<GenerateDraft, "updatedAt">,
+  reason?: string,
+) {
+  const queue = (await readKv<OfflineGenerateDraft[]>(
+    OFFLINE_GENERATE_QUEUE_KEY,
+  )) ?? [];
+  const now = Date.now();
+  const next = [
+    ...queue,
+    {
+      ...draft,
+      id: `offline-${now}-${Math.floor(Math.random() * 100_000)}`,
+      createdAt: now,
+      updatedAt: now,
+      reason,
+    },
+  ].slice(-20);
+  await writeKv(OFFLINE_GENERATE_QUEUE_KEY, next);
+  return next.length;
+}
+
+export function loadOfflineGenerateDrafts() {
+  return readKv<OfflineGenerateDraft[]>(OFFLINE_GENERATE_QUEUE_KEY).then(
+    (queue) => queue ?? [],
+  );
+}
+
+export async function removeOfflineGenerateDraft(id: string) {
+  const queue = (await loadOfflineGenerateDrafts()).filter(
+    (draft) => draft.id !== id,
+  );
+  await writeKv(OFFLINE_GENERATE_QUEUE_KEY, queue);
+  return queue;
 }
 
 export async function saveEditDraft(draft: EditDraftInput) {

@@ -89,8 +89,9 @@ pub use errors::{AppError, CommandOutcome};
 pub(crate) use history_commands::*;
 pub(crate) use history_db::*;
 pub use history_db::{
-    delete_history_job, list_expired_deleted_history_jobs, restore_deleted_history_job,
-    soft_delete_history_job, upsert_history_job,
+    append_history_job_event, delete_history_job, list_expired_deleted_history_jobs,
+    list_history_job_events, restore_deleted_history_job, soft_delete_history_job,
+    upsert_history_job,
 };
 pub(crate) use history_list::*;
 pub use history_list::{
@@ -128,8 +129,9 @@ pub(crate) use provider_types::*;
 pub use recovery::{
     Recoverability, RecoveryAttempt, RecoveryContext, RecoveryStage, RecoveryState,
     annotate_recovery_job_dir, batch_recovery_job_dir, batch_recovery_job_id,
-    build_recovery_descriptor, mark_interrupted_jobs_on_startup, materialize_openai_raw_response,
-    merge_recovery_metadata, raw_response_sha256, recovery_attempts_from_metadata,
+    build_recovery_descriptor, generation_slots_from_batch_payload, generation_slots_from_outputs,
+    mark_interrupted_jobs_on_startup, materialize_openai_raw_response, merge_recovery_metadata,
+    missing_generation_slot_indices, raw_response_sha256, recovery_attempts_from_metadata,
     recovery_job_dir, test_fault, write_batch_recovery_summary,
 };
 pub(crate) use request_commands::*;

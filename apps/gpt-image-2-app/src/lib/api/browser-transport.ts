@@ -423,7 +423,10 @@ export const browserApi: ApiClient = {
     }
     throw new Error("这个任务类型暂不支持重试。");
   },
-  async resumeJob(jobId: string, action: "continue_save" | "resubmit" | "discard") {
+  async resumeJob(
+    jobId: string,
+    action: "continue_save" | "fill_missing" | "reupload" | "resubmit" | "discard",
+  ) {
     if (action === "resubmit") return browserApi.retryJob(jobId);
     if (action === "discard") throw new Error("浏览器模式暂不支持丢弃恢复任务。");
     throw new Error("浏览器模式不支持继续完成，请改用 Docker/App。");

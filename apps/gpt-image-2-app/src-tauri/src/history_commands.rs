@@ -39,12 +39,24 @@ pub(crate) fn history_show(
     job_id: String,
     state: tauri::State<'_, JobQueueState>,
 ) -> Result<Value, String> {
-    let events = state
+    let mut events = list_history_job_events(&job_id).map_err(app_error)?;
+    let in_memory_events = state
         .inner
         .lock()
         .ok()
         .and_then(|inner| inner.events.get(&job_id).cloned())
         .unwrap_or_default();
+    for event in in_memory_events {
+        let seq = event.get("seq").and_then(Value::as_u64);
+        if seq.is_none()
+            || !events
+                .iter()
+                .any(|existing| existing.get("seq").and_then(Value::as_u64) == seq)
+        {
+            events.push(event);
+        }
+    }
+    events.sort_by_key(|event| event.get("seq").and_then(Value::as_u64).unwrap_or(0));
     let job = show_history_job(&job_id).map_err(app_error)?;
     Ok(json!({
         "history_file": history_db_path().display().to_string(),

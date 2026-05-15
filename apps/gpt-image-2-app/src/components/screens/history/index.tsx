@@ -23,6 +23,7 @@ import { JobRowExpandable } from "./job-row-expandable";
 import {
   FILTERS,
   isClearableTerminalJob,
+  jobRecoveryAction,
   jobMatchesSearch,
   jobTimestamp,
   type FilterValue,
@@ -137,22 +138,16 @@ export function HistoryScreen({
   };
 
   const handleRecover = async (job: Job) => {
-    const recoverability = String(job.metadata?.recoverability ?? "");
-    const action =
-      recoverability === "recoverable.local_response_cached"
-        ? "continue_save"
-        : "resubmit";
-    const toastId = toast.loading(
-      action === "continue_save" ? "正在继续完成任务" : "正在重新生成任务",
-    );
+    const recovery = jobRecoveryAction(job);
+    const toastId = toast.loading(recovery.loading);
     try {
-      const result = await resumeJob.mutateAsync({ id: job.id, action });
-      toast.success(action === "continue_save" ? "已继续完成" : "已重新生成", {
+      const result = await resumeJob.mutateAsync({
+        id: job.id,
+        action: recovery.action,
+      });
+      toast.success(recovery.success, {
         id: toastId,
-        description:
-          action === "continue_save"
-            ? "已使用本地缓存响应完成保存，未再次调用 API。"
-            : `新任务 ${result.job_id} 已进入队列，将再次调用 API。`,
+        description: recovery.description(result.job_id, job.id),
       });
       setExpandedIds((prev) => {
         const next = new Set(prev);
@@ -160,7 +155,7 @@ export function HistoryScreen({
         return next;
       });
     } catch (error) {
-      toast.error(action === "continue_save" ? "继续完成失败" : "重新生成失败", {
+      toast.error(`${recovery.label}失败`, {
         id: toastId,
         description: error instanceof Error ? error.message : String(error),
       });
@@ -383,6 +378,7 @@ export function HistoryScreen({
       {/* Image detail drawer */}
       <JobImageDetailDrawer
         job={detailJob}
+        events={detailPayload?.events ?? []}
         outputIndex={detailIndex}
         onClose={() => setDetailJobId(null)}
         onChangeIndex={setDetailIndex}
