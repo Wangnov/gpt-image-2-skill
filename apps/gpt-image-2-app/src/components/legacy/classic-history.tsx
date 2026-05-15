@@ -30,7 +30,8 @@ function matchesFilter(job: Job, filter: FilterValue) {
     return (
       job.status === "failed" ||
       job.status === "partial_failed" ||
-      job.status === "cancelled"
+      job.status === "cancelled" ||
+      job.status === "canceled"
     );
   }
   return true;

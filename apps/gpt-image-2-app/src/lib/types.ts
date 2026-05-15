@@ -303,7 +303,8 @@ export type JobStatus =
   | "completed"
   | "partial_failed"
   | "failed"
-  | "cancelled";
+  | "cancelled"
+  | "canceled";
 
 export interface QueueStatus {
   max_parallel: number;

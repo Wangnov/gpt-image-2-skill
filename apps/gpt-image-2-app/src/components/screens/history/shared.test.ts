@@ -62,8 +62,17 @@ describe("history job display helpers", () => {
     );
     expect(isClearableTerminalJob(job({ status: "failed" }))).toBe(true);
     expect(isClearableTerminalJob(job({ status: "cancelled" }))).toBe(true);
+    expect(isClearableTerminalJob(job({ status: "canceled" }))).toBe(true);
     expect(isClearableTerminalJob(job({ status: "running" }))).toBe(false);
     expect(isClearableTerminalJob(job({ status: "uploading" }))).toBe(false);
+  });
+
+  it("treats canceled jobs like cancelled jobs in recovery display", () => {
+    const value = job({ status: "canceled", outputs: [], output_path: "" });
+
+    expect(jobStatusLabel(value)).toBe("已取消");
+    expect(jobCanShowRecoveryAction(value)).toBe(true);
+    expect(jobRecoveryAction(value).action).toBe("resubmit");
   });
 
   it("shows reupload for completed jobs whose storage upload failed", () => {

@@ -290,7 +290,9 @@ export function jobRecoveryAction(job: Job): RecoveryActionCopy {
 export function jobCanShowRecoveryAction(job: Job) {
   const recoverability = derivedRecoverability(job);
   if (recoverability === "recoverable.upload_failed") return true;
-  return ["failed", "partial_failed", "cancelled"].includes(job.status);
+  return ["failed", "partial_failed", "cancelled", "canceled"].includes(
+    job.status,
+  );
 }
 
 export function jobStatusLabel(job: Job): string {
@@ -299,7 +301,7 @@ export function jobStatusLabel(job: Job): string {
   }
   if (job.status === "completed") return "已完成";
   if (job.status === "failed") return "失败";
-  if (job.status === "cancelled") return "已取消";
+  if (job.status === "cancelled" || job.status === "canceled") return "已取消";
   if (job.status === "uploading" || job.status === "running") return "进行中";
   return "等待中";
 }

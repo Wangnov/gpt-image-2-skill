@@ -23,7 +23,9 @@ const CMD_ICON: Record<string, IconName> = {
 
 function badgeTone(status: Job["status"]) {
   if (status === "completed") return "ok" as const;
-  if (status === "failed" || status === "cancelled") return "err" as const;
+  if (status === "failed" || status === "cancelled" || status === "canceled") {
+    return "err" as const;
+  }
   if (status === "running" || status === "uploading") return "running" as const;
   return "queued" as const;
 }
@@ -71,7 +73,10 @@ function JobAvatar({ job }: { job: Job }) {
   const firstOutput = firstAvailableOutput(job);
   const firstUrl = firstOutput ? api.fileUrl(firstOutput.path) : "";
 
-  const isFailure = job.status === "failed" || job.status === "cancelled";
+  const isFailure =
+    job.status === "failed" ||
+    job.status === "cancelled" ||
+    job.status === "canceled";
   const isRunning = isActiveJobStatus(job.status);
   const showBadge = planned > 1 && !isFailure;
   const badgeText =
