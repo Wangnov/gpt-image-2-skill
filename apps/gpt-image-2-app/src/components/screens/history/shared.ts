@@ -225,8 +225,24 @@ export function jobOutputErrors(job: Job): JobOutputError[] {
   return Array.from(byIndex.values()).sort((a, b) => a.index - b.index);
 }
 
-export function jobRecoveryAction(job: Job): RecoveryActionCopy {
+export function derivedRecoverability(job: Job): string {
   const recoverability = String(job.metadata?.recoverability ?? "");
+  if (recoverability === "recoverable.partial_outputs") {
+    return recoverability;
+  }
+
+  const storageFailed =
+    job.storage_status === "failed" || job.storage_status === "partial_failed";
+  const outputsPresent = jobOutputIndexes(job).length;
+  if (storageFailed && outputsPresent > 0 && outputsPresent >= plannedOutputCount(job)) {
+    return "recoverable.upload_failed";
+  }
+
+  return recoverability;
+}
+
+export function jobRecoveryAction(job: Job): RecoveryActionCopy {
+  const recoverability = derivedRecoverability(job);
   if (recoverability === "recoverable.local_response_cached") {
     return {
       action: "continue_save",
@@ -272,7 +288,7 @@ export function jobRecoveryAction(job: Job): RecoveryActionCopy {
 }
 
 export function jobCanShowRecoveryAction(job: Job) {
-  const recoverability = String(job.metadata?.recoverability ?? "");
+  const recoverability = derivedRecoverability(job);
   if (recoverability === "recoverable.upload_failed") return true;
   return ["failed", "partial_failed", "cancelled"].includes(job.status);
 }

@@ -1,10 +1,13 @@
 import { describe, expect, it } from "vitest";
 import type { Job } from "@/lib/types";
 import {
+  derivedRecoverability,
   isClearableTerminalJob,
+  jobCanShowRecoveryAction,
   jobErrorMessage,
   jobMetaItems,
   jobOutputErrors,
+  jobRecoveryAction,
   jobStatusLabel,
   plannedOutputCount,
 } from "./shared";
@@ -61,5 +64,47 @@ describe("history job display helpers", () => {
     expect(isClearableTerminalJob(job({ status: "cancelled" }))).toBe(true);
     expect(isClearableTerminalJob(job({ status: "running" }))).toBe(false);
     expect(isClearableTerminalJob(job({ status: "uploading" }))).toBe(false);
+  });
+
+  it("shows reupload for completed jobs whose storage upload failed", () => {
+    const value = job({
+      status: "completed",
+      storage_status: "failed",
+      outputs: [
+        { index: 0, path: "/tmp/a.png", bytes: 1024 },
+        { index: 1, path: "/tmp/b.png", bytes: 1024 },
+        { index: 2, path: "/tmp/c.png", bytes: 1024 },
+      ],
+      metadata: {
+        prompt: "make it",
+        n: 3,
+        recoverability: "recoverable.local_response_cached",
+      },
+    });
+
+    expect(derivedRecoverability(value)).toBe("recoverable.upload_failed");
+    expect(jobCanShowRecoveryAction(value)).toBe(true);
+    expect(jobRecoveryAction(value).action).toBe("reupload");
+  });
+
+  it("keeps fill_missing ahead of reupload for partial output jobs", () => {
+    const value = job({
+      status: "partial_failed",
+      storage_status: "failed",
+      metadata: {
+        prompt: "make it",
+        n: 3,
+        recoverability: "recoverable.partial_outputs",
+        generation_slots: [
+          { index: 0, status: "completed", path: "/tmp/a.png" },
+          { index: 1, status: "failed", error: "upstream rejected" },
+          { index: 2, status: "missing" },
+        ],
+      },
+    });
+
+    expect(derivedRecoverability(value)).toBe("recoverable.partial_outputs");
+    expect(jobCanShowRecoveryAction(value)).toBe(true);
+    expect(jobRecoveryAction(value).action).toBe("fill_missing");
   });
 });
