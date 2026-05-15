@@ -95,7 +95,7 @@ pub(crate) fn run_edit_request(
             "out.{}",
             output_extension(request.format.as_deref())
         ));
-        cli_json_result(&edit_args(
+        cli_json_result(&edit_args_with_recovery(
             &request,
             &ref_paths,
             if edit_region_mode == "native-mask" {
@@ -105,6 +105,7 @@ pub(crate) fn run_edit_request(
             },
             &out,
             provider_supports_n,
+            Some((&fallback_id, &dir)),
         ))?
     } else {
         let arg_sets = (0..output_count)

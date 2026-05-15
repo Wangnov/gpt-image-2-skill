@@ -97,6 +97,20 @@ export function useRetryJob() {
   });
 }
 
+export function useResumeJob() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({
+      id,
+      action,
+    }: {
+      id: string;
+      action: "continue_save" | "resubmit" | "discard";
+    }) => api.resumeJob(id, action),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["jobs"] }),
+  });
+}
+
 export function useQueueStatus() {
   return useQuery<QueueStatus>({
     queryKey: ["queue-status"],

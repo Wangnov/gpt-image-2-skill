@@ -29,5 +29,8 @@ sha2 = "0.10.9"
 ssh2 = "0.9.5"
 url = "2.5.7"
 
+[features]
+recovery-fault-injection = []
+
 [dev-dependencies]
 tempfile = "3.23.0"

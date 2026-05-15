@@ -7,6 +7,7 @@ pub(crate) fn request_openai_images_once(
     auth_state: &OpenAiAuthState,
     body: &Value,
     logger: &mut JsonEventLogger,
+    mut recovery: Option<&mut RecoveryContext>,
 ) -> Result<Value, AppError> {
     logger.emit(
         "local",
@@ -22,19 +23,28 @@ pub(crate) fn request_openai_images_once(
         Some(0),
         json!({ "endpoint": endpoint }),
     );
+    let client_request_id = if let Some(ctx) = recovery.as_deref_mut() {
+        let client_request_id = ctx.begin_attempt()?;
+        test_fault::record_provider_http_attempt(&ctx.job_id);
+        Some(client_request_id)
+    } else {
+        None
+    };
     let client = make_client(DEFAULT_REQUEST_TIMEOUT)?;
-    let response = client
+    let mut request = client
         .post(endpoint)
         .header(AUTHORIZATION, format!("Bearer {}", auth_state.api_key))
         .header(CONTENT_TYPE, "application/json")
         .header(ACCEPT, "application/json")
-        .body(body.to_string())
-        .send()
-        .map_err(|error| {
-            AppError::new("network_error", "OpenAI request failed.")
-                .with_detail(json!({ "error": error.to_string() }))
-        })?;
-    parse_openai_json_response(response, logger)
+        .body(body.to_string());
+    if let Some(client_request_id) = &client_request_id {
+        request = request.header("X-Client-Request-Id", client_request_id);
+    }
+    let response = request.send().map_err(|error| {
+        AppError::new("network_error", "OpenAI request failed.")
+            .with_detail(json!({ "error": error.to_string() }))
+    })?;
+    parse_openai_json_response(response, logger, recovery.as_deref_mut())
 }
 
 pub(crate) fn request_openai_edit_once(
@@ -42,6 +52,7 @@ pub(crate) fn request_openai_edit_once(
     auth_state: &OpenAiAuthState,
     body: &Value,
     logger: &mut JsonEventLogger,
+    mut recovery: Option<&mut RecoveryContext>,
 ) -> Result<Value, AppError> {
     logger.emit(
         "local",
@@ -67,29 +78,53 @@ pub(crate) fn request_openai_edit_once(
         Some(10),
         json!({ "transport": "multipart" }),
     );
+    let client_request_id = if let Some(ctx) = recovery.as_deref_mut() {
+        let client_request_id = ctx.begin_attempt()?;
+        test_fault::record_provider_http_attempt(&ctx.job_id);
+        Some(client_request_id)
+    } else {
+        None
+    };
     let client = make_client(DEFAULT_REQUEST_TIMEOUT)?;
-    let response = client
+    let mut request = client
         .post(endpoint)
         .header(AUTHORIZATION, format!("Bearer {}", auth_state.api_key))
-        .multipart(form)
-        .send()
-        .map_err(|error| {
-            AppError::new("network_error", "OpenAI multipart request failed.")
-                .with_detail(json!({ "error": error.to_string() }))
-        })?;
-    parse_openai_json_response(response, logger)
+        .multipart(form);
+    if let Some(client_request_id) = &client_request_id {
+        request = request.header("X-Client-Request-Id", client_request_id);
+    }
+    let response = request.send().map_err(|error| {
+        AppError::new("network_error", "OpenAI multipart request failed.")
+            .with_detail(json!({ "error": error.to_string() }))
+    })?;
+    parse_openai_json_response(response, logger, recovery.as_deref_mut())
 }
 
 pub(crate) fn parse_openai_json_response(
     response: Response,
     logger: &mut JsonEventLogger,
+    mut recovery: Option<&mut RecoveryContext>,
 ) -> Result<Value, AppError> {
+    if let Some(ctx) = recovery.as_deref_mut() {
+        ctx.mark_response_headers(response.headers())?;
+    }
     if !response.status().is_success() {
         let status = response.status();
         let detail = response.text().unwrap_or_else(|_| String::new());
         return Err(http_status_error(status, detail));
     }
-    let payload: Value = response.json().map_err(|error| {
+    let raw = response.text().map_err(|error| {
+        AppError::new(
+            "invalid_json_response",
+            "OpenAI Images API response body could not be read.",
+        )
+        .with_detail(json!({ "error": error.to_string() }))
+    })?;
+    if let Some(ctx) = recovery.as_deref_mut() {
+        ctx.mark_response_body_completed()?;
+        ctx.spool_raw_response(&raw)?;
+    }
+    let payload: Value = serde_json::from_str(&raw).map_err(|error| {
         AppError::new(
             "invalid_json_response",
             "OpenAI Images API returned invalid JSON.",

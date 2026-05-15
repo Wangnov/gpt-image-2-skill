@@ -308,6 +308,10 @@ pub struct SharedImageArgs {
     pub n: Option<u8>,
     #[arg(long, value_enum)]
     pub moderation: Option<Moderation>,
+    #[arg(long, hide = true)]
+    pub recovery_job_id: Option<String>,
+    #[arg(long, hide = true)]
+    pub recovery_job_dir: Option<String>,
 }
 
 #[derive(Args, Debug)]

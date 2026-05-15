@@ -209,6 +209,8 @@ export const api: ApiClient = {
     invokeClient("createEdit", form) as ReturnType<ApiClient["createEdit"]>,
   retryJob: (jobId) =>
     invokeClient("retryJob", jobId) as ReturnType<ApiClient["retryJob"]>,
+  resumeJob: (jobId, action) =>
+    invokeClient("resumeJob", jobId, action) as ReturnType<ApiClient["resumeJob"]>,
   outputUrl(jobId, index) {
     return activeClient.outputUrl(jobId, index);
   },

@@ -73,6 +73,15 @@ export function JobRowExpandable({
     status === "failed" ||
     status === "partial_failed" ||
     status === "cancelled";
+  const recoverability = String(job.metadata?.recoverability ?? "");
+  const recoveryLabel =
+    recoverability === "recoverable.local_response_cached"
+      ? "继续完成"
+      : "重新生成";
+  const recoveryTitle =
+    recoverability === "recoverable.local_response_cached"
+      ? "使用已收到的响应继续完成，不再次调用 API"
+      : "重新生成 · 将再次调用 API";
   const isQueueing = status === "queued";
   const isRunning = status === "running" || status === "uploading";
   const outputIndexes = jobOutputIndexes(job);
@@ -258,11 +267,11 @@ export function JobRowExpandable({
                 onRetry();
               }}
               className="inline-flex h-7 items-center gap-1 rounded-md px-2 text-[11.5px] font-semibold text-foreground transition-colors hover:bg-[color:var(--accent-12)]"
-              aria-label="重试任务"
-              title="原样重试"
+              aria-label={recoveryLabel}
+              title={recoveryTitle}
             >
               <Loader2 size={12} className="hidden" />
-              重试
+              {recoveryLabel}
             </button>
           )}
           <ChevronDown
@@ -491,12 +500,13 @@ export function JobRowExpandable({
                       variant="secondary"
                       size="sm"
                       icon="reload"
+                      title={recoveryTitle}
                       onClick={(e) => {
                         e.stopPropagation();
                         onRetry();
                       }}
                     >
-                      重试
+                      {recoveryLabel}
                     </Button>
                   )}
                   <div className="flex-1" />

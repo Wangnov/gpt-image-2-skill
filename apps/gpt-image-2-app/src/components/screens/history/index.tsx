@@ -8,7 +8,7 @@ import {
   useDeleteJob,
   useJob,
   useJobPages,
-  useRetryJob,
+  useResumeJob,
 } from "@/hooks/use-jobs";
 import { OPEN_JOB_EVENT, sendImageToEdit } from "@/lib/job-navigation";
 import { jobOutputPath, jobOutputUrl } from "@/lib/job-outputs";
@@ -37,7 +37,7 @@ export function HistoryScreen({
 } = {}) {
   const deleteJob = useDeleteJob();
   const cancelJob = useCancelJob();
-  const retryJob = useRetryJob();
+  const resumeJob = useResumeJob();
   const confirm = useConfirm();
   const reducedMotion = useReducedMotion();
   const [filter, setFilter] = useState<FilterValue>("all");
@@ -136,21 +136,31 @@ export function HistoryScreen({
     finished.forEach((j) => deleteJob.mutate(j.id));
   };
 
-  const handleRetry = async (jobId: string) => {
-    const toastId = toast.loading("正在重试任务");
+  const handleRecover = async (job: Job) => {
+    const recoverability = String(job.metadata?.recoverability ?? "");
+    const action =
+      recoverability === "recoverable.local_response_cached"
+        ? "continue_save"
+        : "resubmit";
+    const toastId = toast.loading(
+      action === "continue_save" ? "正在继续完成任务" : "正在重新生成任务",
+    );
     try {
-      const result = await retryJob.mutateAsync(jobId);
-      toast.success("已重新提交", {
+      const result = await resumeJob.mutateAsync({ id: job.id, action });
+      toast.success(action === "continue_save" ? "已继续完成" : "已重新生成", {
         id: toastId,
-        description: `新任务 ${result.job_id} 已进入队列。`,
+        description:
+          action === "continue_save"
+            ? "已使用本地缓存响应完成保存，未再次调用 API。"
+            : `新任务 ${result.job_id} 已进入队列，将再次调用 API。`,
       });
       setExpandedIds((prev) => {
         const next = new Set(prev);
-        next.add(result.job_id);
+        next.add(result.job_id ?? job.id);
         return next;
       });
     } catch (error) {
-      toast.error("重试失败", {
+      toast.error(action === "continue_save" ? "继续完成失败" : "重新生成失败", {
         id: toastId,
         description: error instanceof Error ? error.message : String(error),
       });
@@ -340,7 +350,7 @@ export function HistoryScreen({
                         setDetailJobId(j.id);
                         setDetailIndex(outputIndex);
                       }}
-                      onRetry={() => void handleRetry(j.id)}
+                      onRetry={() => void handleRecover(j)}
                     />
                   </motion.div>
                 ))}
@@ -385,7 +395,10 @@ export function HistoryScreen({
           });
         }}
         onRerun={onSwitchToGenerate}
-        onRetry={(jobId) => void handleRetry(jobId)}
+        onRetry={(jobId) => {
+          const job = jobs.find((item) => item.id === jobId) ?? detailJob;
+          if (job) void handleRecover(job);
+        }}
         onSendToEdit={(job, outputIndex) => {
           sendImageToEdit({
             jobId: job.id,

@@ -100,10 +100,34 @@ pub(crate) fn api_router(state: JobQueueState) -> Router {
         )
         .route("/jobs/{job_id}/cancel", post(cancel_job))
         .route("/jobs/{job_id}/retry", post(retry_job))
+        .route("/jobs/{job_id}/recovery", get(job_recovery))
+        .route("/jobs/{job_id}/resume", post(resume_job))
+        .route("/jobs/interrupted", get(interrupted_jobs))
+        .merge(test_router())
         .route("/queue", get(queue_status))
         .route("/queue/concurrency", post(set_queue_concurrency))
         .route("/images/generate", post(enqueue_generate_image))
         .route("/images/edit", post(enqueue_edit_image))
         .route("/files", get(file_response))
         .with_state(state)
+}
+
+#[cfg(feature = "recovery-fault-injection")]
+pub(crate) fn test_router() -> Router<JobQueueState> {
+    Router::new()
+        .route("/test/faults", post(set_test_faults))
+        .route(
+            "/test/jobs/{job_id}/provider-http-attempts",
+            get(test_provider_http_attempts),
+        )
+        .route("/test/jobs/{job_id}/attempts", get(test_job_attempts))
+        .route(
+            "/test/jobs/{job_id}/raw-response-hash",
+            get(test_raw_response_hash),
+        )
+}
+
+#[cfg(not(feature = "recovery-fault-injection"))]
+pub(crate) fn test_router() -> Router<JobQueueState> {
+    Router::new()
 }

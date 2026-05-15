@@ -21,7 +21,12 @@ pub(crate) fn run_generate_request(
             "out.{}",
             output_extension(request.format.as_deref())
         ));
-        cli_json_result(&generate_args(&request, &out, provider_supports_n))?
+        cli_json_result(&generate_args_with_recovery(
+            &request,
+            &out,
+            provider_supports_n,
+            Some((&fallback_id, &dir)),
+        ))?
     } else {
         let arg_sets = (0..output_count)
             .map(|index| {
