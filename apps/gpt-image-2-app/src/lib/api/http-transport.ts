@@ -294,6 +294,13 @@ export const httpApi: ApiClient = {
     );
     return normalizeJobResponse(result);
   },
+  async resumeJob(jobId: string, action: "continue_save" | "resubmit" | "discard") {
+    const result = await requestJson<TauriJobResponse>(
+      `/jobs/${encodeURIComponent(jobId)}/resume`,
+      { method: "POST", body: jsonBody({ action }) },
+    );
+    return normalizeJobResponse(result);
+  },
   outputUrl(jobId: string, index = 0) {
     const path = outputPath(jobId, index);
     return path ? httpApi.fileUrl(path) : "";

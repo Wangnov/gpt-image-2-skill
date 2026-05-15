@@ -38,6 +38,15 @@ pub fn push_provider_arg(args: &mut Vec<String>, provider: Option<&str>) {
 }
 
 pub fn generate_args(request: &GenerateRequest, out: &Path, include_n: bool) -> Vec<String> {
+    generate_args_with_recovery(request, out, include_n, None)
+}
+
+pub fn generate_args_with_recovery(
+    request: &GenerateRequest,
+    out: &Path,
+    include_n: bool,
+    recovery: Option<(&str, &Path)>,
+) -> Vec<String> {
     let mut args = Vec::new();
     push_provider_arg(&mut args, request.provider.as_deref());
     args.extend([
@@ -61,6 +70,12 @@ pub fn generate_args(request: &GenerateRequest, out: &Path, include_n: bool) -> 
         args.push("--compression".to_string());
         args.push(compression.to_string());
     }
+    if let Some((job_id, job_dir)) = recovery {
+        args.push("--recovery-job-id".to_string());
+        args.push(job_id.to_string());
+        args.push("--recovery-job-dir".to_string());
+        args.push(job_dir.display().to_string());
+    }
     args
 }
 
@@ -70,6 +85,17 @@ pub fn edit_args(
     mask_path: Option<&Path>,
     out: &Path,
     include_n: bool,
+) -> Vec<String> {
+    edit_args_with_recovery(request, ref_paths, mask_path, out, include_n, None)
+}
+
+pub fn edit_args_with_recovery(
+    request: &EditRequest,
+    ref_paths: &[PathBuf],
+    mask_path: Option<&Path>,
+    out: &Path,
+    include_n: bool,
+    recovery: Option<(&str, &Path)>,
 ) -> Vec<String> {
     let mut args = Vec::new();
     push_provider_arg(&mut args, request.provider.as_deref());
@@ -106,6 +132,12 @@ pub fn edit_args(
     if let Some(compression) = request.compression {
         args.push("--compression".to_string());
         args.push(compression.to_string());
+    }
+    if let Some((job_id, job_dir)) = recovery {
+        args.push("--recovery-job-id".to_string());
+        args.push(job_id.to_string());
+        args.push("--recovery-job-dir".to_string());
+        args.push(job_dir.display().to_string());
     }
     args
 }

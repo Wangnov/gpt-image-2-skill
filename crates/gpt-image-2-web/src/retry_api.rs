@@ -159,7 +159,10 @@ pub(crate) async fn retry_job(
             requested_n(request.n).map_err(ApiError::bad_request)?;
             let (id, dir) = unique_job_dir().map_err(ApiError::internal)?;
             let provider = selected_provider_name(request.provider.as_deref());
-            let metadata = serde_json::to_value(&request).unwrap_or_else(|_| json!({}));
+            let metadata = annotate_recovery_job_dir(
+                serde_json::to_value(&request).unwrap_or_else(|_| json!({})),
+                &dir,
+            );
             enqueue_job(
                 state,
                 QueuedJob {
@@ -185,7 +188,7 @@ pub(crate) async fn retry_job(
             requested_n(request.n).map_err(ApiError::bad_request)?;
             let (id, dir) = unique_job_dir().map_err(ApiError::internal)?;
             let provider = selected_provider_name(request.provider.as_deref());
-            let metadata = edit_request_metadata(&request);
+            let metadata = annotate_recovery_job_dir(edit_request_metadata(&request), &dir);
             enqueue_job(
                 state,
                 QueuedJob {

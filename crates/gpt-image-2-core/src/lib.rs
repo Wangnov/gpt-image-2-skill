@@ -45,6 +45,7 @@ mod notifications;
 mod paths;
 mod provider_selection;
 mod provider_types;
+mod recovery;
 mod request_commands;
 mod request_payloads;
 mod runtime_image_args;
@@ -124,13 +125,20 @@ pub(crate) use paths::{
 pub(crate) use provider_selection::*;
 pub use provider_types::ProviderConfig;
 pub(crate) use provider_types::*;
+pub use recovery::{
+    Recoverability, RecoveryAttempt, RecoveryContext, RecoveryStage, RecoveryState,
+    annotate_recovery_job_dir, batch_recovery_job_dir, batch_recovery_job_id,
+    build_recovery_descriptor, mark_interrupted_jobs_on_startup, materialize_openai_raw_response,
+    merge_recovery_metadata, raw_response_sha256, recovery_attempts_from_metadata,
+    recovery_job_dir, test_fault, write_batch_recovery_summary,
+};
 pub(crate) use request_commands::*;
 pub use request_commands::{run, run_json};
 pub use request_payloads::build_openai_image_body;
 pub(crate) use request_payloads::*;
 pub use runtime_image_args::{
-    batch_output_path, edit_args, generate_args, output_extension, push_optional,
-    push_provider_arg, requested_n,
+    batch_output_path, edit_args, edit_args_with_recovery, generate_args,
+    generate_args_with_recovery, output_extension, push_optional, push_provider_arg, requested_n,
 };
 pub use runtime_request_types::{EditRequest, GenerateRequest, UploadFile};
 #[cfg(test)]

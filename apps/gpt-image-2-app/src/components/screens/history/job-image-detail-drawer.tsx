@@ -90,6 +90,15 @@ export function JobImageDetailDrawer({
   );
   const copy = runtimeCopy();
   const canShowFileLocation = isDesktopRuntime();
+  const recoverability = String(job?.metadata?.recoverability ?? "");
+  const recoveryLabel =
+    recoverability === "recoverable.local_response_cached"
+      ? "继续完成"
+      : "重新生成";
+  const recoveryTip =
+    recoverability === "recoverable.local_response_cached"
+      ? "继续完成（不再次调用 API）"
+      : "重新生成（将再次调用 API）";
 
   const handleRerun = () => {
     if (!job) return;
@@ -297,12 +306,12 @@ export function JobImageDetailDrawer({
             {onRetry &&
               job &&
               (job.status === "failed" || job.status === "cancelled") && (
-                <Tooltip text="重试（原样重新提交）">
+                <Tooltip text={recoveryTip}>
                   <Button
                     variant="secondary"
                     size="iconSm"
                     icon="reload"
-                    aria-label="重试"
+                    aria-label={recoveryLabel}
                     onClick={() => onRetry(job.id)}
                   />
                 </Tooltip>

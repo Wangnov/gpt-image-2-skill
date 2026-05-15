@@ -37,24 +37,73 @@ pub(crate) fn run_openai_image_command(
         shared.n,
         shared.moderation,
     );
+    let mut recovery = match (&shared.recovery_job_id, &shared.recovery_job_dir) {
+        (Some(job_id), Some(job_dir)) => {
+            let ctx = RecoveryContext::new(job_id.clone(), PathBuf::from(job_dir))?;
+            ctx.write_request_meta(&json!({
+                "operation": operation,
+                "provider": selection.resolved,
+                "request": summarize_image_request_options("openai", operation, &resolved_model, shared, resolved_ref_images.len(), resolved_mask.is_some(), input_fidelity),
+            }))?;
+            Some(ctx)
+        }
+        _ => None,
+    };
     let endpoint = build_openai_operation_endpoint(&selection.api_base, operation)?;
     let mut logger = JsonEventLogger::new(cli.json_events);
-    let (payload, retry_count) =
-        execute_openai_with_retry(&mut logger, &selection.resolved, |logger| {
-            if operation == "edit" {
-                request_openai_edit_once(&endpoint, &auth_state, &body, logger)
-            } else {
-                request_openai_images_once(&endpoint, &auth_state, &body, logger)
+    let request_result = execute_openai_with_retry(&mut logger, &selection.resolved, |logger| {
+        if operation == "edit" {
+            request_openai_edit_once(&endpoint, &auth_state, &body, logger, recovery.as_mut())
+        } else {
+            request_openai_images_once(&endpoint, &auth_state, &body, logger, recovery.as_mut())
+        }
+    });
+    let (payload, retry_count) = match request_result {
+        Ok(value) => value,
+        Err(error) => {
+            if let Some(ctx) = recovery.as_mut() {
+                let _ = ctx.finish_error(RecoveryStage::Submitted, &error);
             }
-        })?;
-    let (image_bytes_list, revised_prompts) = decode_openai_images(&payload)?;
+            return Err(error);
+        }
+    };
+    if let Some(ctx) = recovery.as_mut()
+        && let Err(error) = ctx.maybe_fail_materialize_start()
+    {
+        let _ = ctx.finish_error(RecoveryStage::ResponseReceived, &error);
+        return Err(error);
+    }
+    let (image_bytes_list, revised_prompts) = match decode_openai_images(&payload) {
+        Ok(value) => value,
+        Err(error) => {
+            if let Some(ctx) = recovery.as_mut() {
+                let _ = ctx.finish_error(RecoveryStage::ResponseReceived, &error);
+            }
+            return Err(error);
+        }
+    };
     if image_bytes_list.is_empty() {
-        return Err(AppError::new(
+        let error = AppError::new(
             "missing_image_result",
             "The response did not include a generated image.",
-        ));
+        );
+        if let Some(ctx) = recovery.as_mut() {
+            let _ = ctx.finish_error(RecoveryStage::ResponseReceived, &error);
+        }
+        return Err(error);
     }
-    let saved_files = save_images(&output_path, &image_bytes_list)?;
+    let saved_files = match save_images(&output_path, &image_bytes_list) {
+        Ok(value) => value,
+        Err(error) => {
+            if let Some(ctx) = recovery.as_mut() {
+                let _ = ctx.finish_error(RecoveryStage::ResponseReceived, &error);
+            }
+            return Err(error);
+        }
+    };
+    if let Some(ctx) = recovery.as_mut() {
+        let _ = ctx.mark_stage(RecoveryStage::Materialized);
+    }
     let primary_output_path = primary_saved_output_path(&output_path, &saved_files);
     let history_job_id = record_history_job(
         &format!("images {operation}"),

@@ -170,6 +170,10 @@ export type ApiClient = RuntimeCapabilities & {
   createGenerate(body: GenerateRequest): Promise<TauriJobResponse>;
   createEdit(form: FormData): Promise<TauriJobResponse>;
   retryJob(jobId: string): Promise<TauriJobResponse>;
+  resumeJob(
+    jobId: string,
+    action: "continue_save" | "resubmit" | "discard",
+  ): Promise<TauriJobResponse>;
   outputUrl(jobId: string, index?: number): string;
   outputPath(jobId: string, index?: number): string | undefined;
   fileUrl(path?: string | null): string;

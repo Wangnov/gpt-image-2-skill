@@ -41,7 +41,9 @@ pub(crate) fn history_row_to_value_with_uploads(
     let id = row.get::<_, String>(0)?;
     let output_path = row.get::<_, Option<String>>(4)?;
     let created_at = row.get::<_, String>(5)?;
-    let metadata = serde_json::from_str::<Value>(&row.get::<_, String>(6)?).unwrap_or(Value::Null);
+    let mut metadata =
+        serde_json::from_str::<Value>(&row.get::<_, String>(6)?).unwrap_or(Value::Null);
+    redact_recovery_attempts(&mut metadata);
     let output = metadata.get("output").cloned().unwrap_or_else(|| json!({}));
     let outputs = output
         .get("files")
@@ -72,6 +74,13 @@ pub(crate) fn history_row_to_value_with_uploads(
         "storage_status": storage_status_for_uploads(uploads),
         "error": error,
     }))
+}
+
+fn redact_recovery_attempts(metadata: &mut Value) {
+    if let Value::Object(map) = metadata {
+        map.remove("attempts");
+        map.remove("attempts_truncated_count");
+    }
 }
 
 pub(crate) fn normalize_history_limit(limit: Option<usize>) -> usize {

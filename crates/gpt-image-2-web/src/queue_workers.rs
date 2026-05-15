@@ -3,6 +3,7 @@
 use super::*;
 
 pub(crate) fn completed_job_for_queue(queued: &QueuedJob, response: &Value) -> Value {
+    let metadata = merge_recovery_metadata(queued.metadata.clone(), &queued.dir);
     let payload = response.get("payload").unwrap_or(response);
     let provider = payload
         .get("provider")
@@ -35,7 +36,7 @@ pub(crate) fn completed_job_for_queue(queued: &QueuedJob, response: &Value) -> V
             .and_then(Value::as_str)
             .unwrap_or("completed"),
         created_at: &queued.created_at,
-        metadata: queued.metadata.clone(),
+        metadata,
         output_path,
         outputs,
         error: payload.get("error").cloned().unwrap_or(Value::Null),
@@ -43,6 +44,7 @@ pub(crate) fn completed_job_for_queue(queued: &QueuedJob, response: &Value) -> V
 }
 
 pub(crate) fn uploading_job_for_queue(queued: &QueuedJob, response: &Value) -> Value {
+    let metadata = merge_recovery_metadata(queued.metadata.clone(), &queued.dir);
     let payload = response.get("payload").unwrap_or(response);
     let provider = payload
         .get("provider")
@@ -72,7 +74,7 @@ pub(crate) fn uploading_job_for_queue(queued: &QueuedJob, response: &Value) -> V
         provider,
         status: "uploading",
         created_at: &queued.created_at,
-        metadata: queued.metadata.clone(),
+        metadata,
         output_path,
         outputs,
         error: Value::Null,
@@ -80,13 +82,17 @@ pub(crate) fn uploading_job_for_queue(queued: &QueuedJob, response: &Value) -> V
 }
 
 pub(crate) fn failed_job_for_queue(queued: &QueuedJob, message: String) -> Value {
+    let mut metadata = merge_recovery_metadata(queued.metadata.clone(), &queued.dir);
+    if let Value::Object(map) = &mut metadata {
+        map.insert("error".to_string(), json!({"message": message.clone()}));
+    }
     job_snapshot(JobSnapshotInput {
         id: &queued.id,
         command: &queued.command,
         provider: &queued.provider,
         status: "failed",
         created_at: &queued.created_at,
-        metadata: queued.metadata.clone(),
+        metadata,
         output_path: None,
         outputs: json!([]),
         error: json!({"message": message}),

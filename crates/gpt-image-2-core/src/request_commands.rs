@@ -144,9 +144,9 @@ pub(crate) fn run_request_create_openai(
     let (payload, retry_count) =
         execute_openai_with_retry(&mut logger, &selection.resolved, |logger| {
             if args.request_operation == RequestOperation::Edit {
-                request_openai_edit_once(&endpoint, &auth_state, &body, logger)
+                request_openai_edit_once(&endpoint, &auth_state, &body, logger, None)
             } else {
-                request_openai_images_once(&endpoint, &auth_state, &body, logger)
+                request_openai_images_once(&endpoint, &auth_state, &body, logger, None)
             }
         })?;
     let (image_bytes_list, revised_prompts) = decode_openai_images(&payload)?;

@@ -19,16 +19,19 @@ use gpt_image_2_core::{
     AppConfig, CONFIG_DIR_NAME, CredentialRef, EditRequest, GenerateRequest, HistoryListOptions,
     KEYCHAIN_SERVICE, NotificationConfig, PathConfig, ProductRuntime, ProviderConfig,
     StorageConfig, StorageReadbackOptions, StorageTargetConfig, StorageUploadOverrides, UploadFile,
-    batch_output_path, default_config_path, default_keychain_account, delete_history_job,
-    dispatch_task_notifications, edit_args, generate_args, history_db_path,
-    initialize_product_runtime_paths, legacy_jobs_dir, legacy_shared_codex_dir,
-    list_active_history_jobs, list_history_jobs_page, load_app_config, notification_status_allowed,
-    output_extension, preserve_notification_secrets, preserve_storage_secrets,
-    product_app_data_dir, product_default_export_dir, product_default_export_dirs,
-    product_result_library_dir, product_storage_fallback_dir,
-    read_job_output_from_storage_with_options, read_keychain_secret, redact_app_config,
-    requested_n, run_json, save_app_config, shared_config_dir, show_history_job,
-    test_storage_target, upload_job_outputs_to_storage, upsert_history_job, write_keychain_secret,
+    annotate_recovery_job_dir, batch_output_path, batch_recovery_job_dir, batch_recovery_job_id,
+    build_recovery_descriptor, default_config_path, default_keychain_account, delete_history_job,
+    dispatch_task_notifications, edit_args_with_recovery, generate_args_with_recovery,
+    history_db_path, initialize_product_runtime_paths, legacy_jobs_dir, legacy_shared_codex_dir,
+    list_active_history_jobs, list_history_jobs_page, load_app_config,
+    mark_interrupted_jobs_on_startup, materialize_openai_raw_response, merge_recovery_metadata,
+    notification_status_allowed, output_extension, preserve_notification_secrets,
+    preserve_storage_secrets, product_app_data_dir, product_default_export_dir,
+    product_default_export_dirs, product_result_library_dir, product_storage_fallback_dir,
+    read_job_output_from_storage_with_options, read_keychain_secret, recovery_job_dir,
+    redact_app_config, requested_n, run_json, save_app_config, shared_config_dir, show_history_job,
+    test_fault, test_storage_target, upload_job_outputs_to_storage, upsert_history_job,
+    write_batch_recovery_summary, write_keychain_secret,
 };
 use serde::Deserialize;
 use serde_json::{Value, json};
@@ -42,6 +45,7 @@ mod job_execution;
 mod provider_config;
 mod queue_api;
 mod queue_workers;
+mod recovery_api;
 mod retry_api;
 mod server;
 mod support;
@@ -55,6 +59,7 @@ pub(crate) use job_execution::*;
 pub(crate) use provider_config::*;
 pub(crate) use queue_api::*;
 pub(crate) use queue_workers::*;
+pub(crate) use recovery_api::*;
 pub(crate) use retry_api::*;
 pub(crate) use server::*;
 pub(crate) use support::*;
@@ -71,6 +76,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         )
         .into());
     }
+    let _ = mark_interrupted_jobs_on_startup();
     let static_files = ServeDir::new(&settings.static_dir)
         .not_found_service(ServeFile::new(settings.static_dir.join("index.html")));
     let app = Router::new()

@@ -43,7 +43,7 @@ pub(crate) fn generate_openai_source_image(
     let mut logger = JsonEventLogger::new(cli.json_events);
     let (payload, retry_count) =
         execute_openai_with_retry(&mut logger, &selection.resolved, |logger| {
-            request_openai_images_once(&endpoint, &auth_state, &body, logger)
+            request_openai_images_once(&endpoint, &auth_state, &body, logger, None)
         })?;
     let (image_bytes_list, revised_prompts) = decode_openai_images(&payload)?;
     if image_bytes_list.is_empty() {

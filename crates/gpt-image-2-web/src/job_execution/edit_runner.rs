@@ -95,7 +95,7 @@ pub(crate) fn run_edit_request(
             "out.{}",
             output_extension(request.format.as_deref())
         ));
-        cli_json_result(&edit_args(
+        cli_json_result(&edit_args_with_recovery(
             &request,
             &ref_paths,
             if edit_region_mode == "native-mask" {
@@ -105,11 +105,22 @@ pub(crate) fn run_edit_request(
             },
             &out,
             provider_supports_n,
+            Some((&fallback_id, &dir)),
         ))?
     } else {
-        let arg_sets = (0..output_count)
+        let recovery_targets = (0..output_count)
             .map(|index| {
-                edit_args(
+                (
+                    batch_recovery_job_id(&fallback_id, index),
+                    batch_recovery_job_dir(&dir, index),
+                )
+            })
+            .collect::<Vec<_>>();
+        let arg_sets = recovery_targets
+            .iter()
+            .enumerate()
+            .map(|(index, (recovery_job_id, recovery_job_dir))| {
+                edit_args_with_recovery(
                     &request,
                     &ref_paths,
                     if edit_region_mode == "native-mask" {
@@ -117,8 +128,9 @@ pub(crate) fn run_edit_request(
                     } else {
                         None
                     },
-                    &batch_output_path(&dir, request.format.as_deref(), index),
+                    &batch_output_path(&dir, request.format.as_deref(), index as u8),
                     false,
+                    Some((recovery_job_id.as_str(), recovery_job_dir.as_path())),
                 )
             })
             .collect::<Vec<_>>();
@@ -133,12 +145,35 @@ pub(crate) fn run_edit_request(
                 apply_partial_output(ctx, &mut list, index, payload);
             }
         });
-        merge_batch_payloads(
+        let merged = merge_batch_payloads(
             "images edit",
             output_count.into(),
             batch.payloads,
             batch.errors,
+        );
+        let outputs_present = merged
+            .get("output")
+            .and_then(|output| output.get("files"))
+            .and_then(Value::as_array)
+            .map(Vec::len)
+            .unwrap_or(0);
+        let failures = merged
+            .get("batch")
+            .and_then(|batch| batch.get("failure_count"))
+            .and_then(Value::as_u64)
+            .unwrap_or(0) as usize;
+        write_batch_recovery_summary(
+            &fallback_id,
+            &dir,
+            &recovery_targets
+                .iter()
+                .map(|(_, recovery_dir)| recovery_dir.clone())
+                .collect::<Vec<_>>(),
+            outputs_present,
+            failures,
         )
+        .map_err(app_error)?;
+        merged
     };
     let request_meta = edit_request_metadata(&request);
     let job = job_from_payload(&payload, &fallback_id, "images edit", request_meta);

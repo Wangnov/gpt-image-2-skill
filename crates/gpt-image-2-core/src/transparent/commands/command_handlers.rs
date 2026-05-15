@@ -52,6 +52,8 @@ pub(crate) fn run_transparent_generate(
         output_compression: args.output_compression,
         n: None,
         moderation: args.moderation,
+        recovery_job_id: None,
+        recovery_job_dir: None,
     };
     validate_provider_specific_image_args(&selection, &shared, None, None)?;
     let source_generation = generate_source_image(cli, &selection, &shared)?;
