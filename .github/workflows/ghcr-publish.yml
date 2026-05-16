@@ -35,8 +35,17 @@ env:
   IMAGE_NAME: wangnov/gpt-image-2
 
 jobs:
-  publish:
+  prepare:
     runs-on: ubuntu-24.04
+    outputs:
+      ref: ${{ steps.release.outputs.ref }}
+      version: ${{ steps.release.outputs.version }}
+      docker_version: ${{ steps.release.outputs.docker_version }}
+      docker_ref_tag: ${{ steps.release.outputs.docker_ref_tag }}
+      publish_latest: ${{ steps.release.outputs.publish_latest }}
+      tags: ${{ steps.meta.outputs.tags }}
+      labels: ${{ steps.meta.outputs.labels }}
+      annotations: ${{ steps.meta.outputs.annotations }}
     steps:
       - name: Resolve release inputs
         id: release
@@ -86,19 +95,6 @@ jobs:
           ref: ${{ steps.release.outputs.ref }}
           persist-credentials: false
 
-      - name: Set up QEMU
-        uses: docker/setup-qemu-action@v3
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
-      - name: Log in to GHCR
-        uses: docker/login-action@v3
-        with:
-          registry: ${{ env.REGISTRY }}
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
       - name: Extract Docker metadata
         id: meta
         uses: docker/metadata-action@v5
@@ -124,39 +120,142 @@ jobs:
             org.opencontainers.image.source=https://github.com/Wangnov/gpt-image-2-skill
             org.opencontainers.image.version=${{ steps.release.outputs.version }}
 
-      - name: Build and push Docker image
-        id: push
+  build:
+    needs: prepare
+    name: build (${{ matrix.platform }})
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: linux/amd64
+            runner: ubuntu-24.04
+            artifact: linux-amd64
+          - platform: linux/arm64
+            runner: ubuntu-24.04-arm
+            artifact: linux-arm64
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ needs.prepare.outputs.ref }}
+          persist-credentials: false
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push platform image
+        id: build
         uses: docker/build-push-action@v7
         with:
           context: .
           file: ./Dockerfile
-          platforms: linux/amd64,linux/arm64
+          platforms: ${{ matrix.platform }}
           pull: true
-          push: true
-          tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
-          annotations: ${{ steps.meta.outputs.annotations }}
-          cache-from: type=gha,scope=gpt-image-2-web
-          cache-to: type=gha,mode=max,scope=gpt-image-2-web
+          outputs: type=image,name=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }},push-by-digest=true,name-canonical=true,push=true
+          labels: ${{ needs.prepare.outputs.labels }}
+          annotations: ${{ needs.prepare.outputs.annotations }}
+          cache-from: type=gha,scope=gpt-image-2-web-${{ matrix.artifact }}
+          cache-to: type=gha,mode=max,scope=gpt-image-2-web-${{ matrix.artifact }}
           provenance: true
           sbom: true
+
+      - name: Export digest
+        shell: bash
+        run: |
+          mkdir -p /tmp/digests
+          digest="${{ steps.build.outputs.digest }}"
+          touch "/tmp/digests/${digest#sha256:}"
+
+      - name: Upload digest
+        uses: actions/upload-artifact@v6
+        with:
+          name: digests-${{ matrix.artifact }}
+          path: /tmp/digests/*
+          if-no-files-found: error
+          retention-days: 1
+
+  publish:
+    needs:
+      - prepare
+      - build
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Download digests
+        uses: actions/download-artifact@v7
+        with:
+          path: /tmp/digests
+          pattern: digests-*
+          merge-multiple: true
+
+      - name: Create multi-arch manifest
+        id: manifest
+        shell: bash
+        env:
+          TAGS: ${{ needs.prepare.outputs.tags }}
+          VERSION_TAG: ${{ needs.prepare.outputs.docker_version }}
+        run: |
+          tag_args=()
+          while IFS= read -r tag; do
+            if [[ -n "$tag" ]]; then
+              tag_args+=("-t" "$tag")
+            fi
+          done <<< "$TAGS"
+
+          sources=()
+          for digest_file in /tmp/digests/*; do
+            sources+=("${REGISTRY}/${IMAGE_NAME}@sha256:$(basename "$digest_file")")
+          done
+
+          docker buildx imagetools create \
+            --annotation "index:org.opencontainers.image.title=GPT Image 2 Web" \
+            --annotation "index:org.opencontainers.image.description=Self-hosted Docker Web runtime for GPT Image 2" \
+            --annotation "index:org.opencontainers.image.source=https://github.com/Wangnov/gpt-image-2-skill" \
+            --annotation "index:org.opencontainers.image.version=${{ needs.prepare.outputs.version }}" \
+            "${tag_args[@]}" \
+            "${sources[@]}"
+
+          primary="${REGISTRY}/${IMAGE_NAME}:${VERSION_TAG}"
+          digest="$(docker buildx imagetools inspect "$primary" --format '{{.Manifest.Digest}}')"
+          echo "digest=$digest" >> "$GITHUB_OUTPUT"
 
       - name: Generate artifact attestation
         uses: actions/attest@v4
         with:
           subject-name: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
-          subject-digest: ${{ steps.push.outputs.digest }}
+          subject-digest: ${{ steps.manifest.outputs.digest }}
           push-to-registry: true
 
       - name: Summarize image
         shell: bash
+        env:
+          TAGS: ${{ needs.prepare.outputs.tags }}
         run: |
           {
             echo "### GHCR image"
             echo
             echo "- Image: \`${REGISTRY}/${IMAGE_NAME}\`"
-            echo "- Version: \`${{ steps.release.outputs.version }}\`"
-            echo "- Digest: \`${{ steps.push.outputs.digest }}\`"
+            echo "- Version: \`${{ needs.prepare.outputs.version }}\`"
+            echo "- Digest: \`${{ steps.manifest.outputs.digest }}\`"
             echo "- Tags:"
-            printf '%s\n' '${{ steps.meta.outputs.tags }}' | sed 's/^/  - `/' | sed 's/$/`/'
+            while IFS= read -r tag; do
+              [[ -n "$tag" ]] && echo "  - \`$tag\`"
+            done <<< "$TAGS"
           } >> "$GITHUB_STEP_SUMMARY"
