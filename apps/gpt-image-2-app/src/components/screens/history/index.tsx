@@ -12,6 +12,7 @@ import {
 } from "@/hooks/use-jobs";
 import { OPEN_JOB_EVENT, sendImageToEdit } from "@/lib/job-navigation";
 import { jobOutputPath, jobOutputUrl } from "@/lib/job-outputs";
+import { api } from "@/lib/api";
 import { Empty } from "@/components/ui/empty";
 import { Button } from "@/components/ui/button";
 import { useConfirm } from "@/hooks/use-confirm";
@@ -23,8 +24,10 @@ import { JobRowExpandable } from "./job-row-expandable";
 import {
   FILTERS,
   isClearableTerminalJob,
+  jobRecoveryAction,
   jobMatchesSearch,
   jobTimestamp,
+  recoveryToastNotice,
   type FilterValue,
 } from "./shared";
 
@@ -137,30 +140,39 @@ export function HistoryScreen({
   };
 
   const handleRecover = async (job: Job) => {
-    const recoverability = String(job.metadata?.recoverability ?? "");
-    const action =
-      recoverability === "recoverable.local_response_cached"
-        ? "continue_save"
-        : "resubmit";
-    const toastId = toast.loading(
-      action === "continue_save" ? "正在继续完成任务" : "正在重新生成任务",
-    );
+    const recovery = jobRecoveryAction(job, {
+      supportsLocalRecovery: api.canUsePersistentResultLibrary,
+    });
+    const toastId = toast.loading(recovery.loading);
     try {
-      const result = await resumeJob.mutateAsync({ id: job.id, action });
-      toast.success(action === "continue_save" ? "已继续完成" : "已重新生成", {
-        id: toastId,
-        description:
-          action === "continue_save"
-            ? "已使用本地缓存响应完成保存，未再次调用 API。"
-            : `新任务 ${result.job_id} 已进入队列，将再次调用 API。`,
+      const result = await resumeJob.mutateAsync({
+        id: job.id,
+        action: recovery.action,
       });
+      const notice = recoveryToastNotice(recovery, result, job.id);
+      if (notice.kind === "warning") {
+        toast.warning(notice.title, {
+          id: toastId,
+          description: notice.description,
+        });
+      } else if (notice.kind === "error") {
+        toast.error(notice.title, {
+          id: toastId,
+          description: notice.description,
+        });
+      } else {
+        toast.success(notice.title, {
+          id: toastId,
+          description: notice.description,
+        });
+      }
       setExpandedIds((prev) => {
         const next = new Set(prev);
         next.add(result.job_id ?? job.id);
         return next;
       });
     } catch (error) {
-      toast.error(action === "continue_save" ? "继续完成失败" : "重新生成失败", {
+      toast.error(`${recovery.label}失败`, {
         id: toastId,
         description: error instanceof Error ? error.message : String(error),
       });
@@ -383,6 +395,7 @@ export function HistoryScreen({
       {/* Image detail drawer */}
       <JobImageDetailDrawer
         job={detailJob}
+        events={detailPayload?.events ?? []}
         outputIndex={detailIndex}
         onClose={() => setDetailJobId(null)}
         onChangeIndex={setDetailIndex}

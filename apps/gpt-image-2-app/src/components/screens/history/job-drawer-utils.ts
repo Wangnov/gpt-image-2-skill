@@ -5,7 +5,9 @@ import type { Job, OutputUploadRef } from "@/lib/types";
 export function jobDrawerBadgeTone(status: Job["status"]) {
   if (status === "completed") return "ok" as const;
   if (status === "partial_failed") return "queued" as const;
-  if (status === "failed" || status === "cancelled") return "err" as const;
+  if (status === "failed" || status === "cancelled" || status === "canceled") {
+    return "err" as const;
+  }
   if (status === "running" || status === "uploading") return "running" as const;
   return "queued" as const;
 }

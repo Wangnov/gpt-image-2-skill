@@ -59,12 +59,18 @@ pub(crate) fn run_generate_request(
                 apply_partial_output(ctx, &mut list, index, payload);
             }
         });
+        let child_dirs = recovery_targets
+            .iter()
+            .map(|(_, recovery_dir)| recovery_dir.clone())
+            .collect::<Vec<_>>();
         let merged = merge_batch_payloads(
             "images generate",
             output_count.into(),
             batch.payloads,
             batch.errors,
         );
+        let generation_slots =
+            generation_slots_from_batch_payload(output_count.into(), &merged, &child_dirs);
         let outputs_present = merged
             .get("output")
             .and_then(|output| output.get("files"))
@@ -79,12 +85,10 @@ pub(crate) fn run_generate_request(
         write_batch_recovery_summary(
             &fallback_id,
             &dir,
-            &recovery_targets
-                .iter()
-                .map(|(_, recovery_dir)| recovery_dir.clone())
-                .collect::<Vec<_>>(),
+            &child_dirs,
             outputs_present,
             failures,
+            generation_slots,
         )
         .map_err(app_error)?;
         merged

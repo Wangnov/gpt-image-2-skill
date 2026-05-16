@@ -149,6 +149,37 @@ pub(crate) fn open_history_db() -> Result<Connection, AppError> {
         )
         .with_detail(json!({"error": error.to_string()}))
     })?;
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS job_events (
+            job_id TEXT NOT NULL,
+            seq INTEGER NOT NULL,
+            kind TEXT NOT NULL,
+            event_type TEXT NOT NULL,
+            data TEXT NOT NULL,
+            created_at TEXT NOT NULL,
+            PRIMARY KEY (job_id, seq),
+            FOREIGN KEY (job_id) REFERENCES jobs(id) ON DELETE CASCADE
+        )",
+        [],
+    )
+    .map_err(|error| {
+        AppError::new(
+            "history_migration_failed",
+            "Unable to initialize job event history.",
+        )
+        .with_detail(json!({"error": error.to_string()}))
+    })?;
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_job_events_job_created ON job_events (job_id, created_at)",
+        [],
+    )
+    .map_err(|error| {
+        AppError::new(
+            "history_migration_failed",
+            "Unable to initialize job event indexes.",
+        )
+        .with_detail(json!({"error": error.to_string()}))
+    })?;
     Ok(conn)
 }
 
@@ -191,8 +222,15 @@ pub fn upsert_history_job(
         .map(ToString::to_string)
         .unwrap_or_else(now_iso);
     conn.execute(
-        "INSERT OR REPLACE INTO jobs (id, command, provider, status, output_path, created_at, metadata)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
+        "INSERT INTO jobs (id, command, provider, status, output_path, created_at, metadata)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)
+         ON CONFLICT(id) DO UPDATE SET
+            command = excluded.command,
+            provider = excluded.provider,
+            status = excluded.status,
+            output_path = excluded.output_path,
+            created_at = excluded.created_at,
+            metadata = excluded.metadata",
         params![
             job_id,
             command_name,
@@ -214,6 +252,14 @@ pub fn delete_history_job(job_id: &str) -> Result<usize, AppError> {
     // This only deletes local SQLite history. Remote Origin/Archive objects
     // referenced by output_uploads stay untouched by design.
     let conn = open_history_db()?;
+    conn.execute("DELETE FROM job_events WHERE job_id = ?1", params![job_id])
+        .map_err(|error| {
+            AppError::new(
+                "history_delete_failed",
+                "Unable to delete job event history.",
+            )
+            .with_detail(json!({"error": error.to_string()}))
+        })?;
     conn.execute(
         "DELETE FROM output_uploads WHERE job_id = ?1",
         params![job_id],
@@ -230,6 +276,95 @@ pub fn delete_history_job(job_id: &str) -> Result<usize, AppError> {
             AppError::new("history_delete_failed", "Unable to delete history job.")
                 .with_detail(json!({"error": error.to_string()}))
         })
+}
+
+pub fn append_history_job_event(job_id: &str, event: &Value) -> Result<u64, AppError> {
+    let seq = event.get("seq").and_then(Value::as_u64).unwrap_or(0) as i64;
+    if seq <= 0 {
+        return Ok(0);
+    }
+    let kind = event
+        .get("kind")
+        .and_then(Value::as_str)
+        .filter(|value| !value.is_empty())
+        .unwrap_or("local");
+    let event_type = event
+        .get("type")
+        .and_then(Value::as_str)
+        .filter(|value| !value.is_empty())
+        .unwrap_or("job.event");
+    let data = event.get("data").cloned().unwrap_or_else(|| json!({}));
+    let data = serde_json::to_string(&data).unwrap_or_else(|_| "{}".to_string());
+    let mut conn = open_history_db()?;
+    let tx = conn.transaction().map_err(|error| {
+        AppError::new("history_write_failed", "Unable to record job event.")
+            .with_detail(json!({"error": error.to_string()}))
+    })?;
+    let mut insert_seq = seq;
+    loop {
+        let inserted = tx
+            .execute(
+                "INSERT OR IGNORE INTO job_events (job_id, seq, kind, event_type, data, created_at)
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+                params![job_id, insert_seq, kind, event_type, &data, now_iso()],
+            )
+            .map_err(|error| {
+                AppError::new("history_write_failed", "Unable to record job event.")
+                    .with_detail(json!({"error": error.to_string()}))
+            })?;
+        if inserted == 1 {
+            break;
+        }
+        insert_seq = tx
+            .query_row(
+                "SELECT COALESCE(MAX(seq), 0) + 1 FROM job_events WHERE job_id = ?1",
+                params![job_id],
+                |row| row.get::<_, i64>(0),
+            )
+            .map_err(|error| {
+                AppError::new(
+                    "history_query_failed",
+                    "Unable to allocate job event sequence.",
+                )
+                .with_detail(json!({"error": error.to_string()}))
+            })?;
+    }
+    tx.commit().map_err(|error| {
+        AppError::new("history_write_failed", "Unable to record job event.")
+            .with_detail(json!({"error": error.to_string()}))
+    })?;
+    Ok(insert_seq as u64)
+}
+
+pub fn list_history_job_events(job_id: &str) -> Result<Vec<Value>, AppError> {
+    let conn = open_history_db()?;
+    let mut stmt = conn
+        .prepare(
+            "SELECT seq, kind, event_type, data FROM job_events WHERE job_id = ?1 ORDER BY seq ASC",
+        )
+        .map_err(|error| {
+            AppError::new("history_query_failed", "Unable to query job events.")
+                .with_detail(json!({"error": error.to_string()}))
+        })?;
+    let rows = stmt
+        .query_map(params![job_id], |row| {
+            let data_raw: String = row.get(3)?;
+            let data = serde_json::from_str::<Value>(&data_raw).unwrap_or_else(|_| json!({}));
+            Ok(json!({
+                "seq": row.get::<_, i64>(0)?,
+                "kind": row.get::<_, String>(1)?,
+                "type": row.get::<_, String>(2)?,
+                "data": data,
+            }))
+        })
+        .map_err(|error| {
+            AppError::new("history_query_failed", "Unable to query job events.")
+                .with_detail(json!({"error": error.to_string()}))
+        })?;
+    rows.collect::<Result<Vec<_>, _>>().map_err(|error| {
+        AppError::new("history_query_failed", "Unable to read job events.")
+            .with_detail(json!({"error": error.to_string()}))
+    })
 }
 
 /// Mark a history row as soft-deleted by stamping `deleted_at` with the

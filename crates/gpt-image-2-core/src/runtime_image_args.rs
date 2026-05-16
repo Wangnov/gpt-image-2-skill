@@ -143,5 +143,6 @@ pub fn edit_args_with_recovery(
 }
 
 pub fn batch_output_path(dir: &Path, format: Option<&str>, index: u8) -> PathBuf {
-    dir.join(format!("out-{}.{}", index + 1, output_extension(format)))
+    dir.join("partial")
+        .join(format!("{}.{}", index + 1, output_extension(format)))
 }

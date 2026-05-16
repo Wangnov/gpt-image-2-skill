@@ -40,7 +40,7 @@ export function StatusChip({
       </span>
     );
   }
-  if (status === "cancelled") {
+  if (status === "cancelled" || status === "canceled") {
     return (
       <span className="inline-flex items-center gap-1.5 text-[12px] text-[color:var(--status-err)]">
         <X size={13} />

@@ -2,8 +2,11 @@ import "fake-indexeddb/auto";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   clearCreativeDrafts,
+  enqueueOfflineGenerateDraft,
   loadEditDraft,
   loadGenerateDraft,
+  loadOfflineGenerateDrafts,
+  removeOfflineGenerateDraft,
   saveEditDraft,
   saveGenerateDraft,
 } from "./drafts";
@@ -119,5 +122,30 @@ describe("creative drafts", () => {
     await clearCreativeDrafts();
 
     expect(await loadGenerateDraft()).toBeNull();
+  });
+
+  it("queues offline generate drafts and removes restored entries", async () => {
+    await enqueueOfflineGenerateDraft(
+      {
+        prompt: "city in rain",
+        provider: "mock",
+        size: "1024x1024",
+        quality: "auto",
+        format: "png",
+        n: 2,
+      },
+      "network offline",
+    );
+
+    const drafts = await loadOfflineGenerateDrafts();
+    expect(drafts).toHaveLength(1);
+    expect(drafts[0]).toMatchObject({
+      prompt: "city in rain",
+      provider: "mock",
+      reason: "network offline",
+    });
+
+    await removeOfflineGenerateDraft(drafts[0].id);
+    expect(await loadOfflineGenerateDrafts()).toEqual([]);
   });
 });

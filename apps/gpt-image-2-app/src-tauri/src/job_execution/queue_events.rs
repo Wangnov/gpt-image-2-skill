@@ -18,14 +18,31 @@ pub(crate) fn append_queue_event(
     event_type: &str,
     data: Value,
 ) -> Value {
-    let seq = inner.next_seq.entry(job_id.to_string()).or_insert(0);
+    let seq = inner.next_seq.entry(job_id.to_string()).or_insert_with(|| {
+        list_history_job_events(job_id)
+            .ok()
+            .and_then(|events| {
+                events
+                    .iter()
+                    .filter_map(|event| event.get("seq").and_then(Value::as_u64))
+                    .max()
+            })
+            .unwrap_or(0)
+    });
     *seq += 1;
-    let event = json!({
+    let mut event = json!({
         "seq": *seq,
         "kind": kind,
         "type": event_type,
         "data": data,
     });
+    if let Ok(persisted_seq) = append_history_job_event(job_id, &event)
+        && persisted_seq > 0
+        && persisted_seq != *seq
+    {
+        *seq = persisted_seq;
+        event["seq"] = json!(persisted_seq);
+    }
     let events = inner.events.entry(job_id.to_string()).or_default();
     events.push(event.clone());
     if events.len() > 200 {

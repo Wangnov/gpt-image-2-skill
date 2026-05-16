@@ -18,7 +18,14 @@ import logoUrl from "@/assets/logo.png";
 import { useTweaks } from "@/hooks/use-tweaks";
 import { useReducedMotion } from "@/hooks/use-reduced-motion";
 import { THEME_PRESETS } from "@/lib/theme-presets";
-import { loadGenerateDraft, saveGenerateDraft } from "@/lib/drafts";
+import {
+  enqueueOfflineGenerateDraft,
+  loadGenerateDraft,
+  loadOfflineGenerateDrafts,
+  removeOfflineGenerateDraft,
+  saveGenerateDraft,
+  type GenerateDraft,
+} from "@/lib/drafts";
 import { useCreateGenerate } from "@/hooks/use-jobs";
 import { useJobEvents } from "@/hooks/use-job-events";
 import { isActiveJobStatus } from "@/lib/api/types";
@@ -87,6 +94,15 @@ export function GenerateScreen({
   const [pulseKey, setPulseKey] = useState(0);
   const promptId = useId();
 
+  const applyDraft = useCallback((draft: Pick<GenerateDraft, "prompt" | "provider" | "size" | "format" | "quality" | "n">) => {
+    setPrompt(draft.prompt);
+    setProvider(draft.provider);
+    setSize(draft.size);
+    setFormat(draft.format);
+    setQuality(draft.quality);
+    setN(draft.n);
+  }, []);
+
   const { running } = useJobEvents(jobId);
   const mutate = useCreateGenerate();
   const { galleryItems, hasSplit, pendingCount, queueCount, recentCount } =
@@ -119,12 +135,7 @@ export function GenerateScreen({
       .then((draft) => {
         if (cancelled || pendingRerunAppliedRef.current) return;
         if (!draft) return;
-        setPrompt(draft.prompt);
-        setProvider(draft.provider);
-        setSize(draft.size);
-        setFormat(draft.format);
-        setQuality(draft.quality);
-        setN(draft.n);
+        applyDraft(draft);
       })
       .catch(() => undefined)
       .finally(() => {
@@ -133,7 +144,31 @@ export function GenerateScreen({
     return () => {
       cancelled = true;
     };
-  }, [tweaks.persistCreativeDrafts]);
+  }, [applyDraft, tweaks.persistCreativeDrafts]);
+
+  useEffect(() => {
+    let cancelled = false;
+    void loadOfflineGenerateDrafts()
+      .then((drafts) => {
+        if (cancelled || drafts.length === 0) return;
+        const draft = drafts[0];
+        toast.message(`有 ${drafts.length} 个离线任务草稿`, {
+          description: "网络恢复后可继续提交。",
+          duration: 8_000,
+          action: {
+            label: "恢复",
+            onClick: () => {
+              applyDraft(draft);
+              void removeOfflineGenerateDraft(draft.id);
+            },
+          },
+        });
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, [applyDraft]);
 
   useEffect(() => {
     if (!draftLoaded || !tweaks.persistCreativeDrafts) return;
@@ -264,6 +299,27 @@ export function GenerateScreen({
     } catch (error) {
       const message = errorMessage(error);
       setRunError(message);
+      if (shouldQueueOfflineDraft(error)) {
+        const count = await enqueueOfflineGenerateDraft(
+          {
+            prompt,
+            provider,
+            size: normalizedSize,
+            format,
+            quality,
+            n: safeN,
+          },
+          message,
+        ).catch(() => 0);
+        if (count > 0) {
+          toast.message("已保存到离线队列", {
+            id: toastId,
+            description: `当前共有 ${count} 个待恢复草稿。`,
+            duration: 6_000,
+          });
+          return;
+        }
+      }
       toast.error("生成失败", { id: toastId, description: message });
     } finally {
       setPendingOutputCount(null);
@@ -441,5 +497,15 @@ export function GenerateScreen({
         )}
       </div>
     </div>
+  );
+}
+
+function shouldQueueOfflineDraft(error: unknown) {
+  if (typeof navigator !== "undefined" && navigator.onLine === false) {
+    return true;
+  }
+  const message = error instanceof Error ? error.message : String(error);
+  return /failed to fetch|networkerror|load failed|network request/i.test(
+    message,
   );
 }

@@ -14,7 +14,7 @@ import {
 } from "@/lib/user-actions";
 import { useConfirm } from "@/hooks/use-confirm";
 import { isDesktopRuntime, runtimeCopy } from "@/lib/runtime-copy";
-import type { Job } from "@/lib/types";
+import type { Job, JobEvent } from "@/lib/types";
 import { cn } from "@/lib/cn";
 import { formatDateTime } from "@/lib/format";
 import { api } from "@/lib/api";
@@ -26,10 +26,16 @@ import {
 import { imageAssetFromOutput } from "@/lib/image-actions/asset";
 import type { ImageAsset } from "@/lib/image-actions/types";
 import { PlaceholderImage } from "@/components/screens/shared/placeholder-image";
-import { outputLabel } from "./shared";
+import {
+  generationSlots,
+  jobCanShowRecoveryAction,
+  jobRecoveryAction,
+  outputLabel,
+} from "./shared";
 
 type Props = {
   job: Job | null;
+  events?: JobEvent[];
   outputIndex: number;
   onClose: () => void;
   onChangeIndex: (idx: number) => void;
@@ -69,8 +75,28 @@ function Detail({ label, value }: { label: string; value: string }) {
   );
 }
 
+function slotStatusLabel(status: string) {
+  if (status === "completed") return "已生成";
+  if (status === "failed") return "失败";
+  return "缺失";
+}
+
+function eventTypeLabel(type: string) {
+  if (type === "job.queued") return "已排队";
+  if (type === "job.running") return "开始执行";
+  if (type === "job.output_ready") return "输出完成";
+  if (type === "job.storage") return "上传结果";
+  if (type === "job.partial_failed") return "部分失败";
+  if (type === "job.failed") return "失败";
+  if (type === "job.cancelled") return "已取消";
+  if (type === "job.notifications") return "通知已发送";
+  if (type === "job.completed") return "已完成";
+  return type;
+}
+
 export function JobImageDetailDrawer({
   job,
+  events = [],
   outputIndex,
   onClose,
   onChangeIndex,
@@ -90,15 +116,10 @@ export function JobImageDetailDrawer({
   );
   const copy = runtimeCopy();
   const canShowFileLocation = isDesktopRuntime();
-  const recoverability = String(job?.metadata?.recoverability ?? "");
-  const recoveryLabel =
-    recoverability === "recoverable.local_response_cached"
-      ? "继续完成"
-      : "重新生成";
-  const recoveryTip =
-    recoverability === "recoverable.local_response_cached"
-      ? "继续完成（不再次调用 API）"
-      : "重新生成（将再次调用 API）";
+  const recoveryOptions = {
+    supportsLocalRecovery: api.canUsePersistentResultLibrary,
+  };
+  const recovery = job ? jobRecoveryAction(job, recoveryOptions) : null;
 
   const handleRerun = () => {
     if (!job) return;
@@ -153,6 +174,14 @@ export function JobImageDetailDrawer({
   const created = formatDateTime(job?.created_at);
   const updated = formatDateTime(job?.updated_at);
   const letter = outputCount > 0 ? outputLabel(activeOutputIndex) : "—";
+  const slots = job ? generationSlots(job) : [];
+  const receivedResponse =
+    recoverabilityFromJob(job) === "recoverable.local_response_cached" ||
+    slots.some((slot) => slot.raw_response_present);
+  const timeline = events
+    .slice()
+    .sort((a, b) => a.seq - b.seq)
+    .slice(-12);
 
   const goPrev = () => {
     if (outputCount <= 1) return;
@@ -305,13 +334,14 @@ export function JobImageDetailDrawer({
             )}
             {onRetry &&
               job &&
-              (job.status === "failed" || job.status === "cancelled") && (
-                <Tooltip text={recoveryTip}>
+              jobCanShowRecoveryAction(job, recoveryOptions) &&
+              recovery && (
+                <Tooltip text={recovery.title}>
                   <Button
                     variant="secondary"
                     size="iconSm"
                     icon="reload"
-                    aria-label={recoveryLabel}
+                    aria-label={recovery.label}
                     onClick={() => onRetry(job.id)}
                   />
                 </Tooltip>
@@ -552,8 +582,94 @@ export function JobImageDetailDrawer({
               )}
             </div>
           </section>
+
+          {(slots.length > 0 || recovery || timeline.length > 0) && (
+            <section className="surface-panel p-4 space-y-3.5">
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <div className="t-caps">恢复状态</div>
+                  <div className="mt-1 text-[12px] text-muted">
+                    响应完整接收：{receivedResponse ? "是" : "否 / 不确定"}
+                  </div>
+                </div>
+                {recovery &&
+                  job &&
+                  jobCanShowRecoveryAction(job, recoveryOptions) && (
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    icon="reload"
+                    title={recovery.title}
+                    onClick={() => onRetry?.(job.id)}
+                  >
+                    {recovery.label}
+                  </Button>
+                )}
+              </div>
+
+              {slots.length > 0 && (
+                <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-4">
+                  {slots.map((slot) => (
+                    <div
+                      key={slot.index}
+                      className="rounded-md border border-[color:var(--w-08)] bg-[color:var(--w-03)] px-2.5 py-2"
+                    >
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="font-mono text-[11px] text-faint">
+                          {outputLabel(slot.index)}
+                        </span>
+                        <span
+                          className={cn(
+                            "text-[11px] font-medium",
+                            slot.status === "completed"
+                              ? "text-[color:var(--status-ok-soft)]"
+                              : "text-[color:var(--status-err)]",
+                          )}
+                        >
+                          {slotStatusLabel(slot.status)}
+                        </span>
+                      </div>
+                      <div className="mt-1 truncate text-[11px] text-muted">
+                        {slot.error || slot.recoverability || "—"}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {timeline.length > 0 && (
+                <div className="space-y-1.5">
+                  <div className="t-caps">时间线</div>
+                  <div className="space-y-1.5">
+                    {timeline.map((event) => (
+                      <div
+                        key={`${event.seq}-${event.type}`}
+                        className="flex min-w-0 items-center gap-2 text-[12px]"
+                      >
+                        <span className="w-8 shrink-0 font-mono text-[11px] text-faint">
+                          #{event.seq}
+                        </span>
+                        <span className="shrink-0 text-foreground">
+                          {eventTypeLabel(event.type)}
+                        </span>
+                        {typeof event.data?.status === "string" && (
+                          <span className="truncate text-muted">
+                            {event.data.status}
+                          </span>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </section>
+          )}
         </div>
       </Drawer>
     </>
   );
+}
+
+function recoverabilityFromJob(job: Job | null) {
+  return String(job?.metadata?.recoverability ?? "");
 }

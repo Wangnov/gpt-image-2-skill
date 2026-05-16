@@ -41,9 +41,13 @@ export function JobDrawerPreview({
     new Set(),
   );
   const displayUrl = rehydratedUrl || previewUrl;
-  const terminal = ["completed", "partial_failed", "failed", "cancelled"].includes(
-    job.status,
-  );
+  const terminal = [
+    "completed",
+    "partial_failed",
+    "failed",
+    "cancelled",
+    "canceled",
+  ].includes(job.status);
   const outputErrors = useMemo(() => jobOutputErrors(job), [job]);
   const errorsByIndex = useMemo(
     () => new Map(outputErrors.map((error) => [error.index, error])),
@@ -127,7 +131,9 @@ export function JobDrawerPreview({
             seed={seed + selectedOutput}
             label={displayUrl && imageFailed ? "远端不可用" : undefined}
           />
-        ) : job.status === "failed" || job.status === "cancelled" ? (
+        ) : job.status === "failed" ||
+          job.status === "cancelled" ||
+          job.status === "canceled" ? (
           <div className="flex h-full w-full items-center justify-center text-faint">
             <Icon name="warn" size={24} aria-hidden="true" />
           </div>

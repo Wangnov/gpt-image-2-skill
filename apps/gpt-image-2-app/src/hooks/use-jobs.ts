@@ -105,9 +105,9 @@ export function useResumeJob() {
       action,
     }: {
       id: string;
-      action: "continue_save" | "resubmit" | "discard";
+      action: "continue_save" | "fill_missing" | "reupload" | "resubmit" | "discard";
     }) => api.resumeJob(id, action),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["jobs"] }),
+    onSettled: () => qc.invalidateQueries({ queryKey: ["jobs"] }),
   });
 }
 

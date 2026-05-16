@@ -16,6 +16,7 @@ import {
 } from "@/hooks/use-config";
 import { cn } from "@/lib/cn";
 import { credentialSecretDisplay } from "@/lib/credential-display";
+import { providerCapabilityBadges } from "@/lib/provider-capabilities";
 import { effectiveDefaultProvider } from "@/lib/providers";
 import type { ProviderConfig, ServerConfig } from "@/lib/types";
 
@@ -33,6 +34,7 @@ type CredCardProps = {
   onUse: () => void;
   onTest: () => void;
   onDelete: () => void;
+  config?: ServerConfig;
 };
 
 function CredCard({
@@ -44,6 +46,7 @@ function CredCard({
   onUse,
   onTest,
   onDelete,
+  config,
 }: CredCardProps) {
   const confirm = useConfirm();
   const reducedMotion = useReducedMotion();
@@ -78,6 +81,7 @@ function CredCard({
       c?.source === "file" || c?.source === "env" || c?.source === "keychain",
   );
   const apiKeyDisplay = credentialSecretDisplay(apiKeyCredential);
+  const capabilityBadges = providerCapabilityBadges(config, name);
 
   return (
     <div
@@ -128,6 +132,16 @@ function CredCard({
           {prov.model && (
             <div className="text-[11px] text-faint font-mono">{prov.model}</div>
           )}
+          <div className="mt-2 flex flex-wrap gap-1.5">
+            {capabilityBadges.map((badge) => (
+              <span
+                key={badge}
+                className="rounded-md border border-[color:var(--w-08)] bg-[color:var(--w-04)] px-1.5 py-0.5 text-[10.5px] text-muted"
+              >
+                {badge}
+              </span>
+            ))}
+          </div>
         </div>
       </div>
 
@@ -340,6 +354,7 @@ export function CredsPanel({ config }: { config?: ServerConfig }) {
                 <CredCard
                   name={name}
                   prov={providers[name]}
+                  config={config}
                   isDefault={name === effectiveDefault}
                   testStatus={testMap[name]?.status}
                   onEdit={() => setEditingName(name)}

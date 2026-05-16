@@ -138,11 +138,16 @@ export function filterJobs(
     filtered = filtered.filter((job) => isActiveJobStatus(job.status));
   }
   if (filter === "completed") {
-    filtered = filtered.filter((job) => job.status === "completed");
+    filtered = filtered.filter(
+      (job) => job.status === "completed" || job.status === "partial_failed",
+    );
   }
   if (filter === "failed") {
     filtered = filtered.filter(
-      (job) => job.status === "failed" || job.status === "cancelled",
+      (job) =>
+        job.status === "failed" ||
+        job.status === "partial_failed" ||
+        job.status === "cancelled",
     );
   }
   return filtered.filter((job) => jobMatchesQuery(job, query));

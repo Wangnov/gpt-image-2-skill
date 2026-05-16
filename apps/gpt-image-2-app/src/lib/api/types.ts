@@ -38,6 +38,7 @@ export type TauriJobResponse = {
   queue?: QueueStatus;
   queued?: boolean;
   canceled?: boolean;
+  recovered?: boolean;
   payload?: {
     output?: {
       path?: string | null;
@@ -172,7 +173,7 @@ export type ApiClient = RuntimeCapabilities & {
   retryJob(jobId: string): Promise<TauriJobResponse>;
   resumeJob(
     jobId: string,
-    action: "continue_save" | "resubmit" | "discard",
+    action: "continue_save" | "fill_missing" | "reupload" | "resubmit" | "discard",
   ): Promise<TauriJobResponse>;
   outputUrl(jobId: string, index?: number): string;
   outputPath(jobId: string, index?: number): string | undefined;

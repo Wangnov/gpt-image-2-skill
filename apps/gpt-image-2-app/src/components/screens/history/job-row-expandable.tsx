@@ -29,10 +29,12 @@ import { StatusChip } from "./status-chip";
 import {
   jobErrorDetailText,
   jobErrorMessage,
+  jobCanShowRecoveryAction,
   jobMetaItems,
   jobOutputErrors,
   jobPrompt,
   jobRatio,
+  jobRecoveryAction,
   jobStatusLabel,
   jobThumbPath,
   jobThumbUrl,
@@ -69,19 +71,11 @@ export function JobRowExpandable({
   const prompt = jobPrompt(job);
   const status = job.status;
   const showCancel = isActiveJobStatus(status);
-  const showRetry =
-    status === "failed" ||
-    status === "partial_failed" ||
-    status === "cancelled";
-  const recoverability = String(job.metadata?.recoverability ?? "");
-  const recoveryLabel =
-    recoverability === "recoverable.local_response_cached"
-      ? "继续完成"
-      : "重新生成";
-  const recoveryTitle =
-    recoverability === "recoverable.local_response_cached"
-      ? "使用已收到的响应继续完成，不再次调用 API"
-      : "重新生成 · 将再次调用 API";
+  const recoveryOptions = {
+    supportsLocalRecovery: api.canUsePersistentResultLibrary,
+  };
+  const showRetry = jobCanShowRecoveryAction(job, recoveryOptions);
+  const recovery = jobRecoveryAction(job, recoveryOptions);
   const isQueueing = status === "queued";
   const isRunning = status === "running" || status === "uploading";
   const outputIndexes = jobOutputIndexes(job);
@@ -267,11 +261,11 @@ export function JobRowExpandable({
                 onRetry();
               }}
               className="inline-flex h-7 items-center gap-1 rounded-md px-2 text-[11.5px] font-semibold text-foreground transition-colors hover:bg-[color:var(--accent-12)]"
-              aria-label={recoveryLabel}
-              title={recoveryTitle}
+              aria-label={recovery.label}
+              title={recovery.title}
             >
               <Loader2 size={12} className="hidden" />
-              {recoveryLabel}
+              {recovery.label}
             </button>
           )}
           <ChevronDown
@@ -500,13 +494,13 @@ export function JobRowExpandable({
                       variant="secondary"
                       size="sm"
                       icon="reload"
-                      title={recoveryTitle}
+                      title={recovery.title}
                       onClick={(e) => {
                         e.stopPropagation();
                         onRetry();
                       }}
                     >
-                      {recoveryLabel}
+                      {recovery.label}
                     </Button>
                   )}
                   <div className="flex-1" />

@@ -41,12 +41,26 @@ pub(crate) async fn history_show(
     Path(job_id): Path<String>,
     State(state): State<JobQueueState>,
 ) -> ApiResult {
-    let events = state
+    let mut events = list_history_job_events(&job_id)
+        .map_err(app_error)
+        .map_err(ApiError::internal)?;
+    let in_memory_events = state
         .inner
         .lock()
         .ok()
         .and_then(|inner| inner.events.get(&job_id).cloned())
         .unwrap_or_default();
+    for event in in_memory_events {
+        let seq = event.get("seq").and_then(Value::as_u64);
+        if seq.is_none()
+            || !events
+                .iter()
+                .any(|existing| existing.get("seq").and_then(Value::as_u64) == seq)
+        {
+            events.push(event);
+        }
+    }
+    events.sort_by_key(|event| event.get("seq").and_then(Value::as_u64).unwrap_or(0));
     Ok(Json(json!({
         "history_file": history_db_path().display().to_string(),
         "job": show_history_job(&job_id).map_err(app_error).map_err(ApiError::not_found)?,

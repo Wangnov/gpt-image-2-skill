@@ -1,12 +1,16 @@
 import { describe, expect, it } from "vitest";
 import type { Job } from "@/lib/types";
 import {
+  derivedRecoverability,
   isClearableTerminalJob,
+  jobCanShowRecoveryAction,
   jobErrorMessage,
   jobMetaItems,
   jobOutputErrors,
+  jobRecoveryAction,
   jobStatusLabel,
   plannedOutputCount,
+  recoveryToastNotice,
 } from "./shared";
 
 function job(overrides: Partial<Job> = {}): Job {
@@ -59,7 +63,139 @@ describe("history job display helpers", () => {
     );
     expect(isClearableTerminalJob(job({ status: "failed" }))).toBe(true);
     expect(isClearableTerminalJob(job({ status: "cancelled" }))).toBe(true);
+    expect(isClearableTerminalJob(job({ status: "canceled" }))).toBe(true);
     expect(isClearableTerminalJob(job({ status: "running" }))).toBe(false);
     expect(isClearableTerminalJob(job({ status: "uploading" }))).toBe(false);
+  });
+
+  it("treats canceled jobs like cancelled jobs in recovery display", () => {
+    const value = job({ status: "canceled", outputs: [], output_path: "" });
+
+    expect(jobStatusLabel(value)).toBe("已取消");
+    expect(jobCanShowRecoveryAction(value)).toBe(true);
+    expect(jobRecoveryAction(value).action).toBe("resubmit");
+  });
+
+  it("shows reupload for completed jobs whose storage upload failed", () => {
+    const value = job({
+      status: "completed",
+      storage_status: "failed",
+      outputs: [
+        { index: 0, path: "/tmp/a.png", bytes: 1024 },
+        { index: 1, path: "/tmp/b.png", bytes: 1024 },
+        { index: 2, path: "/tmp/c.png", bytes: 1024 },
+      ],
+      metadata: {
+        prompt: "make it",
+        n: 3,
+        recoverability: "recoverable.local_response_cached",
+      },
+    });
+
+    expect(derivedRecoverability(value)).toBe("recoverable.upload_failed");
+    expect(jobCanShowRecoveryAction(value)).toBe(true);
+    expect(jobRecoveryAction(value).action).toBe("reupload");
+  });
+
+  it("keeps fill_missing ahead of reupload for partial output jobs", () => {
+    const value = job({
+      status: "partial_failed",
+      storage_status: "failed",
+      metadata: {
+        prompt: "make it",
+        n: 3,
+        recoverability: "recoverable.partial_outputs",
+        generation_slots: [
+          { index: 0, status: "completed", path: "/tmp/a.png" },
+          { index: 1, status: "failed", error: "upstream rejected" },
+          { index: 2, status: "missing" },
+        ],
+      },
+    });
+
+    expect(derivedRecoverability(value)).toBe("recoverable.partial_outputs");
+    expect(jobCanShowRecoveryAction(value)).toBe(true);
+    expect(jobRecoveryAction(value).action).toBe("fill_missing");
+  });
+
+  it("falls back to resubmit when local recovery actions are unavailable", () => {
+    const partial = job({
+      status: "partial_failed",
+      metadata: {
+        prompt: "make it",
+        n: 3,
+        recoverability: "recoverable.partial_outputs",
+        generation_slots: [
+          { index: 0, status: "completed", path: "/tmp/a.png" },
+          { index: 1, status: "missing" },
+        ],
+      },
+    });
+    const uploadFailed = job({
+      status: "completed",
+      storage_status: "failed",
+      outputs: [
+        { index: 0, path: "/tmp/a.png", bytes: 1024 },
+        { index: 1, path: "/tmp/b.png", bytes: 1024 },
+        { index: 2, path: "/tmp/c.png", bytes: 1024 },
+      ],
+    });
+
+    expect(
+      jobRecoveryAction(partial, { supportsLocalRecovery: false }).action,
+    ).toBe("resubmit");
+    expect(
+      jobRecoveryAction(uploadFailed, { supportsLocalRecovery: false }).action,
+    ).toBe("resubmit");
+    expect(
+      jobCanShowRecoveryAction(uploadFailed, { supportsLocalRecovery: false }),
+    ).toBe(false);
+  });
+
+  it("does not report partial fill_missing recovery as success", () => {
+    const value = job({
+      id: "job-fill-missing",
+      status: "partial_failed",
+      metadata: {
+        prompt: "make it",
+        n: 3,
+        recoverability: "recoverable.partial_outputs",
+        generation_slots: [
+          { index: 0, status: "completed", path: "/tmp/a.png" },
+          { index: 1, status: "failed", error: "upstream rejected" },
+          { index: 2, status: "missing" },
+        ],
+      },
+    });
+    const recovery = jobRecoveryAction(value);
+
+    expect(
+      recoveryToastNotice(
+        recovery,
+        {
+          job_id: "job-fill-missing",
+          job: value,
+          recovered: false,
+        },
+        value.id,
+      ),
+    ).toMatchObject({
+      kind: "warning",
+      title: "仍有图片未补齐",
+    });
+    expect(
+      recoveryToastNotice(
+        recovery,
+        {
+          job_id: "job-fill-missing",
+          job: { ...value, status: "failed", outputs: [] },
+          recovered: false,
+        },
+        value.id,
+      ),
+    ).toMatchObject({
+      kind: "error",
+      title: "补齐未完成",
+    });
   });
 });

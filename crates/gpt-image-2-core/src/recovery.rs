@@ -125,6 +125,8 @@ pub struct RecoveryState {
     pub attempts: Vec<RecoveryAttempt>,
     #[serde(default)]
     pub attempts_truncated_count: usize,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub generation_slots: Vec<Value>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub interrupted_reason: Option<String>,
 }
@@ -274,6 +276,12 @@ pub fn merge_recovery_metadata(mut metadata: Value, job_dir: &Path) -> Value {
     if let Value::Object(map) = &mut metadata {
         map.remove("attempts");
         map.remove("attempts_truncated_count");
+        if !state.generation_slots.is_empty() {
+            map.insert(
+                "generation_slots".to_string(),
+                json!(state.generation_slots),
+            );
+        }
         if let Some(stage) = state.stage {
             map.insert("stage".to_string(), json!(stage));
         }
@@ -575,12 +583,109 @@ pub fn batch_recovery_job_dir(parent_dir: &Path, index: u8) -> PathBuf {
     parent_dir.join(format!("recovery-part-{}", index + 1))
 }
 
+pub fn generation_slots_from_batch_payload(
+    request_count: usize,
+    payload: &Value,
+    child_dirs: &[PathBuf],
+) -> Vec<Value> {
+    let files = payload
+        .get("output")
+        .and_then(|output| output.get("files"))
+        .and_then(Value::as_array)
+        .cloned()
+        .unwrap_or_default();
+    let errors = payload
+        .get("batch")
+        .and_then(|batch| batch.get("errors"))
+        .and_then(Value::as_array)
+        .cloned()
+        .unwrap_or_default();
+    generation_slots_from_outputs(request_count, &files, &errors, child_dirs)
+}
+
+pub fn generation_slots_from_outputs(
+    request_count: usize,
+    files: &[Value],
+    errors: &[Value],
+    child_dirs: &[PathBuf],
+) -> Vec<Value> {
+    (0..request_count)
+        .map(|index| {
+            let file = files
+                .iter()
+                .find(|file| file.get("index").and_then(Value::as_u64) == Some(index as u64));
+            let error = errors
+                .iter()
+                .find(|error| error.get("index").and_then(Value::as_u64) == Some(index as u64));
+            let child_dir = child_dirs.get(index);
+            let child_state = child_dir.and_then(|dir| load_recovery_state(dir));
+            let recoverability = child_state
+                .as_ref()
+                .and_then(|state| state.recoverability.as_deref())
+                .or_else(|| {
+                    child_state.as_ref().map(|state| {
+                        classify_from_state_and_evidence(
+                            state,
+                            child_dir.is_some_and(|dir| raw_response_path(dir).is_file()),
+                        )
+                        .as_str()
+                    })
+                })
+                .unwrap_or(Recoverability::NeverDispatched.as_str());
+            let status = if file.is_some() {
+                "completed"
+            } else if error.is_some() {
+                "failed"
+            } else {
+                "missing"
+            };
+            json!({
+                "index": index,
+                "status": status,
+                "path": file.and_then(|file| file.get("path")).cloned().unwrap_or(Value::Null),
+                "bytes": file.and_then(|file| file.get("bytes")).cloned().unwrap_or(Value::Null),
+                "error": error.and_then(|error| error.get("message")).cloned().unwrap_or(Value::Null),
+                "recoverability": recoverability,
+                "raw_response_present": child_dir.is_some_and(|dir| raw_response_path(dir).is_file()),
+                "recovery_job_dir": child_dir
+                    .map(|dir| json!(dir.display().to_string()))
+                    .unwrap_or(Value::Null),
+            })
+        })
+        .collect()
+}
+
+pub fn missing_generation_slot_indices(metadata: &Value) -> Vec<usize> {
+    metadata
+        .get("generation_slots")
+        .and_then(Value::as_array)
+        .map(|slots| {
+            slots
+                .iter()
+                .filter_map(|slot| {
+                    let index = slot.get("index").and_then(Value::as_u64)? as usize;
+                    let status = slot
+                        .get("status")
+                        .and_then(Value::as_str)
+                        .unwrap_or("missing");
+                    if status == "completed" {
+                        None
+                    } else {
+                        Some(index)
+                    }
+                })
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
 pub fn write_batch_recovery_summary(
     parent_job_id: &str,
     parent_dir: &Path,
     child_dirs: &[PathBuf],
     outputs_present: usize,
     failures: usize,
+    generation_slots: Vec<Value>,
 ) -> Result<(), AppError> {
     let mut attempts = Vec::new();
     let mut attempts_truncated_count = 0usize;
@@ -634,6 +739,7 @@ pub fn write_batch_recovery_summary(
         recoverability: Some(recoverability.as_str().to_string()),
         attempts,
         attempts_truncated_count,
+        generation_slots,
         interrupted_reason: None,
     };
     atomic_write_json(
@@ -716,7 +822,7 @@ pub fn build_recovery_descriptor(job: &Value) -> Value {
         .and_then(|path| fs::metadata(path).ok())
         .map(|metadata| metadata.len())
         .unwrap_or(0);
-    let recoverability = metadata
+    let mut recoverability = metadata
         .get("recoverability")
         .and_then(Value::as_str)
         .and_then(Recoverability::from_str)
@@ -734,7 +840,28 @@ pub fn build_recovery_descriptor(job: &Value) -> Value {
         .and_then(Value::as_array)
         .map(Vec::len)
         .unwrap_or(0);
-    let outputs_expected = metadata.get("n").and_then(Value::as_u64).unwrap_or(1);
+    let generation_slots = metadata
+        .get("generation_slots")
+        .and_then(Value::as_array)
+        .cloned()
+        .unwrap_or_default();
+    let outputs_expected = if generation_slots.is_empty() {
+        metadata.get("n").and_then(Value::as_u64).unwrap_or(1)
+    } else {
+        generation_slots.len() as u64
+    };
+    let upload_failed = outputs_present > 0
+        && job
+            .get("storage_status")
+            .and_then(Value::as_str)
+            .map(|status| matches!(status, "failed" | "partial_failed"))
+            .unwrap_or(false);
+    if upload_failed
+        && !matches!(recoverability, Recoverability::PartialOutputs)
+        && outputs_present as u64 >= outputs_expected
+    {
+        recoverability = Recoverability::UploadFailed;
+    }
     let is_completed = job
         .get("status")
         .and_then(Value::as_str)
@@ -745,11 +872,12 @@ pub fn build_recovery_descriptor(job: &Value) -> Value {
             .and_then(Value::as_str)
             .map(|stage| stage == RecoveryStage::Completed.as_str())
             .unwrap_or(false);
-    let (primary_action, secondary_actions) = if is_completed {
-        (Value::Null, Vec::new())
-    } else {
-        recovery_actions(job_id, &recoverability)
-    };
+    let (primary_action, secondary_actions) =
+        if is_completed && !matches!(recoverability, Recoverability::UploadFailed) {
+            (Value::Null, Vec::new())
+        } else {
+            recovery_actions(job_id, &recoverability)
+        };
     json!({
         "job_id": job_id,
         "recoverability": recoverability.as_str(),
@@ -759,7 +887,8 @@ pub fn build_recovery_descriptor(job: &Value) -> Value {
             "raw_response_present": raw_present,
             "raw_response_bytes": raw_bytes,
             "outputs_present": outputs_present,
-            "outputs_expected": outputs_expected
+            "outputs_expected": outputs_expected,
+            "generation_slots": generation_slots
         }
     })
 }
@@ -783,6 +912,27 @@ fn recovery_actions(job_id: &str, recoverability: &Recoverability) -> (Value, Ve
     });
     match recoverability {
         Recoverability::LocalResponseCached => (continue_save, vec![resubmit]),
+        Recoverability::PartialOutputs => (
+            json!({
+                "id": "fill_missing",
+                "label": "生成缺失的 N 张",
+                "endpoint": endpoint,
+                "billable": true,
+                "estimated_cost_label": Value::Null,
+                "warning": "只会为缺失的图片再次调用 API"
+            }),
+            vec![resubmit],
+        ),
+        Recoverability::UploadFailed => (
+            json!({
+                "id": "reupload",
+                "label": "重新上传",
+                "endpoint": endpoint,
+                "billable": false,
+                "explanation": "图片已在本地生成，可不重新调用 API 直接重传。"
+            }),
+            Vec::new(),
+        ),
         Recoverability::NeverDispatched => (resubmit, Vec::new()),
         Recoverability::RemoteMaybeAccepted => (
             json!({
