@@ -1,6 +1,6 @@
 [package]
 name = "gpt-image-2-skill"
-version = "0.6.0"
+version = "0.6.1"
 edition.workspace = true
 license.workspace = true
 repository.workspace = true
@@ -11,7 +11,7 @@ description = "Agent-first GPT Image 2 CLI and installable skill runtime."
 readme = "../../README.md"
 
 [dependencies]
-gpt-image-2-core = { path = "../gpt-image-2-core", version = "0.6.0" }
+gpt-image-2-core = { path = "../gpt-image-2-core", version = "0.6.1" }
 
 [dev-dependencies]
 tempfile = "3.23.0"
