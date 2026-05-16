@@ -1,0 +1,162 @@
+name: Publish GHCR Image
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: Git ref to build, usually a release tag such as v0.6.1
+        required: true
+        default: v0.6.1
+        type: string
+      version:
+        description: Image version tag without leading v. Defaults to ref without leading v.
+        required: false
+        type: string
+      latest:
+        description: Also tag this image as latest
+        required: false
+        default: true
+        type: boolean
+
+permissions:
+  contents: read
+  packages: write
+  attestations: write
+  id-token: write
+
+concurrency:
+  group: ghcr-${{ github.event.release.tag_name || inputs.ref || github.ref_name }}
+  cancel-in-progress: false
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: wangnov/gpt-image-2
+
+jobs:
+  publish:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Resolve release inputs
+        id: release
+        shell: bash
+        env:
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
+          RELEASE_PRERELEASE: ${{ github.event.release.prerelease }}
+          DISPATCH_REF: ${{ inputs.ref }}
+          DISPATCH_VERSION: ${{ inputs.version }}
+          DISPATCH_LATEST: ${{ inputs.latest }}
+        run: |
+          ref="${RELEASE_TAG:-${DISPATCH_REF:-}}"
+          if [[ -z "$ref" ]]; then
+            ref="$GITHUB_REF_NAME"
+          fi
+          ref_tag="${ref#refs/tags/}"
+          ref_tag="${ref_tag#refs/heads/}"
+
+          version="${DISPATCH_VERSION:-}"
+          if [[ -z "$version" ]]; then
+            version="${ref_tag#v}"
+          fi
+
+          if [[ ! "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+([-+][0-9A-Za-z.-]+)?$ ]]; then
+            echo "Expected a SemVer version such as 0.6.1, got: $version" >&2
+            exit 1
+          fi
+
+          docker_version="${version//+/-}"
+          docker_ref_tag="${ref_tag//+/-}"
+          publish_latest="${DISPATCH_LATEST:-true}"
+          if [[ "$RELEASE_PRERELEASE" == "true" ]]; then
+            publish_latest="false"
+          fi
+
+          {
+            echo "ref=$ref"
+            echo "version=$version"
+            echo "docker_version=$docker_version"
+            echo "docker_ref_tag=$docker_ref_tag"
+            echo "publish_latest=$publish_latest"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Checkout repository
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ steps.release.outputs.ref }}
+          persist-credentials: false
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract Docker metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        env:
+          DOCKER_METADATA_ANNOTATIONS_LEVELS: index,manifest
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          tags: |
+            type=raw,value=${{ steps.release.outputs.docker_version }}
+            type=raw,value=${{ steps.release.outputs.docker_ref_tag }}
+            type=raw,value=latest,enable=${{ steps.release.outputs.publish_latest == 'true' }}
+          labels: |
+            org.opencontainers.image.title=GPT Image 2 Web
+            org.opencontainers.image.description=Self-hosted Docker Web runtime for GPT Image 2
+            org.opencontainers.image.source=https://github.com/Wangnov/gpt-image-2-skill
+            org.opencontainers.image.url=https://github.com/Wangnov/gpt-image-2-skill
+            org.opencontainers.image.documentation=https://github.com/Wangnov/gpt-image-2-skill/blob/main/docs/docker-web.md
+            org.opencontainers.image.licenses=MIT
+            org.opencontainers.image.version=${{ steps.release.outputs.version }}
+          annotations: |
+            org.opencontainers.image.title=GPT Image 2 Web
+            org.opencontainers.image.description=Self-hosted Docker Web runtime for GPT Image 2
+            org.opencontainers.image.source=https://github.com/Wangnov/gpt-image-2-skill
+            org.opencontainers.image.version=${{ steps.release.outputs.version }}
+
+      - name: Build and push Docker image
+        id: push
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          file: ./Dockerfile
+          platforms: linux/amd64,linux/arm64
+          pull: true
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          annotations: ${{ steps.meta.outputs.annotations }}
+          cache-from: type=gha,scope=gpt-image-2-web
+          cache-to: type=gha,mode=max,scope=gpt-image-2-web
+          provenance: true
+          sbom: true
+
+      - name: Generate artifact attestation
+        uses: actions/attest@v4
+        with:
+          subject-name: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          subject-digest: ${{ steps.push.outputs.digest }}
+          push-to-registry: true
+
+      - name: Summarize image
+        shell: bash
+        run: |
+          {
+            echo "### GHCR image"
+            echo
+            echo "- Image: \`${REGISTRY}/${IMAGE_NAME}\`"
+            echo "- Version: \`${{ steps.release.outputs.version }}\`"
+            echo "- Digest: \`${{ steps.push.outputs.digest }}\`"
+            echo "- Tags:"
+            printf '%s\n' '${{ steps.meta.outputs.tags }}' | sed 's/^/  - `/' | sed 's/$/`/'
+          } >> "$GITHUB_STEP_SUMMARY"

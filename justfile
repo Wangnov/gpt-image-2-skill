@@ -99,6 +99,10 @@ release level="patch":
 release-tauri tag:
     gh workflow run "Tauri App Release" -f release_tag="{{ tag }}" -f release_draft=false -f prerelease=false
 
+# Build and publish the Docker Web image to GHCR for an existing release tag.
+release-ghcr tag latest="true":
+    version="{{ tag }}"; version="${version#v}"; gh workflow run "Publish GHCR Image" -f ref="{{ tag }}" -f version="$version" -f latest="{{ latest }}"
+
 # Watch a GitHub Actions run until completion.
 watch run_id:
     gh run watch "{{ run_id }}" --exit-status

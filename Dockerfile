@@ -13,6 +13,12 @@ COPY apps/gpt-image-2-app/src-tauri ./apps/gpt-image-2-app/src-tauri
 RUN cargo build --release -p gpt-image-2-web
 
 FROM debian:bookworm-slim
+LABEL org.opencontainers.image.title="GPT Image 2 Web" \
+      org.opencontainers.image.description="Self-hosted Docker Web runtime for GPT Image 2" \
+      org.opencontainers.image.source="https://github.com/Wangnov/gpt-image-2-skill" \
+      org.opencontainers.image.url="https://github.com/Wangnov/gpt-image-2-skill" \
+      org.opencontainers.image.documentation="https://github.com/Wangnov/gpt-image-2-skill/blob/main/docs/docker-web.md" \
+      org.opencontainers.image.licenses="MIT"
 RUN apt-get update \
   && apt-get install -y --no-install-recommends ca-certificates \
   && rm -rf /var/lib/apt/lists/*
