@@ -189,7 +189,7 @@ fn history_job_events_do_not_replace_on_duplicate_seq() {
         json!({}),
     )
     .unwrap();
-    append_history_job_event(
+    let first_seq = append_history_job_event(
         "job-events-duplicate-seq",
         &json!({
             "seq": 1,
@@ -199,7 +199,7 @@ fn history_job_events_do_not_replace_on_duplicate_seq() {
         }),
     )
     .unwrap();
-    append_history_job_event(
+    let second_seq = append_history_job_event(
         "job-events-duplicate-seq",
         &json!({
             "seq": 1,
@@ -209,6 +209,8 @@ fn history_job_events_do_not_replace_on_duplicate_seq() {
         }),
     )
     .unwrap();
+    assert_eq!(first_seq, 1);
+    assert_eq!(second_seq, 2);
 
     let events = list_history_job_events("job-events-duplicate-seq").unwrap();
     assert_eq!(events.len(), 2);

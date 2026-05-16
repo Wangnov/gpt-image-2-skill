@@ -118,6 +118,40 @@ describe("history job display helpers", () => {
     expect(jobRecoveryAction(value).action).toBe("fill_missing");
   });
 
+  it("falls back to resubmit when local recovery actions are unavailable", () => {
+    const partial = job({
+      status: "partial_failed",
+      metadata: {
+        prompt: "make it",
+        n: 3,
+        recoverability: "recoverable.partial_outputs",
+        generation_slots: [
+          { index: 0, status: "completed", path: "/tmp/a.png" },
+          { index: 1, status: "missing" },
+        ],
+      },
+    });
+    const uploadFailed = job({
+      status: "completed",
+      storage_status: "failed",
+      outputs: [
+        { index: 0, path: "/tmp/a.png", bytes: 1024 },
+        { index: 1, path: "/tmp/b.png", bytes: 1024 },
+        { index: 2, path: "/tmp/c.png", bytes: 1024 },
+      ],
+    });
+
+    expect(
+      jobRecoveryAction(partial, { supportsLocalRecovery: false }).action,
+    ).toBe("resubmit");
+    expect(
+      jobRecoveryAction(uploadFailed, { supportsLocalRecovery: false }).action,
+    ).toBe("resubmit");
+    expect(
+      jobCanShowRecoveryAction(uploadFailed, { supportsLocalRecovery: false }),
+    ).toBe(false);
+  });
+
   it("does not report partial fill_missing recovery as success", () => {
     const value = job({
       id: "job-fill-missing",

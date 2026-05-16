@@ -116,7 +116,10 @@ export function JobImageDetailDrawer({
   );
   const copy = runtimeCopy();
   const canShowFileLocation = isDesktopRuntime();
-  const recovery = job ? jobRecoveryAction(job) : null;
+  const recoveryOptions = {
+    supportsLocalRecovery: api.canUsePersistentResultLibrary,
+  };
+  const recovery = job ? jobRecoveryAction(job, recoveryOptions) : null;
 
   const handleRerun = () => {
     if (!job) return;
@@ -331,7 +334,7 @@ export function JobImageDetailDrawer({
             )}
             {onRetry &&
               job &&
-              jobCanShowRecoveryAction(job) &&
+              jobCanShowRecoveryAction(job, recoveryOptions) &&
               recovery && (
                 <Tooltip text={recovery.title}>
                   <Button
@@ -589,7 +592,9 @@ export function JobImageDetailDrawer({
                     响应完整接收：{receivedResponse ? "是" : "否 / 不确定"}
                   </div>
                 </div>
-                {recovery && job && jobCanShowRecoveryAction(job) && (
+                {recovery &&
+                  job &&
+                  jobCanShowRecoveryAction(job, recoveryOptions) && (
                   <Button
                     variant="secondary"
                     size="sm"

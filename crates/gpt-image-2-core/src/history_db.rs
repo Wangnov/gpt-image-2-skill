@@ -278,10 +278,10 @@ pub fn delete_history_job(job_id: &str) -> Result<usize, AppError> {
         })
 }
 
-pub fn append_history_job_event(job_id: &str, event: &Value) -> Result<(), AppError> {
+pub fn append_history_job_event(job_id: &str, event: &Value) -> Result<u64, AppError> {
     let seq = event.get("seq").and_then(Value::as_u64).unwrap_or(0) as i64;
     if seq <= 0 {
-        return Ok(());
+        return Ok(0);
     }
     let kind = event
         .get("kind")
@@ -333,7 +333,7 @@ pub fn append_history_job_event(job_id: &str, event: &Value) -> Result<(), AppEr
         AppError::new("history_write_failed", "Unable to record job event.")
             .with_detail(json!({"error": error.to_string()}))
     })?;
-    Ok(())
+    Ok(insert_seq as u64)
 }
 
 pub fn list_history_job_events(job_id: &str) -> Result<Vec<Value>, AppError> {

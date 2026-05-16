@@ -64,13 +64,18 @@ fn next_recovery_event(job_id: &str, event_type: &str, data: Value) -> Value {
         })
         .unwrap_or(0)
         + 1;
-    let event = json!({
+    let mut event = json!({
         "seq": seq,
         "kind": "local",
         "type": event_type,
         "data": data,
     });
-    let _ = append_history_job_event(job_id, &event);
+    if let Ok(persisted_seq) = append_history_job_event(job_id, &event)
+        && persisted_seq > 0
+        && persisted_seq != seq
+    {
+        event["seq"] = json!(persisted_seq);
+    }
     event
 }
 

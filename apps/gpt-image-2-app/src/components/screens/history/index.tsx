@@ -12,6 +12,7 @@ import {
 } from "@/hooks/use-jobs";
 import { OPEN_JOB_EVENT, sendImageToEdit } from "@/lib/job-navigation";
 import { jobOutputPath, jobOutputUrl } from "@/lib/job-outputs";
+import { api } from "@/lib/api";
 import { Empty } from "@/components/ui/empty";
 import { Button } from "@/components/ui/button";
 import { useConfirm } from "@/hooks/use-confirm";
@@ -139,7 +140,9 @@ export function HistoryScreen({
   };
 
   const handleRecover = async (job: Job) => {
-    const recovery = jobRecoveryAction(job);
+    const recovery = jobRecoveryAction(job, {
+      supportsLocalRecovery: api.canUsePersistentResultLibrary,
+    });
     const toastId = toast.loading(recovery.loading);
     try {
       const result = await resumeJob.mutateAsync({

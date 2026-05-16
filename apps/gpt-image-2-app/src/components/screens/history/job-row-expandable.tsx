@@ -71,8 +71,11 @@ export function JobRowExpandable({
   const prompt = jobPrompt(job);
   const status = job.status;
   const showCancel = isActiveJobStatus(status);
-  const showRetry = jobCanShowRecoveryAction(job);
-  const recovery = jobRecoveryAction(job);
+  const recoveryOptions = {
+    supportsLocalRecovery: api.canUsePersistentResultLibrary,
+  };
+  const showRetry = jobCanShowRecoveryAction(job, recoveryOptions);
+  const recovery = jobRecoveryAction(job, recoveryOptions);
   const isQueueing = status === "queued";
   const isRunning = status === "running" || status === "uploading";
   const outputIndexes = jobOutputIndexes(job);

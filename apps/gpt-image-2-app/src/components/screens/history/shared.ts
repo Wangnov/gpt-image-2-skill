@@ -136,11 +136,27 @@ export type RecoveryActionCopy = {
   description: (resultJobId: string | undefined, originalJobId: string) => string;
 };
 
+export type RecoveryActionOptions = {
+  supportsLocalRecovery?: boolean;
+};
+
 export type RecoveryToastNotice = {
   kind: "success" | "warning" | "error";
   title: string;
   description: string;
 };
+
+function resubmitAction(): RecoveryActionCopy {
+  return {
+    action: "resubmit",
+    label: "重新生成",
+    title: "重新生成 · 将再次调用 API",
+    loading: "正在重新生成任务",
+    success: "已重新生成",
+    description: (resultJobId, originalJobId) =>
+      `任务 ${resultJobId || originalJobId} 已进入队列，将再次调用 API。`,
+  };
+}
 
 function objectValue(value: unknown): Record<string, unknown> | null {
   return value && typeof value === "object"
@@ -248,8 +264,14 @@ export function derivedRecoverability(job: Job): string {
   return recoverability;
 }
 
-export function jobRecoveryAction(job: Job): RecoveryActionCopy {
+export function jobRecoveryAction(
+  job: Job,
+  options: RecoveryActionOptions = {},
+): RecoveryActionCopy {
   const recoverability = derivedRecoverability(job);
+  const supportsLocalRecovery = options.supportsLocalRecovery ?? true;
+  if (!supportsLocalRecovery) return resubmitAction();
+
   if (recoverability === "recoverable.local_response_cached") {
     return {
       action: "continue_save",
@@ -283,15 +305,7 @@ export function jobRecoveryAction(job: Job): RecoveryActionCopy {
       description: () => "图片已在本地生成，本次未再次调用 API。",
     };
   }
-  return {
-    action: "resubmit",
-    label: "重新生成",
-    title: "重新生成 · 将再次调用 API",
-    loading: "正在重新生成任务",
-    success: "已重新生成",
-    description: (resultJobId, originalJobId) =>
-      `任务 ${resultJobId || originalJobId} 已进入队列，将再次调用 API。`,
-  };
+  return resubmitAction();
 }
 
 export function recoveryToastNotice(
@@ -323,7 +337,15 @@ export function recoveryToastNotice(
   };
 }
 
-export function jobCanShowRecoveryAction(job: Job) {
+export function jobCanShowRecoveryAction(
+  job: Job,
+  options: RecoveryActionOptions = {},
+) {
+  if (options.supportsLocalRecovery === false) {
+    return ["failed", "partial_failed", "cancelled", "canceled"].includes(
+      job.status,
+    );
+  }
   const recoverability = derivedRecoverability(job);
   if (recoverability === "recoverable.upload_failed") return true;
   return ["failed", "partial_failed", "cancelled", "canceled"].includes(
