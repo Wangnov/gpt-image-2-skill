@@ -121,13 +121,10 @@ pub(crate) fn authenticate_sftp_session(
             .map(resolve_credential)
             .transpose()?
             .map(|(value, _)| value);
-        session
-            .userauth_pubkey_memory(username, None, &private_key, passphrase.as_deref())
+        authenticate_sftp_private_key(session, username, &private_key, passphrase.as_deref())
             .map_err(|error| {
                 AppError::new("storage_sftp_auth_failed", "SFTP private-key auth failed.")
-                    .with_detail(
-                        json!({"host": host, "username": username, "error": error.to_string()}),
-                    )
+                    .with_detail(json!({"host": host, "username": username, "error": error}))
             })?;
     } else if let Some(password) = password {
         let (password, _) = resolve_credential(password)?;
@@ -151,6 +148,57 @@ pub(crate) fn authenticate_sftp_session(
         ));
     }
     Ok(())
+}
+
+#[cfg(unix)]
+fn authenticate_sftp_private_key(
+    session: &Session,
+    username: &str,
+    private_key: &str,
+    passphrase: Option<&str>,
+) -> Result<(), String> {
+    session
+        .userauth_pubkey_memory(username, None, private_key, passphrase)
+        .map_err(|error| error.to_string())
+}
+
+#[cfg(not(unix))]
+fn authenticate_sftp_private_key(
+    session: &Session,
+    username: &str,
+    private_key: &str,
+    passphrase: Option<&str>,
+) -> Result<(), String> {
+    let path = temporary_sftp_private_key_path();
+    let auth_result = (|| {
+        let mut file = fs::OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(&path)
+            .map_err(|error| format!("Unable to create temporary private-key file: {error}"))?;
+        file.write_all(private_key.as_bytes())
+            .map_err(|error| format!("Unable to write temporary private-key file: {error}"))?;
+        file.sync_all()
+            .map_err(|error| format!("Unable to flush temporary private-key file: {error}"))?;
+        drop(file);
+        session
+            .userauth_pubkey_file(username, None, &path, passphrase)
+            .map_err(|error| error.to_string())
+    })();
+    let _ = fs::remove_file(&path);
+    auth_result
+}
+
+#[cfg(not(unix))]
+fn temporary_sftp_private_key_path() -> PathBuf {
+    let nanos = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|duration| duration.as_nanos())
+        .unwrap_or(0);
+    std::env::temp_dir().join(format!(
+        "gpt-image-2-sftp-key-{}-{nanos}.pem",
+        std::process::id()
+    ))
 }
 
 pub(super) fn upload_to_sftp(
