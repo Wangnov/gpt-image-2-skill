@@ -111,3 +111,5 @@ jobs:
           /usr/libexec/PlistBuddy -c "Print :CFBundleIdentifier" "$app/Contents/Info.plist" | grep -Fx "com.wangnov.gpt-image-2"
           /usr/libexec/PlistBuddy -c "Print :CFBundleShortVersionString" "$app/Contents/Info.plist" | grep -Fx "$version"
           codesign --verify --deep --strict --verbose=2 "$app"
+          otool -L "$app/Contents/MacOS/gpt-image-2-app" | tee /tmp/gpt-image-2-app-otool.txt
+          ! grep -E '^[[:space:]]+/(opt/homebrew|usr/local)/|libssl|libcrypto' /tmp/gpt-image-2-app-otool.txt
