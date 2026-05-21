@@ -110,7 +110,12 @@ jobs:
           if (!binary) {
             throw new Error(`Unable to locate ${packageName} binary. Tried: ${candidates.join(", ")}`);
           }
-          childProcess.execFileSync(binary, ["--json", "doctor"], { stdio: "inherit" });
+          const fileOutput = childProcess.execFileSync("file", [binary], { encoding: "utf8" });
+          process.stdout.write(fileOutput);
+          if (/interpreter /.test(fileOutput) || !/static/.test(fileOutput)) {
+            throw new Error(`${packageName} is not static: ${fileOutput}`);
+          }
+          childProcess.execFileSync(binary, ["--json", "config", "path"], { stdio: "inherit" });
           NODE
 
   homebrew:
