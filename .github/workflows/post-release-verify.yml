@@ -95,13 +95,21 @@ jobs:
         run: |
           node <<'NODE'
           const childProcess = require("node:child_process");
+          const fs = require("node:fs");
           const path = require("node:path");
 
           const packageName = process.arch === "arm64"
             ? "gpt-image-2-skill-linux-arm64-static"
             : "gpt-image-2-skill-linux-x64-static";
           const globalRoot = childProcess.execFileSync("npm", ["root", "-g"], { encoding: "utf8" }).trim();
-          const binary = path.join(globalRoot, packageName, "bin", "gpt-image-2-skill");
+          const candidates = [
+            path.join(globalRoot, "gpt-image-2-skill", "node_modules", packageName, "bin", "gpt-image-2-skill"),
+            path.join(globalRoot, packageName, "bin", "gpt-image-2-skill"),
+          ];
+          const binary = candidates.find((candidate) => fs.existsSync(candidate));
+          if (!binary) {
+            throw new Error(`Unable to locate ${packageName} binary. Tried: ${candidates.join(", ")}`);
+          }
           childProcess.execFileSync(binary, ["--json", "doctor"], { stdio: "inherit" });
           NODE
 
