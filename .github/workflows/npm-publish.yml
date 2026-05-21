@@ -47,13 +47,7 @@ jobs:
       - name: Dry run npm publish
         if: ${{ env.DRY_RUN == 'true' }}
         run: |
-          for package_dir in \
-            packages/npm/gpt-image-2-skill-darwin-arm64 \
-            packages/npm/gpt-image-2-skill-darwin-x64 \
-            packages/npm/gpt-image-2-skill-linux-arm64-gnu \
-            packages/npm/gpt-image-2-skill-linux-x64-gnu \
-            packages/npm/gpt-image-2-skill-windows-arm64-msvc \
-            packages/npm/gpt-image-2-skill-windows-x64-msvc
+          for package_dir in $(find packages/npm -mindepth 1 -maxdepth 1 -type d ! -name gpt-image-2-skill | sort)
           do
             npm publish "$package_dir" --access public --dry-run
           done
@@ -61,13 +55,7 @@ jobs:
       - name: Publish platform packages
         if: ${{ env.DRY_RUN != 'true' }}
         run: |
-          for package_dir in \
-            packages/npm/gpt-image-2-skill-darwin-arm64 \
-            packages/npm/gpt-image-2-skill-darwin-x64 \
-            packages/npm/gpt-image-2-skill-linux-arm64-gnu \
-            packages/npm/gpt-image-2-skill-linux-x64-gnu \
-            packages/npm/gpt-image-2-skill-windows-arm64-msvc \
-            packages/npm/gpt-image-2-skill-windows-x64-msvc
+          for package_dir in $(find packages/npm -mindepth 1 -maxdepth 1 -type d ! -name gpt-image-2-skill | sort)
           do
             npm publish "$package_dir" --access public --provenance
           done

@@ -19,6 +19,7 @@ const BIN_ENV = "GPT_IMAGE_2_SKILL_BIN";
 const APP_BIN_ENV = "GPT_IMAGE_2_SKILL_APP_BIN";
 const REPO_ENV = "GPT_IMAGE_2_SKILL_REPO_ROOT";
 const SKIP_BOOTSTRAP_ENV = "GPT_IMAGE_2_SKILL_SKIP_BOOTSTRAP";
+const SKILL_ROOT = path.resolve(__dirname, "..");
 
 function wantsJson(argv) {
   return argv.includes("--json");
@@ -106,6 +107,20 @@ function resolveFromEnvBinary() {
     return null;
   }
   return { argvPrefix: [candidate], cwd: null, source: "env" };
+}
+
+function resolveFromBundledBinary() {
+  const binaryName = process.platform === "win32" ? `${CLI_NAME}.exe` : CLI_NAME;
+  for (const { triple } of detectTargets()) {
+    const candidate = path.join(SKILL_ROOT, "bin", triple, binaryName);
+    if (isExecutableFile(candidate)) {
+      const runtime = { argvPrefix: [candidate], cwd: null, source: "bundled" };
+      if (runtimeSupportsSharedConfig(runtime)) {
+        return runtime;
+      }
+    }
+  }
+  return null;
 }
 
 function resolveFromPath() {
@@ -198,13 +213,13 @@ function detectLibc() {
   return fs.existsSync("/etc/alpine-release") ? "musl" : "gnu";
 }
 
-function detectTarget() {
+function detectTargets() {
   if (process.platform === "darwin") {
     if (process.arch === "arm64") {
-      return { triple: "aarch64-apple-darwin", extension: "" };
+      return [{ triple: "aarch64-apple-darwin", extension: "" }];
     }
     if (process.arch === "x64") {
-      return { triple: "x86_64-apple-darwin", extension: "" };
+      return [{ triple: "x86_64-apple-darwin", extension: "" }];
     }
     throw new Error(`Unsupported macOS architecture: ${process.arch}`);
   }
@@ -213,14 +228,19 @@ function detectTarget() {
     if (!arch) {
       throw new Error(`Unsupported Linux architecture: ${process.arch}`);
     }
-    return { triple: `${arch}-unknown-linux-${detectLibc()}`, extension: "" };
+    const libc = detectLibc();
+    const preferred = { triple: `${arch}-unknown-linux-${libc}`, extension: "" };
+    if (libc === "gnu") {
+      return [preferred, { triple: `${arch}-unknown-linux-musl`, extension: "" }];
+    }
+    return [preferred];
   }
   if (process.platform === "win32") {
     const arch = process.arch === "arm64" ? "aarch64" : process.arch === "x64" ? "x86_64" : null;
     if (!arch) {
       throw new Error(`Unsupported Windows architecture: ${process.arch}`);
     }
-    return { triple: `${arch}-pc-windows-msvc`, extension: ".exe" };
+    return [{ triple: `${arch}-pc-windows-msvc`, extension: ".exe" }];
   }
   throw new Error(`Unsupported platform: ${process.platform}`);
 }
@@ -230,12 +250,17 @@ function cacheBinaryPath(target, extension) {
 }
 
 function resolveFromCache() {
-  const { triple, extension } = detectTarget();
-  const candidate = cacheBinaryPath(triple, extension);
-  if (!isExecutableFile(candidate)) {
-    return null;
+  for (const { triple, extension } of detectTargets()) {
+    const candidate = cacheBinaryPath(triple, extension);
+    if (!isExecutableFile(candidate)) {
+      continue;
+    }
+    const runtime = { argvPrefix: [candidate], cwd: null, source: "cache" };
+    if (runtimeSupportsSharedConfig(runtime)) {
+      return runtime;
+    }
   }
-  return { argvPrefix: [candidate], cwd: null, source: "cache" };
+  return null;
 }
 
 function assetName(target) {
@@ -292,35 +317,49 @@ async function bootstrapReleaseBinary() {
   if (truthyEnv(SKIP_BOOTSTRAP_ENV)) {
     return null;
   }
-  const { triple, extension } = detectTarget();
-  const destination = cacheBinaryPath(triple, extension);
-  if (isExecutableFile(destination)) {
-    return { argvPrefix: [destination], cwd: null, source: "cache" };
+  const errors = [];
+
+  for (const { triple, extension } of detectTargets()) {
+    const destination = cacheBinaryPath(triple, extension);
+    if (isExecutableFile(destination)) {
+      const runtime = { argvPrefix: [destination], cwd: null, source: "cache" };
+      if (runtimeSupportsSharedConfig(runtime)) {
+        return runtime;
+      }
+    }
+
+    const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), `${CLI_NAME}-bootstrap-`));
+    try {
+      fs.mkdirSync(path.dirname(destination), { recursive: true });
+      const archiveName = assetName(triple);
+      const archivePath = path.join(tempRoot, archiveName);
+      await downloadArchive(`${RELEASE_BASE_URL}/${archiveName}`, archivePath);
+      const extractDir = path.join(tempRoot, "extract");
+      fs.mkdirSync(extractDir, { recursive: true });
+      extractArchive(archivePath, extractDir);
+
+      const binaryName = `${CLI_NAME}${extension}`;
+      const extractedBinary = findFile(extractDir, binaryName);
+      if (!extractedBinary) {
+        throw new Error(`Unable to locate ${binaryName} inside ${archiveName}`);
+      }
+      fs.copyFileSync(extractedBinary, destination);
+      if (process.platform !== "win32") {
+        fs.chmodSync(destination, 0o755);
+      }
+      const runtime = { argvPrefix: [destination], cwd: null, source: "bootstrap" };
+      if (runtimeSupportsSharedConfig(runtime)) {
+        return runtime;
+      }
+      errors.push(`${triple}: downloaded runtime failed self-check`);
+    } catch (error) {
+      errors.push(`${triple}: ${error instanceof Error ? error.message : String(error)}`);
+    } finally {
+      fs.rmSync(tempRoot, { recursive: true, force: true });
+    }
   }
 
-  const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), `${CLI_NAME}-bootstrap-`));
-  try {
-    fs.mkdirSync(path.dirname(destination), { recursive: true });
-    const archiveName = assetName(triple);
-    const archivePath = path.join(tempRoot, archiveName);
-    await downloadArchive(`${RELEASE_BASE_URL}/${archiveName}`, archivePath);
-    const extractDir = path.join(tempRoot, "extract");
-    fs.mkdirSync(extractDir, { recursive: true });
-    extractArchive(archivePath, extractDir);
-
-    const binaryName = `${CLI_NAME}${extension}`;
-    const extractedBinary = findFile(extractDir, binaryName);
-    if (!extractedBinary) {
-      throw new Error(`Unable to locate ${binaryName} inside ${archiveName}`);
-    }
-    fs.copyFileSync(extractedBinary, destination);
-    if (process.platform !== "win32") {
-      fs.chmodSync(destination, 0o755);
-    }
-    return { argvPrefix: [destination], cwd: null, source: "bootstrap" };
-  } finally {
-    fs.rmSync(tempRoot, { recursive: true, force: true });
-  }
+  throw new Error(`Unable to bootstrap a compatible ${CLI_NAME} runtime. Tried: ${errors.join("; ")}`);
 }
 
 function runtimeSupportsSharedConfig(runtime) {
@@ -345,7 +384,7 @@ function runtimeSupportsSharedConfig(runtime) {
 }
 
 async function resolveRuntime() {
-  for (const resolver of [resolveFromEnvBinary, resolveFromPath, resolveFromAppBundle, resolveFromRepo, resolveFromCache]) {
+  for (const resolver of [resolveFromEnvBinary, resolveFromBundledBinary, resolveFromPath, resolveFromAppBundle, resolveFromRepo, resolveFromCache]) {
     const runtime = resolver();
     if (runtime && runtimeSupportsSharedConfig(runtime)) {
       return runtime;

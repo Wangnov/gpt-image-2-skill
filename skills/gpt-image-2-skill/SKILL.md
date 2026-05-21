@@ -3,7 +3,7 @@ name: gpt-image-2-skill
 description: This skill should be used when the user asks to "generate an image", "create a logo", "draw an icon", "edit this photo", "change background to transparent", "remove background", "use GPT image", "use Codex to draw", "用 GPT image 生成图片", "用 Codex 画图", "帮我生成一张图", "改成透明背景", "把这张图编辑一下", or any prompt-to-image or reference-image-edit task that benefits from a structured CLI returning JSON results and JSONL progress events. Supports OpenAI `gpt-image-2` (via `OPENAI_API_KEY` or OpenAI-compatible base URL) and Codex `image_generation` (via `~/.codex/auth.json`) under one command surface, with masks, custom sizes up to 4K, transparent backgrounds, and a raw request escape hatch.
 ---
 
-Run image generation and editing through one CLI surface that hides provider differences. The Node wrapper at `scripts/gpt_image_2_skill.cjs` resolves an underlying Rust binary (env override → installed binary → Tauri App bundled CLI → repo `cargo run` → cached release → bootstrap download) and forwards every flag.
+Run image generation and editing through one CLI surface that hides provider differences. The Node wrapper at `scripts/gpt_image_2_skill.cjs` resolves an underlying Rust binary (env override → bundled Skill binary → installed binary → Tauri App bundled CLI → repo `cargo run` → cached release → bootstrap download) and forwards every flag. On glibc Linux, release bootstrap tries the GNU archive first and then the static musl archive as the sandbox fallback.
 
 ## When to use this skill
 

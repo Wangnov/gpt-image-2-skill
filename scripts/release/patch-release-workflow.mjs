@@ -13,6 +13,7 @@ const insertAfter = `      - name: Install dependencies
 `;
 
 const buildMarker = "      - name: Build artifacts";
+const muslStepName = "      - name: Configure musl toolchain";
 const wixStepName = "      - name: Refresh WiX path";
 const announceSectionMarker = "  announce:\n";
 const announceCheckoutMarker = `      - uses: actions/checkout@v6
@@ -52,6 +53,24 @@ const wixStep = `      - name: Refresh WiX path
           Write-Host "Using WiX root $wixRoot"
 `;
 
+const muslStep = `      - name: Configure musl toolchain
+        if: \${{ runner.os == 'Linux' && contains(join(matrix.targets, ','), 'unknown-linux-musl') }}
+        shell: bash
+        run: |
+          if command -v sudo >/dev/null 2>&1; then
+            sudo apt-get update
+            sudo apt-get install -y musl-tools
+          else
+            apt-get update
+            apt-get install -y musl-tools
+          fi
+
+          echo "CC_x86_64_unknown_linux_musl=musl-gcc" >> "$GITHUB_ENV"
+          echo "CARGO_TARGET_X86_64_UNKNOWN_LINUX_MUSL_LINKER=musl-gcc" >> "$GITHUB_ENV"
+          echo "CC_aarch64_unknown_linux_musl=musl-gcc" >> "$GITHUB_ENV"
+          echo "CARGO_TARGET_AARCH64_UNKNOWN_LINUX_MUSL_LINKER=musl-gcc" >> "$GITHUB_ENV"
+`;
+
 const dispatchSteps = `      - name: Dispatch npm publish workflow
         run: gh workflow run "Publish npm Packages" --repo "\${{ github.repository }}" -f tag="\${{ needs.plan.outputs.tag }}"
       - name: Dispatch static Pages deploy workflow
@@ -63,6 +82,19 @@ const legacyLinuxDepsStepPattern =
 let source = fs.readFileSync(workflowPath, "utf8");
 
 source = source.replace(legacyLinuxDepsStepPattern, "");
+source = source.replace(
+  `          sudo apt-get update
+          sudo apt-get install -y musl-tools
+`,
+  `          if command -v sudo >/dev/null 2>&1; then
+            sudo apt-get update
+            sudo apt-get install -y musl-tools
+          else
+            apt-get update
+            apt-get install -y musl-tools
+          fi
+`,
+);
 
 if (source.includes(permissionsBlock) && !source.includes(`  "actions": "write"`)) {
   source = source.replace(permissionsBlock, expandedPermissionsBlock);
@@ -77,6 +109,10 @@ if (!source.includes(wixStepName)) {
     `${insertAfter}${buildMarker}`,
     `${insertAfter}${wixStep}${buildMarker}`,
   );
+}
+
+if (!source.includes(muslStepName)) {
+  source = source.replace(insertAfter, `${insertAfter}${muslStep}`);
 }
 
 source = source.replace(dispatchStepPattern, "");

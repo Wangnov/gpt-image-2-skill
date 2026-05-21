@@ -431,7 +431,7 @@ docker run --rm -p 8787:8787 \
 
 ## Skill 集成
 
-源码位于 [`skills/gpt-image-2-skill`](skills/gpt-image-2-skill)。入口是 [`scripts/gpt_image_2_skill.cjs`](skills/gpt-image-2-skill/scripts/gpt_image_2_skill.cjs),它本身不执行图像逻辑,而是按下面的顺序解析底层 Rust 二进制并转发参数。
+源码位于 [`skills/gpt-image-2-skill`](skills/gpt-image-2-skill)。入口是 [`scripts/gpt_image_2_skill.cjs`](skills/gpt-image-2-skill/scripts/gpt_image_2_skill.cjs),它本身不执行图像逻辑,而是按下面的顺序解析底层 Rust 二进制并转发参数。Linux glibc 沙箱会先试 GNU release asset,再用 static musl asset 兜底。
 
 **安装**:
 
@@ -447,11 +447,14 @@ cp -r /tmp/gpt-image-2-skill/skills/gpt-image-2-skill ~/.claude/skills/
 **Wrapper 解析顺序**:
 
 1. `GPT_IMAGE_2_SKILL_BIN` 环境变量(指向具体二进制)
-2. `PATH` 上的 `gpt-image-2-skill`(cargo / brew / npm 安装)
-3. Tauri App bundled CLI(`GPT_IMAGE_2_SKILL_APP_BIN` 或标准 app bundle 路径)
-4. 仓库内 `cargo run -q -p gpt-image-2-skill --`(仅当 `Cargo.toml` 与 `cargo` 都存在)
-5. `${XDG_CACHE_HOME:-~/.cache}/gpt-image-2-skill/<version>/<target>/` 缓存
-6. Bootstrap:下载对应版本的 GitHub Release 资产并缓存
+2. Skill 包内置 binary(`bin/<target-triple>/gpt-image-2-skill`,如果存在)
+3. `PATH` 上的 `gpt-image-2-skill`(cargo / brew / npm 安装)
+4. Tauri App bundled CLI(`GPT_IMAGE_2_SKILL_APP_BIN` 或标准 app bundle 路径)
+5. 仓库内 `cargo run -q -p gpt-image-2-skill --`(仅当 `Cargo.toml` 与 `cargo` 都存在)
+6. `${XDG_CACHE_HOME:-~/.cache}/gpt-image-2-skill/<version>/<target>/` 缓存
+7. Bootstrap:下载对应版本的 GitHub Release 资产并缓存
+
+Linux glibc 沙箱下,缓存与 bootstrap 阶段会先检查 GNU target(`*-unknown-linux-gnu`),再尝试 static musl target(`*-unknown-linux-musl`)。
 
 设 `GPT_IMAGE_2_SKILL_SKIP_BOOTSTRAP=1` 关闭最后一步下载。
 
@@ -995,7 +998,7 @@ Open [http://localhost:8787](http://localhost:8787). Full notes: [`docs/docker-w
 
 ## Skill integration
 
-Source: [`skills/gpt-image-2-skill`](skills/gpt-image-2-skill). The entry point is [`scripts/gpt_image_2_skill.cjs`](skills/gpt-image-2-skill/scripts/gpt_image_2_skill.cjs); it does not run image logic itself but resolves the underlying Rust binary in the order below and forwards every flag.
+Source: [`skills/gpt-image-2-skill`](skills/gpt-image-2-skill). The entry point is [`scripts/gpt_image_2_skill.cjs`](skills/gpt-image-2-skill/scripts/gpt_image_2_skill.cjs); it does not run image logic itself but resolves the underlying Rust binary in the order below and forwards every flag. On Linux glibc sandboxes, it tries the GNU release asset first and then the static musl asset as fallback.
 
 **Install**:
 
@@ -1011,11 +1014,14 @@ cp -r /tmp/gpt-image-2-skill/skills/gpt-image-2-skill ~/.claude/skills/
 **Wrapper resolution order**:
 
 1. `GPT_IMAGE_2_SKILL_BIN` env (absolute binary path)
-2. `gpt-image-2-skill` on `PATH` (cargo / brew / npm install)
-3. Tauri App bundled CLI (`GPT_IMAGE_2_SKILL_APP_BIN` or standard app bundle paths)
-4. Repo-local `cargo run -q -p gpt-image-2-skill --` (only when both `Cargo.toml` and `cargo` exist)
-5. `${XDG_CACHE_HOME:-~/.cache}/gpt-image-2-skill/<version>/<target>/` cache
-6. Bootstrap: download the matching GitHub Release asset and cache it
+2. Bundled Skill binary (`bin/<target-triple>/gpt-image-2-skill`, when present)
+3. `gpt-image-2-skill` on `PATH` (cargo / brew / npm install)
+4. Tauri App bundled CLI (`GPT_IMAGE_2_SKILL_APP_BIN` or standard app bundle paths)
+5. Repo-local `cargo run -q -p gpt-image-2-skill --` (only when both `Cargo.toml` and `cargo` exist)
+6. `${XDG_CACHE_HOME:-~/.cache}/gpt-image-2-skill/<version>/<target>/` cache
+7. Bootstrap: download the matching GitHub Release asset and cache it
+
+On Linux glibc sandboxes, cache/bootstrap tries the GNU target (`*-unknown-linux-gnu`) and then the static musl target (`*-unknown-linux-musl`).
 
 Set `GPT_IMAGE_2_SKILL_SKIP_BOOTSTRAP=1` to disable the download step.
 
