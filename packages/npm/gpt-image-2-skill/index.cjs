@@ -91,7 +91,7 @@ function isGlibcLoadError(stderr) {
 }
 
 function probeBinary(binaryPath) {
-  const result = childProcess.spawnSync(binaryPath, ["--version"], {
+  const result = childProcess.spawnSync(binaryPath, ["--json", "doctor"], {
     encoding: "utf8",
     stdio: ["ignore", "ignore", "pipe"],
   });
@@ -99,7 +99,7 @@ function probeBinary(binaryPath) {
     return { ok: false, message: result.error.message, stderr: "" };
   }
   if (result.status !== 0) {
-    return { ok: false, message: `${binaryPath} --version failed with status ${result.status}`, stderr: result.stderr || "" };
+    return { ok: false, message: `${binaryPath} --json doctor failed with status ${result.status}`, stderr: result.stderr || "" };
   }
   return { ok: true, message: "", stderr: "" };
 }
