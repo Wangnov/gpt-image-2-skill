@@ -17,7 +17,7 @@ if ! npm whoami >/dev/null 2>&1; then
   exit 1
 fi
 
-PACKAGES=(
+DEFAULT_PACKAGES=(
   gpt-image-2-skill
   gpt-image-2-skill-darwin-arm64
   gpt-image-2-skill-darwin-x64
@@ -28,6 +28,17 @@ PACKAGES=(
   gpt-image-2-skill-windows-arm64-msvc
   gpt-image-2-skill-windows-x64-msvc
 )
+
+if [[ -n "${NPM_TRUST_PACKAGES:-}" ]]; then
+  read -r -a PACKAGES <<<"${NPM_TRUST_PACKAGES}"
+else
+  PACKAGES=("${DEFAULT_PACKAGES[@]}")
+fi
+
+NPM_AUTH_ARGS=()
+if [[ -n "${NPM_OTP:-}" ]]; then
+  NPM_AUTH_ARGS+=("--otp=${NPM_OTP}")
+fi
 
 REPO="${REPO:-Wangnov/gpt-image-2-skill}"
 WORKFLOW_FILE="${WORKFLOW_FILE:-npm-publish.yml}"
@@ -53,7 +64,7 @@ existing_count=0
 
 for package_name in "${PACKAGES[@]}"; do
   echo "checking trusted publisher for ${package_name}"
-  trust_json="$(npm trust list "${package_name}" --json)"
+  trust_json="$(npm trust list "${package_name}" --json "${NPM_AUTH_ARGS[@]}")"
 
   if [[ -n "${trust_json}" ]]; then
     trust_id="$(read_trust_field "${trust_json}" id)"
@@ -74,7 +85,7 @@ for package_name in "${PACKAGES[@]}"; do
   fi
 
   echo "creating trusted publisher for ${package_name}"
-  npm trust github "${package_name}" --repo "${REPO}" --file "${WORKFLOW_FILE}" --yes
+  npm trust github "${package_name}" --repo "${REPO}" --file "${WORKFLOW_FILE}" --allow-publish --yes "${NPM_AUTH_ARGS[@]}"
   created_count=$((created_count + 1))
   sleep 2
 done
