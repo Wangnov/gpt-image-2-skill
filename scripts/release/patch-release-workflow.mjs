@@ -14,6 +14,8 @@ const insertAfter = `      - name: Install dependencies
 
 const buildMarker = "      - name: Build artifacts";
 const muslStepName = "      - name: Configure musl toolchain";
+const muslStepPattern =
+  /      - name: Configure musl toolchain\n        if: \$\{\{ runner\.os == 'Linux' && contains\(join\(matrix\.targets, ','\), 'unknown-linux-musl'\) \}\}\n        shell: bash\n        run: \|\n(?:.*\n)+?(?=      - name: (?:Refresh WiX path|Build artifacts))/;
 const wixStepName = "      - name: Refresh WiX path";
 const announceSectionMarker = "  announce:\n";
 const announceCheckoutMarker = `      - uses: actions/checkout@v6
@@ -67,8 +69,10 @@ const muslStep = `      - name: Configure musl toolchain
 
           echo "CC_x86_64_unknown_linux_musl=musl-gcc" >> "$GITHUB_ENV"
           echo "CARGO_TARGET_X86_64_UNKNOWN_LINUX_MUSL_LINKER=musl-gcc" >> "$GITHUB_ENV"
+          echo "CARGO_TARGET_X86_64_UNKNOWN_LINUX_MUSL_RUSTFLAGS=-C target-feature=+crt-static -C link-arg=-static" >> "$GITHUB_ENV"
           echo "CC_aarch64_unknown_linux_musl=musl-gcc" >> "$GITHUB_ENV"
           echo "CARGO_TARGET_AARCH64_UNKNOWN_LINUX_MUSL_LINKER=musl-gcc" >> "$GITHUB_ENV"
+          echo "CARGO_TARGET_AARCH64_UNKNOWN_LINUX_MUSL_RUSTFLAGS=-C target-feature=+crt-static -C link-arg=-static" >> "$GITHUB_ENV"
 `;
 
 const dispatchSteps = `      - name: Dispatch npm publish workflow
@@ -111,7 +115,9 @@ if (!source.includes(wixStepName)) {
   );
 }
 
-if (!source.includes(muslStepName)) {
+if (source.includes(muslStepName)) {
+  source = source.replace(muslStepPattern, muslStep);
+} else {
   source = source.replace(insertAfter, `${insertAfter}${muslStep}`);
 }
 
