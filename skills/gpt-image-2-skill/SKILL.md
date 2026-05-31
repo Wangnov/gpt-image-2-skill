@@ -169,7 +169,7 @@ For extraction tuning, use `--material` only as a broad hint, not as a subject c
 
 For style-locked transparent assets, `transparent generate` is prompt-only. Use a flat RGB reference image with `images edit --ref-image` to create a controlled matte source, then run `transparent extract`. Do not use a transparent PNG as the reference image unless you intentionally want the alpha/composited edge behavior to influence the edit.
 
-Do not ask the image model to render exact UI text, numbers, scores, labels, or logos as part of the bitmap unless distorted text is acceptable. Generate the visual asset without text, then render exact text in the host app or design tool.
+GPT Image 2 can render accurate UI text, numbers, scores, labels, and logo marks in the bitmap when they are part of the desired artwork. Put the exact wording or numbering in the prompt and verify the output visually. Render text separately in the host app or design tool only when it must stay editable, localizable, programmatically changeable, or perfectly consistent across many generated variants.
 
 Examples:
 

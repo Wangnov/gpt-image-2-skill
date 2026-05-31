@@ -173,7 +173,7 @@ Use a flat RGB reference image for style lock. A transparent PNG reference may c
 
 ## Text and labels
 
-Do not rely on the image model for exact UI text, labels, scores, combo numbers, or button captions. Generate text-free visual assets and render exact text in the host app, canvas layer, or design tool.
+GPT Image 2 can render accurate UI text, labels, scores, combo numbers, and button captions when they are part of the desired bitmap. Put the exact wording or numbering in the prompt and verify the output visually. Render text separately in the host app, canvas layer, or design tool only when it must stay editable, localizable, programmatically changeable, or perfectly consistent across many generated variants.
 
 ## Verification
 
