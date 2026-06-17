@@ -448,7 +448,7 @@ jobs:
             homepage "https://github.com/Wangnov/gpt-image-2-skill"
 
             auto_updates true
-            depends_on macos: ">= :big_sur"
+            depends_on macos: :big_sur
 
             app "GPT Image 2.app"
 
