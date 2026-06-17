@@ -451,13 +451,17 @@ export const browserApi: ApiClient = {
     const path = jobOutputPath(job, index);
     return path ? browserApi.fileUrl(path) : "";
   },
+  // Returns disposable blob: URLs created from the IndexedDB-stored inputs; the
+  // caller (useJobReferenceUrls) revokes them on unmount. http/tauri instead
+  // return plain file URLs that need no cleanup. Filter/sort by `key` (the form
+  // field name like "ref_0"); `name` is the original filename like "cat.png".
   async jobReferenceUrls(job: Job) {
     const input = await browser.readJobInput(job.id);
     if (!input || input.kind !== "edit") return [];
-    const refIndex = (name: string) => Number(name.replace(/\D/g, "")) || 0;
+    const refIndex = (key: string) => Number(key.replace(/\D/g, "")) || 0;
     return input.files
-      .filter((file) => file.name.startsWith("ref_"))
-      .sort((a, b) => refIndex(a.name) - refIndex(b.name))
+      .filter((file) => file.key.startsWith("ref_"))
+      .sort((a, b) => refIndex(a.key) - refIndex(b.key))
       .map((file) => URL.createObjectURL(file.blob));
   },
   jobOutputPath,

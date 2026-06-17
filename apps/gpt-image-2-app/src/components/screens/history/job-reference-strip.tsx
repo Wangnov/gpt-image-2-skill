@@ -15,6 +15,11 @@ export function useJobReferenceUrls(job: Job) {
   const [loading, setLoading] = useState(false);
   const count = jobReferenceCount(job);
   const isEdit = job.command === "images edit";
+  // Re-fetch when the reference set changes even if the count is stable (e.g.
+  // http/tauri resolving new paths), not just on id/count.
+  const refSig = Array.isArray(job.reference_images)
+    ? job.reference_images.map((ref) => `${ref.index}:${ref.path}`).join("|")
+    : "";
 
   useEffect(() => {
     if (!isEdit || count === 0) {
@@ -50,7 +55,7 @@ export function useJobReferenceUrls(job: Job) {
       revoke(acquired);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [job.id, isEdit, count]);
+  }, [job.id, isEdit, count, refSig]);
 
   return { urls, loading, count };
 }

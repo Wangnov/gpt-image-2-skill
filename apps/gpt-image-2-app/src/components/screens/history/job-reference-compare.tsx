@@ -14,8 +14,19 @@ const SHIMMER = {
  * Before/after wipe slider: the output is the base layer, the reference image is
  * clipped on top and revealed left-to-right by a draggable handle. The range
  * input is a full-bleed transparent control so it stays keyboard-accessible.
+ *
+ * Both layers share one object-contain box, so the wipe lines up exactly when
+ * input and output share an aspect ratio (the common edit case). When ratios
+ * differ the contained images letterbox differently and the comparison is
+ * approximate — acceptable for a quick visual diff.
  */
-function BeforeAfterSlider({ before, after }: { before: string; after: string }) {
+function BeforeAfterSlider({
+  before,
+  after,
+}: {
+  before: string;
+  after: string;
+}) {
   const [pos, setPos] = useState(50);
   return (
     <div

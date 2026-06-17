@@ -421,7 +421,10 @@ export function jobKind(job: Job): JobKind {
  * the browser runtime's `metadata.ref_count`.
  */
 export function jobReferenceCount(job: Job): number {
-  if (Array.isArray(job.reference_images) && job.reference_images.length > 0) {
+  // The backend (http/tauri) always sends reference_images, so an empty array
+  // is authoritative ("no inputs"). Only fall back to the browser runtime's
+  // metadata.ref_count when the field is absent entirely.
+  if (Array.isArray(job.reference_images)) {
     return job.reference_images.length;
   }
   const fromMeta = Number((job.metadata as Record<string, unknown>)?.ref_count);

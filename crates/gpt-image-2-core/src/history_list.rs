@@ -64,11 +64,12 @@ pub(crate) fn history_row_to_value_with_uploads(
         .unwrap_or(&created_at)
         .to_string();
     let error = metadata.get("error").cloned().unwrap_or(Value::Null);
+    let command = row.get::<_, String>(1)?;
     let reference_images =
-        reference_images_for_job(&metadata, output_path.as_deref(), &outputs);
+        reference_images_for_job(&command, &metadata, output_path.as_deref(), &outputs);
     Ok(json!({
         "id": id,
-        "command": row.get::<_, String>(1)?,
+        "command": command,
         "provider": row.get::<_, String>(2)?,
         "status": row.get::<_, String>(3)?,
         "output_path": output_path,
@@ -103,13 +104,15 @@ fn job_dir_for(metadata: &Value, output_path: Option<&str>, outputs: &Value) -> 
         .or_else(|| output_path.and_then(parent_of))
 }
 
-/// Scan a job directory for reference input images named `ref-{index}.png`
+/// Scan a job directory for reference input images named `ref-{index}.{ext}`
 /// and return `[{ "index": <number>, "path": <absolute> }]` sorted by index.
 ///
 /// Compatibility note: this reads the filesystem rather than any stored list,
 /// so older jobs (which never recorded reference metadata) still surface their
-/// inputs as long as the `ref-*.png` files exist on disk.
+/// inputs as long as the `ref-*` files exist on disk.
 fn scan_reference_images(job_dir: &Path) -> Vec<Value> {
+    // A missing/unreadable directory means the job was cleaned up (or never had
+    // inputs); treating that as "no references" is correct, not an error.
     let Ok(entries) = std::fs::read_dir(job_dir) else {
         return Vec::new();
     };
@@ -130,11 +133,13 @@ fn scan_reference_images(job_dir: &Path) -> Vec<Value> {
         .collect()
 }
 
-/// Parse the numeric index from a `ref-{index}.png` file name, e.g.
-/// `ref-0.png` -> `Some(0)`. Returns `None` for any other name.
+/// Parse the numeric index from a `ref-{index}.{ext}` file name, e.g.
+/// `ref-0.png` / `ref-2.webp` -> `Some(0)` / `Some(2)`. Returns `None` otherwise.
 fn parse_reference_index(file_name: &str) -> Option<u64> {
-    let stem = file_name.strip_suffix(".png")?;
-    let digits = stem.strip_prefix("ref-")?;
+    // Inputs keep their original extension, so match `ref-{digits}.{ext}` for
+    // any extension rather than hard-coding `.png`.
+    let rest = file_name.strip_prefix("ref-")?;
+    let (digits, _ext) = rest.split_once('.')?;
     if digits.is_empty() || !digits.bytes().all(|byte| byte.is_ascii_digit()) {
         return None;
     }
@@ -142,10 +147,16 @@ fn parse_reference_index(file_name: &str) -> Option<u64> {
 }
 
 fn reference_images_for_job(
+    command: &str,
     metadata: &Value,
     output_path: Option<&str>,
     outputs: &Value,
 ) -> Value {
+    // Only edit jobs have reference inputs; skipping the scan for generate/
+    // request rows avoids a readdir per row on every history listing.
+    if command != "images edit" {
+        return Value::Array(Vec::new());
+    }
     job_dir_for(metadata, output_path, outputs)
         .map(|dir| Value::Array(scan_reference_images(&dir)))
         .unwrap_or_else(|| Value::Array(Vec::new()))
