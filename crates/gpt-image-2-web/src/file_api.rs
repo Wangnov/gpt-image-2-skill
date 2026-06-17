@@ -99,6 +99,70 @@ pub(crate) async fn job_output_response(
         .map_err(|error| ApiError::internal(error.to_string()))
 }
 
+/// Serve a reference *input* image (`ref-{index}.png`) for an edit job.
+///
+/// Unlike outputs, reference images are the original source files written to
+/// the job directory at submission time, so we read them straight from disk
+/// rather than going through storage readback. The job directory is resolved
+/// the same way as in core history serialization (recovery metadata first,
+/// then the parent of a recorded output path), and the final path is funneled
+/// through `safe_job_file_path` for canonicalization, managed-root checks, and
+/// path-traversal protection.
+pub(crate) async fn job_reference_response(
+    Path((job_id, reference_index)): Path<(String, usize)>,
+) -> Result<Response, ApiError> {
+    let job = show_history_job(&job_id)
+        .map_err(app_error)
+        .map_err(ApiError::not_found)?;
+    let job_dir = reference_job_dir_from_job(&job)
+        .ok_or_else(|| ApiError::not_found("找不到该任务的参考图目录。"))?;
+    // `reference_index` is a `usize` and the file name is pure digits, so the
+    // constructed path cannot introduce `..` or escape the job directory.
+    let candidate = job_dir.join(format!("ref-{reference_index}.png"));
+    let path = safe_job_file_path(&candidate.to_string_lossy())?;
+    let bytes = tokio::fs::read(&path)
+        .await
+        .map_err(|error| ApiError::not_found(error.to_string()))?;
+    let mime = mime_guess::from_path(&path).first_or_octet_stream();
+    let file_name = path
+        .file_name()
+        .and_then(|name| name.to_str())
+        .unwrap_or("reference.png");
+    Response::builder()
+        .status(StatusCode::OK)
+        .header(header::CONTENT_TYPE, mime.as_ref())
+        .header(header::CACHE_CONTROL, "private, max-age=31536000")
+        .header(
+            header::CONTENT_DISPOSITION,
+            format!("inline; filename=\"{file_name}\""),
+        )
+        .body(Body::from(bytes))
+        .map_err(|error| ApiError::internal(error.to_string()))
+}
+
+/// Resolve the on-disk job directory from a serialized history job, mirroring
+/// the logic in `gpt-image-2-core`'s history serialization: prefer recovery
+/// metadata, then fall back to the parent directory of a recorded output path.
+fn reference_job_dir_from_job(job: &Value) -> Option<PathBuf> {
+    if let Some(dir) = job.get("metadata").and_then(recovery_job_dir) {
+        return Some(dir);
+    }
+    let parent_of = |path: &str| FsPath::new(path).parent().map(FsPath::to_path_buf);
+    job.get("outputs")
+        .and_then(Value::as_array)
+        .and_then(|outputs| {
+            outputs
+                .iter()
+                .filter_map(|output| output.get("path").and_then(Value::as_str))
+                .find_map(parent_of)
+        })
+        .or_else(|| {
+            job.get("output_path")
+                .and_then(Value::as_str)
+                .and_then(parent_of)
+        })
+}
+
 fn output_file_name_from_job(job: &Value, output_index: usize) -> String {
     job.get("outputs")
         .and_then(Value::as_array)

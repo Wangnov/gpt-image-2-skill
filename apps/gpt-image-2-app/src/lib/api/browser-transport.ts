@@ -425,10 +425,16 @@ export const browserApi: ApiClient = {
   },
   async resumeJob(
     jobId: string,
-    action: "continue_save" | "fill_missing" | "reupload" | "resubmit" | "discard",
+    action:
+      | "continue_save"
+      | "fill_missing"
+      | "reupload"
+      | "resubmit"
+      | "discard",
   ) {
     if (action === "resubmit") return browserApi.retryJob(jobId);
-    if (action === "discard") throw new Error("浏览器模式暂不支持丢弃恢复任务。");
+    if (action === "discard")
+      throw new Error("浏览器模式暂不支持丢弃恢复任务。");
     throw new Error("浏览器模式不支持继续完成，请改用 Docker/App。");
   },
   outputUrl(jobId: string, index = 0) {
@@ -444,6 +450,15 @@ export const browserApi: ApiClient = {
   jobOutputUrl(job: Job, index = 0) {
     const path = jobOutputPath(job, index);
     return path ? browserApi.fileUrl(path) : "";
+  },
+  async jobReferenceUrls(job: Job) {
+    const input = await browser.readJobInput(job.id);
+    if (!input || input.kind !== "edit") return [];
+    const refIndex = (name: string) => Number(name.replace(/\D/g, "")) || 0;
+    return input.files
+      .filter((file) => file.name.startsWith("ref_"))
+      .sort((a, b) => refIndex(a.name) - refIndex(b.name))
+      .map((file) => URL.createObjectURL(file.blob));
   },
   jobOutputPath,
   jobOutputPaths,

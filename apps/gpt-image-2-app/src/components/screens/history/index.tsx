@@ -129,7 +129,8 @@ export function HistoryScreen({
           <span className="text-foreground font-medium">
             {finished.length} 条
           </span>{" "}
-          当前已加载的已完成 / 已失败任务。远端 Origin/Archive 不会被删除，此操作不可撤销。
+          当前已加载的已完成 / 已失败任务。远端 Origin/Archive
+          不会被删除，此操作不可撤销。
         </>
       ),
       confirmText: "清理",
@@ -328,11 +329,7 @@ export function HistoryScreen({
                   <motion.div
                     key={j.id}
                     layout="position"
-                    initial={
-                      reducedMotion
-                        ? false
-                        : { opacity: 0, y: 4 }
-                    }
+                    initial={reducedMotion ? false : { opacity: 0, y: 4 }}
                     animate={{ opacity: 1, y: 0 }}
                     exit={
                       reducedMotion

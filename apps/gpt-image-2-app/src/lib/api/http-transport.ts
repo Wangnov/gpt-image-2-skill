@@ -296,7 +296,12 @@ export const httpApi: ApiClient = {
   },
   async resumeJob(
     jobId: string,
-    action: "continue_save" | "fill_missing" | "reupload" | "resubmit" | "discard",
+    action:
+      | "continue_save"
+      | "fill_missing"
+      | "reupload"
+      | "resubmit"
+      | "discard",
   ) {
     const result = await requestJson<TauriJobResponse>(
       `/jobs/${encodeURIComponent(jobId)}/resume`,
@@ -316,6 +321,11 @@ export const httpApi: ApiClient = {
   jobOutputUrl(job: Job, index = 0) {
     return apiResourceUrl(
       `/jobs/${encodeURIComponent(job.id)}/outputs/${index}`,
+    );
+  },
+  async jobReferenceUrls(job: Job) {
+    return (job.reference_images ?? []).map((ref) =>
+      apiResourceUrl(`/jobs/${encodeURIComponent(job.id)}/refs/${ref.index}`),
     );
   },
   jobOutputPath,

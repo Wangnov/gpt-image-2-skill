@@ -161,7 +161,10 @@ export type ApiClient = RuntimeCapabilities & {
     jobId: string,
     outputIndex: number,
   ): Promise<string[]>;
-  ensureJobOutputCached(jobId: string, outputIndex: number): Promise<string | null>;
+  ensureJobOutputCached(
+    jobId: string,
+    outputIndex: number,
+  ): Promise<string | null>;
   /**
    * Open the OS-native folder picker. Returns the selected absolute path or
    * `null` when the user cancels. Tauri-only — other runtimes do not expose
@@ -173,7 +176,12 @@ export type ApiClient = RuntimeCapabilities & {
   retryJob(jobId: string): Promise<TauriJobResponse>;
   resumeJob(
     jobId: string,
-    action: "continue_save" | "fill_missing" | "reupload" | "resubmit" | "discard",
+    action:
+      | "continue_save"
+      | "fill_missing"
+      | "reupload"
+      | "resubmit"
+      | "discard",
   ): Promise<TauriJobResponse>;
   outputUrl(jobId: string, index?: number): string;
   outputPath(jobId: string, index?: number): string | undefined;
@@ -181,6 +189,8 @@ export type ApiClient = RuntimeCapabilities & {
   jobOutputUrl(job: Job, index?: number): string;
   jobOutputPath(job: Job, index?: number): string | undefined;
   jobOutputPaths(job: Job): string[];
+  /** Resolve displayable URLs for an edit job's input reference images. */
+  jobReferenceUrls(job: Job): Promise<string[]>;
   subscribeJobEvents(
     jobId: string,
     onEvent: EventHandler,

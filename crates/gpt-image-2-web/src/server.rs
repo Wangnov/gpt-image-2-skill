@@ -98,6 +98,10 @@ pub(crate) fn api_router(state: JobQueueState) -> Router {
             "/jobs/{job_id}/outputs/{output_index}",
             get(job_output_response),
         )
+        .route(
+            "/jobs/{job_id}/refs/{index}",
+            get(job_reference_response),
+        )
         .route("/jobs/{job_id}/cancel", post(cancel_job))
         .route("/jobs/{job_id}/retry", post(retry_job))
         .route("/jobs/{job_id}/recovery", get(job_recovery))

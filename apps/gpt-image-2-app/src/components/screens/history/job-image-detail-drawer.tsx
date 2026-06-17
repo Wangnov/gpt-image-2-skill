@@ -26,6 +26,7 @@ import {
 import { imageAssetFromOutput } from "@/lib/image-actions/asset";
 import type { ImageAsset } from "@/lib/image-actions/types";
 import { PlaceholderImage } from "@/components/screens/shared/placeholder-image";
+import { JobReferenceCompare } from "./job-reference-compare";
 import {
   generationSlots,
   jobCanShowRecoveryAction,
@@ -524,6 +525,8 @@ export function JobImageDetailDrawer({
             </div>
           )}
 
+          {job && <JobReferenceCompare job={job} outputUrl={displayUrl} />}
+
           {/* Metadata panel */}
           <section className="surface-panel p-4 space-y-3.5">
             <div>
@@ -595,16 +598,16 @@ export function JobImageDetailDrawer({
                 {recovery &&
                   job &&
                   jobCanShowRecoveryAction(job, recoveryOptions) && (
-                  <Button
-                    variant="secondary"
-                    size="sm"
-                    icon="reload"
-                    title={recovery.title}
-                    onClick={() => onRetry?.(job.id)}
-                  >
-                    {recovery.label}
-                  </Button>
-                )}
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      icon="reload"
+                      title={recovery.title}
+                      onClick={() => onRetry?.(job.id)}
+                    >
+                      {recovery.label}
+                    </Button>
+                  )}
               </div>
 
               {slots.length > 0 && (

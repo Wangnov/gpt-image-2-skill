@@ -2,7 +2,7 @@ import { Fragment, useMemo, useState } from "react";
 import { AnimatePresence, motion } from "motion/react";
 import { useReducedMotion } from "@/hooks/use-reduced-motion";
 import { cn } from "@/lib/cn";
-import { Icon, type IconName } from "@/components/icon";
+import { Icon } from "@/components/icon";
 import { Badge } from "@/components/ui/badge";
 import { StatusDot } from "@/components/ui/status-dot";
 import { PlaceholderImage } from "@/components/screens/shared/placeholder-image";
@@ -13,13 +13,8 @@ import { api } from "@/lib/api";
 import { isActiveJobStatus } from "@/lib/api/types";
 import type { Job } from "@/lib/types";
 import { JobPreviewImage } from "./job-preview-image";
+import { JobKindIcon } from "./job-kind-icon";
 import { outputLabel } from "./shared";
-
-const CMD_ICON: Record<string, IconName> = {
-  "images generate": "generate",
-  "images edit": "edit",
-  "request create": "arrowin",
-};
 
 function badgeTone(status: Job["status"]) {
   if (status === "completed") return "ok" as const;
@@ -296,11 +291,7 @@ export function JobRow({
         <JobAvatar job={job} />
         <div className="min-w-0">
           <div className="flex items-center gap-1.5">
-            <Icon
-              name={CMD_ICON[job.command] ?? "sparkle"}
-              size={12}
-              style={{ color: "var(--text-faint)" }}
-            />
+            <JobKindIcon job={job} size={12} />
             <span className="truncate text-[12.5px] font-semibold">
               {title}
             </span>
