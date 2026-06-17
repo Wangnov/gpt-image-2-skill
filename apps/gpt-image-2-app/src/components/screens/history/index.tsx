@@ -216,7 +216,7 @@ export function HistoryScreen({
       </header>
 
       {/* filters */}
-      <div className="mb-4 grid grid-cols-1 items-center gap-3 lg:grid-cols-[1fr_minmax(320px,560px)_1fr]">
+      <div className="mb-4 grid grid-cols-1 items-center gap-3 lg:grid-cols-[auto_1fr_auto]">
         <div className="flex min-w-0 items-center gap-1 overflow-x-auto scrollbar-none">
           {FILTERS.map((f) => {
             const isActive = filter === f.value;
@@ -226,7 +226,7 @@ export function HistoryScreen({
                 type="button"
                 onClick={() => setFilter(f.value)}
                 className={cn(
-                  "relative px-3.5 h-8 rounded-full text-[12.5px] font-medium transition-colors",
+                  "relative shrink-0 whitespace-nowrap px-3.5 h-8 rounded-full text-[12.5px] font-medium transition-colors",
                   isActive
                     ? "text-foreground"
                     : "text-muted hover:text-foreground hover:bg-[color:var(--w-04)]",
@@ -250,7 +250,7 @@ export function HistoryScreen({
             );
           })}
         </div>
-        <label className="relative block min-w-0">
+        <label className="relative block w-full min-w-0 lg:mx-auto lg:max-w-[560px]">
           <Search
             size={15}
             className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-faint"
