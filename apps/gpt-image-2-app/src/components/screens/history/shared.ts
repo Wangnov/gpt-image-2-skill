@@ -133,7 +133,10 @@ export type RecoveryActionCopy = {
   title: string;
   loading: string;
   success: string;
-  description: (resultJobId: string | undefined, originalJobId: string) => string;
+  description: (
+    resultJobId: string | undefined,
+    originalJobId: string,
+  ) => string;
 };
 
 export type RecoveryActionOptions = {
@@ -257,7 +260,11 @@ export function derivedRecoverability(job: Job): string {
   const storageFailed =
     job.storage_status === "failed" || job.storage_status === "partial_failed";
   const outputsPresent = jobOutputIndexes(job).length;
-  if (storageFailed && outputsPresent > 0 && outputsPresent >= plannedOutputCount(job)) {
+  if (
+    storageFailed &&
+    outputsPresent > 0 &&
+    outputsPresent >= plannedOutputCount(job)
+  ) {
     return "recoverable.upload_failed";
   }
 
@@ -396,7 +403,42 @@ export function jobMetaItems(job: Job): string[] {
   } else if (planned > 1 || produced > 0) {
     items.push(`${produced || planned} 张`);
   }
-  if (job.command === "images edit") items.push("编辑");
-  if (job.command === "request create") items.push("请求");
   return items;
+}
+
+export type JobKind = "generate" | "edit" | "request";
+
+/** Coarse creation kind for a job: text-to-image, image-to-image, or raw request. */
+export function jobKind(job: Job): JobKind {
+  if (job.command === "images edit") return "edit";
+  if (job.command === "request create") return "request";
+  return "generate";
+}
+
+/**
+ * Number of input reference images for an edit job. Prefers the backend-filled
+ * `reference_images` (works for http/tauri incl. legacy jobs); falls back to
+ * the browser runtime's `metadata.ref_count`.
+ */
+export function jobReferenceCount(job: Job): number {
+  // The backend (http/tauri) always sends reference_images, so an empty array
+  // is authoritative ("no inputs"). Only fall back to the browser runtime's
+  // metadata.ref_count when the field is absent entirely.
+  if (Array.isArray(job.reference_images)) {
+    return job.reference_images.length;
+  }
+  const fromMeta = Number((job.metadata as Record<string, unknown>)?.ref_count);
+  return Number.isFinite(fromMeta) && fromMeta > 0 ? Math.floor(fromMeta) : 0;
+}
+
+/**
+ * Whether an edit job used a local region/mask (vs. plain reference images).
+ * Best-effort from metadata; absent markers degrade to `false` (no badge).
+ */
+export function jobHasRegionEdit(job: Job): boolean {
+  if (job.command !== "images edit") return false;
+  // The edit form persists `edit_region_mode` into metadata: "native-mask" /
+  // "reference-hint" for local region edits, "none" for plain reference edits.
+  const mode = (job.metadata as Record<string, unknown>)?.edit_region_mode;
+  return typeof mode === "string" && mode !== "" && mode !== "none";
 }

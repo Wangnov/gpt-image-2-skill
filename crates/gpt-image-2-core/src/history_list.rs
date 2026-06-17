@@ -1,3 +1,5 @@
+use std::path::{Path, PathBuf};
+
 use rusqlite::types::Value as SqlValue;
 use rusqlite::{Connection, Row, params, params_from_iter};
 use serde_json::{Value, json};
@@ -5,6 +7,7 @@ use serde_json::{Value, json};
 use crate::constants::{DEFAULT_HISTORY_PAGE_LIMIT, MAX_HISTORY_PAGE_LIMIT};
 use crate::errors::AppError;
 use crate::history_db::open_history_db;
+use crate::recovery::recovery_job_dir;
 use crate::storage::{
     OutputUploadRecord, enrich_outputs_with_uploads, list_output_upload_records_with_conn,
     storage_status_for_uploads,
@@ -61,9 +64,12 @@ pub(crate) fn history_row_to_value_with_uploads(
         .unwrap_or(&created_at)
         .to_string();
     let error = metadata.get("error").cloned().unwrap_or(Value::Null);
+    let command = row.get::<_, String>(1)?;
+    let reference_images =
+        reference_images_for_job(&command, &metadata, output_path.as_deref(), &outputs);
     Ok(json!({
         "id": id,
-        "command": row.get::<_, String>(1)?,
+        "command": command,
         "provider": row.get::<_, String>(2)?,
         "status": row.get::<_, String>(3)?,
         "output_path": output_path,
@@ -71,9 +77,89 @@ pub(crate) fn history_row_to_value_with_uploads(
         "updated_at": updated_at,
         "metadata": metadata,
         "outputs": enrich_outputs_with_uploads(outputs, uploads),
+        "reference_images": reference_images,
         "storage_status": storage_status_for_uploads(uploads),
         "error": error,
     }))
+}
+
+/// Locate the on-disk job directory for a history row.
+///
+/// Recovery/resume jobs persist the directory in metadata, but ordinary
+/// CLI/app edit jobs do not, so we fall back to the parent directory of any
+/// recorded output path (outputs live alongside the `ref-*.png` inputs).
+fn job_dir_for(metadata: &Value, output_path: Option<&str>, outputs: &Value) -> Option<PathBuf> {
+    if let Some(dir) = recovery_job_dir(metadata) {
+        return Some(dir);
+    }
+    let parent_of = |path: &str| Path::new(path).parent().map(Path::to_path_buf);
+    outputs
+        .as_array()
+        .and_then(|items| {
+            items
+                .iter()
+                .filter_map(|item| item.get("path").and_then(Value::as_str))
+                .find_map(parent_of)
+        })
+        .or_else(|| output_path.and_then(parent_of))
+}
+
+/// Scan a job directory for reference input images named `ref-{index}.{ext}`
+/// and return `[{ "index": <number>, "path": <absolute> }]` sorted by index.
+///
+/// Compatibility note: this reads the filesystem rather than any stored list,
+/// so older jobs (which never recorded reference metadata) still surface their
+/// inputs as long as the `ref-*` files exist on disk.
+fn scan_reference_images(job_dir: &Path) -> Vec<Value> {
+    // A missing/unreadable directory means the job was cleaned up (or never had
+    // inputs); treating that as "no references" is correct, not an error.
+    let Ok(entries) = std::fs::read_dir(job_dir) else {
+        return Vec::new();
+    };
+    let mut refs: Vec<(u64, PathBuf)> = entries
+        .filter_map(Result::ok)
+        .filter_map(|entry| {
+            let path = entry.path();
+            if !path.is_file() {
+                return None;
+            }
+            let index = parse_reference_index(path.file_name()?.to_str()?)?;
+            Some((index, path))
+        })
+        .collect();
+    refs.sort_by_key(|(index, _)| *index);
+    refs.into_iter()
+        .map(|(index, path)| json!({ "index": index, "path": path.display().to_string() }))
+        .collect()
+}
+
+/// Parse the numeric index from a `ref-{index}.{ext}` file name, e.g.
+/// `ref-0.png` / `ref-2.webp` -> `Some(0)` / `Some(2)`. Returns `None` otherwise.
+fn parse_reference_index(file_name: &str) -> Option<u64> {
+    // Inputs keep their original extension, so match `ref-{digits}.{ext}` for
+    // any extension rather than hard-coding `.png`.
+    let rest = file_name.strip_prefix("ref-")?;
+    let (digits, _ext) = rest.split_once('.')?;
+    if digits.is_empty() || !digits.bytes().all(|byte| byte.is_ascii_digit()) {
+        return None;
+    }
+    digits.parse::<u64>().ok()
+}
+
+fn reference_images_for_job(
+    command: &str,
+    metadata: &Value,
+    output_path: Option<&str>,
+    outputs: &Value,
+) -> Value {
+    // Only edit jobs have reference inputs; skipping the scan for generate/
+    // request rows avoids a readdir per row on every history listing.
+    if command != "images edit" {
+        return Value::Array(Vec::new());
+    }
+    job_dir_for(metadata, output_path, outputs)
+        .map(|dir| Value::Array(scan_reference_images(&dir)))
+        .unwrap_or_else(|| Value::Array(Vec::new()))
 }
 
 fn redact_recovery_attempts(metadata: &mut Value) {

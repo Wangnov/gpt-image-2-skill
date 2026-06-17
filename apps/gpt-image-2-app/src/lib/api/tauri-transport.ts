@@ -122,10 +122,14 @@ export const tauriApi: ApiClient = {
     return invoke<NotificationCapabilities>("notification_capabilities");
   },
   async updatePaths(config: PathConfig) {
-    return normalizeConfig(await invoke<ServerConfig>("update_paths", { config }));
+    return normalizeConfig(
+      await invoke<ServerConfig>("update_paths", { config }),
+    );
   },
   async updateStorage(config: StorageConfig) {
-    return normalizeConfig(await invoke<ServerConfig>("update_storage", { config }));
+    return normalizeConfig(
+      await invoke<ServerConfig>("update_storage", { config }),
+    );
   },
   async testStorageTarget(name: string, target?: StorageTargetConfig) {
     return invoke<StorageTestResult>("test_storage_target", { name, target });
@@ -300,7 +304,12 @@ export const tauriApi: ApiClient = {
   },
   async resumeJob(
     jobId: string,
-    action: "continue_save" | "fill_missing" | "reupload" | "resubmit" | "discard",
+    action:
+      | "continue_save"
+      | "fill_missing"
+      | "reupload"
+      | "resubmit"
+      | "discard",
   ) {
     const result = await invoke<TauriJobResponse>("resume_job", {
       jobId,
@@ -325,6 +334,11 @@ export const tauriApi: ApiClient = {
       return convertFileSrc(job.output_path);
     }
     return "";
+  },
+  async jobReferenceUrls(job: Job) {
+    return (job.reference_images ?? [])
+      .map((ref) => (ref.path ? convertFileSrc(ref.path) : ""))
+      .filter(Boolean);
   },
   jobOutputPath,
   jobOutputPaths,

@@ -425,10 +425,16 @@ export const browserApi: ApiClient = {
   },
   async resumeJob(
     jobId: string,
-    action: "continue_save" | "fill_missing" | "reupload" | "resubmit" | "discard",
+    action:
+      | "continue_save"
+      | "fill_missing"
+      | "reupload"
+      | "resubmit"
+      | "discard",
   ) {
     if (action === "resubmit") return browserApi.retryJob(jobId);
-    if (action === "discard") throw new Error("浏览器模式暂不支持丢弃恢复任务。");
+    if (action === "discard")
+      throw new Error("浏览器模式暂不支持丢弃恢复任务。");
     throw new Error("浏览器模式不支持继续完成，请改用 Docker/App。");
   },
   outputUrl(jobId: string, index = 0) {
@@ -444,6 +450,19 @@ export const browserApi: ApiClient = {
   jobOutputUrl(job: Job, index = 0) {
     const path = jobOutputPath(job, index);
     return path ? browserApi.fileUrl(path) : "";
+  },
+  // Returns disposable blob: URLs created from the IndexedDB-stored inputs; the
+  // caller (useJobReferenceUrls) revokes them on unmount. http/tauri instead
+  // return plain file URLs that need no cleanup. Filter/sort by `key` (the form
+  // field name like "ref_0"); `name` is the original filename like "cat.png".
+  async jobReferenceUrls(job: Job) {
+    const input = await browser.readJobInput(job.id);
+    if (!input || input.kind !== "edit") return [];
+    const refIndex = (key: string) => Number(key.replace(/\D/g, "")) || 0;
+    return input.files
+      .filter((file) => file.key.startsWith("ref_"))
+      .sort((a, b) => refIndex(a.key) - refIndex(b.key))
+      .map((file) => URL.createObjectURL(file.blob));
   },
   jobOutputPath,
   jobOutputPaths,

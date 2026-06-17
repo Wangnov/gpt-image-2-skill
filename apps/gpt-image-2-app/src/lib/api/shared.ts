@@ -65,9 +65,26 @@ export function normalizeJob(raw: Record<string, unknown>): Job {
   const outputPath =
     typeof raw.output_path === "string"
       ? raw.output_path
-      : indexZeroPath ?? (outputs.length === 0 ? metadataOutputPath : undefined);
+      : (indexZeroPath ??
+        (outputs.length === 0 ? metadataOutputPath : undefined));
   const rawStatus = String(raw.status ?? "completed");
   const status = rawStatus === "canceled" ? "cancelled" : rawStatus;
+  const referenceImages = Array.isArray(raw.reference_images)
+    ? raw.reference_images
+        .map((item) => {
+          const ref =
+            item && typeof item === "object"
+              ? (item as Record<string, unknown>)
+              : null;
+          if (!ref) return null;
+          const index = Number(ref.index);
+          const path = typeof ref.path === "string" ? ref.path : "";
+          if (!Number.isFinite(index) || !path) return null;
+          return { index, path };
+        })
+        .filter((ref): ref is { index: number; path: string } => ref !== null)
+        .sort((a, b) => a.index - b.index)
+    : undefined;
   const job: Job = {
     id: String(raw.id ?? ""),
     command: (raw.command as Job["command"]) ?? "images generate",
@@ -77,6 +94,7 @@ export function normalizeJob(raw: Record<string, unknown>): Job {
     updated_at: String(raw.updated_at ?? raw.created_at ?? ""),
     metadata,
     outputs,
+    reference_images: referenceImages,
     output_path: outputPath,
     storage_status:
       typeof raw.storage_status === "string"
@@ -253,9 +271,7 @@ function normalizePipelineConfig(
     : fallback.mode;
   const originRaw = value.origin;
   const origin =
-    typeof originRaw === "string" && originRaw.trim()
-      ? originRaw.trim()
-      : null;
+    typeof originRaw === "string" && originRaw.trim() ? originRaw.trim() : null;
   return {
     mode,
     origin,
@@ -367,11 +383,11 @@ export function migrateLegacyToPipeline(
  * `StorageTargetConfig::can_act_as_origin()`. Origin is limited to backends
  * with implemented readback in this build.
  */
-export function canActAsOrigin(target: StorageTargetConfig | undefined): boolean {
+export function canActAsOrigin(
+  target: StorageTargetConfig | undefined,
+): boolean {
   if (!target) return false;
-  return ["local", "s3", "webdav", "sftp"].includes(
-    storageTargetType(target),
-  );
+  return ["local", "s3", "webdav", "sftp"].includes(storageTargetType(target));
 }
 
 export function defaultPathConfig(): PathConfig {
@@ -581,12 +597,12 @@ export function normalizeStorageConfig(
   const policy = normalizeStorageManagementPolicy(config?.policy);
   const pipeline = applyStorageManagementPolicy(
     config?.pipeline
-    ? normalizePipelineConfig(config.pipeline)
-    : migrateLegacyToPipeline({
-        default_targets,
-        fallback_targets,
-        fallback_policy,
-      }),
+      ? normalizePipelineConfig(config.pipeline)
+      : migrateLegacyToPipeline({
+          default_targets,
+          fallback_targets,
+          fallback_policy,
+        }),
     policy,
   );
   return {

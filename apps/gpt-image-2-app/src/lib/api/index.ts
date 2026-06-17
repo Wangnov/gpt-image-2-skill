@@ -156,9 +156,7 @@ export const api: ApiClient = {
       prompt,
       jobId,
       outputIndex,
-    ) as ReturnType<
-      ApiClient["copyImageToClipboard"]
-    >,
+    ) as ReturnType<ApiClient["copyImageToClipboard"]>,
   cancelJob: (id) =>
     invokeClient("cancelJob", id) as ReturnType<ApiClient["cancelJob"]>,
   queueStatus: () =>
@@ -199,7 +197,9 @@ export const api: ApiClient = {
     >,
   chooseFolder: (startDir) =>
     loadClient().then((client) =>
-      client.chooseFolder ? client.chooseFolder(startDir) : Promise.resolve(null),
+      client.chooseFolder
+        ? client.chooseFolder(startDir)
+        : Promise.resolve(null),
     ),
   createGenerate: (body) =>
     invokeClient("createGenerate", body) as ReturnType<
@@ -210,7 +210,9 @@ export const api: ApiClient = {
   retryJob: (jobId) =>
     invokeClient("retryJob", jobId) as ReturnType<ApiClient["retryJob"]>,
   resumeJob: (jobId, action) =>
-    invokeClient("resumeJob", jobId, action) as ReturnType<ApiClient["resumeJob"]>,
+    invokeClient("resumeJob", jobId, action) as ReturnType<
+      ApiClient["resumeJob"]
+    >,
   outputUrl(jobId, index) {
     return activeClient.outputUrl(jobId, index);
   },
@@ -222,6 +224,9 @@ export const api: ApiClient = {
   },
   jobOutputUrl(job, index) {
     return activeClient.jobOutputUrl(job, index);
+  },
+  jobReferenceUrls(job) {
+    return activeClient.jobReferenceUrls(job);
   },
   jobOutputPath(job, index) {
     return activeClient.jobOutputPath(job, index);

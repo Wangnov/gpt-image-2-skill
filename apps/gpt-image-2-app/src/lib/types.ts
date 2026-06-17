@@ -320,6 +320,16 @@ export interface OutputRef {
   uploads?: OutputUploadRef[];
 }
 
+/**
+ * A persisted input reference image for an `images edit` (image-to-image) job.
+ * The backend fills this by scanning `ref-{index}.png` in the job directory, so
+ * it works for legacy jobs too. Absent/empty for text-to-image jobs.
+ */
+export interface ReferenceImageRef {
+  index: number;
+  path: string;
+}
+
 export interface Job {
   id: string;
   command: "images generate" | "images edit" | "request create";
@@ -329,6 +339,7 @@ export interface Job {
   updated_at: string;
   metadata: Record<string, unknown>;
   outputs: OutputRef[];
+  reference_images?: ReferenceImageRef[];
   output_path?: string;
   storage_status?: StorageStatus | string;
   error?: Record<string, unknown> | null;

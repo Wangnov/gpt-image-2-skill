@@ -99,6 +99,56 @@ pub(crate) async fn job_output_response(
         .map_err(|error| ApiError::internal(error.to_string()))
 }
 
+/// Serve a reference *input* image (`ref-{index}.{ext}`) for an edit job.
+///
+/// Unlike outputs, reference images are the original source files written to
+/// the job directory at submission time, so we read them straight from disk
+/// rather than going through storage readback. The job directory is resolved
+/// the same way as in core history serialization (recovery metadata first,
+/// then the parent of a recorded output path), and the final path is funneled
+/// through `safe_job_file_path` for canonicalization, managed-root checks, and
+/// path-traversal protection.
+pub(crate) async fn job_reference_response(
+    Path((job_id, reference_index)): Path<(String, usize)>,
+) -> Result<Response, ApiError> {
+    let job = show_history_job(&job_id)
+        .map_err(app_error)
+        .map_err(ApiError::not_found)?;
+    // Resolve the actual reference path from the serialized `reference_images`
+    // (which honors the on-disk extension and is only populated for edit jobs),
+    // then funnel it through `safe_job_file_path` for canonicalization,
+    // managed-root checks, and path-traversal protection.
+    let reference_path = job
+        .get("reference_images")
+        .and_then(Value::as_array)
+        .and_then(|refs| {
+            refs.iter().find(|item| {
+                item.get("index").and_then(Value::as_u64) == Some(reference_index as u64)
+            })
+        })
+        .and_then(|item| item.get("path").and_then(Value::as_str))
+        .ok_or_else(|| ApiError::not_found("找不到该参考图。"))?;
+    let path = safe_job_file_path(reference_path)?;
+    let bytes = tokio::fs::read(&path)
+        .await
+        .map_err(|error| ApiError::not_found(error.to_string()))?;
+    let mime = mime_guess::from_path(&path).first_or_octet_stream();
+    let file_name = path
+        .file_name()
+        .and_then(|name| name.to_str())
+        .unwrap_or("reference.png");
+    Response::builder()
+        .status(StatusCode::OK)
+        .header(header::CONTENT_TYPE, mime.as_ref())
+        .header(header::CACHE_CONTROL, "private, max-age=31536000")
+        .header(
+            header::CONTENT_DISPOSITION,
+            format!("inline; filename=\"{file_name}\""),
+        )
+        .body(Body::from(bytes))
+        .map_err(|error| ApiError::internal(error.to_string()))
+}
+
 fn output_file_name_from_job(job: &Value, output_index: usize) -> String {
     job.get("outputs")
         .and_then(Value::as_array)

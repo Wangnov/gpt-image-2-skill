@@ -25,6 +25,8 @@ import {
 } from "@/lib/user-actions";
 import type { Job } from "@/lib/types";
 import { JobPreviewImage } from "./job-preview-image";
+import { JobKindIcon, JobReferenceBadge } from "./job-kind-icon";
+import { JobReferenceStrip } from "./job-reference-strip";
 import { StatusChip } from "./status-chip";
 import {
   jobErrorDetailText,
@@ -34,6 +36,7 @@ import {
   jobOutputErrors,
   jobPrompt,
   jobRatio,
+  jobReferenceCount,
   jobRecoveryAction,
   jobStatusLabel,
   jobThumbPath,
@@ -97,6 +100,7 @@ export function JobRowExpandable({
     return Array.from(indexes).sort((a, b) => a - b);
   }, [outputIndexes, outputErrors, planned]);
   const metaItems = jobMetaItems(job);
+  const refCount = jobReferenceCount(job);
   const errorMessage = jobErrorMessage(job);
   const errorDetail = jobErrorDetailText(job);
   const showPromptToggle = prompt.length > 240 || prompt.split("\n").length > 6;
@@ -195,10 +199,16 @@ export function JobRowExpandable({
               +{extraCount}
             </span>
           )}
+          <JobReferenceBadge count={refCount} />
         </div>
 
         <div className="min-w-0 self-center sm:flex-1">
-          <div className="text-[13px] text-foreground truncate">{prompt}</div>
+          <div className="flex items-center gap-1.5">
+            <JobKindIcon job={job} size={13} />
+            <span className="min-w-0 truncate text-[13px] text-foreground">
+              {prompt}
+            </span>
+          </div>
           <div className="text-[11px] text-faint mt-0.5 font-mono flex items-center gap-1.5">
             {metaItems.map((item, itemIndex) => (
               <span
@@ -329,6 +339,8 @@ export function JobRowExpandable({
                     </button>
                   </div>
                 </div>
+
+                <JobReferenceStrip job={job} />
 
                 {(status === "failed" || status === "partial_failed") &&
                   errorMessage && (

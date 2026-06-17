@@ -129,7 +129,8 @@ export function HistoryScreen({
           <span className="text-foreground font-medium">
             {finished.length} 条
           </span>{" "}
-          当前已加载的已完成 / 已失败任务。远端 Origin/Archive 不会被删除，此操作不可撤销。
+          当前已加载的已完成 / 已失败任务。远端 Origin/Archive
+          不会被删除，此操作不可撤销。
         </>
       ),
       confirmText: "清理",
@@ -216,7 +217,7 @@ export function HistoryScreen({
       </header>
 
       {/* filters */}
-      <div className="mb-4 grid grid-cols-1 items-center gap-3 lg:grid-cols-[1fr_minmax(320px,560px)_1fr]">
+      <div className="mb-4 grid grid-cols-1 items-center gap-3 lg:grid-cols-[auto_1fr_auto]">
         <div className="flex min-w-0 items-center gap-1 overflow-x-auto scrollbar-none">
           {FILTERS.map((f) => {
             const isActive = filter === f.value;
@@ -226,7 +227,7 @@ export function HistoryScreen({
                 type="button"
                 onClick={() => setFilter(f.value)}
                 className={cn(
-                  "relative px-3.5 h-8 rounded-full text-[12.5px] font-medium transition-colors",
+                  "relative shrink-0 whitespace-nowrap px-3.5 h-8 rounded-full text-[12.5px] font-medium transition-colors",
                   isActive
                     ? "text-foreground"
                     : "text-muted hover:text-foreground hover:bg-[color:var(--w-04)]",
@@ -250,7 +251,7 @@ export function HistoryScreen({
             );
           })}
         </div>
-        <label className="relative block min-w-0">
+        <label className="relative block w-full min-w-0 lg:mx-auto lg:max-w-[560px]">
           <Search
             size={15}
             className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-faint"
@@ -328,11 +329,7 @@ export function HistoryScreen({
                   <motion.div
                     key={j.id}
                     layout="position"
-                    initial={
-                      reducedMotion
-                        ? false
-                        : { opacity: 0, y: 4 }
-                    }
+                    initial={reducedMotion ? false : { opacity: 0, y: 4 }}
                     animate={{ opacity: 1, y: 0 }}
                     exit={
                       reducedMotion
