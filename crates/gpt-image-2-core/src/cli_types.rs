@@ -336,6 +336,7 @@ pub struct GenerateImageArgs {
 pub struct EditImageArgs {
     #[command(flatten)]
     pub shared: SharedImageArgs,
+    /// Reference image path or URL. Repeat the flag to pass multiple images (up to 16).
     #[arg(long = "ref-image", required = true)]
     pub ref_image: Vec<String>,
     #[arg(long)]
