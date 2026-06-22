@@ -754,6 +754,7 @@ export function normalizeConfig(config: ServerConfig): ServerConfig {
     storage: normalizeStorageConfig(config.storage),
     paths: normalizePathConfig(config.paths),
     proxy: normalizeProxyConfig(config.proxy),
+    logging: { debug: Boolean(config.logging?.debug) },
   };
 }
 

@@ -3,6 +3,9 @@ import type {
   Job,
   JobEvent,
   JobStatus,
+  LoggingConfig,
+  LogLevel,
+  LogsResult,
   NotificationCapabilities,
   NotificationConfig,
   NotificationTestResult,
@@ -135,6 +138,27 @@ export const httpApi: ApiClient = {
         body: jsonBody({ target }),
       },
     );
+  },
+  async getLogs(options?: { limit?: number; level?: LogLevel }) {
+    const params = new URLSearchParams();
+    if (options?.limit != null) params.set("limit", String(options.limit));
+    if (options?.level) params.set("level", options.level);
+    const query = params.toString();
+    return requestJson<LogsResult>(`/logs${query ? `?${query}` : ""}`);
+  },
+  async updateLogging(config: LoggingConfig) {
+    return normalizeConfig(
+      await requestJson<ServerConfig>("/logging", {
+        method: "PUT",
+        body: jsonBody(config),
+      }),
+    );
+  },
+  async openLogsDir() {
+    // No native file-manager on a remote server; surface the server-side path
+    // so the UI can show users where the logs live inside the container.
+    const result = await requestJson<LogsResult>("/logs?limit=1");
+    return result.logs_dir;
   },
   async setDefault(name: string) {
     return normalizeConfig(

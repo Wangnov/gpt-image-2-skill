@@ -127,6 +127,7 @@ pub fn redact_app_config(config: &AppConfig) -> Value {
         "storage": redact_storage_config(&config.storage),
         "paths": config.paths,
         "proxy": redact_proxy_config(&config.proxy),
+        "logging": redact_logging_config(&config.logging),
     })
 }
 

@@ -2,6 +2,9 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/lib/api";
 import type {
   JobStatus,
+  LoggingConfig,
+  LogLevel,
+  LogsResult,
   NotificationConfig,
   PathConfig,
   ProviderConfig,
@@ -119,6 +122,49 @@ export function useTestStorageTarget() {
         throw new Error("当前运行环境不支持测试存储目标。");
       }
       return api.testStorageTarget(name, target);
+    },
+  });
+}
+
+export function useLogs(options?: {
+  level?: LogLevel;
+  limit?: number;
+  enabled?: boolean;
+  refetchInterval?: number | false;
+}) {
+  const level = options?.level;
+  const limit = options?.limit ?? 500;
+  return useQuery<LogsResult>({
+    // level is part of the key so switching the filter re-fetches a
+    // server-side filtered slice instead of just client-filtering.
+    queryKey: ["logs", level ?? "all", limit],
+    queryFn: () => api.getLogs({ level, limit }),
+    enabled: options?.enabled ?? true,
+    refetchInterval: options?.refetchInterval ?? false,
+    staleTime: 2_000,
+  });
+}
+
+export function useUpdateLogging() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (config: LoggingConfig) => api.updateLogging(config),
+    onSuccess: (data) => {
+      qc.setQueryData(["config"], data);
+      // Verbose toggle changes which entries get persisted going forward;
+      // refresh the panel so the effect is visible.
+      void qc.invalidateQueries({ queryKey: ["logs"] });
+    },
+  });
+}
+
+export function useOpenLogsDir() {
+  return useMutation({
+    mutationFn: () => {
+      if (!api.openLogsDir) {
+        throw new Error("当前运行环境不支持打开日志文件夹。");
+      }
+      return api.openLogsDir();
     },
   });
 }

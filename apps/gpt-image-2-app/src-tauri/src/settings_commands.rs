@@ -54,6 +54,9 @@ pub(crate) fn update_paths(config: PathConfig, app: tauri::AppHandle) -> Result<
     app_config.paths = next_config;
     save_config(&app_config)?;
     allow_result_library_asset_scope(&app);
+    // The app data dir may have moved; repoint the logger so get_logs and the
+    // writer stay in sync without a restart.
+    gpt_image_2_core::init_logging(&app_config, ProductRuntime::Tauri);
     Ok(config_for_ui(&app_config))
 }
 
@@ -65,6 +68,32 @@ pub(crate) fn update_proxy(mut config: ProxyConfig) -> Result<Value, String> {
     app_config.proxy = config;
     save_config(&app_config)?;
     Ok(config_for_ui(&app_config))
+}
+
+#[tauri::command]
+pub(crate) fn update_logging(config: LoggingConfig) -> Result<Value, String> {
+    let mut app_config = load_config()?;
+    app_config.logging = config;
+    save_config(&app_config)?;
+    // Re-tune the live persistence level so the verbose toggle takes effect
+    // without restarting the app.
+    apply_logging_config(&app_config.logging);
+    Ok(config_for_ui(&app_config))
+}
+
+#[tauri::command]
+pub(crate) fn get_logs(limit: Option<usize>, level: Option<String>) -> Result<Value, String> {
+    let config = load_config_or_default();
+    let limit = limit.unwrap_or(500).clamp(1, 5000);
+    let min_level = level
+        .as_deref()
+        .and_then(LogLevel::parse)
+        .unwrap_or(LogLevel::Debug);
+    let entries = read_recent_logs(Some(&config), ProductRuntime::Tauri, limit, min_level);
+    Ok(json!({
+        "entries": entries,
+        "logs_dir": logs_dir(Some(&config), ProductRuntime::Tauri).display().to_string(),
+    }))
 }
 
 #[tauri::command]

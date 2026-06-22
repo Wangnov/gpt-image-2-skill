@@ -9,6 +9,7 @@ import { AppearancePanel } from "./appearance-panel";
 import { BROWSER_HIDDEN_TABS, type SettingsTab } from "./constants";
 import { CredsPanel } from "./credentials-panel";
 import { PanelHeader, SettingsNav } from "./layout";
+import { LogsPanel } from "./logs-panel";
 import { ProxyPanel } from "./proxy-panel";
 import { RuntimePanel } from "./runtime-panel";
 import { StoragePanel } from "./storage-panel";
@@ -78,6 +79,7 @@ export function SettingsScreen({ config }: { config?: ServerConfig } = {}) {
             )}
             {visibleTab === "proxy" && <ProxyPanel proxy={config?.proxy} />}
             {visibleTab === "prompts" && <PromptTemplatesPanel />}
+            {visibleTab === "logs" && <LogsPanel />}
             {visibleTab === "about" && <AboutPanel />}
           </motion.div>
         </AnimatePresence>

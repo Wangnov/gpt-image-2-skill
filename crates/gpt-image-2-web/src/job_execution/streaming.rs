@@ -15,7 +15,26 @@ pub(crate) struct StreamContext {
 #[derive(Debug, Clone)]
 pub(crate) struct BatchItemError {
     pub(crate) index: usize,
+    pub(crate) code: Option<String>,
     pub(crate) message: String,
+    pub(crate) detail: Option<Value>,
+}
+
+impl BatchItemError {
+    /// Build a structured per-slot error from a JobError-shaped `Value`
+    /// (`{ code, message, detail }`) as produced by `cli_json_result`, keeping
+    /// `code`/`detail` so the merged payload's `error.items[*]` stay rich.
+    pub(crate) fn from_error_value(index: usize, error: Value) -> Self {
+        Self {
+            index,
+            code: error
+                .get("code")
+                .and_then(Value::as_str)
+                .map(ToString::to_string),
+            message: error_message_from_value(&error),
+            detail: error.get("detail").cloned(),
+        }
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -35,7 +54,7 @@ pub(crate) fn run_payloads_concurrently_streaming(
             errors: Vec::new(),
         };
     }
-    let (tx, rx) = mpsc::channel::<(usize, Result<Value, String>)>();
+    let (tx, rx) = mpsc::channel::<(usize, Result<Value, Value>)>();
     for (index, args) in arg_sets.into_iter().enumerate() {
         let tx = tx.clone();
         thread::spawn(move || {
@@ -53,10 +72,7 @@ pub(crate) fn run_payloads_concurrently_streaming(
                 on_partial(index, &payload);
                 results[index] = Some(payload);
             }
-            Ok((index, Err(error))) => errors.push(BatchItemError {
-                index,
-                message: error,
-            }),
+            Ok((index, Err(error))) => errors.push(BatchItemError::from_error_value(index, error)),
             Err(_) => break,
         }
         received += 1;

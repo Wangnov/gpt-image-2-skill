@@ -274,7 +274,28 @@ pub(crate) fn cli_json(args: &[String]) -> Value {
     run_json(&argv).payload
 }
 
-pub(crate) fn cli_json_result(args: &[String]) -> Result<Value, String> {
+/// Wrap a bare error string into a JobError-shaped object (`{ "message": ... }`)
+/// so internal validation/IO errors flow through the same `Value` channel as the
+/// structured payload errors produced by the core. Keeps `detail` optional.
+pub(crate) fn error_value_from_message(message: impl Into<String>) -> Value {
+    json!({ "message": message.into() })
+}
+
+/// Best-effort human-readable message from a JobError-shaped value, used where a
+/// flat string is still required (e.g. logging, summaries).
+pub(crate) fn error_message_from_value(error: &Value) -> String {
+    error
+        .get("message")
+        .and_then(Value::as_str)
+        .map(ToString::to_string)
+        .unwrap_or_else(|| "Command failed".to_string())
+}
+
+/// Run the CLI and, on failure, preserve the entire `error` object from the
+/// payload (already redacted by core's `build_error_payload`) instead of
+/// flattening it to `error.message`. The Err value is JobError-shaped
+/// (`{ code, message, detail }`).
+pub(crate) fn cli_json_result(args: &[String]) -> Result<Value, Value> {
     let mut argv = vec!["gpt-image-2-skill".to_string(), "--json".to_string()];
     argv.extend(args.iter().cloned());
     let outcome = run_json(&argv);
@@ -284,9 +305,7 @@ pub(crate) fn cli_json_result(args: &[String]) -> Result<Value, String> {
         Err(outcome
             .payload
             .get("error")
-            .and_then(|error| error.get("message"))
-            .and_then(Value::as_str)
-            .unwrap_or("Command failed")
-            .to_string())
+            .cloned()
+            .unwrap_or_else(|| error_value_from_message("Command failed")))
     }
 }

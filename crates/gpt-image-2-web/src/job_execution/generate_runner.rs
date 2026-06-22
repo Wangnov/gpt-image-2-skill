@@ -7,11 +7,11 @@ pub(crate) fn run_generate_request(
     fallback_id: String,
     dir: PathBuf,
     stream: Option<StreamContext>,
-) -> Result<Value, String> {
+) -> Result<Value, Value> {
     if request.prompt.trim().is_empty() {
-        return Err("Prompt is required.".to_string());
+        return Err(error_value_from_message("Prompt is required."));
     }
-    let output_count = requested_n(request.n)?;
+    let output_count = requested_n(request.n).map_err(error_value_from_message)?;
     if request.n.is_some() {
         request.n = Some(output_count);
     }
@@ -90,7 +90,7 @@ pub(crate) fn run_generate_request(
             failures,
             generation_slots,
         )
-        .map_err(app_error)?;
+        .map_err(|error| error_value_from_message(app_error(error)))?;
         merged
     };
     let request_meta = serde_json::to_value(&request).unwrap_or_else(|_| json!({}));

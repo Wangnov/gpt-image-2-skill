@@ -77,18 +77,21 @@ pub(crate) fn run_edit_request(
     fallback_id: String,
     dir: PathBuf,
     stream: Option<StreamContext>,
-) -> Result<Value, String> {
+) -> Result<Value, Value> {
     if request.prompt.trim().is_empty() {
-        return Err("Prompt is required.".to_string());
+        return Err(error_value_from_message("Prompt is required."));
     }
     if request.refs.is_empty() {
-        return Err("At least one reference image is required.".to_string());
+        return Err(error_value_from_message(
+            "At least one reference image is required.",
+        ));
     }
-    let output_count = requested_n(request.n)?;
+    let output_count = requested_n(request.n).map_err(error_value_from_message)?;
     if request.n.is_some() {
         request.n = Some(output_count);
     }
-    let (ref_paths, mask_path, edit_region_mode) = write_edit_inputs(&request, &dir)?;
+    let (ref_paths, mask_path, edit_region_mode) =
+        write_edit_inputs(&request, &dir).map_err(error_value_from_message)?;
     let provider_supports_n = provider_supports_n(request.provider.as_deref());
     let payload = if provider_supports_n || output_count == 1 {
         let out = dir.join(format!(
@@ -176,7 +179,7 @@ pub(crate) fn run_edit_request(
             failures,
             generation_slots,
         )
-        .map_err(app_error)?;
+        .map_err(|error| error_value_from_message(app_error(error)))?;
         merged
     };
     let request_meta = edit_request_metadata(&request);

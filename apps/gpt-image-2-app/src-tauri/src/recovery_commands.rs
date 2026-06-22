@@ -247,10 +247,10 @@ fn fill_missing_job(job_id: &str) -> Result<Value, String> {
                 ) {
                     match cached {
                         Ok(payload) => payloads.push((*index, payload)),
-                        Err(message) => errors.push(BatchItemError {
-                            index: *index,
-                            message,
-                        }),
+                        Err(message) => errors.push(BatchItemError::from_error_value(
+                            *index,
+                            error_value_from_message(message),
+                        )),
                     }
                     continue;
                 }
@@ -261,10 +261,7 @@ fn fill_missing_job(job_id: &str) -> Result<Value, String> {
                     Some((child_id.as_str(), child_dir.as_path())),
                 )) {
                     Ok(payload) => payloads.push((*index, payload)),
-                    Err(message) => errors.push(BatchItemError {
-                        index: *index,
-                        message,
-                    }),
+                    Err(error) => errors.push(BatchItemError::from_error_value(*index, error)),
                 }
             }
         }
@@ -285,10 +282,10 @@ fn fill_missing_job(job_id: &str) -> Result<Value, String> {
                 ) {
                     match cached {
                         Ok(payload) => payloads.push((*index, payload)),
-                        Err(message) => errors.push(BatchItemError {
-                            index: *index,
-                            message,
-                        }),
+                        Err(message) => errors.push(BatchItemError::from_error_value(
+                            *index,
+                            error_value_from_message(message),
+                        )),
                     }
                     continue;
                 }
@@ -305,10 +302,7 @@ fn fill_missing_job(job_id: &str) -> Result<Value, String> {
                     Some((child_id.as_str(), child_dir.as_path())),
                 )) {
                     Ok(payload) => payloads.push((*index, payload)),
-                    Err(message) => errors.push(BatchItemError {
-                        index: *index,
-                        message,
-                    }),
+                    Err(error) => errors.push(BatchItemError::from_error_value(*index, error)),
                 }
             }
         }

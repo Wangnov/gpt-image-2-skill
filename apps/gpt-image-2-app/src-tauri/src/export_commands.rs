@@ -21,6 +21,16 @@ pub(crate) fn reveal_path(path: String) -> Result<(), String> {
 }
 
 #[tauri::command]
+pub(crate) fn open_logs_dir() -> Result<String, String> {
+    let dir = logs_dir(Some(&load_config_or_default()), ProductRuntime::Tauri);
+    // The directory may not exist yet if nothing has been logged; create it so
+    // the reveal lands somewhere instead of erroring.
+    fs::create_dir_all(&dir).map_err(|error| format!("无法创建日志目录：{error}"))?;
+    open_system_path(&dir, false)?;
+    Ok(dir.display().to_string())
+}
+
+#[tauri::command]
 pub(crate) fn export_files_to_downloads(paths: Vec<String>) -> Result<Vec<String>, String> {
     export_files_to_configured_folder(paths)
 }

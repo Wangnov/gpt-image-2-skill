@@ -314,6 +314,30 @@ export interface NotificationCapabilities {
   };
 }
 
+export type LogLevel = "debug" | "info" | "warn" | "error";
+
+export interface LoggingConfig {
+  /** When true, debug-level events are persisted alongside info/warn/error. */
+  debug: boolean;
+}
+
+export interface LogEntry {
+  /** RFC3339 timestamp. */
+  ts: string;
+  level: LogLevel;
+  /** Event family, mirroring the JsonEventLogger vocabulary (e.g. "local"). */
+  kind: string;
+  /** Event type, e.g. "job.failed" / "app.started". */
+  type: string;
+  /** Redacted structured payload. */
+  data?: Record<string, unknown>;
+}
+
+export interface LogsResult {
+  entries: LogEntry[];
+  logs_dir: string;
+}
+
 export interface ServerConfig {
   version: 1;
   default_provider?: string;
@@ -322,6 +346,7 @@ export interface ServerConfig {
   storage: StorageConfig;
   paths: PathConfig;
   proxy: ProxyConfig;
+  logging?: LoggingConfig;
 }
 
 export type JobStatus =
@@ -349,6 +374,23 @@ export interface OutputRef {
 }
 
 /**
+ * Structured error carried end-to-end from the core through the GUI/Web
+ * boundary. `message` is the short human summary (matches the legacy
+ * `{ message }` shape); `code` is the machine error code; `detail` is the real,
+ * already-redacted cause (an object or string) surfaced behind a "show details"
+ * affordance; `items` holds per-slot errors for batch (n>1) jobs, each itself a
+ * `JobError`.
+ */
+export interface JobError {
+  code?: string;
+  message: string;
+  detail?: unknown;
+  items?: JobError[];
+  /** Batch item index, present on `items[*]` entries. */
+  index?: number;
+}
+
+/**
  * A persisted input reference image for an `images edit` (image-to-image) job.
  * The backend fills this by scanning `ref-{index}.png` in the job directory, so
  * it works for legacy jobs too. Absent/empty for text-to-image jobs.
@@ -370,7 +412,7 @@ export interface Job {
   reference_images?: ReferenceImageRef[];
   output_path?: string;
   storage_status?: StorageStatus | string;
-  error?: Record<string, unknown> | null;
+  error?: JobError | null;
 }
 
 export interface JobEvent {

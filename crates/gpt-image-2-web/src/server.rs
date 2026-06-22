@@ -80,6 +80,8 @@ pub(crate) fn api_router(state: JobQueueState) -> Router {
         )
         .route("/paths", put(update_paths))
         .route("/proxy", put(update_proxy))
+        .route("/logging", put(update_logging))
+        .route("/logs", get(get_logs))
         .route("/storage", put(update_storage))
         .route("/storage/{name}/test", post(test_storage))
         .route("/providers/default", post(set_default_provider))

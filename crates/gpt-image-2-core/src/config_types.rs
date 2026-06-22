@@ -4,6 +4,7 @@ use std::collections::BTreeMap;
 
 use serde::{Deserialize, Serialize};
 
+use crate::logging::LoggingConfig;
 use crate::notifications::NotificationConfig;
 use crate::provider_types::ProviderConfig;
 use crate::storage::StorageConfig;
@@ -67,6 +68,8 @@ pub struct AppConfig {
     pub paths: PathConfig,
     #[serde(default)]
     pub proxy: ProxyConfig,
+    #[serde(default)]
+    pub logging: LoggingConfig,
 }
 
 impl Default for AppConfig {
@@ -79,6 +82,7 @@ impl Default for AppConfig {
             storage: StorageConfig::default(),
             paths: PathConfig::default(),
             proxy: ProxyConfig::default(),
+            logging: LoggingConfig::default(),
         }
     }
 }

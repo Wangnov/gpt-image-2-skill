@@ -81,10 +81,10 @@ pub(crate) fn uploading_job_for_queue(queued: &QueuedJob, response: &Value) -> V
     })
 }
 
-pub(crate) fn failed_job_for_queue(queued: &QueuedJob, message: String) -> Value {
+pub(crate) fn failed_job_for_queue(queued: &QueuedJob, error: Value) -> Value {
     let mut metadata = merge_recovery_metadata(queued.metadata.clone(), &queued.dir);
     if let Value::Object(map) = &mut metadata {
-        map.insert("error".to_string(), json!({"message": message.clone()}));
+        map.insert("error".to_string(), error.clone());
     }
     job_snapshot(JobSnapshotInput {
         id: &queued.id,
@@ -95,7 +95,7 @@ pub(crate) fn failed_job_for_queue(queued: &QueuedJob, message: String) -> Value
         metadata,
         output_path: None,
         outputs: json!([]),
-        error: json!({"message": message}),
+        error,
     })
 }
 
@@ -133,7 +133,7 @@ pub(crate) fn finish_queued_job(
     app: tauri::AppHandle,
     state: JobQueueState,
     queued: QueuedJob,
-    result: Result<Value, String>,
+    result: Result<Value, Value>,
 ) {
     let (job, event_type, event_data, completed) = match result {
         Ok(response) => {
@@ -148,16 +148,50 @@ pub(crate) fn finish_queued_job(
                 let uploading_job = uploading_job_for_queue(&queued, &response);
                 let _ = persist_job(&uploading_job);
             }
+            // An Ok payload can still carry a terminal failure status (e.g.
+            // batch partial_failed), so classify the log from the terminal
+            // event type and include the cause when it failed.
+            let (log_level, log_type) = match event_type {
+                "job.failed" => (LogLevel::Error, "job.failed"),
+                "job.partial_failed" => (LogLevel::Warn, "job.partial_failed"),
+                "job.cancelled" => (LogLevel::Info, "job.cancelled"),
+                _ => (LogLevel::Info, "job.completed"),
+            };
+            let mut log_data = json!({
+                "job_id": queued.id,
+                "command": queued.command,
+                "provider": queued.provider,
+                "status": status.unwrap_or("completed"),
+            });
+            if matches!(event_type, "job.failed" | "job.partial_failed")
+                && let Some(error) = job.get("error").filter(|value| !value.is_null())
+            {
+                log_data["error"] = error.clone();
+            }
+            log_event(log_level, "local", log_type, log_data);
             (job, event_type, data, completed)
         }
-        Err(message) => {
-            let job = failed_job_for_queue(&queued, message.clone());
+        Err(error) => {
+            // P0 hands us a structured JobError (code/message/detail); persist
+            // the same value so the logs panel can surface the real cause.
+            log_event(
+                LogLevel::Error,
+                "local",
+                "job.failed",
+                json!({
+                    "job_id": queued.id,
+                    "command": queued.command,
+                    "provider": queued.provider,
+                    "error": error,
+                }),
+            );
+            let job = failed_job_for_queue(&queued, error.clone());
             (
                 job,
                 "job.failed",
                 json!({
                     "status": "failed",
-                    "error": {"message": message},
+                    "error": error,
                 }),
                 false,
             )
@@ -331,6 +365,16 @@ pub(crate) fn start_queued_jobs(app: tauri::AppHandle, state: JobQueueState) {
         };
         let _ = persist_job(&running_job);
         emit_queue_event(&app, &queued.id, &event);
+        log_event(
+            LogLevel::Info,
+            "local",
+            "job.started",
+            json!({
+                "job_id": queued.id,
+                "command": queued.command,
+                "provider": queued.provider,
+            }),
+        );
         let worker_app = app.clone();
         let worker_state = state.clone();
         thread::spawn(move || {

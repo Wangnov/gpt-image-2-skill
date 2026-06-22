@@ -1,4 +1,10 @@
-import type { GenerateRequest, Job, OutputRef, QueueStatus } from "../../types";
+import type {
+  GenerateRequest,
+  Job,
+  JobError,
+  OutputRef,
+  QueueStatus,
+} from "../../types";
 import { normalizeJobResponse, outputPaths } from "../shared";
 import { isActiveJobStatus } from "../types";
 import { appendEvent, nowIso } from "./events";
@@ -167,14 +173,31 @@ export async function failTask(task: BrowserQueuedTask, error: unknown) {
     : error instanceof Error
       ? error.message
       : String(error);
+  // Preserve the structured shape (code/message/detail/items) for thrown batch
+  // errors and any object that already carries a JobError-like payload, so the
+  // failed card and "复制完整错误" surface the real cause; otherwise fall back to
+  // a bare `{ message }`.
+  const structured =
+    !aborted && error && typeof error === "object"
+      ? (error as Partial<JobError>)
+      : null;
+  const jobError: JobError =
+    structured && (structured.items || structured.detail || structured.code)
+      ? {
+          code: structured.code,
+          message:
+            typeof structured.message === "string"
+              ? structured.message
+              : message,
+          detail: structured.detail,
+          items: structured.items,
+        }
+      : { message };
   const failed = {
     ...task.job,
     status: aborted ? ("cancelled" as const) : ("failed" as const),
     updated_at: nowIso(),
-    error:
-      error && typeof error === "object" && "items" in error
-        ? (error as Record<string, unknown>)
-        : { message },
+    error: jobError,
   };
   await writeJob(failed);
   appendEvent(task.job.id, aborted ? "job.cancelled" : "job.failed", {
