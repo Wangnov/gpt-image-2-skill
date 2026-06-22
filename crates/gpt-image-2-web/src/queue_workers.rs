@@ -144,17 +144,27 @@ pub(crate) fn finish_queued_job(
                 let uploading_job = uploading_job_for_queue(&queued, &response);
                 let _ = persist_job(&uploading_job);
             }
-            log_event(
-                LogLevel::Info,
-                "local",
-                "job.completed",
-                json!({
-                    "job_id": queued.id,
-                    "command": queued.command,
-                    "provider": queued.provider,
-                    "status": status.unwrap_or("completed"),
-                }),
-            );
+            // An Ok payload can still carry a terminal failure status (e.g.
+            // batch partial_failed), so classify the log from the terminal
+            // event type and include the cause when it failed.
+            let (log_level, log_type) = match event_type {
+                "job.failed" => (LogLevel::Error, "job.failed"),
+                "job.partial_failed" => (LogLevel::Warn, "job.partial_failed"),
+                "job.cancelled" => (LogLevel::Info, "job.cancelled"),
+                _ => (LogLevel::Info, "job.completed"),
+            };
+            let mut log_data = json!({
+                "job_id": queued.id,
+                "command": queued.command,
+                "provider": queued.provider,
+                "status": status.unwrap_or("completed"),
+            });
+            if matches!(event_type, "job.failed" | "job.partial_failed")
+                && let Some(error) = job.get("error").filter(|value| !value.is_null())
+            {
+                log_data["error"] = error.clone();
+            }
+            log_event(log_level, "local", log_type, log_data);
             (job, event_type, data, completed)
         }
         Err(error) => {
