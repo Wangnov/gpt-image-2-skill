@@ -128,7 +128,7 @@ pub(crate) use provider_selection::*;
 pub use provider_types::ProviderConfig;
 pub(crate) use provider_types::*;
 pub(crate) use proxy::*;
-pub use proxy::validate_proxy_config;
+pub use proxy::{effective_proxy_for_provider, preserve_proxy_secrets, validate_proxy_config};
 pub use recovery::{
     Recoverability, RecoveryAttempt, RecoveryContext, RecoveryStage, RecoveryState,
     annotate_recovery_job_dir, batch_recovery_job_dir, batch_recovery_job_id,

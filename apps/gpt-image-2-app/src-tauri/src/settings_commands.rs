@@ -58,9 +58,10 @@ pub(crate) fn update_paths(config: PathConfig, app: tauri::AppHandle) -> Result<
 }
 
 #[tauri::command]
-pub(crate) fn update_proxy(config: ProxyConfig) -> Result<Value, String> {
-    gpt_image_2_core::validate_proxy_config(&config).map_err(app_error)?;
+pub(crate) fn update_proxy(mut config: ProxyConfig) -> Result<Value, String> {
     let mut app_config = load_config()?;
+    gpt_image_2_core::preserve_proxy_secrets(&mut config, &app_config.proxy);
+    gpt_image_2_core::validate_proxy_config(&config).map_err(app_error)?;
     app_config.proxy = config;
     save_config(&app_config)?;
     Ok(config_for_ui(&app_config))

@@ -542,6 +542,7 @@ pub fn normalize_provider_request_id(headers: &HeaderMap) -> Option<String> {
 pub fn materialize_openai_raw_response(
     job_dir: &Path,
     output_path: &Path,
+    provider_name: Option<&str>,
 ) -> Result<Vec<Value>, AppError> {
     let raw_path = raw_response_path(job_dir);
     let raw = fs::read_to_string(&raw_path).map_err(|error| {
@@ -558,9 +559,7 @@ pub fn materialize_openai_raw_response(
         )
         .with_detail(json!({"path": raw_path.display().to_string(), "error": error.to_string()}))
     })?;
-    let proxy = load_app_config(&default_config_path())
-        .map(|config| config.proxy)
-        .unwrap_or_default();
+    let proxy = effective_proxy_for_provider(provider_name);
     let (image_bytes_list, _) = decode_openai_images(&payload, &proxy)?;
     save_images(output_path, &image_bytes_list)
 }

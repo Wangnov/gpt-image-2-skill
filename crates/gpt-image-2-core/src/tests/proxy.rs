@@ -107,6 +107,35 @@ fn redact_proxy_config_hides_password() {
 }
 
 #[test]
+fn preserve_proxy_secrets_restores_redacted_credentials() {
+    let existing = custom("socks5h://user:secret@proxy.local:1080");
+
+    // Redacted round-trip (same target, no creds) -> credentials restored.
+    let mut redacted = custom("socks5h://proxy.local:1080");
+    preserve_proxy_secrets(&mut redacted, &existing);
+    assert_eq!(redacted.url.as_deref(), Some("socks5h://user:secret@proxy.local:1080"));
+
+    // User supplied fresh credentials -> left untouched.
+    let mut fresh = custom("socks5h://newuser:newpass@proxy.local:1080");
+    preserve_proxy_secrets(&mut fresh, &existing);
+    assert_eq!(fresh.url.as_deref(), Some("socks5h://newuser:newpass@proxy.local:1080"));
+
+    // Different host -> do NOT leak credentials across targets.
+    let mut other_host = custom("socks5h://other.local:1080");
+    preserve_proxy_secrets(&mut other_host, &existing);
+    assert_eq!(other_host.url.as_deref(), Some("socks5h://other.local:1080"));
+
+    // Switching to direct (None) -> untouched.
+    let mut direct = ProxyConfig {
+        mode: ProxyMode::None,
+        ..ProxyConfig::default()
+    };
+    preserve_proxy_secrets(&mut direct, &existing);
+    assert_eq!(direct.mode, ProxyMode::None);
+    assert!(direct.url.is_none());
+}
+
+#[test]
 fn make_client_builds_for_every_mode() {
     // System and None never fail to build.
     assert!(make_client(30, &ProxyConfig::default()).is_ok());

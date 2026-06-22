@@ -81,6 +81,51 @@ pub(crate) fn effective_proxy_for(
     Ok(resolved)
 }
 
+/// Resolve the effective proxy for a provider from the on-disk config, without
+/// a [`Cli`]. Used by recovery/materialization paths that only know the job's
+/// provider name. Falls back to the global proxy (or a direct connection) when
+/// config is unreadable.
+pub fn effective_proxy_for_provider(provider_name: Option<&str>) -> ProxyConfig {
+    let config = load_app_config(&default_config_path()).unwrap_or_default();
+    resolve_effective_proxy(
+        &config.proxy,
+        provider_name.and_then(|name| config.providers.get(name)),
+    )
+}
+
+/// Restore credentials onto a redacted Custom proxy URL.
+///
+/// `get_config` returns proxy URLs with credentials stripped, so a UI that
+/// re-saves an unchanged Custom proxy would otherwise persist the redacted
+/// `scheme://host:port` and silently drop the password. If `new` is a Custom
+/// URL pointing at the same scheme/host/port as a credentialed `existing`
+/// Custom URL but carries no credentials of its own, copy the old credentials
+/// back. A user supplying a fresh `user:pass@` is left untouched.
+pub fn preserve_proxy_secrets(new: &mut ProxyConfig, existing: &ProxyConfig) {
+    if new.mode != ProxyMode::Custom || existing.mode != ProxyMode::Custom {
+        return;
+    }
+    let (Some(new_url), Some(old_url)) = (new.url.as_deref(), existing.url.as_deref()) else {
+        return;
+    };
+    let (Ok(mut new_parsed), Ok(old_parsed)) = (Url::parse(new_url), Url::parse(old_url)) else {
+        return;
+    };
+    let old_has_creds = !old_parsed.username().is_empty() || old_parsed.password().is_some();
+    let new_has_creds = !new_parsed.username().is_empty() || new_parsed.password().is_some();
+    if !old_has_creds || new_has_creds {
+        return;
+    }
+    if new_parsed.scheme() == old_parsed.scheme()
+        && new_parsed.host_str() == old_parsed.host_str()
+        && new_parsed.port_or_known_default() == old_parsed.port_or_known_default()
+    {
+        let _ = new_parsed.set_username(old_parsed.username());
+        let _ = new_parsed.set_password(old_parsed.password());
+        new.url = Some(new_parsed.to_string());
+    }
+}
+
 /// Validate a [`ProxyConfig`] (only Custom mode has anything to check).
 pub fn validate_proxy_config(proxy: &ProxyConfig) -> Result<(), AppError> {
     if proxy.mode == ProxyMode::Custom {
