@@ -13,6 +13,7 @@ fn openai_compatible_provider() -> ProviderConfig {
         credentials: BTreeMap::new(),
         supports_n: Some(false),
         edit_region_mode: Some("reference-hint".to_string()),
+        proxy: None,
     }
 }
 

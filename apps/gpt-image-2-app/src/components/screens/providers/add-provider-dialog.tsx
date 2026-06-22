@@ -518,7 +518,7 @@ export function AddProviderDialog({
           )}
         </div>
       )}
-      {!browserRuntime && (
+      {api.kind !== "browser" && (
         <div className="mt-1 grid gap-3.5 border-t border-border-faint pt-3.5">
           <Field
             label="网络代理"
