@@ -480,67 +480,64 @@ mod tests {
 
     #[test]
     fn public_read_recent_logs_resolves_via_product_data_dir() {
-        let _guard = TEST_LOCK.lock().unwrap();
         let dir = unique_tmp_dir("public-readback");
-        let base = logs_dir(None, ProductRuntime::DockerWeb);
-        // Point the DockerWeb data dir at our temp dir, then write some lines
-        // straight into the resolved logs file and read them back through the
-        // public API to prove the path resolution is wired up.
-        let prev = std::env::var_os("GPT_IMAGE_2_DATA_DIR");
-        unsafe {
-            std::env::set_var("GPT_IMAGE_2_DATA_DIR", &dir);
-        }
-        let resolved = logs_dir(None, ProductRuntime::DockerWeb).join(LOG_FILE_NAME);
-        assert_ne!(resolved, base.join(LOG_FILE_NAME));
+        // Point the app data dir at our temp dir via config (NOT the process
+        // environment, which would race parallel path tests like
+        // `product_paths_default_by_runtime`), then write lines into the
+        // resolved logs file and read them back through the public API to prove
+        // path resolution is wired up.
+        let mut config = AppConfig::default();
+        config.paths.app_data_dir = PathRef {
+            mode: PathMode::Custom,
+            path: Some(dir.clone()),
+        };
+        let resolved = logs_dir(Some(&config), ProductRuntime::DockerWeb).join(LOG_FILE_NAME);
+        assert!(resolved.starts_with(&dir));
         let writer = Mutex::new(RollingWriter::open(resolved.clone()));
         write_record(&writer, LogLevel::Info, "alpha", json!({ "n": 1 }));
         write_record(&writer, LogLevel::Error, "omega", json!({ "n": 2 }));
         drop(writer);
 
-        let all = read_recent_logs(None, ProductRuntime::DockerWeb, 100, LogLevel::Debug);
+        let all = read_recent_logs(
+            Some(&config),
+            ProductRuntime::DockerWeb,
+            100,
+            LogLevel::Debug,
+        );
         assert_eq!(all.len(), 2);
         assert_eq!(all[0]["type"], "alpha");
         assert_eq!(all[1]["type"], "omega");
-        let errors_only = read_recent_logs(None, ProductRuntime::DockerWeb, 100, LogLevel::Error);
+        let errors_only = read_recent_logs(
+            Some(&config),
+            ProductRuntime::DockerWeb,
+            100,
+            LogLevel::Error,
+        );
         assert_eq!(errors_only.len(), 1);
         assert_eq!(errors_only[0]["type"], "omega");
 
-        unsafe {
-            match prev {
-                Some(value) => std::env::set_var("GPT_IMAGE_2_DATA_DIR", value),
-                None => std::env::remove_var("GPT_IMAGE_2_DATA_DIR"),
-            }
-        }
         let _ = fs::remove_dir_all(&dir);
     }
 
     #[test]
     fn init_logging_is_idempotent() {
         let _guard = TEST_LOCK.lock().unwrap();
-        // First init wins; a second init with a different dir must not panic
-        // or repoint the writer (OnceLock guarantees single init).
+        // Re-initializing with the same dir does not error and re-tunes the live
+        // level. Use a config-driven data dir (not the process env, which would
+        // race parallel path tests).
         let dir = unique_tmp_dir("init-once");
         let mut config = AppConfig::default();
+        config.paths.app_data_dir = PathRef {
+            mode: PathMode::Custom,
+            path: Some(dir.clone()),
+        };
         config.logging.debug = false;
-        // Point product data dir via the DockerWeb env override so we don't
-        // touch the user's real data dir.
-        let prev = std::env::var_os("GPT_IMAGE_2_DATA_DIR");
-        unsafe {
-            std::env::set_var("GPT_IMAGE_2_DATA_DIR", &dir);
-        }
         init_logging(&config, ProductRuntime::DockerWeb);
         assert_eq!(min_level(), LogLevel::Info as u8);
-        // Toggling debug re-tunes the level even though the writer is fixed.
+        // Toggling debug re-tunes the level on a subsequent init.
         config.logging.debug = true;
         init_logging(&config, ProductRuntime::DockerWeb);
         assert_eq!(min_level(), LogLevel::Debug as u8);
-        // restore
-        unsafe {
-            match prev {
-                Some(value) => std::env::set_var("GPT_IMAGE_2_DATA_DIR", value),
-                None => std::env::remove_var("GPT_IMAGE_2_DATA_DIR"),
-            }
-        }
         let _ = fs::remove_dir_all(&dir);
     }
 }
