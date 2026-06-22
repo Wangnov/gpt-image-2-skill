@@ -29,6 +29,8 @@ import { JobKindIcon, JobReferenceBadge } from "./job-kind-icon";
 import { JobReferenceStrip } from "./job-reference-strip";
 import { StatusChip } from "./status-chip";
 import {
+  jobErrorCode,
+  jobErrorDetailOnly,
   jobErrorDetailText,
   jobErrorMessage,
   jobCanShowRecoveryAction,
@@ -102,6 +104,8 @@ export function JobRowExpandable({
   const metaItems = jobMetaItems(job);
   const refCount = jobReferenceCount(job);
   const errorMessage = jobErrorMessage(job);
+  const errorCode = jobErrorCode(job);
+  const errorDetailOnly = jobErrorDetailOnly(job);
   const errorDetail = jobErrorDetailText(job);
   const showPromptToggle = prompt.length > 240 || prompt.split("\n").length > 6;
   const primaryOutputIndex = outputIndexes[0] ?? 0;
@@ -348,14 +352,26 @@ export function JobRowExpandable({
                       <div className="flex items-start gap-2 text-[12.5px] text-status-err">
                         <AlertTriangle size={14} className="mt-0.5 shrink-0" />
                         <div className="min-w-0">
-                          <div className="font-medium">
-                            {status === "partial_failed"
-                              ? "部分图片生成失败"
-                              : "任务失败"}
+                          <div className="flex items-center gap-2">
+                            <span className="font-medium">
+                              {status === "partial_failed"
+                                ? "部分图片生成失败"
+                                : "任务失败"}
+                            </span>
+                            {errorCode && (
+                              <span className="t-mono rounded bg-status-err/10 px-1.5 py-0.5 text-[10px]">
+                                {errorCode}
+                              </span>
+                            )}
                           </div>
                           <div className="mt-1 whitespace-pre-wrap break-words text-[12px] text-muted">
                             {errorMessage}
                           </div>
+                          {errorDetailOnly && (
+                            <pre className="mt-1.5 mb-0 max-h-40 overflow-auto whitespace-pre-wrap break-words rounded bg-status-err/5 p-2 font-mono text-[11px] leading-[1.45] text-muted">
+                              {errorDetailOnly}
+                            </pre>
+                          )}
                         </div>
                       </div>
                       {errorDetail && (
