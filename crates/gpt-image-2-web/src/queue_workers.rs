@@ -81,10 +81,10 @@ pub(crate) fn uploading_job_for_queue(queued: &QueuedJob, response: &Value) -> V
     })
 }
 
-pub(crate) fn failed_job_for_queue(queued: &QueuedJob, message: String) -> Value {
+pub(crate) fn failed_job_for_queue(queued: &QueuedJob, error: Value) -> Value {
     let mut metadata = merge_recovery_metadata(queued.metadata.clone(), &queued.dir);
     if let Value::Object(map) = &mut metadata {
-        map.insert("error".to_string(), json!({"message": message.clone()}));
+        map.insert("error".to_string(), error.clone());
     }
     job_snapshot(JobSnapshotInput {
         id: &queued.id,
@@ -95,7 +95,7 @@ pub(crate) fn failed_job_for_queue(queued: &QueuedJob, message: String) -> Value
         metadata,
         output_path: None,
         outputs: json!([]),
-        error: json!({"message": message}),
+        error,
     })
 }
 
@@ -129,7 +129,7 @@ pub(crate) fn append_terminal_queue_event(
 pub(crate) fn finish_queued_job(
     state: JobQueueState,
     queued: QueuedJob,
-    result: Result<Value, String>,
+    result: Result<Value, Value>,
 ) {
     let (job, event_type, event_data, completed) = match result {
         Ok(response) => {
@@ -146,14 +146,14 @@ pub(crate) fn finish_queued_job(
             }
             (job, event_type, data, completed)
         }
-        Err(message) => {
-            let job = failed_job_for_queue(&queued, message.clone());
+        Err(error) => {
+            let job = failed_job_for_queue(&queued, error.clone());
             (
                 job,
                 "job.failed",
                 json!({
                     "status": "failed",
-                    "error": {"message": message},
+                    "error": error,
                 }),
                 false,
             )
@@ -455,6 +455,29 @@ mod tests {
                 fallback_targets: None,
             }),
         }
+    }
+
+    #[test]
+    fn failed_job_for_queue_preserves_structured_error_with_detail() {
+        // P0 regression: a single-output provider failure must keep the full
+        // JobError (code/message/detail) on both `job.error` and
+        // `metadata.error` instead of being flattened to `{ message }`.
+        let queued = queued_job("job-network-failure");
+        let error = json!({
+            "code": "network_error",
+            "message": "OpenAI request failed.",
+            "detail": { "error": "error sending request: connection refused" },
+        });
+        let job = failed_job_for_queue(&queued, error.clone());
+
+        assert_eq!(job["status"], "failed");
+        assert_eq!(job["error"], error);
+        assert_eq!(job["error"]["code"], "network_error");
+        assert_eq!(
+            job["error"]["detail"]["error"],
+            "error sending request: connection refused"
+        );
+        assert_eq!(job["metadata"]["error"], error);
     }
 
     #[test]

@@ -81,10 +81,10 @@ pub(crate) fn uploading_job_for_queue(queued: &QueuedJob, response: &Value) -> V
     })
 }
 
-pub(crate) fn failed_job_for_queue(queued: &QueuedJob, message: String) -> Value {
+pub(crate) fn failed_job_for_queue(queued: &QueuedJob, error: Value) -> Value {
     let mut metadata = merge_recovery_metadata(queued.metadata.clone(), &queued.dir);
     if let Value::Object(map) = &mut metadata {
-        map.insert("error".to_string(), json!({"message": message.clone()}));
+        map.insert("error".to_string(), error.clone());
     }
     job_snapshot(JobSnapshotInput {
         id: &queued.id,
@@ -95,7 +95,7 @@ pub(crate) fn failed_job_for_queue(queued: &QueuedJob, message: String) -> Value
         metadata,
         output_path: None,
         outputs: json!([]),
-        error: json!({"message": message}),
+        error,
     })
 }
 
@@ -133,7 +133,7 @@ pub(crate) fn finish_queued_job(
     app: tauri::AppHandle,
     state: JobQueueState,
     queued: QueuedJob,
-    result: Result<Value, String>,
+    result: Result<Value, Value>,
 ) {
     let (job, event_type, event_data, completed) = match result {
         Ok(response) => {
@@ -150,14 +150,14 @@ pub(crate) fn finish_queued_job(
             }
             (job, event_type, data, completed)
         }
-        Err(message) => {
-            let job = failed_job_for_queue(&queued, message.clone());
+        Err(error) => {
+            let job = failed_job_for_queue(&queued, error.clone());
             (
                 job,
                 "job.failed",
                 json!({
                     "status": "failed",
-                    "error": {"message": message},
+                    "error": error,
                 }),
                 false,
             )

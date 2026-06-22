@@ -374,8 +374,7 @@ export function jobStatusLabel(job: Job): string {
 export function jobErrorMessage(job: Job): string {
   const error = job.error;
   if (!error || typeof error !== "object") return "";
-  const message = (error as Record<string, unknown>).message;
-  return typeof message === "string" ? message : "";
+  return typeof error.message === "string" ? error.message : "";
 }
 
 export function jobErrorDetailText(job: Job): string {

@@ -163,15 +163,94 @@ export function JobDrawerStorage({
   );
 }
 
+function formatErrorDetail(detail: unknown): string {
+  if (detail == null) return "";
+  if (typeof detail === "string") return detail;
+  try {
+    return JSON.stringify(detail, null, 2);
+  } catch {
+    return String(detail);
+  }
+}
+
 export function JobDrawerError({ job }: { job: Job }) {
-  if (job.status !== "failed" || !job.error) return null;
+  if ((job.status !== "failed" && job.status !== "partial_failed") || !job.error)
+    return null;
+  const error = job.error;
+  const items = Array.isArray(error.items) ? error.items : [];
+  const detailText = formatErrorDetail(error.detail);
+  // The copy payload keeps the full structured error so users can paste the real
+  // cause (code + message + detail + per-slot items) into a bug report.
+  const copyPayload = formatErrorDetail({
+    code: error.code,
+    message: error.message,
+    detail: error.detail,
+    items: items.length > 0 ? items : undefined,
+  });
   return (
-    <div className="px-3 py-2.5 mb-3.5 bg-status-err-bg text-status-err border border-status-err rounded-md text-[12px] flex items-start gap-2">
-      <Icon name="warn" size={13} style={{ marginTop: 1 }} />
-      <div>
-        <div className="font-semibold mb-0.5">错误</div>
-        <div>{(job.error as Record<string, unknown>).message as string}</div>
+    <div className="px-3 py-2.5 mb-3.5 bg-status-err-bg text-status-err border border-status-err rounded-md text-[12px]">
+      <div className="flex items-start gap-2">
+        <Icon name="warn" size={13} style={{ marginTop: 1 }} />
+        <div className="min-w-0 flex-1">
+          <div className="mb-0.5 flex items-center gap-2">
+            <span className="font-semibold">错误</span>
+            {error.code && (
+              <span className="t-mono rounded bg-status-err/10 px-1.5 py-0.5 text-[10.5px]">
+                {error.code}
+              </span>
+            )}
+            <Button
+              variant="ghost"
+              size="iconSm"
+              icon="copy"
+              className="ml-auto"
+              onClick={() => copyText(copyPayload, "错误详情")}
+              title="复制错误详情"
+              aria-label="复制错误详情"
+            />
+          </div>
+          <div className="break-anywhere">{error.message}</div>
+        </div>
       </div>
+      {(detailText || items.length > 0) && (
+        <details className="mt-2">
+          <summary className="cursor-pointer select-none text-[11px] font-semibold opacity-90">
+            显示详情
+          </summary>
+          {detailText && (
+            <pre className="mt-1.5 mb-0 max-h-52 overflow-auto whitespace-pre-wrap break-anywhere rounded bg-status-err/5 p-2 font-mono text-[10.5px] leading-[1.45]">
+              {detailText}
+            </pre>
+          )}
+          {items.length > 0 && (
+            <div className="mt-2 space-y-1.5">
+              {items.map((item, position) => (
+                <div
+                  key={item.index ?? position}
+                  className="rounded bg-status-err/5 px-2 py-1.5 text-[11px]"
+                >
+                  <div className="flex items-center gap-2">
+                    <span className="font-semibold">
+                      候选 {(item.index ?? position) + 1}
+                    </span>
+                    {item.code && (
+                      <span className="t-mono text-[10px] opacity-80">
+                        {item.code}
+                      </span>
+                    )}
+                  </div>
+                  <div className="break-anywhere">{item.message}</div>
+                  {item.detail != null && (
+                    <pre className="mt-1 mb-0 max-h-40 overflow-auto whitespace-pre-wrap break-anywhere rounded bg-status-err/5 p-1.5 font-mono text-[10px] leading-[1.4]">
+                      {formatErrorDetail(item.detail)}
+                    </pre>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+        </details>
+      )}
     </div>
   );
 }

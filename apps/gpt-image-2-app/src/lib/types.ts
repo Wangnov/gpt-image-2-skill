@@ -321,6 +321,23 @@ export interface OutputRef {
 }
 
 /**
+ * Structured error carried end-to-end from the core through the GUI/Web
+ * boundary. `message` is the short human summary (matches the legacy
+ * `{ message }` shape); `code` is the machine error code; `detail` is the real,
+ * already-redacted cause (an object or string) surfaced behind a "show details"
+ * affordance; `items` holds per-slot errors for batch (n>1) jobs, each itself a
+ * `JobError`.
+ */
+export interface JobError {
+  code?: string;
+  message: string;
+  detail?: unknown;
+  items?: JobError[];
+  /** Batch item index, present on `items[*]` entries. */
+  index?: number;
+}
+
+/**
  * A persisted input reference image for an `images edit` (image-to-image) job.
  * The backend fills this by scanning `ref-{index}.png` in the job directory, so
  * it works for legacy jobs too. Absent/empty for text-to-image jobs.
@@ -342,7 +359,7 @@ export interface Job {
   reference_images?: ReferenceImageRef[];
   output_path?: string;
   storage_status?: StorageStatus | string;
-  error?: Record<string, unknown> | null;
+  error?: JobError | null;
 }
 
 export interface JobEvent {

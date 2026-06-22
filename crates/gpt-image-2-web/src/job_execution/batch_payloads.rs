@@ -80,10 +80,17 @@ pub(crate) fn batch_errors_json(errors: &[BatchItemError]) -> Value {
         errors
             .iter()
             .map(|error| {
-                json!({
+                let mut item = json!({
                     "index": error.index,
                     "message": error.message,
-                })
+                });
+                if let (Value::Object(map), Some(code)) = (&mut item, error.code.as_ref()) {
+                    map.insert("code".to_string(), json!(code));
+                }
+                if let (Value::Object(map), Some(detail)) = (&mut item, error.detail.as_ref()) {
+                    map.insert("detail".to_string(), detail.clone());
+                }
+                item
             })
             .collect(),
     )
@@ -244,7 +251,9 @@ mod tests {
             vec![(0, payload("/tmp/a.png")), (2, payload("/tmp/c.png"))],
             vec![BatchItemError {
                 index: 1,
+                code: None,
                 message: "upstream rejected candidate B".to_string(),
+                detail: None,
             }],
         );
 
@@ -273,11 +282,15 @@ mod tests {
             vec![
                 BatchItemError {
                     index: 0,
+                    code: None,
                     message: "candidate A failed".to_string(),
+                    detail: None,
                 },
                 BatchItemError {
                     index: 1,
+                    code: None,
                     message: "candidate B failed".to_string(),
+                    detail: None,
                 },
             ],
         );
@@ -295,5 +308,37 @@ mod tests {
         assert_eq!(job["status"], "failed");
         assert_eq!(terminal_event_type(job["status"].as_str()), "job.failed");
         assert!(!terminal_status_runs_storage_upload(job["status"].as_str()));
+    }
+
+    #[test]
+    fn batch_errors_json_preserves_code_and_detail_per_item() {
+        // P0 regression: per-slot batch errors must keep code/detail so
+        // `error.items[*]` carry the real cause, not just a flat message.
+        let errors = vec![
+            BatchItemError::from_error_value(
+                0,
+                json!({
+                    "code": "network_error",
+                    "message": "OpenAI request failed.",
+                    "detail": { "error": "connection refused" },
+                }),
+            ),
+            BatchItemError::from_error_value(2, json!({ "message": "plain failure" })),
+        ];
+
+        let items = batch_errors_json(&errors);
+        assert_eq!(items[0]["index"], 0);
+        assert_eq!(items[0]["code"], "network_error");
+        assert_eq!(items[0]["message"], "OpenAI request failed.");
+        assert_eq!(items[0]["detail"]["error"], "connection refused");
+        // An item without code/detail stays minimal (no null spam).
+        assert_eq!(items[1]["index"], 2);
+        assert_eq!(items[1]["message"], "plain failure");
+        assert!(items[1].get("code").is_none());
+        assert!(items[1].get("detail").is_none());
+
+        let merged = merge_batch_payloads("images generate", 3, vec![], errors);
+        assert_eq!(merged["error"]["items"][0]["detail"]["error"], "connection refused");
+        assert_eq!(merged["error"]["items"][0]["code"], "network_error");
     }
 }
