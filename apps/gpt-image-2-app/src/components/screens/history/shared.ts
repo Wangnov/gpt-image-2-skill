@@ -387,6 +387,26 @@ export function jobErrorDetailText(job: Job): string {
   }
 }
 
+export function jobErrorCode(job: Job): string {
+  const error = job.error;
+  if (!error || typeof error !== "object") return "";
+  return typeof error.code === "string" ? error.code : "";
+}
+
+/** Just the structured `detail` (the real cause), formatted for inline display.
+ * Empty when there is no detail. Separate from {@link jobErrorDetailText},
+ * which serializes the whole error object for the copy-to-clipboard payload. */
+export function jobErrorDetailOnly(job: Job): string {
+  const error = job.error;
+  if (!error || typeof error !== "object" || error.detail == null) return "";
+  if (typeof error.detail === "string") return error.detail;
+  try {
+    return JSON.stringify(error.detail, null, 2);
+  } catch {
+    return String(error.detail);
+  }
+}
+
 export function jobMetaItems(job: Job): string[] {
   const md = (job.metadata ?? {}) as Record<string, unknown>;
   const items = [job.provider || "auto"];
