@@ -1,6 +1,8 @@
 import type {
   GenerateRequest,
   Job,
+  LoggingConfig,
+  LogsResult,
   NotificationConfig,
   PathConfig,
   ProviderConfig,
@@ -114,6 +116,20 @@ export const browserApi: ApiClient = {
     return browser.browserConfigForUi(current);
   },
   testStorageTarget: browser.testBrowserStorageTarget,
+  async getLogs() {
+    // Static Web build has no server-side file logger to read back.
+    return { entries: [], logs_dir: "" } satisfies LogsResult;
+  },
+  async updateLogging(config: LoggingConfig) {
+    // No file logger here, but persist the preference so the toggle is sticky
+    // across reloads and stays consistent if the same config syncs elsewhere.
+    await browser.prepareBrowserRuntime();
+    const current = await browser.readConfigRecord();
+    current.logging = { debug: Boolean(config.debug) };
+    await browser.writeStoredConfig(browser.browserStoredConfig(current));
+    return browser.browserConfigForUi(current);
+  },
+  // openLogsDir intentionally omitted: the browser cannot open a folder.
   async setDefault(name: string) {
     await browser.prepareBrowserRuntime();
     const config = await browser.readConfigRecord();

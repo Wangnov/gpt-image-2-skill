@@ -40,6 +40,7 @@ mod history_list;
 mod image_commands;
 mod image_requests;
 mod json_events;
+mod logging;
 mod network_safety;
 mod notifications;
 mod paths;
@@ -101,6 +102,11 @@ pub use history_list::{
 pub(crate) use image_commands::*;
 pub(crate) use image_requests::*;
 pub use json_events::JsonEventLogger;
+pub(crate) use logging::*;
+pub use logging::{
+    LogLevel, LoggingConfig, apply_logging_config, init_logging, log_event, logs_dir,
+    read_recent_logs,
+};
 pub(crate) use network_safety::*;
 pub(crate) use notifications::*;
 pub use notifications::{

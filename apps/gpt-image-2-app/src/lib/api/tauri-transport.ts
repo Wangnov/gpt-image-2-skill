@@ -5,6 +5,9 @@ import type {
   Job,
   JobEvent,
   JobStatus,
+  LoggingConfig,
+  LogLevel,
+  LogsResult,
   NotificationCapabilities,
   NotificationConfig,
   NotificationTestResult,
@@ -133,6 +136,20 @@ export const tauriApi: ApiClient = {
   },
   async testStorageTarget(name: string, target?: StorageTargetConfig) {
     return invoke<StorageTestResult>("test_storage_target", { name, target });
+  },
+  async getLogs(options?: { limit?: number; level?: LogLevel }) {
+    return invoke<LogsResult>("get_logs", {
+      limit: options?.limit ?? null,
+      level: options?.level ?? null,
+    });
+  },
+  async updateLogging(config: LoggingConfig) {
+    return normalizeConfig(
+      await invoke<ServerConfig>("update_logging", { config }),
+    );
+  },
+  async openLogsDir() {
+    return invoke<string>("open_logs_dir");
   },
   async setDefault(name: string) {
     return normalizeConfig(

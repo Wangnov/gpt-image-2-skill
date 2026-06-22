@@ -72,9 +72,7 @@ pub(crate) fn run_payloads_concurrently_streaming(
                 on_partial(index, &payload);
                 results[index] = Some(payload);
             }
-            Ok((index, Err(error))) => {
-                errors.push(BatchItemError::from_error_value(index, error))
-            }
+            Ok((index, Err(error))) => errors.push(BatchItemError::from_error_value(index, error)),
             Err(_) => break,
         }
         received += 1;

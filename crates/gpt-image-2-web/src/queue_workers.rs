@@ -144,9 +144,33 @@ pub(crate) fn finish_queued_job(
                 let uploading_job = uploading_job_for_queue(&queued, &response);
                 let _ = persist_job(&uploading_job);
             }
+            log_event(
+                LogLevel::Info,
+                "local",
+                "job.completed",
+                json!({
+                    "job_id": queued.id,
+                    "command": queued.command,
+                    "provider": queued.provider,
+                    "status": status.unwrap_or("completed"),
+                }),
+            );
             (job, event_type, data, completed)
         }
         Err(error) => {
+            // P0 hands us a structured JobError (code/message/detail); persist
+            // the same value so the logs panel can surface the real cause.
+            log_event(
+                LogLevel::Error,
+                "local",
+                "job.failed",
+                json!({
+                    "job_id": queued.id,
+                    "command": queued.command,
+                    "provider": queued.provider,
+                    "error": error,
+                }),
+            );
             let job = failed_job_for_queue(&queued, error.clone());
             (
                 job,
@@ -310,6 +334,16 @@ pub(crate) fn start_queued_jobs(state: JobQueueState) {
             (queued, running_job)
         };
         let _ = persist_job(&running_job);
+        log_event(
+            LogLevel::Info,
+            "local",
+            "job.started",
+            json!({
+                "job_id": queued.id,
+                "command": queued.command,
+                "provider": queued.provider,
+            }),
+        );
         let worker_state = state.clone();
         thread::spawn(move || {
             let stream = StreamContext {

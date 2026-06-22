@@ -7,6 +7,7 @@ import {
   Info,
   KeyRound,
   ListChecks,
+  ScrollText,
   Sparkles,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
@@ -45,6 +46,7 @@ export type SettingsTab =
   | "runtime"
   | "storage"
   | "prompts"
+  | "logs"
   | "about";
 
 export const NAV: { id: SettingsTab; label: string; icon: LucideIcon }[] = [
@@ -53,10 +55,13 @@ export const NAV: { id: SettingsTab; label: string; icon: LucideIcon }[] = [
   { id: "runtime", label: "任务", icon: ListChecks },
   { id: "storage", label: "存储", icon: HardDrive },
   { id: "prompts", label: "模板", icon: FileText },
+  { id: "logs", label: "日志", icon: ScrollText },
   { id: "about", label: "关于", icon: Info },
 ];
 
-export const BROWSER_HIDDEN_TABS: SettingsTab[] = ["storage"];
+// Static Web has no server-side file logger, so the logs tab would only ever
+// show an empty state — hide it there alongside the (server-only) storage tab.
+export const BROWSER_HIDDEN_TABS: SettingsTab[] = ["storage", "logs"];
 
 export const PARALLEL_OPTIONS = [1, 2, 3, 4, 6, 8].map((n) => ({
   value: String(n),
@@ -239,6 +244,10 @@ export const TAB_TITLES: Record<
   prompts: {
     title: "提示词模板",
     subtitle: "管理可复用的生成和编辑提示词",
+  },
+  logs: {
+    title: "日志",
+    subtitle: "查看运行诊断日志，排查生成失败的原因",
   },
   about: {
     title: "关于 / 更新",

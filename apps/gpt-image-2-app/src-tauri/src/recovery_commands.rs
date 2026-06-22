@@ -251,9 +251,7 @@ fn fill_missing_job(job_id: &str) -> Result<Value, String> {
                     Some((child_id.as_str(), child_dir.as_path())),
                 )) {
                     Ok(payload) => payloads.push((*index, payload)),
-                    Err(error) => {
-                        errors.push(BatchItemError::from_error_value(*index, error))
-                    }
+                    Err(error) => errors.push(BatchItemError::from_error_value(*index, error)),
                 }
             }
         }
@@ -290,9 +288,7 @@ fn fill_missing_job(job_id: &str) -> Result<Value, String> {
                     Some((child_id.as_str(), child_dir.as_path())),
                 )) {
                     Ok(payload) => payloads.push((*index, payload)),
-                    Err(error) => {
-                        errors.push(BatchItemError::from_error_value(*index, error))
-                    }
+                    Err(error) => errors.push(BatchItemError::from_error_value(*index, error)),
                 }
             }
         }

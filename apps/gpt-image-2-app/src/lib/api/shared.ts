@@ -719,6 +719,7 @@ export function normalizeConfig(config: ServerConfig): ServerConfig {
     notifications: normalizeNotificationConfig(config.notifications),
     storage: normalizeStorageConfig(config.storage),
     paths: normalizePathConfig(config.paths),
+    logging: { debug: Boolean(config.logging?.debug) },
   };
 }
 

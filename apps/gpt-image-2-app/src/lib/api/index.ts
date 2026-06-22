@@ -115,6 +115,19 @@ export const api: ApiClient = {
       }
       return client.testStorageTarget(name, target);
     }),
+  getLogs: (options) =>
+    invokeClient("getLogs", options) as ReturnType<ApiClient["getLogs"]>,
+  updateLogging: (config) =>
+    invokeClient("updateLogging", config) as ReturnType<
+      ApiClient["updateLogging"]
+    >,
+  openLogsDir: () =>
+    loadClient().then((client) => {
+      if (!client.openLogsDir) {
+        throw new Error("当前运行环境不支持打开日志文件夹。");
+      }
+      return client.openLogsDir();
+    }),
   setDefault: (name) =>
     invokeClient("setDefault", name) as ReturnType<ApiClient["setDefault"]>,
   upsertProvider: (name, cfg) =>

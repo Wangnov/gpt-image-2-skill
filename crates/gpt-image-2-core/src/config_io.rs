@@ -125,6 +125,7 @@ pub fn redact_app_config(config: &AppConfig) -> Value {
         "notifications": redact_notification_config(&config.notifications),
         "storage": redact_storage_config(&config.storage),
         "paths": config.paths,
+        "logging": redact_logging_config(&config.logging),
     })
 }
 

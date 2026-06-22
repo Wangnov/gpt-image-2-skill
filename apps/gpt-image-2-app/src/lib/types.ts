@@ -287,6 +287,30 @@ export interface NotificationCapabilities {
   };
 }
 
+export type LogLevel = "debug" | "info" | "warn" | "error";
+
+export interface LoggingConfig {
+  /** When true, debug-level events are persisted alongside info/warn/error. */
+  debug: boolean;
+}
+
+export interface LogEntry {
+  /** RFC3339 timestamp. */
+  ts: string;
+  level: LogLevel;
+  /** Event family, mirroring the JsonEventLogger vocabulary (e.g. "local"). */
+  kind: string;
+  /** Event type, e.g. "job.failed" / "app.started". */
+  type: string;
+  /** Redacted structured payload. */
+  data?: Record<string, unknown>;
+}
+
+export interface LogsResult {
+  entries: LogEntry[];
+  logs_dir: string;
+}
+
 export interface ServerConfig {
   version: 1;
   default_provider?: string;
@@ -294,6 +318,7 @@ export interface ServerConfig {
   notifications: NotificationConfig;
   storage: StorageConfig;
   paths: PathConfig;
+  logging?: LoggingConfig;
 }
 
 export type JobStatus =

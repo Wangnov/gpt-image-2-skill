@@ -3,6 +3,9 @@ import type {
   Job,
   JobEvent,
   JobStatus,
+  LoggingConfig,
+  LogLevel,
+  LogsResult,
   NotificationCapabilities,
   NotificationConfig,
   NotificationTestResult,
@@ -102,6 +105,19 @@ export type ApiClient = RuntimeCapabilities & {
     name: string,
     target?: StorageTargetConfig,
   ): Promise<StorageTestResult>;
+  /**
+   * Read recent persisted log entries (newest last), filtered to `>= level`.
+   * Browser runtime has no file logger and resolves to an empty result.
+   */
+  getLogs(options?: { limit?: number; level?: LogLevel }): Promise<LogsResult>;
+  /** Persist the logging config (verbose toggle) and re-tune the live level. */
+  updateLogging(config: LoggingConfig): Promise<ServerConfig>;
+  /**
+   * Tauri: reveal the logs directory in the OS file manager and return its
+   * path. HTTP: no native open, returns the server-side path string for the
+   * UI to display. Absent on the browser runtime.
+   */
+  openLogsDir?(): Promise<string>;
   setDefault(name: string): Promise<ServerConfig>;
   upsertProvider(name: string, cfg: ProviderConfig): Promise<ServerConfig>;
   revealProviderCredential(

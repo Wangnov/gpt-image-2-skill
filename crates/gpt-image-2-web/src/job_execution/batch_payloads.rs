@@ -338,7 +338,10 @@ mod tests {
         assert!(items[1].get("detail").is_none());
 
         let merged = merge_batch_payloads("images generate", 3, vec![], errors);
-        assert_eq!(merged["error"]["items"][0]["detail"]["error"], "connection refused");
+        assert_eq!(
+            merged["error"]["items"][0]["detail"]["error"],
+            "connection refused"
+        );
         assert_eq!(merged["error"]["items"][0]["code"], "network_error");
     }
 }

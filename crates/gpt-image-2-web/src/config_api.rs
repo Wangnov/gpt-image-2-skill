@@ -81,6 +81,39 @@ pub(crate) async fn update_storage(Json(mut body): Json<StorageConfig>) -> ApiRe
     Ok(Json(config_for_ui(&config)))
 }
 
+pub(crate) async fn update_logging(Json(body): Json<LoggingConfig>) -> ApiResult {
+    let mut config = load_config().map_err(ApiError::internal)?;
+    config.logging = body;
+    save_config(&config).map_err(ApiError::internal)?;
+    // Re-tune the live persistence level so the verbose toggle takes effect
+    // without a restart.
+    apply_logging_config(&config.logging);
+    Ok(Json(config_for_ui(&config)))
+}
+
+#[derive(Deserialize)]
+pub(crate) struct LogsQuery {
+    #[serde(default)]
+    pub(crate) limit: Option<usize>,
+    #[serde(default)]
+    pub(crate) level: Option<String>,
+}
+
+pub(crate) async fn get_logs(Query(query): Query<LogsQuery>) -> ApiResult {
+    let config = load_config_or_default();
+    let limit = query.limit.unwrap_or(500).clamp(1, 5000);
+    let min_level = query
+        .level
+        .as_deref()
+        .and_then(LogLevel::parse)
+        .unwrap_or(LogLevel::Debug);
+    let entries = read_recent_logs(Some(&config), ProductRuntime::DockerWeb, limit, min_level);
+    Ok(Json(json!({
+        "entries": entries,
+        "logs_dir": logs_dir(Some(&config), ProductRuntime::DockerWeb).display().to_string(),
+    })))
+}
+
 #[derive(Deserialize)]
 pub(crate) struct StorageTestBody {
     #[serde(default)]

@@ -17,20 +17,21 @@ use axum::{
 };
 use gpt_image_2_core::{
     AppConfig, CONFIG_DIR_NAME, CredentialRef, EditRequest, GenerateRequest, HistoryListOptions,
-    KEYCHAIN_SERVICE, NotificationConfig, PathConfig, ProductRuntime, ProviderConfig,
-    StorageConfig, StorageReadbackOptions, StorageTargetConfig, StorageUploadOverrides, UploadFile,
-    annotate_recovery_job_dir, append_history_job_event, batch_output_path, batch_recovery_job_dir,
-    batch_recovery_job_id, build_recovery_descriptor, default_config_path,
-    default_keychain_account, delete_history_job, dispatch_task_notifications,
-    edit_args_with_recovery, generate_args_with_recovery, generation_slots_from_batch_payload,
-    generation_slots_from_outputs, history_db_path, initialize_product_runtime_paths,
-    legacy_jobs_dir, legacy_shared_codex_dir, list_active_history_jobs, list_history_job_events,
-    list_history_jobs_page, load_app_config, mark_interrupted_jobs_on_startup,
-    materialize_openai_raw_response, merge_recovery_metadata, missing_generation_slot_indices,
-    notification_status_allowed, output_extension, preserve_notification_secrets,
-    preserve_storage_secrets, product_app_data_dir, product_default_export_dir,
-    product_default_export_dirs, product_result_library_dir, product_storage_fallback_dir,
-    raw_response_path, read_job_output_from_storage_with_options, read_keychain_secret,
+    KEYCHAIN_SERVICE, LogLevel, LoggingConfig, NotificationConfig, PathConfig, ProductRuntime,
+    ProviderConfig, StorageConfig, StorageReadbackOptions, StorageTargetConfig,
+    StorageUploadOverrides, UploadFile, annotate_recovery_job_dir, append_history_job_event,
+    apply_logging_config, batch_output_path, batch_recovery_job_dir, batch_recovery_job_id,
+    build_recovery_descriptor, default_config_path, default_keychain_account, delete_history_job,
+    dispatch_task_notifications, edit_args_with_recovery, generate_args_with_recovery,
+    generation_slots_from_batch_payload, generation_slots_from_outputs, history_db_path,
+    init_logging, initialize_product_runtime_paths, legacy_jobs_dir, legacy_shared_codex_dir,
+    list_active_history_jobs, list_history_job_events, list_history_jobs_page, load_app_config,
+    log_event, logs_dir, mark_interrupted_jobs_on_startup, materialize_openai_raw_response,
+    merge_recovery_metadata, missing_generation_slot_indices, notification_status_allowed,
+    output_extension, preserve_notification_secrets, preserve_storage_secrets,
+    product_app_data_dir, product_default_export_dir, product_default_export_dirs,
+    product_result_library_dir, product_storage_fallback_dir, raw_response_path,
+    read_job_output_from_storage_with_options, read_keychain_secret, read_recent_logs,
     recovery_job_dir, redact_app_config, requested_n, run_json, save_app_config, shared_config_dir,
     show_history_job, test_fault, test_storage_target, upload_job_outputs_to_storage,
     upsert_history_job, write_batch_recovery_summary, write_keychain_secret,
@@ -70,6 +71,13 @@ pub(crate) use types::*;
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let _ = initialize_product_runtime_paths(ProductRuntime::DockerWeb);
+    init_logging(&load_config_or_default(), ProductRuntime::DockerWeb);
+    log_event(
+        LogLevel::Info,
+        "local",
+        "app.started",
+        json!({ "runtime": "web", "version": env!("CARGO_PKG_VERSION") }),
+    );
     let settings = parse_settings().map_err(std::io::Error::other)?;
     if !settings.static_dir.is_dir() {
         return Err(format!(
