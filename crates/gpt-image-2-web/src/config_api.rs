@@ -64,6 +64,9 @@ pub(crate) async fn update_paths(Json(body): Json<PathConfig>) -> ApiResult {
     let mut config = load_config().map_err(ApiError::internal)?;
     config.paths = body;
     save_config(&config).map_err(ApiError::internal)?;
+    // The app data dir may have moved; repoint the logger so get_logs and the
+    // writer stay in sync without a restart.
+    gpt_image_2_core::init_logging(&config, ProductRuntime::DockerWeb);
     Ok(Json(config_for_ui(&config)))
 }
 

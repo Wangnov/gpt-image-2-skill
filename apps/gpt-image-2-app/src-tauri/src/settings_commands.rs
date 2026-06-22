@@ -54,6 +54,9 @@ pub(crate) fn update_paths(config: PathConfig, app: tauri::AppHandle) -> Result<
     app_config.paths = next_config;
     save_config(&app_config)?;
     allow_result_library_asset_scope(&app);
+    // The app data dir may have moved; repoint the logger so get_logs and the
+    // writer stay in sync without a restart.
+    gpt_image_2_core::init_logging(&app_config, ProductRuntime::Tauri);
     Ok(config_for_ui(&app_config))
 }
 

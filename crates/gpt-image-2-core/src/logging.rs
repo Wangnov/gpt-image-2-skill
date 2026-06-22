@@ -180,15 +180,23 @@ pub fn logs_dir(config: Option<&AppConfig>, runtime: ProductRuntime) -> PathBuf 
     product_app_data_dir(config, runtime).join("logs")
 }
 
-/// Initialize the persistent file logger. Idempotent: only the first call per
-/// process actually opens the writer; later calls just re-tune the live level.
+/// Initialize the persistent file logger and re-tune the live level. The writer
+/// is created once per process, but if a later call resolves to a different
+/// directory (e.g. the user changed the app data dir in Settings) the live
+/// writer is repointed there so `get_logs`/`open_logs_dir` and the writer never
+/// drift apart.
 ///
 /// CLI/Skill must NOT call this — they keep no file logger and never touch
 /// stdout from here.
 pub fn init_logging(config: &AppConfig, runtime: ProductRuntime) {
     set_min_level_from_config(&config.logging);
     let path = logs_dir(Some(config), runtime).join(LOG_FILE_NAME);
-    let _ = WRITER.get_or_init(|| Mutex::new(RollingWriter::open(path)));
+    let writer = WRITER.get_or_init(|| Mutex::new(RollingWriter::open(path.clone())));
+    if let Ok(mut writer) = writer.lock()
+        && writer.path != path
+    {
+        *writer = RollingWriter::open(path);
+    }
 }
 
 /// Re-tune the live persistence level after a config change (e.g. the user
