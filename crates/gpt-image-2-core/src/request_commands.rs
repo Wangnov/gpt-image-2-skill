@@ -14,6 +14,7 @@ pub(crate) fn run_request_create_codex(
         ));
     }
     let mut auth_state = load_codex_auth_state_for(cli, selection)?;
+    let proxy = effective_proxy_for(cli, &selection.resolved)?;
     let body = read_body_json(&args.body_file)?;
     let mut logger = JsonEventLogger::new(cli.json_events);
     let (outcome, auth_refreshed, retry_count) = request_codex_with_retry(
@@ -21,6 +22,7 @@ pub(crate) fn run_request_create_codex(
         &mut auth_state,
         &body,
         &mut logger,
+        &proxy,
     )?;
     let response_meta = outcome
         .get("response")
@@ -137,6 +139,7 @@ pub(crate) fn run_request_create_openai(
         ));
     }
     let auth_state = load_openai_auth_state_for(cli, selection)?;
+    let proxy = effective_proxy_for(cli, &selection.resolved)?;
     let body = read_body_json(&args.body_file)?;
     let endpoint =
         build_openai_operation_endpoint(&selection.api_base, args.request_operation.as_str())?;
@@ -144,12 +147,12 @@ pub(crate) fn run_request_create_openai(
     let (payload, retry_count) =
         execute_openai_with_retry(&mut logger, &selection.resolved, |logger| {
             if args.request_operation == RequestOperation::Edit {
-                request_openai_edit_once(&endpoint, &auth_state, &body, logger, None)
+                request_openai_edit_once(&endpoint, &auth_state, &body, logger, None, &proxy)
             } else {
-                request_openai_images_once(&endpoint, &auth_state, &body, logger, None)
+                request_openai_images_once(&endpoint, &auth_state, &body, logger, None, &proxy)
             }
         })?;
-    let (image_bytes_list, revised_prompts) = decode_openai_images(&payload)?;
+    let (image_bytes_list, revised_prompts) = decode_openai_images(&payload, &proxy)?;
     let image_output = if image_bytes_list.is_empty() {
         None
     } else if let Some(out_image) = &args.out_image {

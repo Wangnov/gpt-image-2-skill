@@ -79,6 +79,7 @@ pub(crate) fn api_router(state: JobQueueState) -> Router {
             get(notification_capabilities),
         )
         .route("/paths", put(update_paths))
+        .route("/proxy", put(update_proxy))
         .route("/logging", put(update_logging))
         .route("/logs", get(get_logs))
         .route("/storage", put(update_storage))

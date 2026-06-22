@@ -46,11 +46,12 @@ pub(crate) fn request_codex_with_retry(
     auth_state: &mut CodexAuthState,
     body: &Value,
     logger: &mut JsonEventLogger,
+    proxy: &ProxyConfig,
 ) -> Result<(Value, bool, usize), AppError> {
     let mut auth_refreshed = false;
     let mut retry_count = 0;
     loop {
-        match request_codex_responses_once(endpoint, auth_state, body, logger) {
+        match request_codex_responses_once(endpoint, auth_state, body, logger, proxy) {
             Ok(value) => return Ok((value, auth_refreshed, retry_count)),
             Err(error) => {
                 if error.status_code == Some(401) && !auth_refreshed {
@@ -63,7 +64,7 @@ pub(crate) fn request_codex_with_retry(
                         Some(2),
                         json!({ "endpoint": REFRESH_ENDPOINT }),
                     );
-                    let payload = refresh_access_token(auth_state)?;
+                    let payload = refresh_access_token(auth_state, proxy)?;
                     logger.emit(
                         "local",
                         "auth.refresh.completed",

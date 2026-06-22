@@ -7,6 +7,7 @@ pub(crate) fn request_codex_responses_once(
     auth_state: &CodexAuthState,
     body: &Value,
     logger: &mut JsonEventLogger,
+    proxy: &ProxyConfig,
 ) -> Result<Value, AppError> {
     logger.emit(
         "local",
@@ -22,7 +23,7 @@ pub(crate) fn request_codex_responses_once(
         Some(0),
         json!({ "endpoint": endpoint }),
     );
-    let client = make_client(DEFAULT_REQUEST_TIMEOUT)?;
+    let client = make_client(DEFAULT_REQUEST_TIMEOUT, proxy)?;
     let response = client
         .post(endpoint)
         .header(AUTHORIZATION, format!("Bearer {}", auth_state.access_token))

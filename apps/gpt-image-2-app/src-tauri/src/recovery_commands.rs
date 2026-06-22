@@ -80,7 +80,12 @@ pub(crate) fn continue_save_job(job_id: &str) -> Result<Value, String> {
     let format = metadata.get("format").and_then(Value::as_str);
     let output_path = job_dir.join(format!("out.{}", output_extension(format)));
     let before_attempts = test_fault::provider_http_attempts(job_id);
-    let saved_files = materialize_openai_raw_response(&job_dir, &output_path).map_err(app_error)?;
+    let saved_files = materialize_openai_raw_response(
+        &job_dir,
+        &output_path,
+        job.get("provider").and_then(Value::as_str),
+    )
+    .map_err(app_error)?;
     let after_attempts = test_fault::provider_http_attempts(job_id);
     if after_attempts != before_attempts {
         return Err("continue_save attempted a provider HTTP request.".to_string());
@@ -186,12 +191,13 @@ fn merge_output_files(existing: Vec<Value>, filled: Vec<(usize, Value)>) -> Vec<
 fn materialize_cached_slot_payload(
     child_dir: &std::path::Path,
     output_path: &std::path::Path,
+    provider: Option<&str>,
 ) -> Option<Result<Value, String>> {
     if !raw_response_path(child_dir).is_file() {
         return None;
     }
     Some(
-        materialize_openai_raw_response(child_dir, output_path)
+        materialize_openai_raw_response(child_dir, output_path, provider)
             .map(|files| json!({ "output": normalize_batch_output(files) }))
             .map_err(app_error),
     )
@@ -234,7 +240,11 @@ fn fill_missing_job(job_id: &str) -> Result<Value, String> {
                 let child_id = batch_recovery_job_id(job_id, slot);
                 let child_dir = batch_recovery_job_dir(&job_dir, slot);
                 let out = batch_output_path(&job_dir, request.format.as_deref().or(format), slot);
-                if let Some(cached) = materialize_cached_slot_payload(&child_dir, &out) {
+                if let Some(cached) = materialize_cached_slot_payload(
+                    &child_dir,
+                    &out,
+                    job.get("provider").and_then(Value::as_str),
+                ) {
                     match cached {
                         Ok(payload) => payloads.push((*index, payload)),
                         Err(message) => errors.push(BatchItemError::from_error_value(
@@ -265,7 +275,11 @@ fn fill_missing_job(job_id: &str) -> Result<Value, String> {
                 let child_id = batch_recovery_job_id(job_id, slot);
                 let child_dir = batch_recovery_job_dir(&job_dir, slot);
                 let out = batch_output_path(&job_dir, request.format.as_deref().or(format), slot);
-                if let Some(cached) = materialize_cached_slot_payload(&child_dir, &out) {
+                if let Some(cached) = materialize_cached_slot_payload(
+                    &child_dir,
+                    &out,
+                    job.get("provider").and_then(Value::as_str),
+                ) {
                     match cached {
                         Ok(payload) => payloads.push((*index, payload)),
                         Err(message) => errors.push(BatchItemError::from_error_value(

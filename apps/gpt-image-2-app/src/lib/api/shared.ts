@@ -8,6 +8,8 @@ import type {
   PathConfig,
   PipelineConfig,
   PipelineMode,
+  ProxyConfig,
+  ProxyMode,
   ServerConfig,
   StorageConfig,
   StorageFallbackPolicy,
@@ -402,6 +404,33 @@ export function defaultPathConfig(): PathConfig {
   };
 }
 
+export function defaultProxyConfig(): ProxyConfig {
+  return { mode: "system" };
+}
+
+const PROXY_MODES: ProxyMode[] = ["system", "none", "custom"];
+
+export function normalizeProxyConfig(
+  config?: Partial<ProxyConfig> | null,
+): ProxyConfig {
+  const mode = PROXY_MODES.includes(config?.mode as ProxyMode)
+    ? (config?.mode as ProxyMode)
+    : "system";
+  const url =
+    typeof config?.url === "string" && config.url.trim()
+      ? config.url.trim()
+      : undefined;
+  const noProxy = normalizeStringArray(config?.no_proxy);
+  const proxy: ProxyConfig = { mode };
+  // url / no_proxy only carry meaning in custom mode; drop them otherwise so
+  // the stored shape matches the backend (which skip-serializes empties).
+  if (mode === "custom") {
+    if (url) proxy.url = url;
+    if (noProxy.length > 0) proxy.no_proxy = noProxy;
+  }
+  return proxy;
+}
+
 export function storageTargetType(target?: StorageTargetConfig | null) {
   if (!target) return "local";
   if (target.type) return target.type;
@@ -713,12 +742,18 @@ export function normalizeConfig(config: ServerConfig): ServerConfig {
         {
           ...provider,
           credentials: provider.credentials ?? {},
+          // Preserve a per-provider override when present; leave it absent
+          // (= inherit global) otherwise so the UI can tell the two apart.
+          proxy: provider.proxy
+            ? normalizeProxyConfig(provider.proxy)
+            : undefined,
         },
       ]),
     ),
     notifications: normalizeNotificationConfig(config.notifications),
     storage: normalizeStorageConfig(config.storage),
     paths: normalizePathConfig(config.paths),
+    proxy: normalizeProxyConfig(config.proxy),
     logging: { debug: Boolean(config.logging?.debug) },
   };
 }

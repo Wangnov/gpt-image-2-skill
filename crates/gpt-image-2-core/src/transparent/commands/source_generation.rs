@@ -20,6 +20,7 @@ pub(crate) fn generate_openai_source_image(
     shared: &SharedImageArgs,
 ) -> Result<Value, AppError> {
     let auth_state = load_openai_auth_state_for(cli, selection)?;
+    let proxy = effective_proxy_for(cli, &selection.resolved)?;
     let resolved_model = shared
         .model
         .clone()
@@ -43,9 +44,9 @@ pub(crate) fn generate_openai_source_image(
     let mut logger = JsonEventLogger::new(cli.json_events);
     let (payload, retry_count) =
         execute_openai_with_retry(&mut logger, &selection.resolved, |logger| {
-            request_openai_images_once(&endpoint, &auth_state, &body, logger, None)
+            request_openai_images_once(&endpoint, &auth_state, &body, logger, None, &proxy)
         })?;
-    let (image_bytes_list, revised_prompts) = decode_openai_images(&payload)?;
+    let (image_bytes_list, revised_prompts) = decode_openai_images(&payload, &proxy)?;
     if image_bytes_list.is_empty() {
         return Err(AppError::new(
             "missing_image_result",
@@ -95,6 +96,7 @@ pub(crate) fn generate_codex_source_image(
     shared: &SharedImageArgs,
 ) -> Result<Value, AppError> {
     let mut auth_state = load_codex_auth_state_for(cli, selection)?;
+    let proxy = effective_proxy_for(cli, &selection.resolved)?;
     let resolved_model = shared
         .model
         .clone()
@@ -117,6 +119,7 @@ pub(crate) fn generate_codex_source_image(
         &mut auth_state,
         &body,
         &mut logger,
+        &proxy,
     )?;
     let output_items = outcome
         .get("output_items")

@@ -23,6 +23,7 @@ fn app_config_round_trips_with_file_secret() {
             )]),
             supports_n: Some(false),
             edit_region_mode: Some(EDIT_REGION_REFERENCE_HINT.to_string()),
+            proxy: None,
         },
     );
     save_app_config(&config_path, &config).unwrap();
@@ -49,6 +50,7 @@ fn configured_openai_provider_resolves_with_file_secret() {
         )]),
         supports_n: Some(true),
         edit_region_mode: None,
+        proxy: None,
     };
     let selection = configured_provider_selection("local", &provider, "test", None).unwrap();
     assert_eq!(selection.resolved, "local");
@@ -77,6 +79,7 @@ fn explicit_builtin_name_uses_configured_provider_when_present() {
             )]),
             supports_n: Some(false),
             edit_region_mode: Some(EDIT_REGION_REFERENCE_HINT.to_string()),
+            proxy: None,
         },
     );
     save_app_config(&config_path, &config).unwrap();
@@ -120,6 +123,7 @@ fn configured_openai_name_loads_config_secret_for_image_auth() {
             )]),
             supports_n: Some(false),
             edit_region_mode: Some(EDIT_REGION_REFERENCE_HINT.to_string()),
+            proxy: None,
         },
     );
     save_app_config(&config_path, &config).unwrap();

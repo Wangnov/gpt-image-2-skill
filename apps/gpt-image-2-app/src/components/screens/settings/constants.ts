@@ -7,6 +7,7 @@ import {
   Info,
   KeyRound,
   ListChecks,
+  Network,
   ScrollText,
   Sparkles,
 } from "lucide-react";
@@ -45,6 +46,7 @@ export type SettingsTab =
   | "appearance"
   | "runtime"
   | "storage"
+  | "proxy"
   | "prompts"
   | "logs"
   | "about";
@@ -54,14 +56,17 @@ export const NAV: { id: SettingsTab; label: string; icon: LucideIcon }[] = [
   { id: "appearance", label: "外观", icon: Sparkles },
   { id: "runtime", label: "任务", icon: ListChecks },
   { id: "storage", label: "存储", icon: HardDrive },
+  { id: "proxy", label: "网络", icon: Network },
   { id: "prompts", label: "模板", icon: FileText },
   { id: "logs", label: "日志", icon: ScrollText },
   { id: "about", label: "关于", icon: Info },
 ];
 
-// Static Web has no server-side file logger, so the logs tab would only ever
-// show an empty state — hide it there alongside the (server-only) storage tab.
-export const BROWSER_HIDDEN_TABS: SettingsTab[] = ["storage", "logs"];
+// Static Web has no server-side file logger (logs would be empty) and routes
+// provider traffic through the browser's own stack (an app-level proxy has
+// nothing to act on), so hide both tabs there alongside the server-only storage
+// tab.
+export const BROWSER_HIDDEN_TABS: SettingsTab[] = ["storage", "proxy", "logs"];
 
 export const PARALLEL_OPTIONS = [1, 2, 3, 4, 6, 8].map((n) => ({
   value: String(n),
@@ -221,6 +226,26 @@ export const EXPORT_DIR_MODE_OPTIONS = [
   { value: "custom", label: "其他文件夹" },
 ] as const;
 
+/** Global proxy mode picker (settings → 网络). */
+export const PROXY_MODE_OPTIONS = [
+  { value: "system", label: "跟随系统" },
+  { value: "none", label: "直连" },
+  { value: "custom", label: "自定义" },
+] as const;
+
+/**
+ * Per-provider proxy override picker. `inherit` is a UI-only pseudo mode that
+ * maps to "no override" (provider.proxy === undefined); `none` / `custom` map
+ * to a real override.
+ */
+export type ProviderProxyMode = "inherit" | "none" | "custom";
+
+export const PROVIDER_PROXY_MODE_OPTIONS = [
+  { value: "inherit", label: "跟随全局" },
+  { value: "none", label: "强制直连" },
+  { value: "custom", label: "自定义" },
+] as const;
+
 export const TAB_TITLES: Record<
   SettingsTab,
   { title: string; subtitle: string }
@@ -240,6 +265,10 @@ export const TAB_TITLES: Record<
   storage: {
     title: "保存与归档",
     subtitle: "图片保存位置，以及是否自动归档到其他存储",
+  },
+  proxy: {
+    title: "网络代理",
+    subtitle: "供应商和 API 请求走系统代理、直连还是自定义代理",
   },
   prompts: {
     title: "提示词模板",

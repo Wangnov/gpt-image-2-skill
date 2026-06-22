@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { defaultPathConfig, defaultStorageConfig } from "./api/shared";
+import {
+  defaultPathConfig,
+  defaultProxyConfig,
+  defaultStorageConfig,
+} from "./api/shared";
 import {
   effectiveDefaultProvider,
   reconcileProviderSelection,
@@ -45,6 +49,7 @@ function config(defaultProvider: string): ServerConfig {
     },
     storage: defaultStorageConfig(),
     paths: defaultPathConfig(),
+    proxy: defaultProxyConfig(),
   };
 }
 

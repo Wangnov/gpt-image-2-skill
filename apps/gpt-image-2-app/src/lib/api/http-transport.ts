@@ -11,6 +11,7 @@ import type {
   NotificationTestResult,
   PathConfig,
   ProviderConfig,
+  ProxyConfig,
   QueueStatus,
   ServerConfig,
   StorageConfig,
@@ -116,6 +117,14 @@ export const httpApi: ApiClient = {
   async updateStorage(config: StorageConfig) {
     return normalizeConfig(
       await requestJson<ServerConfig>("/storage", {
+        method: "PUT",
+        body: jsonBody(config),
+      }),
+    );
+  },
+  async updateProxy(config: ProxyConfig) {
+    return normalizeConfig(
+      await requestJson<ServerConfig>("/proxy", {
         method: "PUT",
         body: jsonBody(config),
       }),

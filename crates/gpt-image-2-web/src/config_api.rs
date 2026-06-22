@@ -70,6 +70,16 @@ pub(crate) async fn update_paths(Json(body): Json<PathConfig>) -> ApiResult {
     Ok(Json(config_for_ui(&config)))
 }
 
+pub(crate) async fn update_proxy(Json(mut body): Json<ProxyConfig>) -> ApiResult {
+    let mut config = load_config().map_err(ApiError::internal)?;
+    gpt_image_2_core::preserve_proxy_secrets(&mut body, &config.proxy);
+    gpt_image_2_core::validate_proxy_config(&body)
+        .map_err(|error| ApiError::bad_request(app_error(error)))?;
+    config.proxy = body;
+    save_config(&config).map_err(ApiError::internal)?;
+    Ok(Json(config_for_ui(&config)))
+}
+
 pub(crate) async fn update_storage(Json(mut body): Json<StorageConfig>) -> ApiResult {
     let mut config = load_config().map_err(ApiError::internal)?;
     preserve_storage_secrets(&mut body, &config.storage);

@@ -149,8 +149,8 @@ pub(crate) fn parse_data_url_image(value: &str) -> Result<(String, Vec<u8>), App
     Ok((mime_type, decode_base64_bytes(encoded)?))
 }
 
-pub(crate) fn download_bytes(url: &str) -> Result<Vec<u8>, AppError> {
-    let client = make_client(DEFAULT_REQUEST_TIMEOUT)?;
+pub(crate) fn download_bytes(url: &str, proxy: &ProxyConfig) -> Result<Vec<u8>, AppError> {
+    let client = make_client(DEFAULT_REQUEST_TIMEOUT, proxy)?;
     let response = client.get(url).send().map_err(|error| {
         AppError::new("network_error", "Unable to download image bytes.")
             .with_detail(json!({ "error": error.to_string(), "url": url }))
@@ -172,6 +172,7 @@ pub(crate) fn download_bytes(url: &str) -> Result<Vec<u8>, AppError> {
 pub(crate) fn load_image_source_bytes(
     source: &str,
     fallback_name: &str,
+    proxy: &ProxyConfig,
 ) -> Result<(String, Vec<u8>, String), AppError> {
     if source.starts_with("data:image/") {
         let (mime_type, bytes) = parse_data_url_image(source)?;
@@ -184,7 +185,7 @@ pub(crate) fn load_image_source_bytes(
     if let Ok(url) = Url::parse(source) {
         match url.scheme() {
             "http" | "https" => {
-                let bytes = download_bytes(source)?;
+                let bytes = download_bytes(source, proxy)?;
                 let guessed_name = Path::new(url.path())
                     .file_name()
                     .and_then(|name| name.to_str())

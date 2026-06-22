@@ -114,6 +114,7 @@ pub fn redact_app_config(config: &AppConfig) -> Value {
                     "model": provider.model,
                     "supports_n": provider.supports_n,
                     "credentials": credentials,
+                    "proxy": provider.proxy.as_ref().map(redact_proxy_config),
                 }),
             )
         })
@@ -125,6 +126,7 @@ pub fn redact_app_config(config: &AppConfig) -> Value {
         "notifications": redact_notification_config(&config.notifications),
         "storage": redact_storage_config(&config.storage),
         "paths": config.paths,
+        "proxy": redact_proxy_config(&config.proxy),
         "logging": redact_logging_config(&config.logging),
     })
 }

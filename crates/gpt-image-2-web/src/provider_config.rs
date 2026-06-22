@@ -60,6 +60,20 @@ pub(crate) fn convert_provider_input(
         };
         credentials.insert(secret, converted);
     }
+    // The UI always sends the full intended override (absent = inherit global),
+    // so take it verbatim — this lets "inherit" actually clear a previous
+    // override. Restore redacted credentials and validate before persisting so
+    // a bad per-provider proxy is rejected at save time, like the global one.
+    let proxy = match input.proxy {
+        Some(mut proxy) => {
+            if let Some(existing_proxy) = existing.and_then(|provider| provider.proxy.as_ref()) {
+                gpt_image_2_core::preserve_proxy_secrets(&mut proxy, existing_proxy);
+            }
+            gpt_image_2_core::validate_proxy_config(&proxy).map_err(app_error)?;
+            Some(proxy)
+        }
+        None => None,
+    };
     Ok((
         ProviderConfig {
             provider_type: input.provider_type,
@@ -69,6 +83,7 @@ pub(crate) fn convert_provider_input(
             credentials,
             supports_n: input.supports_n,
             edit_region_mode: input.edit_region_mode,
+            proxy,
         },
         input.set_default,
     ))
