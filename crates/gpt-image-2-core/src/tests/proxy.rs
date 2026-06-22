@@ -72,10 +72,7 @@ fn resolve_effective_proxy_prefers_provider_override() {
         ..ProviderConfig::default()
     };
     // Provider override wins.
-    assert_eq!(
-        resolve_effective_proxy(&global, Some(&provider)),
-        direct
-    );
+    assert_eq!(resolve_effective_proxy(&global, Some(&provider)), direct);
     // No override inherits the global proxy.
     let inherit = ProviderConfig {
         provider_type: "openai".to_string(),
@@ -113,17 +110,26 @@ fn preserve_proxy_secrets_restores_redacted_credentials() {
     // Redacted round-trip (same target, no creds) -> credentials restored.
     let mut redacted = custom("socks5h://proxy.local:1080");
     preserve_proxy_secrets(&mut redacted, &existing);
-    assert_eq!(redacted.url.as_deref(), Some("socks5h://user:secret@proxy.local:1080"));
+    assert_eq!(
+        redacted.url.as_deref(),
+        Some("socks5h://user:secret@proxy.local:1080")
+    );
 
     // User supplied fresh credentials -> left untouched.
     let mut fresh = custom("socks5h://newuser:newpass@proxy.local:1080");
     preserve_proxy_secrets(&mut fresh, &existing);
-    assert_eq!(fresh.url.as_deref(), Some("socks5h://newuser:newpass@proxy.local:1080"));
+    assert_eq!(
+        fresh.url.as_deref(),
+        Some("socks5h://newuser:newpass@proxy.local:1080")
+    );
 
     // Different host -> do NOT leak credentials across targets.
     let mut other_host = custom("socks5h://other.local:1080");
     preserve_proxy_secrets(&mut other_host, &existing);
-    assert_eq!(other_host.url.as_deref(), Some("socks5h://other.local:1080"));
+    assert_eq!(
+        other_host.url.as_deref(),
+        Some("socks5h://other.local:1080")
+    );
 
     // Switching to direct (None) -> untouched.
     let mut direct = ProxyConfig {

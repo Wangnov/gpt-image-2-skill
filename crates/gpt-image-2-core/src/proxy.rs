@@ -21,18 +21,15 @@ pub(crate) fn proxy_mode_str(mode: ProxyMode) -> &'static str {
 /// behavior.
 pub(crate) fn validate_proxy_url(url_str: &str) -> Result<(), AppError> {
     let url = Url::parse(url_str).map_err(|error| {
-        AppError::new("proxy_url_invalid", "Proxy URL is not a valid URL.").with_detail(
-            json!({ "error": error.to_string(), "url": redact_proxy_url(url_str) }),
-        )
+        AppError::new("proxy_url_invalid", "Proxy URL is not a valid URL.")
+            .with_detail(json!({ "error": error.to_string(), "url": redact_proxy_url(url_str) }))
     })?;
     match url.scheme() {
         "http" | "https" | "socks5" | "socks5h" => {}
         other => {
             return Err(AppError::new(
                 "proxy_url_invalid",
-                format!(
-                    "Unsupported proxy scheme: {other}. Use http, https, socks5, or socks5h."
-                ),
+                format!("Unsupported proxy scheme: {other}. Use http, https, socks5, or socks5h."),
             )
             .with_detail(json!({
                 "scheme": other,
@@ -71,10 +68,7 @@ pub(crate) fn resolve_effective_proxy(
 
 /// Load config and resolve the effective proxy for `provider_name`, validating
 /// a Custom URL eagerly so a bad proxy fails fast with `proxy_url_invalid`.
-pub(crate) fn effective_proxy_for(
-    cli: &Cli,
-    provider_name: &str,
-) -> Result<ProxyConfig, AppError> {
+pub(crate) fn effective_proxy_for(cli: &Cli, provider_name: &str) -> Result<ProxyConfig, AppError> {
     let config = load_app_config(&cli_config_path(cli))?;
     let resolved = resolve_effective_proxy(&config.proxy, config.providers.get(provider_name));
     validate_proxy_config(&resolved)?;

@@ -54,9 +54,23 @@ pub(crate) fn run_openai_image_command(
     let mut logger = JsonEventLogger::new(cli.json_events);
     let request_result = execute_openai_with_retry(&mut logger, &selection.resolved, |logger| {
         if operation == "edit" {
-            request_openai_edit_once(&endpoint, &auth_state, &body, logger, recovery.as_mut(), &proxy)
+            request_openai_edit_once(
+                &endpoint,
+                &auth_state,
+                &body,
+                logger,
+                recovery.as_mut(),
+                &proxy,
+            )
         } else {
-            request_openai_images_once(&endpoint, &auth_state, &body, logger, recovery.as_mut(), &proxy)
+            request_openai_images_once(
+                &endpoint,
+                &auth_state,
+                &body,
+                logger,
+                recovery.as_mut(),
+                &proxy,
+            )
         }
     });
     let (payload, retry_count) = match request_result {

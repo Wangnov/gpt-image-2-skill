@@ -93,7 +93,9 @@ pub(crate) fn run_config_command(
                 resolve_effective_proxy(&config.proxy, config.providers.get(&selection.resolved));
             let endpoint = match selection.kind {
                 ProviderKind::OpenAi => check_endpoint_reachability(&selection.api_base, &proxy),
-                ProviderKind::Codex => check_endpoint_reachability(&selection.codex_endpoint, &proxy),
+                ProviderKind::Codex => {
+                    check_endpoint_reachability(&selection.codex_endpoint, &proxy)
+                }
             };
             Ok(CommandOutcome {
                 payload: json!({
