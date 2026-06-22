@@ -88,9 +88,12 @@ pub(crate) fn run_config_command(
         }
         ConfigSubcommand::TestProvider(args) => {
             let selection = select_configured_provider(cli, &args.name, "config_test_provider")?;
+            let config = load_app_config(&cli_config_path(cli))?;
+            let proxy =
+                resolve_effective_proxy(&config.proxy, config.providers.get(&selection.resolved));
             let endpoint = match selection.kind {
-                ProviderKind::OpenAi => check_endpoint_reachability(&selection.api_base),
-                ProviderKind::Codex => check_endpoint_reachability(&selection.codex_endpoint),
+                ProviderKind::OpenAi => check_endpoint_reachability(&selection.api_base, &proxy),
+                ProviderKind::Codex => check_endpoint_reachability(&selection.codex_endpoint, &proxy),
             };
             Ok(CommandOutcome {
                 payload: json!({

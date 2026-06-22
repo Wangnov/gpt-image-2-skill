@@ -52,16 +52,20 @@ pub(crate) fn run_doctor(cli: &Cli) -> CommandOutcome {
     let config = load_app_config(&config_path).unwrap_or_default();
     let codex_auth = inspect_codex_auth_file(&auth_path);
     let openai_auth = inspect_openai_auth(cli.api_key.as_deref());
-    let codex_endpoint = check_endpoint_reachability(&cli.endpoint);
-    let openai_endpoint = check_endpoint_reachability(&cli.openai_api_base);
+    let codex_endpoint = check_endpoint_reachability(&cli.endpoint, &config.proxy);
+    let openai_endpoint = check_endpoint_reachability(&cli.openai_api_base, &config.proxy);
 
     let selection = select_image_provider(cli);
     let ready = selection
         .as_ref()
         .map(|selection| {
+            let proxy =
+                resolve_effective_proxy(&config.proxy, config.providers.get(&selection.resolved));
             let endpoint = match selection.kind {
-                ProviderKind::OpenAi => check_endpoint_reachability(&selection.api_base),
-                ProviderKind::Codex => check_endpoint_reachability(&selection.codex_endpoint),
+                ProviderKind::OpenAi => check_endpoint_reachability(&selection.api_base, &proxy),
+                ProviderKind::Codex => {
+                    check_endpoint_reachability(&selection.codex_endpoint, &proxy)
+                }
             };
             endpoint
                 .get("reachable")
