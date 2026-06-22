@@ -45,6 +45,7 @@ mod notifications;
 mod paths;
 mod provider_selection;
 mod provider_types;
+mod proxy;
 mod recovery;
 mod request_commands;
 mod request_payloads;
@@ -71,7 +72,7 @@ pub(crate) use config_commands::*;
 pub(crate) use config_io::*;
 pub use config_io::{load_app_config, redact_app_config, save_app_config};
 pub(crate) use config_types::*;
-pub use config_types::{AppConfig, CredentialRef};
+pub use config_types::{AppConfig, CredentialRef, ProxyConfig, ProxyMode};
 pub use constants::{
     CLI_NAME, CONFIG_DIR_NAME, CONFIG_FILE_NAME, DEFAULT_BACKGROUND, DEFAULT_CODEX_ENDPOINT,
     DEFAULT_CODEX_MODEL, DEFAULT_HISTORY_PAGE_LIMIT, DEFAULT_INSTRUCTIONS, DEFAULT_OPENAI_API_BASE,
@@ -126,6 +127,8 @@ pub(crate) use paths::{
 pub(crate) use provider_selection::*;
 pub use provider_types::ProviderConfig;
 pub(crate) use provider_types::*;
+pub(crate) use proxy::*;
+pub use proxy::{effective_proxy_for_provider, preserve_proxy_secrets, validate_proxy_config};
 pub use recovery::{
     Recoverability, RecoveryAttempt, RecoveryContext, RecoveryStage, RecoveryState,
     annotate_recovery_job_dir, batch_recovery_job_dir, batch_recovery_job_id,

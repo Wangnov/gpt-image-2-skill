@@ -7,6 +7,7 @@ import type {
   StorageTargetConfig,
 } from "../../types";
 import {
+  defaultProxyConfig,
   normalizeConfig,
   normalizeNotificationConfig,
   normalizePathConfig,
@@ -330,6 +331,11 @@ export function browserConfigForUi(config: ServerConfig): ServerConfig {
     ),
     storage: sanitizeStorageConfig(config.storage),
     paths: normalizePathConfig(config.paths),
+    // Static Web has no local HTTP client to honor a proxy, so this value is
+    // never applied here — but we keep whatever is stored so the shape stays
+    // valid and round-trips cleanly. The settings UI hides the Proxy tab in
+    // this runtime (see BROWSER_HIDDEN_TABS).
+    proxy: config.proxy,
   });
 }
 
@@ -345,6 +351,7 @@ export function browserStoredConfig(config: ServerConfig): ServerConfig {
     notifications: normalizeNotificationConfig(config.notifications),
     storage: normalizeStorageConfig(config.storage),
     paths: normalizePathConfig(config.paths),
+    proxy: config.proxy ?? defaultProxyConfig(),
   };
 }
 

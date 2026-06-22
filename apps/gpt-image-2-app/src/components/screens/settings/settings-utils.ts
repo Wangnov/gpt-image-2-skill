@@ -1,8 +1,10 @@
 import {
   defaultNotificationConfig,
+  defaultProxyConfig,
   defaultStorageConfig,
   normalizeNotificationConfig,
   normalizePathConfig,
+  normalizeProxyConfig,
   normalizeStorageConfig,
   storageTargetType,
 } from "@/lib/api/shared";
@@ -11,6 +13,7 @@ import type {
   HttpStorageTargetConfig,
   NotificationConfig,
   PathConfig,
+  ProxyConfig,
   BaiduNetdiskStorageTargetConfig,
   Pan123OpenStorageTargetConfig,
   SftpStorageTargetConfig,
@@ -134,6 +137,20 @@ export function prepareNotificationConfigForSave(
       headers: webhookHeaders(webhook),
     })),
   };
+}
+
+export function cloneProxyConfig(value?: ProxyConfig) {
+  return normalizeProxyConfig(
+    value
+      ? (JSON.parse(JSON.stringify(value)) as ProxyConfig)
+      : defaultProxyConfig(),
+  );
+}
+
+export function prepareProxyConfigForSave(config: ProxyConfig): ProxyConfig {
+  // normalizeProxyConfig already trims the url, drops url / no_proxy outside
+  // custom mode, and de-dupes the bypass list — so saving is just a normalize.
+  return normalizeProxyConfig(config);
 }
 
 export function cloneStorageConfig(value?: StorageConfig) {

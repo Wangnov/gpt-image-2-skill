@@ -10,6 +10,28 @@ export interface CredentialRef {
   account?: string;
 }
 
+/**
+ * Outbound proxy mode for provider/API traffic.
+ * - `system`: inherit `HTTP(S)_PROXY` / `ALL_PROXY` / `NO_PROXY` from the
+ *   environment (default; preserves the HTTP client's built-in behavior).
+ * - `none`: force a direct connection, ignoring any environment proxy.
+ * - `custom`: use the explicit `url` (and `no_proxy`) below.
+ */
+export type ProxyMode = "system" | "none" | "custom";
+
+export interface ProxyConfig {
+  mode: ProxyMode;
+  /**
+   * `scheme://[user:pass@]host:port` where scheme ∈ http/https/socks5/socks5h.
+   * Only meaningful in `custom` mode. The backend strips credentials before
+   * returning config (same redaction as secrets), so values read back here are
+   * `scheme://host:port` with no password.
+   */
+  url?: string;
+  /** Hostnames/domains to bypass the proxy for. Custom mode only. */
+  no_proxy?: string[];
+}
+
 export interface ProviderConfig {
   type: ProviderKind;
   api_base?: string;
@@ -18,6 +40,11 @@ export interface ProviderConfig {
   supports_n?: boolean;
   edit_region_mode?: "native-mask" | "reference-hint" | "none";
   credentials: Record<string, CredentialRef>;
+  /**
+   * Per-provider proxy override. Absent/`undefined` inherits the global proxy;
+   * `{ mode: "none" }` forces a direct connection for this provider only.
+   */
+  proxy?: ProxyConfig;
   builtin?: boolean;
   disabled?: boolean;
   disabled_reason?: string;
@@ -294,6 +321,7 @@ export interface ServerConfig {
   notifications: NotificationConfig;
   storage: StorageConfig;
   paths: PathConfig;
+  proxy: ProxyConfig;
 }
 
 export type JobStatus =

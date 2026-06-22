@@ -1,5 +1,10 @@
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
+import {
+  PROVIDER_PROXY_MODE_OPTIONS,
+  type ProviderProxyMode,
+} from "@/components/screens/settings/constants";
+import { parseRecipients } from "@/components/screens/settings/settings-utils";
 import { Button } from "@/components/ui/button";
 import { Dialog } from "@/components/ui/dialog";
 import { Field } from "@/components/ui/field";
@@ -8,13 +13,16 @@ import {
   Segmented,
   type SegmentedOption,
 } from "@/components/ui/segmented";
+import { Textarea } from "@/components/ui/textarea";
 import { useUpsertProvider } from "@/hooks/use-config";
 import { api } from "@/lib/api";
+import { normalizeProxyConfig } from "@/lib/api/shared";
 import { runtimeCopy } from "@/lib/runtime-copy";
 import type {
   CredentialSource,
   ProviderConfig,
   ProviderKind,
+  ProxyConfig,
 } from "@/lib/types";
 
 type EditRegionMode = NonNullable<ProviderConfig["edit_region_mode"]>;
@@ -23,6 +31,18 @@ function defaultEditRegionMode(kind: ProviderKind): EditRegionMode {
   if (kind === "openai") return "native-mask";
   if (kind === "codex") return "reference-hint";
   return "reference-hint";
+}
+
+/**
+ * Map a stored per-provider override onto the dialog's three-way picker.
+ * Absent override (or an explicit `system`, which behaves the same as having
+ * no override) reads as "inherit"; `none` / `custom` map directly.
+ */
+function providerProxyModeFromConfig(
+  proxy: ProxyConfig | undefined,
+): ProviderProxyMode {
+  if (!proxy || proxy.mode === "system") return "inherit";
+  return proxy.mode === "none" ? "none" : "custom";
 }
 
 export function AddProviderDialog({
@@ -54,6 +74,9 @@ export function AddProviderDialog({
   const [codexAccountId, setCodexAccountId] = useState("");
   const [codexAccessToken, setCodexAccessToken] = useState("");
   const [codexRefreshToken, setCodexRefreshToken] = useState("");
+  const [proxyMode, setProxyMode] = useState<ProviderProxyMode>("inherit");
+  const [proxyUrl, setProxyUrl] = useState("");
+  const [proxyNoProxyText, setProxyNoProxyText] = useState("");
 
   const upsert = useUpsertProvider();
   const editing = mode === "edit" && Boolean(providerName && provider);
@@ -105,6 +128,9 @@ export function AddProviderDialog({
     setCodexAccountId("");
     setCodexAccessToken("");
     setCodexRefreshToken("");
+    setProxyMode("inherit");
+    setProxyUrl("");
+    setProxyNoProxyText("");
   };
 
   useEffect(() => {
@@ -136,6 +162,16 @@ export function AddProviderDialog({
     setCodexAccountId("");
     setCodexAccessToken("");
     setCodexRefreshToken("");
+
+    setProxyMode(providerProxyModeFromConfig(provider.proxy));
+    setProxyUrl(
+      provider.proxy?.mode === "custom" ? (provider.proxy.url ?? "") : "",
+    );
+    setProxyNoProxyText(
+      provider.proxy?.mode === "custom"
+        ? (provider.proxy.no_proxy ?? []).join("\n")
+        : "",
+    );
   }, [browserRuntime, editing, open, provider, providerName]);
 
   const fileCredential = (value: string) =>
@@ -158,6 +194,19 @@ export function AddProviderDialog({
       });
       return;
     }
+    // inherit → no override (undefined). The backend preserves the previous
+    // value when this field is omitted, so an existing override can't be
+    // *cleared* through this dialog — only switched to 直连 / 自定义.
+    const proxyOverride: ProxyConfig | undefined =
+      proxyMode === "none"
+        ? { mode: "none" }
+        : proxyMode === "custom"
+          ? normalizeProxyConfig({
+              mode: "custom",
+              url: proxyUrl,
+              no_proxy: parseRecipients(proxyNoProxyText),
+            })
+          : undefined;
     try {
       await upsert.mutateAsync({
         name: trimmedName,
@@ -167,6 +216,7 @@ export function AddProviderDialog({
           model: model || undefined,
           supports_n: kind === "codex" ? false : supportsN,
           edit_region_mode: editRegionMode,
+          proxy: proxyOverride,
           credentials:
             kind === "codex"
               ? {
@@ -465,6 +515,58 @@ export function AddProviderDialog({
                 />
               </Field>
             </>
+          )}
+        </div>
+      )}
+      {api.kind !== "browser" && (
+        <div className="mt-1 grid gap-3.5 border-t border-border-faint pt-3.5">
+          <Field
+            label="网络代理"
+            hint="默认跟随全局设置"
+          >
+            <Segmented
+              value={proxyMode}
+              onChange={setProxyMode}
+              ariaLabel="该凭证的网络代理"
+              className="w-full overflow-x-auto scrollbar-none"
+              options={PROVIDER_PROXY_MODE_OPTIONS}
+            />
+          </Field>
+          {proxyMode === "custom" && (
+            <>
+              <Field
+                label="代理地址"
+                hint="scheme://[user:pass@]host:port"
+              >
+                <Input
+                  value={proxyUrl}
+                  onChange={(e) => setProxyUrl(e.target.value)}
+                  placeholder="socks5h://127.0.0.1:1080"
+                  monospace
+                />
+              </Field>
+              <Field
+                label="绕过代理的主机"
+                hint="可选，每行一个或逗号分隔"
+              >
+                <Textarea
+                  value={proxyNoProxyText}
+                  onChange={(e) => setProxyNoProxyText(e.target.value)}
+                  placeholder={"localhost\n127.0.0.1"}
+                  monospace
+                  minHeight={64}
+                />
+              </Field>
+              <p className="text-[11px] text-faint">
+                支持 http / https / socks5 / socks5h；socks5h:// 由代理端做 DNS
+                解析。保存后地址只回显 scheme://host:port，重填完整地址才更新密码。
+              </p>
+            </>
+          )}
+          {proxyMode === "inherit" && editing && provider?.proxy && (
+            <p className="text-[11px] text-faint">
+              该供应商当前有单独的代理设置；保持「跟随全局」并保存即可清除它，恢复使用全局代理。
+            </p>
           )}
         </div>
       )}

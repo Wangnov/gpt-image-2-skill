@@ -17,7 +17,7 @@ use axum::{
 };
 use gpt_image_2_core::{
     AppConfig, CONFIG_DIR_NAME, CredentialRef, EditRequest, GenerateRequest, HistoryListOptions,
-    KEYCHAIN_SERVICE, NotificationConfig, PathConfig, ProductRuntime, ProviderConfig,
+    KEYCHAIN_SERVICE, NotificationConfig, PathConfig, ProductRuntime, ProviderConfig, ProxyConfig,
     StorageConfig, StorageReadbackOptions, StorageTargetConfig, StorageUploadOverrides, UploadFile,
     annotate_recovery_job_dir, append_history_job_event, batch_output_path, batch_recovery_job_dir,
     batch_recovery_job_id, build_recovery_descriptor, default_config_path,

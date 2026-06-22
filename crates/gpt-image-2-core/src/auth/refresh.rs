@@ -2,14 +2,17 @@
 
 use super::*;
 
-pub(crate) fn refresh_access_token(auth_state: &mut CodexAuthState) -> Result<Value, AppError> {
+pub(crate) fn refresh_access_token(
+    auth_state: &mut CodexAuthState,
+    proxy: &ProxyConfig,
+) -> Result<Value, AppError> {
     let Some(refresh_token) = auth_state.refresh_token.clone() else {
         return Err(AppError::new(
             "refresh_token_missing",
             "Missing refresh_token in auth.json",
         ));
     };
-    let client = make_client(DEFAULT_REFRESH_TIMEOUT)?;
+    let client = make_client(DEFAULT_REFRESH_TIMEOUT, proxy)?;
     let response = client
         .post(REFRESH_ENDPOINT)
         .header(CONTENT_TYPE, "application/json")
@@ -87,7 +90,7 @@ pub(crate) fn refresh_access_token(auth_state: &mut CodexAuthState) -> Result<Va
     Ok(payload)
 }
 
-pub(crate) fn check_endpoint_reachability(endpoint: &str) -> Value {
+pub(crate) fn check_endpoint_reachability(endpoint: &str, proxy: &ProxyConfig) -> Value {
     let url = match Url::parse(endpoint) {
         Ok(url) => url,
         Err(error) => {
@@ -100,44 +103,47 @@ pub(crate) fn check_endpoint_reachability(endpoint: &str) -> Value {
     };
     let host = url.host_str().unwrap_or_default().to_string();
     let port = url.port_or_known_default().unwrap_or(443);
-    let mut reachable = false;
-    let mut dns_resolved = false;
-    let mut tcp_connected = false;
-    let mut addresses = Vec::<String>::new();
-    let mut error_text: Option<String> = None;
+    let proxy_mode = proxy_mode_str(proxy.mode);
 
-    match (host.as_str(), port).to_socket_addrs() {
-        Ok(iter) => {
-            dns_resolved = true;
-            for address in iter {
-                addresses.push(address.ip().to_string());
-                if TcpStream::connect_timeout(&address, Duration::from_secs(ENDPOINT_CHECK_TIMEOUT))
-                    .is_ok()
-                {
-                    tcp_connected = true;
-                    reachable = true;
-                    break;
-                }
-            }
-            if !tcp_connected {
-                error_text = Some("No address accepted a TCP connection.".to_string());
-            }
-        }
+    // Probe through the resolved proxy (System honors the environment, None
+    // forces direct, Custom uses the configured URL) so the result reflects the
+    // path real requests take — a direct TCP probe would wrongly report
+    // "unreachable" whenever the endpoint is only reachable via a proxy. Any
+    // HTTP response, including 4xx/5xx, proves the network path works.
+    let client = match make_client(ENDPOINT_CHECK_TIMEOUT, proxy) {
+        Ok(client) => client,
         Err(error) => {
-            error_text = Some(error.to_string());
+            return json!({
+                "endpoint": endpoint,
+                "host": host,
+                "port": port,
+                "scheme": url.scheme(),
+                "reachable": false,
+                "proxy": proxy_mode,
+                "error": error.message,
+            });
         }
+    };
+    match client.head(endpoint).send() {
+        Ok(response) => json!({
+            "endpoint": endpoint,
+            "host": host,
+            "port": port,
+            "scheme": url.scheme(),
+            "reachable": true,
+            "proxy": proxy_mode,
+            "status": response.status().as_u16(),
+            "tls_ok": if url.scheme() == "https" { Value::Bool(true) } else { Value::Null },
+            "error": Value::Null,
+        }),
+        Err(error) => json!({
+            "endpoint": endpoint,
+            "host": host,
+            "port": port,
+            "scheme": url.scheme(),
+            "reachable": false,
+            "proxy": proxy_mode,
+            "error": error.to_string(),
+        }),
     }
-
-    json!({
-        "endpoint": endpoint,
-        "host": host,
-        "port": port,
-        "scheme": url.scheme(),
-        "dns_resolved": dns_resolved,
-        "tcp_connected": tcp_connected,
-        "tls_ok": if url.scheme() == "https" { Value::Bool(reachable) } else { Value::Null },
-        "reachable": reachable,
-        "addresses": addresses,
-        "error": error_text,
-    })
 }

@@ -1,5 +1,5 @@
 import type { GenerateRequest, Job, OutputRef, ServerConfig } from "../../types";
-import { defaultNotificationConfig, defaultPathConfig, defaultStorageConfig, normalizeConfig, normalizeJob, outputPaths, rememberJobOutputs } from "../shared";
+import { defaultNotificationConfig, defaultPathConfig, defaultProxyConfig, defaultStorageConfig, normalizeConfig, normalizeJob, outputPaths, rememberJobOutputs } from "../shared";
 import type { JobListOptions, JobListPage } from "../types";
 import { isActiveJobStatus } from "../types";
 import { CONFIG_KEY, DB_NAME, DB_VERSION, blobsByPath, dbPromise, objectUrls } from "./state";
@@ -69,6 +69,7 @@ export async function readConfigRecord() {
       notifications: defaultNotificationConfig(),
       storage: defaultStorageConfig(),
       paths: defaultPathConfig(),
+      proxy: defaultProxyConfig(),
     },
   );
 }

@@ -108,6 +108,10 @@ export const api: ApiClient = {
       }
       return client.updateStorage(config);
     }),
+  updateProxy: (config) =>
+    invokeClient("updateProxy", config) as ReturnType<
+      ApiClient["updateProxy"]
+    >,
   testStorageTarget: (name, target) =>
     loadClient().then((client) => {
       if (!client.testStorageTarget) {
