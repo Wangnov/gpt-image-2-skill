@@ -53,4 +53,8 @@ pub struct ProviderConfig {
     pub supports_n: Option<bool>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub edit_region_mode: Option<String>,
+    /// Per-provider proxy override. `None` inherits the global proxy;
+    /// `Some(mode = none)` forces a direct connection for this provider.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub proxy: Option<ProxyConfig>,
 }

@@ -10,6 +10,7 @@ import type {
   ExportDirMode,
   PathConfig,
   ProviderConfig,
+  ProxyConfig,
   QueueStatus,
   ServerConfig,
   StorageConfig,
@@ -98,6 +99,7 @@ export type ApiClient = RuntimeCapabilities & {
   notificationCapabilities(): Promise<NotificationCapabilities>;
   updatePaths?(config: PathConfig): Promise<ServerConfig>;
   updateStorage?(config: StorageConfig): Promise<ServerConfig>;
+  updateProxy(config: ProxyConfig): Promise<ServerConfig>;
   testStorageTarget?(
     name: string,
     target?: StorageTargetConfig,

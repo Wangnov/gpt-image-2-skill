@@ -69,6 +69,10 @@ pub(crate) fn convert_provider_input(
             credentials,
             supports_n: input.supports_n,
             edit_region_mode: input.edit_region_mode,
+            // The UI always sends the full intended override (absent = inherit
+            // global), so take it verbatim — this lets "inherit" actually clear
+            // a previous override.
+            proxy: input.proxy,
         },
         input.set_default,
     ))

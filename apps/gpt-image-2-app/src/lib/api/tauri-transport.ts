@@ -10,6 +10,7 @@ import type {
   NotificationTestResult,
   PathConfig,
   ProviderConfig,
+  ProxyConfig,
   QueueStatus,
   ServerConfig,
   StorageConfig,
@@ -129,6 +130,11 @@ export const tauriApi: ApiClient = {
   async updateStorage(config: StorageConfig) {
     return normalizeConfig(
       await invoke<ServerConfig>("update_storage", { config }),
+    );
+  },
+  async updateProxy(config: ProxyConfig) {
+    return normalizeConfig(
+      await invoke<ServerConfig>("update_proxy", { config }),
     );
   },
   async testStorageTarget(name: string, target?: StorageTargetConfig) {

@@ -558,7 +558,10 @@ pub fn materialize_openai_raw_response(
         )
         .with_detail(json!({"path": raw_path.display().to_string(), "error": error.to_string()}))
     })?;
-    let (image_bytes_list, _) = decode_openai_images(&payload)?;
+    let proxy = load_app_config(&default_config_path())
+        .map(|config| config.proxy)
+        .unwrap_or_default();
+    let (image_bytes_list, _) = decode_openai_images(&payload, &proxy)?;
     save_images(output_path, &image_bytes_list)
 }
 

@@ -55,5 +55,5 @@ fn build_openai_edit_form_contains_required_parts() {
         "mask": {"image_url": "data:image/png;base64,YWJjZA=="},
         "size": "1024x1024",
     });
-    assert!(build_openai_edit_form(&body).is_ok());
+    assert!(build_openai_edit_form(&body, &ProxyConfig::default()).is_ok());
 }

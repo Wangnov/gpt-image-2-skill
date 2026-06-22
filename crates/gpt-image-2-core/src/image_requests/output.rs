@@ -119,7 +119,10 @@ pub(crate) fn history_image_metadata(
 
 pub(crate) type DecodedOpenAiImages = (Vec<Vec<u8>>, Vec<Option<String>>);
 
-pub(crate) fn decode_openai_images(payload: &Value) -> Result<DecodedOpenAiImages, AppError> {
+pub(crate) fn decode_openai_images(
+    payload: &Value,
+    proxy: &ProxyConfig,
+) -> Result<DecodedOpenAiImages, AppError> {
     let mut result = Vec::new();
     let mut revised_prompts = Vec::new();
     for item in payload
@@ -138,7 +141,7 @@ pub(crate) fn decode_openai_images(payload: &Value) -> Result<DecodedOpenAiImage
             continue;
         }
         if let Some(url) = item.get("url").and_then(Value::as_str) {
-            result.push(download_bytes(url)?);
+            result.push(download_bytes(url, proxy)?);
         }
     }
     Ok((result, revised_prompts))

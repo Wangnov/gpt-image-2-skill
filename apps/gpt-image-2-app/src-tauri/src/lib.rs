@@ -10,7 +10,8 @@ use std::{
 
 use gpt_image_2_core::{
     AppConfig, CredentialRef, EditRequest, GenerateRequest, HistoryListOptions, KEYCHAIN_SERVICE,
-    NotificationConfig, PathConfig, ProductRuntime, ProviderConfig, StorageConfig, StorageReadback,
+    NotificationConfig, PathConfig, ProductRuntime, ProviderConfig, ProxyConfig, StorageConfig,
+    StorageReadback,
     StorageReadbackOptions, StorageTargetConfig, StorageUploadOverrides, UploadFile,
     annotate_recovery_job_dir, append_history_job_event, batch_output_path, batch_recovery_job_dir,
     batch_recovery_job_id, build_recovery_descriptor, default_config_path,
@@ -107,6 +108,7 @@ pub fn run() {
             get_config,
             update_notifications,
             update_paths,
+            update_proxy,
             update_storage,
             test_notifications,
             test_storage_target,

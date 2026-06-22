@@ -13,6 +13,7 @@ pub(crate) fn run_openai_image_command(
 ) -> Result<CommandOutcome, AppError> {
     let output_path = PathBuf::from(&shared.out);
     let auth_state = load_openai_auth_state_for(cli, selection)?;
+    let proxy = effective_proxy_for(cli, &selection.resolved)?;
     let resolved_ref_images = resolve_ref_images(ref_images)?;
     let resolved_mask = match mask {
         Some(mask) => Some(resolve_ref_image(mask)?),
@@ -53,9 +54,9 @@ pub(crate) fn run_openai_image_command(
     let mut logger = JsonEventLogger::new(cli.json_events);
     let request_result = execute_openai_with_retry(&mut logger, &selection.resolved, |logger| {
         if operation == "edit" {
-            request_openai_edit_once(&endpoint, &auth_state, &body, logger, recovery.as_mut())
+            request_openai_edit_once(&endpoint, &auth_state, &body, logger, recovery.as_mut(), &proxy)
         } else {
-            request_openai_images_once(&endpoint, &auth_state, &body, logger, recovery.as_mut())
+            request_openai_images_once(&endpoint, &auth_state, &body, logger, recovery.as_mut(), &proxy)
         }
     });
     let (payload, retry_count) = match request_result {
@@ -73,7 +74,7 @@ pub(crate) fn run_openai_image_command(
         let _ = ctx.finish_error(RecoveryStage::ResponseReceived, &error);
         return Err(error);
     }
-    let (image_bytes_list, revised_prompts) = match decode_openai_images(&payload) {
+    let (image_bytes_list, revised_prompts) = match decode_openai_images(&payload, &proxy) {
         Ok(value) => value,
         Err(error) => {
             if let Some(ctx) = recovery.as_mut() {
@@ -171,6 +172,7 @@ pub(crate) fn run_codex_image_command(
     ref_images: &[String],
 ) -> Result<CommandOutcome, AppError> {
     let mut auth_state = load_codex_auth_state_for(cli, selection)?;
+    let proxy = effective_proxy_for(cli, &selection.resolved)?;
     let output_path = PathBuf::from(&shared.out);
     let resolved_ref_images = resolve_ref_images(ref_images)?;
     let resolved_model = shared
@@ -195,6 +197,7 @@ pub(crate) fn run_codex_image_command(
         &mut auth_state,
         &body,
         &mut logger,
+        &proxy,
     )?;
     let output_items = outcome
         .get("output_items")

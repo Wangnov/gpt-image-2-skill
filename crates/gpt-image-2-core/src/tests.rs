@@ -35,5 +35,6 @@ mod image_requests;
 mod network_safety;
 mod notification_delivery;
 mod notifications;
+mod proxy;
 mod recovery;
 mod storage_config;

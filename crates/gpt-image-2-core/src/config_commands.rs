@@ -188,6 +188,7 @@ pub(crate) fn run_config_add_provider(
             credentials,
             supports_n,
             edit_region_mode,
+            proxy: None,
         },
     );
     if args.set_default || config.default_provider.is_none() {

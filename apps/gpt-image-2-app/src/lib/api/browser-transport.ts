@@ -4,6 +4,7 @@ import type {
   NotificationConfig,
   PathConfig,
   ProviderConfig,
+  ProxyConfig,
   ServerConfig,
   StorageConfig,
   StorageTargetConfig,
@@ -15,6 +16,7 @@ import {
   normalizeJobResponse,
   normalizeNotificationConfig,
   normalizePathConfig,
+  normalizeProxyConfig,
   normalizeStorageConfig,
   outputPath,
   storageTargetType,
@@ -114,6 +116,18 @@ export const browserApi: ApiClient = {
     return browser.browserConfigForUi(current);
   },
   testStorageTarget: browser.testBrowserStorageTarget,
+  async updateProxy(config: ProxyConfig) {
+    // Static Web has no local HTTP client whose proxy we could steer (fetch
+    // goes straight through the browser), so this is a best-effort round-trip:
+    // we persist the value to IndexedDB and hand it back. The settings UI hides
+    // the Proxy tab in this runtime, so this path is here only to satisfy the
+    // ApiClient contract.
+    await browser.prepareBrowserRuntime();
+    const current = await browser.readConfigRecord();
+    current.proxy = normalizeProxyConfig(config);
+    await browser.writeStoredConfig(browser.browserStoredConfig(current));
+    return browser.browserConfigForUi(current);
+  },
   async setDefault(name: string) {
     await browser.prepareBrowserRuntime();
     const config = await browser.readConfigRecord();

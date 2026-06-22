@@ -5,6 +5,7 @@ import type {
   NotificationConfig,
   PathConfig,
   ProviderConfig,
+  ProxyConfig,
   ServerConfig,
   StorageConfig,
   StorageTargetConfig,
@@ -93,6 +94,14 @@ export function useUpdateStorage() {
       }
       return api.updateStorage(config);
     },
+    onSuccess: (data) => qc.setQueryData(["config"], data),
+  });
+}
+
+export function useUpdateProxy() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (config: ProxyConfig) => api.updateProxy(config),
     onSuccess: (data) => qc.setQueryData(["config"], data),
   });
 }

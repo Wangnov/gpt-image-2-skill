@@ -2,14 +2,17 @@
 
 use super::*;
 
-pub(crate) fn refresh_access_token(auth_state: &mut CodexAuthState) -> Result<Value, AppError> {
+pub(crate) fn refresh_access_token(
+    auth_state: &mut CodexAuthState,
+    proxy: &ProxyConfig,
+) -> Result<Value, AppError> {
     let Some(refresh_token) = auth_state.refresh_token.clone() else {
         return Err(AppError::new(
             "refresh_token_missing",
             "Missing refresh_token in auth.json",
         ));
     };
-    let client = make_client(DEFAULT_REFRESH_TIMEOUT)?;
+    let client = make_client(DEFAULT_REFRESH_TIMEOUT, proxy)?;
     let response = client
         .post(REFRESH_ENDPOINT)
         .header(CONTENT_TYPE, "application/json")
