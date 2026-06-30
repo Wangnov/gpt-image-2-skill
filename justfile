@@ -96,7 +96,10 @@ release level="patch":
     scripts/release/publish.sh "{{ level }}" --execute
 
 # Build and publish desktop app installers for an existing release tag.
+# Waits until the cargo-dist Release exists first, so Tauri's idempotent
+# create-release never races cargo-dist's non-idempotent `gh release create`.
 release-tauri tag:
+    scripts/release/wait-for-release.sh "{{ tag }}"
     gh workflow run "Tauri App Release" -f release_tag="{{ tag }}" -f release_draft=false -f prerelease=false
 
 # Build and publish the Docker Web image to GHCR for an existing release tag.
