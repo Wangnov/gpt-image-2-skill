@@ -81,6 +81,9 @@ export function GlassCombobox(props: GlassComboboxProps) {
   } = props;
   const [open, setOpen] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
+  // Guards the programmatic re-focus in handlePick: the input's onFocus
+  // must not re-open the popover we just closed.
+  const suppressFocusOpen = useRef(false);
   const isChip = props.variant === "chip";
   const chipLabel = isChip ? (props as ChipVariantProps).label : undefined;
   const trimmed = value.trim().toLowerCase();
@@ -91,8 +94,13 @@ export function GlassCombobox(props: GlassComboboxProps) {
   const handlePick = (next: string) => {
     onValueChange(next);
     setOpen(false);
-    // re-focus the input after the popover closes
-    setTimeout(() => inputRef.current?.focus(), 0);
+    // re-focus the input after the popover closes; focus() dispatches the
+    // focus event synchronously, so the guard can be reset right after
+    setTimeout(() => {
+      suppressFocusOpen.current = true;
+      inputRef.current?.focus({ preventScroll: true });
+      suppressFocusOpen.current = false;
+    }, 0);
   };
 
   const openFromSurface = (event: PointerEvent<HTMLDivElement>) => {
@@ -133,7 +141,10 @@ export function GlassCombobox(props: GlassComboboxProps) {
           id={id}
           value={value}
           onChange={(e) => onValueChange(e.target.value)}
-          onFocus={() => setOpen(true)}
+          onFocus={() => {
+            if (suppressFocusOpen.current) return;
+            setOpen(true);
+          }}
           onClick={() => {
             if (!disabled) setOpen(true);
           }}
@@ -167,8 +178,9 @@ export function GlassCombobox(props: GlassComboboxProps) {
           align="start"
           sideOffset={6}
           onOpenAutoFocus={(e) => e.preventDefault()}
+          onCloseAutoFocus={(e) => e.preventDefault()}
           className={cn(
-            "z-50 max-h-[280px] overflow-auto rounded-xl border outline-none p-1",
+            "z-50 max-h-[280px] overflow-auto scrollbar-none rounded-xl border outline-none p-1",
             "min-w-[var(--radix-popover-trigger-width)]",
             "data-[state=open]:animate-in data-[state=closed]:animate-out",
             "data-[state=open]:fade-in-0 data-[state=closed]:fade-out-0",
