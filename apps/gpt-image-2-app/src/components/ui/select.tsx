@@ -93,7 +93,13 @@ const SelectContent = forwardRef<
       }}
       {...rest}
     >
-      <RadixSelect.Viewport className="p-1">{children}</RadixSelect.Viewport>
+      {/* Height cap + scroll live on the Viewport: Radix gives it
+          `overflow: hidden auto`, but its `flex: 1` only resolves against a
+          flex parent — the Content wrapper isn't one, so capping Content
+          would clip the list instead of scrolling it. */}
+      <RadixSelect.Viewport className="max-h-[min(280px,var(--radix-select-content-available-height))] scrollbar-none p-1">
+        {children}
+      </RadixSelect.Viewport>
     </RadixSelect.Content>
   </RadixSelect.Portal>
 ));
