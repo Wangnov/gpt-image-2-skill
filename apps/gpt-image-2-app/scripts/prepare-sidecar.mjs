@@ -1,4 +1,11 @@
-import { chmodSync, copyFileSync, existsSync, mkdirSync, rmSync } from "node:fs";
+import {
+  chmodSync,
+  copyFileSync,
+  existsSync,
+  mkdirSync,
+  rmSync,
+  statSync,
+} from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { spawnSync } from "node:child_process";
@@ -17,6 +24,25 @@ function parseTarget() {
 }
 
 const target = parseTarget();
+const isWindowsTarget = target.includes("windows") || process.platform === "win32";
+const extension = isWindowsTarget ? ".exe" : "";
+const destinationDir = join(appDir, "src-tauri", "bin");
+const destination = join(destinationDir, `${binName}${extension}`);
+
+// `--if-missing` keeps this cheap as a beforeDevCommand/beforeBuildCommand
+// hook and, crucially, keeps CI correct: the release workflow prepares a
+// cross-compiled sidecar first, and a host-target rebuild here would
+// silently overwrite it. A zero-byte file is the build.rs placeholder that
+// only satisfies the resources glob — treat it as missing.
+if (
+  process.argv.includes("--if-missing") &&
+  existsSync(destination) &&
+  statSync(destination).size > 0
+) {
+  console.log(`sidecar already present at ${destination}; skipping build`);
+  process.exit(0);
+}
+
 const buildArgs = ["build", "--release", "-p", binName];
 if (target) {
   buildArgs.push("--target", target);
@@ -31,8 +57,6 @@ if (build.status !== 0) {
   process.exit(build.status ?? 1);
 }
 
-const isWindowsTarget = target.includes("windows") || process.platform === "win32";
-const extension = isWindowsTarget ? ".exe" : "";
 const releaseDir = target
   ? join(repoRoot, "target", target, "release")
   : join(repoRoot, "target", "release");
@@ -41,9 +65,6 @@ const source = join(releaseDir, `${binName}${extension}`);
 if (!existsSync(source)) {
   throw new Error(`Sidecar binary was not built: ${source}`);
 }
-
-const destinationDir = join(appDir, "src-tauri", "bin");
-const destination = join(destinationDir, `${binName}${extension}`);
 
 rmSync(destinationDir, { recursive: true, force: true });
 mkdirSync(destinationDir, { recursive: true });

@@ -24,7 +24,7 @@ npm --prefix apps/gpt-image-2-app ci
 npm --prefix apps/gpt-image-2-app run prepare:sidecar
 npm --prefix apps/gpt-image-2-app run tauri -- build --bundles app,dmg
 
-DMG="target/release/bundle/dmg/GPT Image 2_0.2.5_aarch64.dmg"
+DMG="target/release/bundle/dmg/GPT Image 2_<version>_aarch64.dmg"
 xcrun notarytool submit "$DMG" \
   --key "$APPLE_API_KEY_PATH" \
   --key-id "$APPLE_API_KEY" \
@@ -40,7 +40,20 @@ The SHA-1 identity avoids ambiguity when multiple `Developer ID Application: Don
 
 ## CI Release
 
-Run `Tauri App Release` manually with the same tag as the CLI release, for example `v0.2.5`. The workflow builds and uploads:
+Dispatch the workflow with `just release-tauri v<version>` using the same tag
+as the CLI release.
+
+**Ordering is mandatory: the cargo-dist `Release` workflow must fully create
+and populate the GitHub Release first.** Both workflows create the same
+`v<version>` Release, but cargo-dist's `gh release create` is not idempotent
+while Tauri's create-release is — if Tauri wins the race, the whole `Release`
+workflow fails with `already exists` and the CLI installers and npm dispatch
+are lost. `just release-tauri` guards this via
+`scripts/release/wait-for-release.sh`, which blocks until the Release carries
+cargo-dist's `dist-manifest.json` asset. If you dispatch manually with
+`gh workflow run`, run that script (or check the asset) yourself first.
+
+The workflow builds and uploads:
 
 - macOS: signed and notarized `.app` / `.dmg` for Apple Silicon and Intel.
 - Windows: NSIS `.exe`.

@@ -80,6 +80,13 @@ jobs:
           if [[ "$RELEASE_PRERELEASE" == "true" ]]; then
             publish_latest="false"
           fi
+          # A SemVer prerelease (e.g. 0.8.0-rc.1) must never take the
+          # latest tag, no matter how this workflow was invoked — the
+          # release-event prerelease flag is absent on workflow_dispatch.
+          core_version="${version%%+*}"
+          if [[ "$core_version" == *-* ]]; then
+            publish_latest="false"
+          fi
 
           {
             echo "ref=$ref"

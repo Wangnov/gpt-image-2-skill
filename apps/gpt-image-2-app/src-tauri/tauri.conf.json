@@ -4,8 +4,8 @@
   "version": "0.7.1",
   "identifier": "com.wangnov.gpt-image-2",
   "build": {
-    "beforeDevCommand": "npm run dev",
-    "beforeBuildCommand": "npm run build",
+    "beforeDevCommand": "npm run prepare:sidecar -- --if-missing && npm run dev",
+    "beforeBuildCommand": "npm run prepare:sidecar -- --if-missing && npm run build",
     "devUrl": "http://localhost:5173",
     "frontendDist": "../dist"
   },
