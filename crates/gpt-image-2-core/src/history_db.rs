@@ -1,5 +1,7 @@
+use std::collections::HashSet;
 use std::fs;
-use std::path::Path;
+use std::path::{Path, PathBuf};
+use std::sync::{Mutex, OnceLock};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use rusqlite::{Connection, params};
@@ -46,6 +48,28 @@ pub(crate) fn open_history_db() -> Result<Connection, AppError> {
             )
             .with_detail(json!({"error": error.to_string()}))
         })?;
+    ensure_history_schema(&conn, &path)?;
+    Ok(conn)
+}
+
+/// Run the CREATE TABLE / INDEX / ALTER migrations once per database path for
+/// the life of the process. They're all idempotent, but running the full set
+/// on every `open_history_db()` — i.e. every queue write — is wasted work. The
+/// path key keeps tests that point at different databases correct; the lock is
+/// held across the first migration so only the first opener of each path pays.
+fn ensure_history_schema(conn: &Connection, path: &Path) -> Result<(), AppError> {
+    static MIGRATED: OnceLock<Mutex<HashSet<PathBuf>>> = OnceLock::new();
+    let migrated = MIGRATED.get_or_init(|| Mutex::new(HashSet::new()));
+    let mut guard = migrated.lock().unwrap_or_else(|error| error.into_inner());
+    if guard.contains(path) {
+        return Ok(());
+    }
+    run_history_migrations(conn)?;
+    guard.insert(path.to_path_buf());
+    Ok(())
+}
+
+fn run_history_migrations(conn: &Connection) -> Result<(), AppError> {
     conn.execute(
         "CREATE TABLE IF NOT EXISTS jobs (
             id TEXT PRIMARY KEY,
@@ -180,7 +204,7 @@ pub(crate) fn open_history_db() -> Result<Connection, AppError> {
         )
         .with_detail(json!({"error": error.to_string()}))
     })?;
-    Ok(conn)
+    Ok(())
 }
 
 pub(crate) fn record_history_job(
@@ -250,32 +274,36 @@ pub fn upsert_history_job(
 
 pub fn delete_history_job(job_id: &str) -> Result<usize, AppError> {
     // This only deletes local SQLite history. Remote Origin/Archive objects
-    // referenced by output_uploads stay untouched by design.
-    let conn = open_history_db()?;
-    conn.execute("DELETE FROM job_events WHERE job_id = ?1", params![job_id])
-        .map_err(|error| {
-            AppError::new(
-                "history_delete_failed",
-                "Unable to delete job event history.",
-            )
+    // referenced by output_uploads stay untouched by design. All three table
+    // deletes run in one transaction so a crash can't leave a job row without
+    // its events/uploads or vice versa.
+    let mut conn = open_history_db()?;
+    let tx = conn.transaction().map_err(|error| {
+        AppError::new("history_delete_failed", "Unable to delete history job.")
             .with_detail(json!({"error": error.to_string()}))
-        })?;
-    conn.execute(
+    })?;
+    let delete_err = |error: rusqlite::Error, message: &str| {
+        AppError::new("history_delete_failed", message.to_string())
+            .with_detail(json!({"error": error.to_string()}))
+    };
+    tx.execute("DELETE FROM job_events WHERE job_id = ?1", params![job_id])
+        .map_err(|error| delete_err(error, "Unable to delete job event history."))?;
+    tx.execute(
         "DELETE FROM output_uploads WHERE job_id = ?1",
         params![job_id],
     )
-    .map_err(|error| {
+    .map_err(|error| delete_err(error, "Unable to delete output upload history."))?;
+    let removed = tx
+        .execute("DELETE FROM jobs WHERE id = ?1", params![job_id])
+        .map_err(|error| delete_err(error, "Unable to delete history job."))?;
+    tx.commit().map_err(|error| {
         AppError::new(
             "history_delete_failed",
-            "Unable to delete output upload history.",
+            "Unable to commit history deletion.",
         )
         .with_detail(json!({"error": error.to_string()}))
     })?;
-    conn.execute("DELETE FROM jobs WHERE id = ?1", params![job_id])
-        .map_err(|error| {
-            AppError::new("history_delete_failed", "Unable to delete history job.")
-                .with_detail(json!({"error": error.to_string()}))
-        })
+    Ok(removed)
 }
 
 pub fn append_history_job_event(job_id: &str, event: &Value) -> Result<u64, AppError> {

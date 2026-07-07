@@ -53,6 +53,54 @@ fn s3_signing_key(secret_access_key: &str, date: &str, region: &str) -> Result<V
     hmac_sha256(&service_key, "aws4_request")
 }
 
+/// Build the SigV4 `Authorization` header for an S3 request. Shared by
+/// upload/download/head, which previously each open-coded the identical
+/// canonical-request → string-to-sign → signature chain. `content_type` is
+/// `Some` only for uploads (it joins the signed headers); the caller still
+/// sets the matching request headers.
+#[allow(clippy::too_many_arguments)]
+fn sign_s3_request(
+    method: &str,
+    canonical_uri: &str,
+    host: &str,
+    content_type: Option<&str>,
+    payload_hash: &str,
+    session_token: Option<&str>,
+    amz_date: &str,
+    short_date: &str,
+    region: &str,
+    access_key_id: &str,
+    secret_access_key: &str,
+) -> Result<String, AppError> {
+    let mut canonical_headers = String::new();
+    let mut signed_headers = String::new();
+    if let Some(content_type) = content_type {
+        canonical_headers.push_str(&format!("content-type:{content_type}\n"));
+        signed_headers.push_str("content-type;");
+    }
+    canonical_headers.push_str(&format!(
+        "host:{host}\nx-amz-content-sha256:{payload_hash}\nx-amz-date:{amz_date}\n"
+    ));
+    signed_headers.push_str("host;x-amz-content-sha256;x-amz-date");
+    if let Some(token) = session_token {
+        canonical_headers.push_str(&format!("x-amz-security-token:{token}\n"));
+        signed_headers.push_str(";x-amz-security-token");
+    }
+    let canonical_request = format!(
+        "{method}\n{canonical_uri}\n\n{canonical_headers}\n{signed_headers}\n{payload_hash}"
+    );
+    let credential_scope = format!("{short_date}/{region}/s3/aws4_request");
+    let string_to_sign = format!(
+        "AWS4-HMAC-SHA256\n{amz_date}\n{credential_scope}\n{}",
+        sha256_hex(canonical_request.as_bytes())
+    );
+    let signing_key = s3_signing_key(secret_access_key, short_date, region)?;
+    let signature = hex_lower(&hmac_sha256(&signing_key, &string_to_sign)?);
+    Ok(format!(
+        "AWS4-HMAC-SHA256 Credential={access_key_id}/{credential_scope}, SignedHeaders={signed_headers}, Signature={signature}"
+    ))
+}
+
 pub(super) fn upload_to_s3(
     target: &StorageTargetConfig,
     job_id: &str,
@@ -130,26 +178,19 @@ pub(super) fn upload_to_s3(
     let content_type = mime_guess::from_path(&output.path)
         .first_or_octet_stream()
         .to_string();
-    let mut canonical_headers = format!(
-        "content-type:{content_type}\nhost:{host}\nx-amz-content-sha256:{payload_hash}\nx-amz-date:{amz_date}\n"
-    );
-    let mut signed_headers = "content-type;host;x-amz-content-sha256;x-amz-date".to_string();
-    if let Some(token) = &session_token {
-        canonical_headers.push_str(&format!("x-amz-security-token:{token}\n"));
-        signed_headers.push_str(";x-amz-security-token");
-    }
-    let canonical_request =
-        format!("PUT\n{canonical_uri}\n\n{canonical_headers}\n{signed_headers}\n{payload_hash}");
-    let credential_scope = format!("{short_date}/{signing_region}/s3/aws4_request");
-    let string_to_sign = format!(
-        "AWS4-HMAC-SHA256\n{amz_date}\n{credential_scope}\n{}",
-        sha256_hex(canonical_request.as_bytes())
-    );
-    let signing_key = s3_signing_key(&secret_access_key, &short_date, signing_region)?;
-    let signature = hex_lower(&hmac_sha256(&signing_key, &string_to_sign)?);
-    let authorization = format!(
-        "AWS4-HMAC-SHA256 Credential={access_key_id}/{credential_scope}, SignedHeaders={signed_headers}, Signature={signature}"
-    );
+    let authorization = sign_s3_request(
+        "PUT",
+        &canonical_uri,
+        &host,
+        Some(&content_type),
+        &payload_hash,
+        session_token.as_deref(),
+        &amz_date,
+        &short_date,
+        signing_region,
+        &access_key_id,
+        &secret_access_key,
+    )?;
     let client = pinned_http_client(
         &host_label,
         &addrs,
@@ -157,6 +198,9 @@ pub(super) fn upload_to_s3(
         "storage_s3_client_failed",
         "Unable to build S3 storage client.",
     )?;
+    // Capture the length before moving the buffer into the request body, so a
+    // 4K PNG isn't cloned in full just to report its size afterwards.
+    let bytes_len = bytes.len() as u64;
     let mut request = client
         .put(&url)
         .header("Host", host.clone())
@@ -164,7 +208,7 @@ pub(super) fn upload_to_s3(
         .header("x-amz-content-sha256", payload_hash)
         .header("x-amz-date", amz_date)
         .header(AUTHORIZATION, authorization)
-        .body(bytes.clone());
+        .body(bytes);
     if let Some(token) = session_token {
         request = request.header("x-amz-security-token", token);
     }
@@ -197,7 +241,7 @@ pub(super) fn upload_to_s3(
                 .as_deref()
                 .map(|base| join_storage_url(base, &key)),
         ),
-        bytes: Some(bytes.len() as u64),
+        bytes: Some(bytes_len),
         metadata: json!({
             "bucket": bucket,
             "key": key,
@@ -272,25 +316,19 @@ pub(super) fn download_from_s3(
     let amz_date = now.format("%Y%m%dT%H%M%SZ").to_string();
     let short_date = now.format("%Y%m%d").to_string();
     let payload_hash = sha256_hex(b"");
-    let mut canonical_headers =
-        format!("host:{host}\nx-amz-content-sha256:{payload_hash}\nx-amz-date:{amz_date}\n");
-    let mut signed_headers = "host;x-amz-content-sha256;x-amz-date".to_string();
-    if let Some(token) = &session_token {
-        canonical_headers.push_str(&format!("x-amz-security-token:{token}\n"));
-        signed_headers.push_str(";x-amz-security-token");
-    }
-    let canonical_request =
-        format!("GET\n{canonical_uri}\n\n{canonical_headers}\n{signed_headers}\n{payload_hash}");
-    let credential_scope = format!("{short_date}/{signing_region}/s3/aws4_request");
-    let string_to_sign = format!(
-        "AWS4-HMAC-SHA256\n{amz_date}\n{credential_scope}\n{}",
-        sha256_hex(canonical_request.as_bytes())
-    );
-    let signing_key = s3_signing_key(&secret_access_key, &short_date, signing_region)?;
-    let signature = hex_lower(&hmac_sha256(&signing_key, &string_to_sign)?);
-    let authorization = format!(
-        "AWS4-HMAC-SHA256 Credential={access_key_id}/{credential_scope}, SignedHeaders={signed_headers}, Signature={signature}"
-    );
+    let authorization = sign_s3_request(
+        "GET",
+        &canonical_uri,
+        &host,
+        None,
+        &payload_hash,
+        session_token.as_deref(),
+        &amz_date,
+        &short_date,
+        signing_region,
+        &access_key_id,
+        &secret_access_key,
+    )?;
     let client = pinned_http_client(
         &host_label,
         &addrs,
@@ -407,25 +445,19 @@ pub(super) fn head_s3(
     let amz_date = now.format("%Y%m%dT%H%M%SZ").to_string();
     let short_date = now.format("%Y%m%d").to_string();
     let payload_hash = sha256_hex(b"");
-    let mut canonical_headers =
-        format!("host:{host}\nx-amz-content-sha256:{payload_hash}\nx-amz-date:{amz_date}\n");
-    let mut signed_headers = "host;x-amz-content-sha256;x-amz-date".to_string();
-    if let Some(token) = &session_token {
-        canonical_headers.push_str(&format!("x-amz-security-token:{token}\n"));
-        signed_headers.push_str(";x-amz-security-token");
-    }
-    let canonical_request =
-        format!("HEAD\n{canonical_uri}\n\n{canonical_headers}\n{signed_headers}\n{payload_hash}");
-    let credential_scope = format!("{short_date}/{signing_region}/s3/aws4_request");
-    let string_to_sign = format!(
-        "AWS4-HMAC-SHA256\n{amz_date}\n{credential_scope}\n{}",
-        sha256_hex(canonical_request.as_bytes())
-    );
-    let signing_key = s3_signing_key(&secret_access_key, &short_date, signing_region)?;
-    let signature = hex_lower(&hmac_sha256(&signing_key, &string_to_sign)?);
-    let authorization = format!(
-        "AWS4-HMAC-SHA256 Credential={access_key_id}/{credential_scope}, SignedHeaders={signed_headers}, Signature={signature}"
-    );
+    let authorization = sign_s3_request(
+        "HEAD",
+        &canonical_uri,
+        &host,
+        None,
+        &payload_hash,
+        session_token.as_deref(),
+        &amz_date,
+        &short_date,
+        signing_region,
+        &access_key_id,
+        &secret_access_key,
+    )?;
     let client = pinned_http_client(
         &host_label,
         &addrs,
@@ -476,4 +508,61 @@ pub(super) fn head_s3(
             "http_status": status.as_u16(),
         }),
     })
+}
+
+#[cfg(test)]
+mod sigv4_tests {
+    use super::*;
+
+    // Golden SigV4 signatures for fixed inputs, so the shared signer can't
+    // drift the canonical request out from under upload/download/head. The
+    // upload variant includes content-type in the signed headers; the read
+    // variants don't.
+    #[test]
+    fn upload_signature_is_stable() {
+        let auth = sign_s3_request(
+            "PUT",
+            "/bucket/key.png",
+            "bucket.s3.amazonaws.com",
+            Some("image/png"),
+            "abc123",
+            None,
+            "20240101T000000Z",
+            "20240101",
+            "us-east-1",
+            "AKIDEXAMPLE",
+            "SECRET",
+        )
+        .unwrap();
+        assert_eq!(
+            auth,
+            "AWS4-HMAC-SHA256 Credential=AKIDEXAMPLE/20240101/us-east-1/s3/aws4_request, \
+             SignedHeaders=content-type;host;x-amz-content-sha256;x-amz-date, \
+             Signature=de01a32b1bf10b70013a186737622e6553a35552437b45e0499c402923c5b5a3"
+        );
+    }
+
+    #[test]
+    fn download_signature_is_stable() {
+        let auth = sign_s3_request(
+            "GET",
+            "/bucket/key.png",
+            "bucket.s3.amazonaws.com",
+            None,
+            "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            Some("session-tok"),
+            "20240101T000000Z",
+            "20240101",
+            "us-east-1",
+            "AKIDEXAMPLE",
+            "SECRET",
+        )
+        .unwrap();
+        assert_eq!(
+            auth,
+            "AWS4-HMAC-SHA256 Credential=AKIDEXAMPLE/20240101/us-east-1/s3/aws4_request, \
+             SignedHeaders=host;x-amz-content-sha256;x-amz-date;x-amz-security-token, \
+             Signature=fcd31ac6b956c8359694375a374ca6a28535954d5e053c0ce3a209e97999b8cf"
+        );
+    }
 }
