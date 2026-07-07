@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 
 type Handler = (e: KeyboardEvent) => void;
 
@@ -24,6 +24,10 @@ export function useShortcut(
 export function useGlobalShortcuts(callbacks: {
   onScreen?: (screen: string) => void;
 }) {
+  // Read through a ref so callers can pass an inline object literal without
+  // re-binding the window listener on every render.
+  const callbacksRef = useRef(callbacks);
+  callbacksRef.current = callbacks;
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       const mod = e.metaKey || e.ctrlKey;
@@ -35,10 +39,10 @@ export function useGlobalShortcuts(callbacks: {
           "3": "history",
           "4": "settings",
         };
-        callbacks.onScreen?.(map[e.key]);
+        callbacksRef.current.onScreen?.(map[e.key]);
       }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [callbacks]);
+  }, []);
 }

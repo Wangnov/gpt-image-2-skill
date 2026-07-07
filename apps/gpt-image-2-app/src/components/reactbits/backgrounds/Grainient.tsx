@@ -317,6 +317,7 @@ const Grainient: React.FC<GrainientProps> = ({
       } catch {
         /* ignore */
       }
+      gl.getExtension('WEBGL_lose_context')?.loseContext();
     };
   }, [
     timeSpeed,

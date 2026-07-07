@@ -249,6 +249,7 @@ export const Plasma: React.FC<PlasmaProps> = ({
       } catch {
         /* ignore */
       }
+      gl.getExtension('WEBGL_lose_context')?.loseContext();
     };
   }, [color, speed, direction, scale, opacity, mouseInteractive]);
 

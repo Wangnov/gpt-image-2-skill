@@ -225,6 +225,7 @@ export function HistoryScreen({
               <button
                 key={f.value}
                 type="button"
+                aria-pressed={isActive}
                 onClick={() => setFilter(f.value)}
                 className={cn(
                   "relative shrink-0 whitespace-nowrap px-3.5 h-8 rounded-full text-[12.5px] font-medium transition-colors",
