@@ -188,7 +188,6 @@ pub(crate) async fn test_notifications(Json(body): Json<NotificationTestBody>) -
         "output_path": Value::Null,
         "error": if status == "failed" { json!({"message": "Notification test failure"}) } else { Value::Null },
     });
-    let deliveries = dispatch_task_notifications(&config.notifications, &job);
     // dispatch_task_notifications only fires server channels (email/webhook).
     // Toast and system notifications are delivered client-side, so a wholly
     // empty deliveries vec is OK as long as the config still has a local
@@ -197,6 +196,11 @@ pub(crate) async fn test_notifications(Json(body): Json<NotificationTestBody>) -
     let local_eligible = config.notifications.enabled
         && notification_status_allowed(&config.notifications, status)
         && (config.notifications.toast.enabled || config.notifications.system.enabled);
+    // The webhook channel uses core's blocking HTTP client; dispatch on the
+    // blocking pool so dropping it can't panic the tokio worker.
+    let notifications = config.notifications.clone();
+    let deliveries =
+        run_core_blocking(move || dispatch_task_notifications(&notifications, &job)).await?;
     let (ok, reason) = if !deliveries.is_empty() {
         (deliveries.iter().all(|delivery| delivery.ok), None)
     } else if local_eligible {
@@ -326,7 +330,14 @@ pub(crate) async fn delete_provider(Path(name): Path<String>) -> ApiResult {
 
 pub(crate) async fn provider_test(Path(name): Path<String>) -> Json<Value> {
     let started = SystemTime::now();
-    let payload = cli_json(&["--provider".to_string(), name.clone(), "doctor".to_string()]);
+    // doctor reaches the provider over core's blocking HTTP client, which
+    // panics if dropped on a tokio worker — run it on the blocking pool.
+    let doctor_name = name.clone();
+    let payload = run_core_blocking(move || {
+        cli_json(&["--provider".to_string(), doctor_name, "doctor".to_string()])
+    })
+    .await
+    .unwrap_or_else(|error| json!({"ok": false, "error": {"message": error.message}}));
     let latency_ms = started.elapsed().unwrap_or_default().as_millis();
     let ok = payload.get("ok").and_then(Value::as_bool).unwrap_or(false);
     let message = if ok {

@@ -66,24 +66,34 @@ pub(crate) async fn copy_image_to_clipboard(
     output_index: Option<usize>,
     app: tauri::AppHandle,
 ) -> Result<(), String> {
-    let raw = PathBuf::from(&path);
-    let bytes = if raw.is_file() {
-        let resolved = resolve_within_allowed_scope(&raw)?;
-        fs::read(&resolved).map_err(|error| format!("读取失败：{error}"))?
-    } else if let (Some(job_id), Some(output_index)) = (job_id.as_deref(), output_index) {
-        read_job_output_for_product(job_id, output_index, true)?.bytes
-    } else {
-        return Err("图片文件不存在，可能已被移动或删除。".to_string());
-    };
-    // Decode via the `image` crate so JPEG / WEBP / GIF outputs round-trip
-    // — `tauri::image::Image::from_bytes` only supports PNG/ICO with the
-    // currently enabled feature set, which would otherwise hard-regress
-    // Copy Image on any non-PNG job.
-    let decoded =
-        image::load_from_memory(&bytes).map_err(|error| format!("解析图片失败：{error}"))?;
-    let rgba = decoded.to_rgba8();
-    let (width, height) = rgba.dimensions();
-    let image = tauri::image::Image::new_owned(rgba.into_raw(), width, height);
+    // Reading a job output can pull it back from remote storage over core's
+    // blocking HTTP client, which panics if dropped on the tokio runtime this
+    // async command runs on; the `image` decode is blocking CPU work too. Do
+    // both on the blocking pool and hand back only the raw RGBA buffer.
+    let (raw, width, height) =
+        tauri::async_runtime::spawn_blocking(move || -> Result<(Vec<u8>, u32, u32), String> {
+            let raw_path = PathBuf::from(&path);
+            let bytes = if raw_path.is_file() {
+                let resolved = resolve_within_allowed_scope(&raw_path)?;
+                fs::read(&resolved).map_err(|error| format!("读取失败：{error}"))?
+            } else if let (Some(job_id), Some(output_index)) = (job_id.as_deref(), output_index) {
+                read_job_output_for_product(job_id, output_index, true)?.bytes
+            } else {
+                return Err("图片文件不存在，可能已被移动或删除。".to_string());
+            };
+            // Decode via the `image` crate so JPEG / WEBP / GIF outputs
+            // round-trip — `tauri::image::Image::from_bytes` only supports
+            // PNG/ICO with the currently enabled feature set, which would
+            // otherwise hard-regress Copy Image on any non-PNG job.
+            let decoded = image::load_from_memory(&bytes)
+                .map_err(|error| format!("解析图片失败：{error}"))?;
+            let rgba = decoded.to_rgba8();
+            let (width, height) = rgba.dimensions();
+            Ok((rgba.into_raw(), width, height))
+        })
+        .await
+        .map_err(|error| format!("图片处理任务失败：{error}"))??;
+    let image = tauri::image::Image::new_owned(raw, width, height);
     app.clipboard()
         .write_image(&image)
         .map_err(|error| format!("写入剪贴板失败：{error}"))?;
