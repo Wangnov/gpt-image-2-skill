@@ -17,6 +17,20 @@ function parseTarget() {
 }
 
 const target = parseTarget();
+const isWindowsTarget = target.includes("windows") || process.platform === "win32";
+const extension = isWindowsTarget ? ".exe" : "";
+const destinationDir = join(appDir, "src-tauri", "bin");
+const destination = join(destinationDir, `${binName}${extension}`);
+
+// `--if-missing` keeps this cheap as a beforeDevCommand/beforeBuildCommand
+// hook and, crucially, keeps CI correct: the release workflow prepares a
+// cross-compiled sidecar first, and a host-target rebuild here would
+// silently overwrite it.
+if (process.argv.includes("--if-missing") && existsSync(destination)) {
+  console.log(`sidecar already present at ${destination}; skipping build`);
+  process.exit(0);
+}
+
 const buildArgs = ["build", "--release", "-p", binName];
 if (target) {
   buildArgs.push("--target", target);
@@ -31,8 +45,6 @@ if (build.status !== 0) {
   process.exit(build.status ?? 1);
 }
 
-const isWindowsTarget = target.includes("windows") || process.platform === "win32";
-const extension = isWindowsTarget ? ".exe" : "";
 const releaseDir = target
   ? join(repoRoot, "target", target, "release")
   : join(repoRoot, "target", "release");
@@ -41,9 +53,6 @@ const source = join(releaseDir, `${binName}${extension}`);
 if (!existsSync(source)) {
   throw new Error(`Sidecar binary was not built: ${source}`);
 }
-
-const destinationDir = join(appDir, "src-tauri", "bin");
-const destination = join(destinationDir, `${binName}${extension}`);
 
 rmSync(destinationDir, { recursive: true, force: true });
 mkdirSync(destinationDir, { recursive: true });
