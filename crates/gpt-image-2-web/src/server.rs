@@ -70,6 +70,7 @@ pub(crate) fn parse_settings() -> Result<Settings, String> {
 
 pub(crate) fn api_router(state: JobQueueState) -> Router {
     Router::new()
+        .route("/session", get(session_status).post(create_session))
         .route("/config", get(get_config))
         .route("/config-paths", get(config_paths))
         .route("/notifications", put(update_notifications))
@@ -113,6 +114,15 @@ pub(crate) fn api_router(state: JobQueueState) -> Router {
         .route("/images/generate", post(enqueue_generate_image))
         .route("/images/edit", post(enqueue_edit_image))
         .route("/files", get(file_response))
+        // Reference images ride in the JSON body as byte arrays, so a 1–2MB
+        // PNG blows past axum's 2MB default and 413s. Raise it for the API.
+        .layer(axum::extract::DefaultBodyLimit::max(64 * 1024 * 1024))
+        // Gate every /api route (except the /session login handled inside)
+        // behind the access token / loopback policy.
+        .layer(axum::middleware::from_fn_with_state(
+            state.clone(),
+            require_auth,
+        ))
         .with_state(state)
 }
 

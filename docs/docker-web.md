@@ -20,14 +20,37 @@ docker pull ghcr.io/wangnov/gpt-image-2:0.6.1
 docker build -t gpt-image-2-web .
 ```
 
+## Access control
+
+The container binds `0.0.0.0`, so the API — including the endpoint that reads
+back stored provider keys — is reachable by anything that can reach the port.
+The server therefore **refuses to start on a non-loopback host unless
+`GPT_IMAGE_2_WEB_TOKEN` is set**. Set it to a secret and the whole `/api`
+surface requires that token (sent as `Authorization: Bearer <token>` or, for
+the web UI, exchanged for an HttpOnly session cookie at first load):
+
+```bash
+-e GPT_IMAGE_2_WEB_TOKEN="$(openssl rand -hex 32)"
+```
+
+To run without a token, bind loopback only (`-e GPT_IMAGE_2_WEB_HOST=127.0.0.1`
+and publish to `127.0.0.1:8787:8787`); token-less mode also rejects requests
+whose `Host` header isn't a loopback name (override with
+`GPT_IMAGE_2_WEB_ALLOWED_HOSTS`). If the port is only reachable on a trusted
+network (e.g. a container published to `127.0.0.1` or fronted by a
+reverse proxy that authenticates), set `GPT_IMAGE_2_WEB_ALLOW_UNAUTHENTICATED=1`
+to permit token-less `0.0.0.0` binding — it prints a warning and leaves the
+API open, so only use it when the network already restricts access.
+
 ## Run
 
-OpenAI-compatible API Key:
+OpenAI-compatible API Key (exposed on the LAN, so a token is required):
 
 ```bash
 docker run --rm -p 8787:8787 \
   -v gpt-image-2-data:/data \
   -e OPENAI_API_KEY=sk-... \
+  -e GPT_IMAGE_2_WEB_TOKEN="$(openssl rand -hex 32)" \
   ghcr.io/wangnov/gpt-image-2:latest
 ```
 

@@ -77,7 +77,7 @@ dev-http-frontend:
 dev-http-backend image="gpt-image-2-web:latest":
     mkdir -p "$HOME/.codex/gpt-image-2-skill/jobs" "$HOME/.local/share/gpt-image-2" "$HOME/.local/share/gpt-image-2-codex/gpt-image-2-skill"
     docker rm -f gpt-image-2-web-dev gpt-image-2-web-codex-smoke >/dev/null 2>&1 || true
-    auth_mount=(); if [ -f "$HOME/.codex/auth.json" ]; then auth_mount=(-v "$HOME/.codex/auth.json:/data/codex/auth.json:ro"); fi; docker run -d --name gpt-image-2-web-dev -p 8787:8787 -v "$HOME/.local/share/gpt-image-2:/data/gpt-image-2" -v "$HOME/.local/share/gpt-image-2-codex:/data/codex" -v "$HOME/.codex/gpt-image-2-skill/jobs:/data/codex/gpt-image-2-skill/jobs:ro" "${auth_mount[@]}" "{{ image }}"
+    auth_mount=(); if [ -f "$HOME/.codex/auth.json" ]; then auth_mount=(-v "$HOME/.codex/auth.json:/data/codex/auth.json:ro"); fi; docker run -d --name gpt-image-2-web-dev -p 127.0.0.1:8787:8787 -e GPT_IMAGE_2_WEB_ALLOW_UNAUTHENTICATED=1 -v "$HOME/.local/share/gpt-image-2:/data/gpt-image-2" -v "$HOME/.local/share/gpt-image-2-codex:/data/codex" -v "$HOME/.codex/gpt-image-2-skill/jobs:/data/codex/gpt-image-2-skill/jobs:ro" "${auth_mount[@]}" "{{ image }}"
 
 # Start the Tauri dev server for desktop-only behavior checks.
 dev-tauri:

@@ -40,6 +40,7 @@ use serde::Deserialize;
 use serde_json::{Value, json};
 use tower_http::services::{ServeDir, ServeFile};
 
+mod auth;
 mod config_api;
 mod error;
 mod file_api;
@@ -54,6 +55,7 @@ mod server;
 mod support;
 mod types;
 
+pub(crate) use auth::*;
 pub(crate) use config_api::*;
 pub(crate) use error::*;
 pub(crate) use file_api::*;
@@ -86,11 +88,18 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         )
         .into());
     }
+    // Refuses to bind a non-loopback host without GPT_IMAGE_2_WEB_TOKEN.
+    let auth_policy = AuthPolicy::from_env(&settings.host).map_err(std::io::Error::other)?;
+    if auth_policy.requires_token() {
+        println!("gpt-image-2-web: access token required (GPT_IMAGE_2_WEB_TOKEN is set).");
+    } else {
+        println!("gpt-image-2-web: no access token set; only loopback Host headers are served.");
+    }
     let _ = mark_interrupted_jobs_on_startup();
     let static_files = ServeDir::new(&settings.static_dir)
         .not_found_service(ServeFile::new(settings.static_dir.join("index.html")));
     let app = Router::new()
-        .nest("/api", api_router(JobQueueState::default()))
+        .nest("/api", api_router(JobQueueState::with_auth(auth_policy)))
         .fallback_service(static_files);
     let listener =
         tokio::net::TcpListener::bind(format!("{}:{}", settings.host, settings.port)).await?;
