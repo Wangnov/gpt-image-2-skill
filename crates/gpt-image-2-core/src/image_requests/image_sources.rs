@@ -149,24 +149,57 @@ pub(crate) fn parse_data_url_image(value: &str) -> Result<(String, Vec<u8>), App
     Ok((mime_type, decode_base64_bytes(encoded)?))
 }
 
+/// Reference images fetched from a URL are capped so a hostile or accidental
+/// giant response can't exhaust memory. 64MB comfortably covers any real image.
+const MAX_REMOTE_IMAGE_BYTES: u64 = 64 * 1024 * 1024;
+
 pub(crate) fn download_bytes(url: &str, proxy: &ProxyConfig) -> Result<Vec<u8>, AppError> {
+    // Redact query strings from anything we log — reference URLs can carry
+    // signed tokens.
+    let redacted = redact_url_for_log(url);
+    // SSRF guard: on a direct connection, reject URLs that resolve to
+    // loopback/link-local/private ranges (e.g. the cloud metadata service).
+    // A custom proxy is the user's explicit egress, so we trust it to police
+    // its own targets rather than validating a host it, not we, will resolve.
+    if proxy.mode != ProxyMode::Custom {
+        validate_remote_http_target(url, "Reference image")?;
+    }
     let client = make_client(DEFAULT_REQUEST_TIMEOUT, proxy)?;
     let response = client.get(url).send().map_err(|error| {
         AppError::new("network_error", "Unable to download image bytes.")
-            .with_detail(json!({ "error": error.to_string(), "url": url }))
+            .with_detail(json!({ "error": error.to_string(), "url": redacted }))
     })?;
     if !response.status().is_success() {
         let status = response.status();
         let detail = response.text().unwrap_or_else(|_| String::new());
         return Err(http_status_error(status, detail));
     }
-    response
-        .bytes()
-        .map(|bytes| bytes.to_vec())
-        .map_err(|error| {
-            AppError::new("network_error", "Unable to read downloaded image bytes.")
-                .with_detail(json!({ "error": error.to_string(), "url": url }))
-        })
+    if let Some(len) = response.content_length()
+        && len > MAX_REMOTE_IMAGE_BYTES
+    {
+        return Err(
+            AppError::new("network_error", "Downloaded image is too large.").with_detail(json!({
+                "url": redacted,
+                "content_length": len,
+                "max_bytes": MAX_REMOTE_IMAGE_BYTES,
+            })),
+        );
+    }
+    let bytes = response.bytes().map_err(|error| {
+        AppError::new("network_error", "Unable to read downloaded image bytes.")
+            .with_detail(json!({ "error": error.to_string(), "url": redacted }))
+    })?;
+    if bytes.len() as u64 > MAX_REMOTE_IMAGE_BYTES {
+        // A server can omit Content-Length; enforce the cap on the body too.
+        return Err(
+            AppError::new("network_error", "Downloaded image is too large.").with_detail(json!({
+                "url": redacted,
+                "bytes": bytes.len(),
+                "max_bytes": MAX_REMOTE_IMAGE_BYTES,
+            })),
+        );
+    }
+    Ok(bytes.to_vec())
 }
 
 pub(crate) fn load_image_source_bytes(

@@ -103,8 +103,22 @@ pub(crate) async fn copy_image_to_clipboard(
     Ok(())
 }
 
+/// Reject a job id that isn't a single, normal path segment before it's joined
+/// onto a library/trash root. A webview XSS could otherwise pass `../../…` to
+/// the delete/restore commands and `fs::rename`/`remove_dir_all` an arbitrary
+/// directory. Job ids are opaque generated tokens, so a legit one is always a
+/// single component.
+fn safe_job_segment(job_id: &str) -> Result<(), String> {
+    let mut components = std::path::Path::new(job_id).components();
+    match (components.next(), components.next()) {
+        (Some(std::path::Component::Normal(part)), None) if part == job_id => Ok(()),
+        _ => Err("非法的任务 ID。".to_string()),
+    }
+}
+
 #[tauri::command]
 pub(crate) fn soft_delete_job(job_id: String) -> Result<(), String> {
+    safe_job_segment(&job_id)?;
     // This flow only moves local result-library files into local trash and
     // marks the local history row. Remote Origin/Archive objects are never
     // deleted implicitly.
@@ -126,6 +140,7 @@ pub(crate) fn soft_delete_job(job_id: String) -> Result<(), String> {
 
 #[tauri::command]
 pub(crate) fn restore_deleted_job(job_id: String) -> Result<(), String> {
+    safe_job_segment(&job_id)?;
     let trash_path = jobs_trash_dir().join(&job_id);
     if trash_path.exists() {
         let dest = result_library_dir().join(&job_id);
@@ -140,6 +155,7 @@ pub(crate) fn restore_deleted_job(job_id: String) -> Result<(), String> {
 
 #[tauri::command]
 pub(crate) fn hard_delete_job(job_id: String) -> Result<(), String> {
+    safe_job_segment(&job_id)?;
     // Hard delete is still local-only: remove local trash/cache plus the DB
     // row, but leave any uploaded Origin/Archive objects intact.
     let trash_path = jobs_trash_dir().join(&job_id);
@@ -196,4 +212,22 @@ pub(crate) fn spawn_trash_cleanup_worker() {
             thread::sleep(std::time::Duration::from_secs(60));
         }
     });
+}
+
+#[cfg(test)]
+mod safe_job_segment_tests {
+    use super::safe_job_segment;
+
+    #[test]
+    fn accepts_plain_job_ids() {
+        assert!(safe_job_segment("job-20240101-abcdef").is_ok());
+        assert!(safe_job_segment("a1b2c3").is_ok());
+    }
+
+    #[test]
+    fn rejects_path_traversal_and_separators() {
+        for bad in ["..", ".", "", "../secret", "a/b", "/abs", "a/../b", "."] {
+            assert!(safe_job_segment(bad).is_err(), "{bad:?} should be rejected");
+        }
+    }
 }
