@@ -15,7 +15,7 @@ fn refresh_lock() -> &'static Mutex<()> {
 
 /// Re-read the persisted access/refresh/account tokens for this auth state,
 /// or `None` for session-only auth or if the persisted copy can't be read.
-fn reload_persisted_tokens(
+pub(crate) fn reload_persisted_tokens(
     auth_state: &CodexAuthState,
 ) -> Option<(String, Option<String>, Option<String>)> {
     match &auth_state.persistence {
@@ -64,32 +64,21 @@ pub(crate) fn refresh_access_token(
         .lock()
         .unwrap_or_else(|error| error.into_inner());
 
-    // Double-check under the lock: another job in this process — or the Codex
-    // CLI sharing auth.json — may have rotated the token while we waited. If
-    // the persisted access_token no longer matches the one that just 401'd,
-    // someone already refreshed; adopt their tokens instead of burning our
-    // now-consumed refresh_token on a request that would fail.
-    if let Some((persisted_access, persisted_refresh, persisted_account)) =
-        reload_persisted_tokens(auth_state)
-        && persisted_access != auth_state.access_token
+    // Under the lock, re-read the persisted refresh_token: another job in this
+    // process — or the Codex CLI sharing auth.json — may have already rotated
+    // it while we waited. Refresh tokens are single-use, so spending our stale
+    // in-memory copy would 401. Adopt the freshest persisted refresh_token
+    // before issuing the request, so serialized refreshes each use a valid
+    // token instead of all burning the same expired one. We deliberately do
+    // NOT trust a persisted access_token as "already refreshed" — it may be an
+    // older, now-expired token, and short-circuiting on it would block the
+    // real refresh this 401 needs.
+    if let Some((_, Some(persisted_refresh), _)) = reload_persisted_tokens(auth_state)
+        && auth_state.refresh_token.as_deref() != Some(persisted_refresh.as_str())
     {
-        let tokens = get_token_container_mut(&mut auth_state.auth_json);
-        tokens.insert("access_token".to_string(), json!(persisted_access));
-        if let Some(refresh_token) = persisted_refresh.clone() {
-            tokens.insert("refresh_token".to_string(), json!(refresh_token));
-        }
-        if let Some(account_id) = persisted_account.clone() {
-            tokens.insert("account_id".to_string(), json!(account_id));
-        }
-        auth_state.access_token = persisted_access.clone();
-        auth_state.refresh_token = persisted_refresh;
-        if let Some(account_id) = persisted_account {
-            auth_state.account_id = account_id;
-        }
-        return Ok(json!({
-            "access_token": persisted_access,
-            "reused_persisted_refresh": true,
-        }));
+        auth_state.refresh_token = Some(persisted_refresh.clone());
+        get_token_container_mut(&mut auth_state.auth_json)
+            .insert("refresh_token".to_string(), json!(persisted_refresh));
     }
 
     let Some(refresh_token) = auth_state.refresh_token.clone() else {

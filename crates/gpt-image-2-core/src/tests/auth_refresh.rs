@@ -17,17 +17,14 @@ fn auth_file_state(auth_path: &std::path::Path, access: &str, refresh: &str) -> 
     }
 }
 
-// When another actor (a sibling job, or the Codex CLI sharing auth.json) has
-// already rotated the token, refresh_access_token must adopt the persisted
-// credentials under its lock instead of spending our now-stale refresh_token
-// on the network. Proven here by the absence of any network call: the default
-// proxy would make a real REFRESH_ENDPOINT request, so a passing offline test
-// means the short-circuit fired.
+// The refresh path re-reads the persisted refresh_token under its lock so a
+// second concurrent job refreshes with the freshest rotated token instead of
+// re-spending the one the first job already consumed. This verifies the reload
+// half of that: our in-memory copy is stale, disk holds the rotated token.
 #[test]
-fn refresh_adopts_persisted_token_without_network() {
+fn reload_persisted_tokens_reads_the_rotated_refresh_token() {
     let dir = tempfile::tempdir().unwrap();
     let auth_path = dir.path().join("auth.json");
-    // Disk already carries the freshly-rotated tokens.
     fs::write(
         &auth_path,
         serde_json::to_string_pretty(&json!({
@@ -41,14 +38,20 @@ fn refresh_adopts_persisted_token_without_network() {
     )
     .unwrap();
 
-    // Our in-memory state still holds the token that just 401'd.
-    let mut state = auth_file_state(&auth_path, "OLD-access", "OLD-refresh");
-    let payload = refresh_access_token(&mut state, &ProxyConfig::default()).unwrap();
+    let state = auth_file_state(&auth_path, "OLD-access", "OLD-refresh");
+    let (access, refresh, account) = reload_persisted_tokens(&state).unwrap();
 
-    assert_eq!(payload["reused_persisted_refresh"], json!(true));
-    assert_eq!(state.access_token, "NEW-access");
-    assert_eq!(state.refresh_token.as_deref(), Some("NEW-refresh"));
-    assert_eq!(state.account_id, "acct-2");
+    assert_eq!(access, "NEW-access");
+    assert_eq!(refresh.as_deref(), Some("NEW-refresh"));
+    assert_eq!(account.as_deref(), Some("acct-2"));
+}
+
+#[test]
+fn reload_persisted_tokens_is_none_for_session_only() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut state = auth_file_state(&dir.path().join("auth.json"), "a", "r");
+    state.persistence = CodexAuthPersistence::SessionOnly;
+    assert!(reload_persisted_tokens(&state).is_none());
 }
 
 #[test]
@@ -61,7 +64,7 @@ fn save_auth_json_is_atomic_and_private() {
 
     let written: Value = serde_json::from_str(&fs::read_to_string(&auth_path).unwrap()).unwrap();
     assert_eq!(written["tokens"]["access_token"], json!("access-1"));
-    // The temp file used for the atomic rename must not linger.
+    // The unique temp file used for the atomic rename must not linger.
     let leftovers = fs::read_dir(auth_path.parent().unwrap())
         .unwrap()
         .filter_map(Result::ok)
@@ -75,4 +78,37 @@ fn save_auth_json_is_atomic_and_private() {
         let mode = fs::metadata(&auth_path).unwrap().permissions().mode();
         assert_eq!(mode & 0o777, 0o600, "auth.json must be private (0600)");
     }
+}
+
+// Concurrent writers must keep last-writer-wins without corrupting the file or
+// leaving temp turds — each thread renames its own uniquely-named private temp.
+#[test]
+fn concurrent_atomic_writes_never_corrupt() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("config-race.json");
+    let threads = (0..8)
+        .map(|i| {
+            let path = path.clone();
+            std::thread::spawn(move || {
+                for round in 0..25 {
+                    let body = serde_json::to_vec(&json!({"writer": i, "round": round})).unwrap();
+                    atomic_write_private(&path, &body, "config_write_failed").unwrap();
+                }
+            })
+        })
+        .collect::<Vec<_>>();
+    for thread in threads {
+        thread.join().unwrap();
+    }
+
+    // Whatever won the last rename must be complete, valid JSON.
+    let parsed: Value = serde_json::from_slice(&fs::read(&path).unwrap()).unwrap();
+    assert!(parsed.get("writer").is_some() && parsed.get("round").is_some());
+    // No *.tmp survivors.
+    let leftovers = fs::read_dir(dir.path())
+        .unwrap()
+        .filter_map(Result::ok)
+        .filter(|entry| entry.file_name() != "config-race.json")
+        .count();
+    assert_eq!(leftovers, 0, "a concurrent writer left a temp file behind");
 }
