@@ -391,3 +391,5 @@ jobs:
         run: gh workflow run "Publish npm Packages" --repo "${{ github.repository }}" -f tag="${{ needs.plan.outputs.tag }}"
       - name: Dispatch static Pages deploy workflow
         run: gh workflow run "Deploy Static Page" --repo "${{ github.repository }}" -f tag="${{ needs.plan.outputs.tag }}"
+      - name: Dispatch GHCR image publish workflow
+        run: gh workflow run "Publish GHCR Image" --repo "${{ github.repository }}" -f ref="${{ needs.plan.outputs.tag }}"

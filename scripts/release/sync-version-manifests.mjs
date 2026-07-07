@@ -30,6 +30,7 @@ const TAURI_CONFIG = path.join(
   "src-tauri",
   "tauri.conf.json"
 );
+const PLUGIN_MANIFEST = path.join(ROOT, ".claude-plugin", "plugin.json");
 const NPM_MATRIX_SCRIPT = path.join(ROOT, "scripts", "npm", "build-matrix.mjs");
 
 function readCargoVersion() {
@@ -93,6 +94,7 @@ function main() {
   updateJsonVersion(APP_PACKAGE_JSON, version);
   updatePackageLockVersion(APP_PACKAGE_LOCK, version);
   updateTauriVersion(TAURI_CONFIG, version);
+  updateJsonVersion(PLUGIN_MANIFEST, version);
   runNpmMatrix(version);
   console.log(
     JSON.stringify(
@@ -105,6 +107,7 @@ function main() {
           APP_PACKAGE_JSON,
           APP_PACKAGE_LOCK,
           TAURI_CONFIG,
+          PLUGIN_MANIFEST,
           "packages/npm/*/package.json",
         ],
       },

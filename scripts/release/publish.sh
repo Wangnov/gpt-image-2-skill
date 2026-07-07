@@ -53,6 +53,7 @@ if [[ "$EXECUTE" -eq 1 ]]; then
     apps/gpt-image-2-app/package-lock.json \
     skills/gpt-image-2-skill/scripts/gpt_image_2_skill.cjs \
     skills/gpt-image-2-skill/scripts/selftest.cjs \
+    .claude-plugin/plugin.json \
     packages/npm
   git commit -m "release: $(project_version)"
   cargo release publish "${COMMON_ARGS[@]}" --execute
