@@ -352,9 +352,10 @@ export function HistoryScreen({
                           next.delete(j.id);
                           return next;
                         });
-                        if (detailJobId === j.id) {
-                          setDetailJobId(null);
-                        }
+                        // Functional update so this closure doesn't capture
+                        // detailJobId — keeps the row's handlers semantically
+                        // stable per job id, which the memo comparator relies on.
+                        setDetailJobId((prev) => (prev === j.id ? null : prev));
                       }}
                       onOpenDetail={(outputIndex) => {
                         setDetailJobId(j.id);
