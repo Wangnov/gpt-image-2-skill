@@ -29,6 +29,7 @@ impl Drop for TestCodexHome {
     }
 }
 
+mod auth_refresh;
 mod config_provider;
 mod history_storage;
 mod image_requests;

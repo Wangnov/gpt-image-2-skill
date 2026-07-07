@@ -19,24 +19,69 @@ pub fn load_app_config(path: &Path) -> Result<AppConfig, AppError> {
 }
 
 pub fn save_app_config(path: &Path, config: &AppConfig) -> Result<(), AppError> {
-    if let Some(parent) = path.parent() {
-        fs::create_dir_all(parent).map_err(|error| {
-            AppError::new("config_write_failed", "Unable to create config directory.").with_detail(
-                json!({"config_file": path.display().to_string(), "error": error.to_string()}),
-            )
-        })?;
-    }
     let mut content = serde_json::to_string_pretty(config).map_err(|error| {
         AppError::new("config_write_failed", "Unable to serialize config.")
             .with_detail(json!({"error": error.to_string()}))
     })?;
     content.push('\n');
-    fs::write(path, content).map_err(|error| {
-        AppError::new("config_write_failed", "Unable to write config file.").with_detail(
-            json!({"config_file": path.display().to_string(), "error": error.to_string()}),
-        )
+    atomic_write_private(path, content.as_bytes(), "config_write_failed")
+}
+
+/// Write `bytes` to `path` atomically: fill a sibling temp file, fsync it,
+/// set 0600 *before* it becomes visible, then rename over the target. A
+/// crash can leave the temp file but never a half-written or briefly
+/// world-readable target — which matters because auth.json / config.json
+/// hold secrets and auth.json is shared with the Codex CLI.
+pub(crate) fn atomic_write_private(
+    path: &Path,
+    bytes: &[u8],
+    error_code: &'static str,
+) -> Result<(), AppError> {
+    let detail = |extra: Value| {
+        let mut map = json!({"config_file": path.display().to_string()});
+        if let (Value::Object(map), Value::Object(extra)) = (&mut map, extra) {
+            map.extend(extra);
+        }
+        map
+    };
+    if let Some(parent) = path.parent() {
+        fs::create_dir_all(parent).map_err(|error| {
+            AppError::new(error_code, "Unable to create config directory.")
+                .with_detail(detail(json!({"error": error.to_string()})))
+        })?;
+    }
+    let temp = path.with_extension(format!(
+        "{}tmp",
+        path.extension()
+            .and_then(|ext| ext.to_str())
+            .map(|ext| format!("{ext}."))
+            .unwrap_or_default()
+    ));
+    {
+        let mut file = fs::File::create(&temp).map_err(|error| {
+            AppError::new(error_code, "Unable to create temp config file.")
+                .with_detail(detail(json!({"error": error.to_string()})))
+        })?;
+        file.write_all(bytes).map_err(|error| {
+            AppError::new(error_code, "Unable to write temp config file.")
+                .with_detail(detail(json!({"error": error.to_string()})))
+        })?;
+        file.sync_all().map_err(|error| {
+            AppError::new(error_code, "Unable to flush temp config file.")
+                .with_detail(detail(json!({"error": error.to_string()})))
+        })?;
+    }
+    set_private_file_permissions(&temp)?;
+    fs::rename(&temp, path).map_err(|error| {
+        let _ = fs::remove_file(&temp);
+        AppError::new(error_code, "Unable to finalize config file.")
+            .with_detail(detail(json!({"error": error.to_string()})))
     })?;
-    set_private_file_permissions(path)?;
+    if let Some(parent) = path.parent()
+        && let Ok(dir) = fs::File::open(parent)
+    {
+        let _ = dir.sync_all();
+    }
     Ok(())
 }
 
