@@ -19,6 +19,11 @@ const Grainient = lazy(
   () => import("@/components/reactbits/backgrounds/Grainient"),
 );
 
+// Module-level so the fallback keeps a stable identity: an inline array
+// literal would be a new reference every render, and LiquidChrome rebuilds
+// its whole WebGL context when baseColor changes.
+const LIQUID_DEFAULT_BASE_COLOR: [number, number, number] = [0.18, 0.16, 0.32];
+
 /**
  * Render the active theme preset's background. Each kind reads only
  * the params it cares about from preset.background; everything else
@@ -60,7 +65,7 @@ function ThemeBackground({ presetId }: { presetId: ThemePresetId }) {
     case "liquid":
       return (
         <LiquidChrome
-          baseColor={bg.baseColor ?? [0.18, 0.16, 0.32]}
+          baseColor={bg.baseColor ?? LIQUID_DEFAULT_BASE_COLOR}
           speed={bg.speed}
           amplitude={bg.amplitude}
           frequencyX={bg.frequencyX}

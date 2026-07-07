@@ -116,7 +116,7 @@ export function useMaskWorkspace({
   }, [active, targetRefId, updateMaskToolbarScale, usesRegion, zoom]);
 
   useEffect(() => {
-    if (!usesRegion) return;
+    if (!active || !usesRegion) return;
     const isEditableTarget = (target: EventTarget | null) => {
       if (!(target instanceof HTMLElement)) return false;
       return Boolean(
