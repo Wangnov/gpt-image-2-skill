@@ -423,13 +423,22 @@ export const httpApi: ApiClient = {
   subscribeJobUpdates(onEvent: JobUpdateHandler) {
     let closed = false;
     let initialized = false;
+    let timer: ReturnType<typeof setTimeout> | undefined;
     const known = new Map<string, string>();
+    // Poll fast while work is in flight, but back off to 8s when everything
+    // is terminal so an idle Web session isn't hitting listJobs every 1.5s
+    // forever. Self-scheduling timeout (not setInterval) so the cadence can
+    // adapt to the latest result.
+    const ACTIVE_INTERVAL_MS = 1_500;
+    const IDLE_INTERVAL_MS = 8_000;
 
     const poll = async () => {
       if (closed) return;
+      let hasActive = false;
       try {
         const jobs = await httpApi.listJobs();
         for (const job of jobs) {
+          if (!isTerminalJobStatus(job.status)) hasActive = true;
           const next = jobUpdateSignature(job);
           const previous = known.get(job.id);
           known.set(job.id, next);
@@ -447,13 +456,17 @@ export const httpApi: ApiClient = {
         // The regular query layer surfaces API errors; this subscription is only
         // a lightweight invalidation hint.
       }
+      if (closed) return;
+      timer = setTimeout(
+        poll,
+        hasActive ? ACTIVE_INTERVAL_MS : IDLE_INTERVAL_MS,
+      );
     };
 
     void poll();
-    const timer = window.setInterval(poll, 1_500);
     return () => {
       closed = true;
-      window.clearInterval(timer);
+      if (timer !== undefined) clearTimeout(timer);
     };
   },
 };

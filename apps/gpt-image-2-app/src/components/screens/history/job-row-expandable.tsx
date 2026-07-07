@@ -1,4 +1,4 @@
-import { type CSSProperties, useMemo, useState } from "react";
+import { type CSSProperties, memo, useMemo, useState } from "react";
 import { AnimatePresence, motion } from "motion/react";
 import { AlertTriangle, ChevronDown, Clock, Loader2, X } from "lucide-react";
 import SpotlightCard from "@/components/reactbits/components/SpotlightCard";
@@ -48,7 +48,7 @@ import {
   totalBytes,
 } from "./shared";
 
-export function JobRowExpandable({
+function JobRowExpandableComponent({
   index,
   job,
   expanded,
@@ -568,3 +568,18 @@ export function JobRowExpandable({
     </div>
   );
 }
+
+// The history list re-renders on every 4s poll. Skip re-rendering a row whose
+// data props are unchanged. react-query structural sharing keeps an unchanged
+// job referentially stable, so a plain ref check on `job` is enough. Callback
+// props are intentionally excluded: the parent recreates them each render but
+// they're semantically stable per job id (onDelete uses a functional state
+// update rather than capturing detailJobId), so keeping a memoized row's older
+// closures is safe.
+export const JobRowExpandable = memo(
+  JobRowExpandableComponent,
+  (prev, next) =>
+    prev.job === next.job &&
+    prev.expanded === next.expanded &&
+    prev.index === next.index,
+);

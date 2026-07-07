@@ -2,6 +2,8 @@ import {
   Component,
   type ErrorInfo,
   type ReactNode,
+  Suspense,
+  lazy,
   useCallback,
   useEffect,
   useState,
@@ -9,7 +11,14 @@ import {
 import { createPortal } from "react-dom";
 import { Toaster, toast } from "sonner";
 import { Button } from "@/components/ui/button";
-import { ClassicShell } from "@/components/legacy/classic-shell";
+// Legacy sidebar UI (~2k lines) only renders for the opt-in "legacy"
+// interface mode, which Tauri users never default to. Lazy-load it so it
+// stays out of the main chunk.
+const ClassicShell = lazy(() =>
+  import("@/components/legacy/classic-shell").then((module) => ({
+    default: module.ClassicShell,
+  })),
+);
 import { TopNav } from "@/components/shell/top-nav";
 import { WindowChrome } from "@/components/shell/window-chrome";
 import { type ScreenId, isScreenId } from "@/components/shell/screens";
@@ -225,12 +234,14 @@ export default function App() {
         <div className="relative h-full w-full">
           {legacyInterface ? (
             <ScreenErrorBoundary onReset={() => setScreenState(screen)}>
-              <ClassicShell
-                screen={screen}
-                setScreen={setScreen}
-                config={config}
-                running={running}
-              />
+              <Suspense fallback={null}>
+                <ClassicShell
+                  screen={screen}
+                  setScreen={setScreen}
+                  config={config}
+                  running={running}
+                />
+              </Suspense>
             </ScreenErrorBoundary>
           ) : (
             <div className="relative flex h-full w-full flex-col">
