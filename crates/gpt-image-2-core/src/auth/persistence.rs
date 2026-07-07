@@ -11,21 +11,13 @@ pub(crate) fn save_auth_json(auth_state: &CodexAuthState) -> Result<(), AppError
                         .with_detail(json!({"error": error.to_string()}))
                 })?;
             content.push('\n');
-            fs::create_dir_all(
-                auth_state
-                    .auth_path
-                    .parent()
-                    .unwrap_or_else(|| Path::new(".")),
+            // Atomic + 0600, so a crash or a concurrent Codex CLI reader never
+            // sees a half-written or world-readable auth.json.
+            atomic_write_private(
+                &auth_state.auth_path,
+                content.as_bytes(),
+                "auth_write_failed",
             )
-            .map_err(|error| {
-                AppError::new("auth_write_failed", "Unable to create auth directory.")
-                    .with_detail(json!({"error": error.to_string()}))
-            })?;
-            fs::write(&auth_state.auth_path, content).map_err(|error| {
-                AppError::new("auth_write_failed", "Unable to save auth.json.")
-                    .with_detail(json!({"error": error.to_string()}))
-            })?;
-            Ok(())
         }
         CodexAuthPersistence::ConfigProvider {
             config_path,
