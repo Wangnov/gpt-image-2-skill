@@ -70,7 +70,7 @@ pub(crate) fn request_openai_edit_once(
         Some(0),
         json!({ "endpoint": endpoint, "transport": "multipart" }),
     );
-    let form = build_openai_edit_form(body, proxy)?;
+    let form = build_openai_edit_form(body)?;
     emit_progress_event(
         logger,
         "openai",
@@ -154,7 +154,7 @@ pub(crate) fn parse_openai_json_response(
     Ok(payload)
 }
 
-pub(crate) fn build_openai_edit_form(body: &Value, proxy: &ProxyConfig) -> Result<Form, AppError> {
+pub(crate) fn build_openai_edit_form(body: &Value) -> Result<Form, AppError> {
     let object = json_object(body)?;
     let mut form = Form::new();
     for key in [
@@ -184,7 +184,7 @@ pub(crate) fn build_openai_edit_form(body: &Value, proxy: &ProxyConfig) -> Resul
     }
     for (index, source) in images.iter().enumerate() {
         let (mime_type, bytes, file_name) =
-            load_image_source_bytes(source, &format!("image-{}", index + 1), proxy)?;
+            load_image_source_bytes(source, &format!("image-{}", index + 1))?;
         let part = Part::bytes(bytes)
             .file_name(file_name)
             .mime_str(&mime_type)
@@ -198,7 +198,7 @@ pub(crate) fn build_openai_edit_form(body: &Value, proxy: &ProxyConfig) -> Resul
         form = form.part("image[]", part);
     }
     if let Some(mask_source) = extract_openai_mask_source(body)? {
-        let (mime_type, bytes, file_name) = load_image_source_bytes(&mask_source, "mask", proxy)?;
+        let (mime_type, bytes, file_name) = load_image_source_bytes(&mask_source, "mask")?;
         let part = Part::bytes(bytes)
             .file_name(file_name)
             .mime_str(&mime_type)

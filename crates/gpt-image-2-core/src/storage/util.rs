@@ -535,6 +535,11 @@ pub(super) fn storage_response_json(
     Ok((status, payload))
 }
 
+/// True when a Baidu / 123 Netdisk response carries one of the expected success
+/// codes. A missing `errno`/`code` counts as success on purpose: Baidu's
+/// chunked `pcs/superfile2` upload returns only `md5`/`request_id` on success,
+/// with no status field, so requiring an explicit code would fail every
+/// legitimate chunk upload.
 pub(super) fn value_code_success(payload: &Value, ok_values: &[i64]) -> bool {
     payload
         .get("errno")

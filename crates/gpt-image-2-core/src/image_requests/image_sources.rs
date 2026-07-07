@@ -149,30 +149,133 @@ pub(crate) fn parse_data_url_image(value: &str) -> Result<(String, Vec<u8>), App
     Ok((mime_type, decode_base64_bytes(encoded)?))
 }
 
-pub(crate) fn download_bytes(url: &str, proxy: &ProxyConfig) -> Result<Vec<u8>, AppError> {
-    let client = make_client(DEFAULT_REQUEST_TIMEOUT, proxy)?;
-    let response = client.get(url).send().map_err(|error| {
-        AppError::new("network_error", "Unable to download image bytes.")
-            .with_detail(json!({ "error": error.to_string(), "url": url }))
-    })?;
-    if !response.status().is_success() {
-        let status = response.status();
-        let detail = response.text().unwrap_or_else(|_| String::new());
-        return Err(http_status_error(status, detail));
-    }
+/// Reference images fetched from a URL are capped so a hostile or accidental
+/// giant response can't exhaust memory. 64MB comfortably covers any real image.
+const MAX_REMOTE_IMAGE_BYTES: u64 = 64 * 1024 * 1024;
+/// Error bodies are only used for diagnostics, so bound them tightly.
+const MAX_ERROR_BODY_BYTES: u64 = 64 * 1024;
+const MAX_REDIRECT_HOPS: usize = 10;
+
+/// Read at most `max + 1` bytes so an over-limit (or Content-Length-less /
+/// chunked) body is detected without ever buffering the whole thing.
+fn read_capped(
+    response: reqwest::blocking::Response,
+    max: u64,
+    redacted: &str,
+) -> Result<Vec<u8>, AppError> {
+    use std::io::Read;
+    let mut buf = Vec::new();
     response
-        .bytes()
-        .map(|bytes| bytes.to_vec())
+        .take(max + 1)
+        .read_to_end(&mut buf)
         .map_err(|error| {
             AppError::new("network_error", "Unable to read downloaded image bytes.")
-                .with_detail(json!({ "error": error.to_string(), "url": url }))
-        })
+                .with_detail(json!({ "error": error.to_string(), "url": redacted }))
+        })?;
+    if buf.len() as u64 > max {
+        return Err(
+            AppError::new("network_error", "Downloaded image is too large.").with_detail(json!({
+                "url": redacted,
+                "max_bytes": max,
+            })),
+        );
+    }
+    Ok(buf)
+}
+
+/// Fetch an **untrusted, user-supplied** reference image over http(s). Always
+/// direct-connect so the SSRF validation and address pinning actually hold — a
+/// remote-resolving proxy (http/socks5h, or a `no_proxy` miss) would resolve
+/// the host itself and defeat the pin. A URL only reachable through a proxy
+/// should be passed as a local file or data URL instead.
+pub(crate) fn download_reference_image_bytes(url: &str) -> Result<Vec<u8>, AppError> {
+    download_http_image_bytes(url, None)
+}
+
+/// Fetch a **trusted, provider-returned** result image URL (e.g. the `url` in
+/// an OpenAI image response). The URL comes from the provider's authenticated
+/// TLS response, so we honor the proxy the user configured to reach that
+/// provider's CDN; pinning can't apply through a resolving proxy, which is
+/// acceptable for a trusted source. Validation and bounded reads still apply.
+pub(crate) fn download_result_image_bytes(
+    url: &str,
+    proxy: &ProxyConfig,
+) -> Result<Vec<u8>, AppError> {
+    download_http_image_bytes(url, Some(proxy))
+}
+
+fn download_http_image_bytes(url: &str, proxy: Option<&ProxyConfig>) -> Result<Vec<u8>, AppError> {
+    // Redact query strings from anything we log — image URLs can carry signed
+    // tokens.
+    let redacted = redact_url_for_log(url);
+    // Follow redirects manually so every hop — not just the first — is both
+    // SSRF-validated and (when direct) pinned to the addresses we validated.
+    // reqwest's resolve_to_addrs only pins the initial host and its automatic
+    // redirect would re-resolve a redirect target, reopening a DNS-rebind hole.
+    // Every body read is bounded.
+    let mut current = url.to_string();
+    for _ in 0..=MAX_REDIRECT_HOPS {
+        let (_, host_label, addrs) = validate_remote_http_target(&current, "Image download")?;
+        let builder = reqwest::blocking::Client::builder()
+            .timeout(Duration::from_secs(DEFAULT_REQUEST_TIMEOUT))
+            .redirect(reqwest::redirect::Policy::none())
+            .resolve_to_addrs(&host_label, &addrs)
+            .user_agent(build_user_agent());
+        let client = match proxy {
+            Some(proxy) => apply_proxy(builder, proxy)?,
+            // Explicitly disable proxies for the untrusted path: reqwest
+            // otherwise auto-detects HTTP(S)_PROXY from the environment, which
+            // would let the proxy resolve the host and defeat the address pin.
+            None => builder.no_proxy(),
+        }
+        .build()
+        .map_err(|error| {
+            AppError::new("network_error", "Unable to build download client.")
+                .with_detail(json!({ "error": error.to_string() }))
+        })?;
+        let response = client.get(&current).send().map_err(|error| {
+            AppError::new("network_error", "Unable to download image bytes.")
+                .with_detail(json!({ "error": error.to_string(), "url": redacted }))
+        })?;
+        let status = response.status();
+        if status.is_redirection() {
+            let location = response
+                .headers()
+                .get(reqwest::header::LOCATION)
+                .and_then(|value| value.to_str().ok())
+                .ok_or_else(|| {
+                    AppError::new("network_error", "Redirect without a Location header.")
+                        .with_detail(json!({ "url": redacted }))
+                })?;
+            // Resolve relative redirects against the current URL. The next loop
+            // iteration validates and pins this target before connecting.
+            let next = Url::parse(&current)
+                .and_then(|base| base.join(location))
+                .map_err(|error| {
+                    AppError::new("network_error", "Invalid redirect target.")
+                        .with_detail(json!({ "error": error.to_string() }))
+                })?;
+            current = next.to_string();
+            continue;
+        }
+        if !status.is_success() {
+            let body = read_capped(response, MAX_ERROR_BODY_BYTES, &redacted)
+                .map(|bytes| String::from_utf8_lossy(&bytes).into_owned())
+                .unwrap_or_default();
+            return Err(http_status_error(status, body));
+        }
+        return read_capped(response, MAX_REMOTE_IMAGE_BYTES, &redacted);
+    }
+    Err(AppError::new(
+        "network_error",
+        "Too many redirects while downloading image.",
+    )
+    .with_detail(json!({ "url": redacted, "max_hops": MAX_REDIRECT_HOPS })))
 }
 
 pub(crate) fn load_image_source_bytes(
     source: &str,
     fallback_name: &str,
-    proxy: &ProxyConfig,
 ) -> Result<(String, Vec<u8>, String), AppError> {
     if source.starts_with("data:image/") {
         let (mime_type, bytes) = parse_data_url_image(source)?;
@@ -185,7 +288,7 @@ pub(crate) fn load_image_source_bytes(
     if let Ok(url) = Url::parse(source) {
         match url.scheme() {
             "http" | "https" => {
-                let bytes = download_bytes(source, proxy)?;
+                let bytes = download_reference_image_bytes(source)?;
                 let guessed_name = Path::new(url.path())
                     .file_name()
                     .and_then(|name| name.to_str())
@@ -239,4 +342,26 @@ pub(crate) fn load_image_source_bytes(
         "ref_image_invalid",
         format!("Unsupported image source for multipart edit: {source}"),
     ))
+}
+
+#[cfg(test)]
+mod download_ssrf_tests {
+    use super::*;
+
+    // The SSRF guard rejects internal targets before any request is made, so
+    // these resolve numerically and fail offline.
+    #[test]
+    fn rejects_loopback_and_link_local_targets() {
+        for url in [
+            "http://127.0.0.1/x.png",
+            "http://[::1]/x.png",
+            "http://169.254.169.254/latest/meta-data/",
+        ] {
+            let err = download_reference_image_bytes(url).unwrap_err();
+            assert_ne!(
+                err.code, "network_error",
+                "{url} should be rejected by the SSRF guard, not attempted"
+            );
+        }
+    }
 }

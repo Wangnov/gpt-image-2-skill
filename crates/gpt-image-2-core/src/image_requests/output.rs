@@ -141,7 +141,7 @@ pub(crate) fn decode_openai_images(
             continue;
         }
         if let Some(url) = item.get("url").and_then(Value::as_str) {
-            result.push(download_bytes(url, proxy)?);
+            result.push(download_result_image_bytes(url, proxy)?);
         }
     }
     Ok((result, revised_prompts))
