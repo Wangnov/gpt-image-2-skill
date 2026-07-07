@@ -75,6 +75,13 @@ impl Recoverability {
         }
     }
 
+    /// Kept for downstream compatibility (this crate is published); prefer
+    /// [`Recoverability::parse`] in new code.
+    #[allow(clippy::should_implement_trait)]
+    pub fn from_str(value: &str) -> Option<Self> {
+        Self::parse(value)
+    }
+
     pub fn parse(value: &str) -> Option<Self> {
         match value {
             "recoverable.never_dispatched" => Some(Self::NeverDispatched),
