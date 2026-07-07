@@ -535,18 +535,18 @@ pub(super) fn storage_response_json(
     Ok((status, payload))
 }
 
-/// Baidu / 123 Netdisk responses carry an explicit `errno`/`code` status.
-/// Require one of the expected success codes to be present: a response missing
-/// the field entirely is non-standard (an error page, a truncated body, an auth
-/// challenge) and must not be mistaken for a successful upload, which would
-/// record a broken link as if it were live.
+/// True when a Baidu / 123 Netdisk response carries one of the expected success
+/// codes. A missing `errno`/`code` counts as success on purpose: Baidu's
+/// chunked `pcs/superfile2` upload returns only `md5`/`request_id` on success,
+/// with no status field, so requiring an explicit code would fail every
+/// legitimate chunk upload.
 pub(super) fn value_code_success(payload: &Value, ok_values: &[i64]) -> bool {
     payload
         .get("errno")
         .or_else(|| payload.get("code"))
         .and_then(Value::as_i64)
         .map(|code| ok_values.contains(&code))
-        .unwrap_or(false)
+        .unwrap_or(true)
 }
 
 pub(super) fn payload_data(payload: &Value) -> &Value {
@@ -620,20 +620,4 @@ pub(super) fn netdisk_http_client() -> Result<Client, AppError> {
             )
             .with_detail(json!({"error": error.to_string()}))
         })
-}
-
-#[cfg(test)]
-mod value_code_success_tests {
-    use super::*;
-
-    #[test]
-    fn requires_an_explicit_success_code() {
-        assert!(value_code_success(&json!({"errno": 0}), &[0]));
-        assert!(value_code_success(&json!({"code": 200}), &[0, 200]));
-        assert!(!value_code_success(&json!({"errno": 31023}), &[0]));
-        // Missing / non-numeric status must not read as success.
-        assert!(!value_code_success(&json!({"message": "forbidden"}), &[0]));
-        assert!(!value_code_success(&json!({}), &[0]));
-        assert!(!value_code_success(&json!({"code": "200"}), &[0, 200]));
-    }
 }

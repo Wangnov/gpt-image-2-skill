@@ -154,17 +154,39 @@ pub(crate) fn parse_data_url_image(value: &str) -> Result<(String, Vec<u8>), App
 const MAX_REMOTE_IMAGE_BYTES: u64 = 64 * 1024 * 1024;
 
 pub(crate) fn download_bytes(url: &str, proxy: &ProxyConfig) -> Result<Vec<u8>, AppError> {
+    use std::io::Read;
+
     // Redact query strings from anything we log — reference URLs can carry
     // signed tokens.
     let redacted = redact_url_for_log(url);
-    // SSRF guard: on a direct connection, reject URLs that resolve to
+    // SSRF guard, applied unconditionally: reject URLs whose host resolves to
     // loopback/link-local/private ranges (e.g. the cloud metadata service).
-    // A custom proxy is the user's explicit egress, so we trust it to police
-    // its own targets rather than validating a host it, not we, will resolve.
-    if proxy.mode != ProxyMode::Custom {
-        validate_remote_http_target(url, "Reference image")?;
-    }
-    let client = make_client(DEFAULT_REQUEST_TIMEOUT, proxy)?;
+    // We can't exempt the custom-proxy case — a `no_proxy` match still makes
+    // reqwest connect directly — so we always validate and pin.
+    let (_, host_label, addrs) = validate_remote_http_target(url, "Reference image")?;
+    // Pin the initial host to the addresses we just validated (blocks a rebind
+    // between validation and connect) and re-validate every redirect hop, so a
+    // 302-to-internal can't smuggle us onto a blocked target either. Legitimate
+    // CDN redirects to other public hosts still work. Proxy is honored for
+    // egress.
+    let redirect_policy = reqwest::redirect::Policy::custom(|attempt| {
+        if attempt.previous().len() >= 10 {
+            return attempt.error(std::io::Error::other("too many redirects"));
+        }
+        match validate_remote_http_target(attempt.url().as_str(), "Reference image redirect") {
+            Ok(_) => attempt.follow(),
+            Err(_) => attempt.stop(),
+        }
+    });
+    let builder = reqwest::blocking::Client::builder()
+        .timeout(Duration::from_secs(DEFAULT_REQUEST_TIMEOUT))
+        .redirect(redirect_policy)
+        .resolve_to_addrs(&host_label, &addrs)
+        .user_agent(build_user_agent());
+    let client = apply_proxy(builder, proxy)?.build().map_err(|error| {
+        AppError::new("network_error", "Unable to build download client.")
+            .with_detail(json!({ "error": error.to_string() }))
+    })?;
     let response = client.get(url).send().map_err(|error| {
         AppError::new("network_error", "Unable to download image bytes.")
             .with_detail(json!({ "error": error.to_string(), "url": redacted }))
@@ -174,32 +196,24 @@ pub(crate) fn download_bytes(url: &str, proxy: &ProxyConfig) -> Result<Vec<u8>, 
         let detail = response.text().unwrap_or_else(|_| String::new());
         return Err(http_status_error(status, detail));
     }
-    if let Some(len) = response.content_length()
-        && len > MAX_REMOTE_IMAGE_BYTES
-    {
-        return Err(
-            AppError::new("network_error", "Downloaded image is too large.").with_detail(json!({
-                "url": redacted,
-                "content_length": len,
-                "max_bytes": MAX_REMOTE_IMAGE_BYTES,
-            })),
-        );
-    }
-    let bytes = response.bytes().map_err(|error| {
+    // Stream with a hard cap: reading `MAX + 1` bytes lets us detect an
+    // over-limit body (including chunked / Content-Length-less responses)
+    // without ever buffering the whole thing.
+    let mut buf = Vec::new();
+    let mut limited = response.take(MAX_REMOTE_IMAGE_BYTES + 1);
+    limited.read_to_end(&mut buf).map_err(|error| {
         AppError::new("network_error", "Unable to read downloaded image bytes.")
             .with_detail(json!({ "error": error.to_string(), "url": redacted }))
     })?;
-    if bytes.len() as u64 > MAX_REMOTE_IMAGE_BYTES {
-        // A server can omit Content-Length; enforce the cap on the body too.
+    if buf.len() as u64 > MAX_REMOTE_IMAGE_BYTES {
         return Err(
             AppError::new("network_error", "Downloaded image is too large.").with_detail(json!({
                 "url": redacted,
-                "bytes": bytes.len(),
                 "max_bytes": MAX_REMOTE_IMAGE_BYTES,
             })),
         );
     }
-    Ok(bytes.to_vec())
+    Ok(buf)
 }
 
 pub(crate) fn load_image_source_bytes(
@@ -272,4 +286,26 @@ pub(crate) fn load_image_source_bytes(
         "ref_image_invalid",
         format!("Unsupported image source for multipart edit: {source}"),
     ))
+}
+
+#[cfg(test)]
+mod download_ssrf_tests {
+    use super::*;
+
+    // The SSRF guard rejects internal targets before any request is made, so
+    // these resolve numerically and fail offline.
+    #[test]
+    fn rejects_loopback_and_link_local_targets() {
+        for url in [
+            "http://127.0.0.1/x.png",
+            "http://[::1]/x.png",
+            "http://169.254.169.254/latest/meta-data/",
+        ] {
+            let err = download_bytes(url, &ProxyConfig::default()).unwrap_err();
+            assert_ne!(
+                err.code, "network_error",
+                "{url} should be rejected by the SSRF guard, not attempted"
+            );
+        }
+    }
 }
