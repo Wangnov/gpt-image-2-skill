@@ -49,6 +49,7 @@ pub(crate) enum CredentialInput {
 #[derive(Clone)]
 pub(crate) struct JobQueueState {
     pub(crate) inner: Arc<Mutex<JobQueueInner>>,
+    pub(crate) auth: Arc<AuthPolicy>,
 }
 
 impl Default for JobQueueState {
@@ -61,6 +62,16 @@ impl Default for JobQueueState {
                 events: BTreeMap::new(),
                 next_seq: BTreeMap::new(),
             })),
+            auth: Arc::new(AuthPolicy::default()),
+        }
+    }
+}
+
+impl JobQueueState {
+    pub(crate) fn with_auth(auth: AuthPolicy) -> Self {
+        Self {
+            auth: Arc::new(auth),
+            ..Self::default()
         }
     }
 }
