@@ -31,7 +31,10 @@ pub(super) fn upload_to_http(
     })?;
     let mime = mime_guess::from_path(&output.path).first_or_octet_stream();
     let file_name = output_file_name(output);
-    let part = Part::bytes(bytes.clone())
+    // Length before the buffer moves into the multipart part — avoids cloning
+    // the whole file just to report its size later.
+    let bytes_len = bytes.len() as u64;
+    let part = Part::bytes(bytes)
         .file_name(file_name.clone())
         .mime_str(mime.as_ref())
         .map_err(|error| {
@@ -91,7 +94,7 @@ pub(super) fn upload_to_http(
         http_url_if_safe(json_pointer_string(&response_json, public_url_json_pointer));
     Ok(StorageUploadOutcome {
         url: extracted_url,
-        bytes: Some(bytes.len() as u64),
+        bytes: Some(bytes_len),
         metadata: json!({
             "http_status": status.as_u16(),
             "url_from_response": public_url_json_pointer
