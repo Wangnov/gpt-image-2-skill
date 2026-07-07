@@ -27,30 +27,13 @@ pub fn save_app_config(path: &Path, config: &AppConfig) -> Result<(), AppError> 
     atomic_write_private(path, content.as_bytes(), "config_write_failed")
 }
 
-/// Monotonic suffix so two writers in the same process never pick the same
-/// temp path; combined with the pid it stays unique across processes too.
-static ATOMIC_WRITE_SEQ: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
-
-/// Open a fresh, private (0600 on unix) temp file. `create_new` guarantees we
-/// never adopt a file another writer is mid-write on, and the mode is applied
-/// at creation so a secrets temp is never briefly group/world-readable.
-fn create_private_temp(temp: &Path) -> std::io::Result<fs::File> {
-    let mut options = fs::OpenOptions::new();
-    options.write(true).create_new(true);
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::OpenOptionsExt;
-        options.mode(0o600);
-    }
-    options.open(temp)
-}
-
 /// Write `bytes` to `path` atomically: fill a unique, private temp file, fsync
-/// it, then rename over the target. A crash can leave a temp file but never a
-/// half-written or briefly world-readable target — which matters because
-/// auth.json / config.json hold secrets and auth.json is shared with the
-/// Codex CLI. Concurrent writers keep last-writer-wins semantics without
-/// corrupting each other, since each renames its own private temp.
+/// it, then persist it over the target. A crash can leave a temp file but never
+/// a half-written or briefly world-readable target — which matters because
+/// auth.json / config.json hold secrets and auth.json is shared with the Codex
+/// CLI. Uses `tempfile` for the temp+persist so the replace is atomic on both
+/// unix (rename) and Windows (ReplaceFile) — a bare `fs::rename` fails on
+/// Windows when the target already exists.
 pub(crate) fn atomic_write_private(
     path: &Path,
     bytes: &[u8],
@@ -63,44 +46,43 @@ pub(crate) fn atomic_write_private(
         }
         map
     };
-    if let Some(parent) = path.parent() {
+    let parent = path.parent().filter(|p| !p.as_os_str().is_empty());
+    if let Some(parent) = parent {
         fs::create_dir_all(parent).map_err(|error| {
             AppError::new(error_code, "Unable to create config directory.")
                 .with_detail(detail(json!({"error": error.to_string()})))
         })?;
     }
-    let seq = ATOMIC_WRITE_SEQ.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-    let suffix = format!(".{}.{seq}.tmp", std::process::id());
-    let mut file_name = path.file_name().unwrap_or_default().to_os_string();
-    file_name.push(&suffix);
-    let temp = match path.parent() {
-        Some(parent) => parent.join(file_name),
-        None => PathBuf::from(file_name),
-    };
+    // A uniquely-named temp in the target dir (same filesystem, so persist is a
+    // rename), created 0600 up front so secrets are never briefly readable.
+    let mut builder = tempfile::Builder::new();
+    builder.prefix(".").suffix(".tmp");
+    #[cfg(unix)]
     {
-        let mut file = create_private_temp(&temp).map_err(|error| {
-            AppError::new(error_code, "Unable to create temp config file.")
-                .with_detail(detail(json!({"error": error.to_string()})))
-        })?;
-        file.write_all(bytes).map_err(|error| {
-            let _ = fs::remove_file(&temp);
-            AppError::new(error_code, "Unable to write temp config file.")
-                .with_detail(detail(json!({"error": error.to_string()})))
-        })?;
-        file.sync_all().map_err(|error| {
-            let _ = fs::remove_file(&temp);
-            AppError::new(error_code, "Unable to flush temp config file.")
-                .with_detail(detail(json!({"error": error.to_string()})))
-        })?;
+        use std::os::unix::fs::PermissionsExt;
+        builder.permissions(fs::Permissions::from_mode(0o600));
     }
-    fs::rename(&temp, path).map_err(|error| {
-        let _ = fs::remove_file(&temp);
-        AppError::new(error_code, "Unable to finalize config file.")
+    let dir = parent.unwrap_or_else(|| Path::new("."));
+    let mut temp = builder.tempfile_in(dir).map_err(|error| {
+        AppError::new(error_code, "Unable to create temp config file.")
             .with_detail(detail(json!({"error": error.to_string()})))
     })?;
-    // The target inherits the temp's 0600; non-unix is a no-op.
+    temp.write_all(bytes).map_err(|error| {
+        AppError::new(error_code, "Unable to write temp config file.")
+            .with_detail(detail(json!({"error": error.to_string()})))
+    })?;
+    temp.as_file().sync_all().map_err(|error| {
+        AppError::new(error_code, "Unable to flush temp config file.")
+            .with_detail(detail(json!({"error": error.to_string()})))
+    })?;
+    temp.persist(path).map_err(|error| {
+        AppError::new(error_code, "Unable to finalize config file.")
+            .with_detail(detail(json!({"error": error.error.to_string()})))
+    })?;
+    // Windows has no unix mode; the unix path already created the temp 0600.
+    #[cfg(not(unix))]
     set_private_file_permissions(path)?;
-    if let Some(parent) = path.parent()
+    if let Some(parent) = parent
         && let Ok(dir) = fs::File::open(parent)
     {
         let _ = dir.sync_all();
@@ -108,28 +90,9 @@ pub(crate) fn atomic_write_private(
     Ok(())
 }
 
-#[cfg(unix)]
-pub(crate) fn set_private_file_permissions(path: &Path) -> Result<(), AppError> {
-    use std::os::unix::fs::PermissionsExt;
-    let mut permissions = fs::metadata(path)
-        .map_err(|error| {
-            AppError::new(
-                "config_write_failed",
-                "Unable to inspect config permissions.",
-            )
-            .with_detail(
-                json!({"config_file": path.display().to_string(), "error": error.to_string()}),
-            )
-        })?
-        .permissions();
-    permissions.set_mode(0o600);
-    fs::set_permissions(path, permissions).map_err(|error| {
-        AppError::new("config_write_failed", "Unable to set config permissions.").with_detail(
-            json!({"config_file": path.display().to_string(), "error": error.to_string()}),
-        )
-    })
-}
-
+// Unix temp files are created 0600 by the tempfile builder above, so a
+// post-write chmod is only needed on platforms without unix permissions
+// (where it's a no-op today, but keeps the call site honest).
 #[cfg(not(unix))]
 pub(crate) fn set_private_file_permissions(_path: &Path) -> Result<(), AppError> {
     Ok(())
