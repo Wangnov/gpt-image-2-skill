@@ -111,12 +111,17 @@ pub(crate) fn api_router(state: JobQueueState) -> Router {
         .merge(test_router())
         .route("/queue", get(queue_status))
         .route("/queue/concurrency", post(set_queue_concurrency))
-        .route("/images/generate", post(enqueue_generate_image))
-        .route("/images/edit", post(enqueue_edit_image))
         .route("/files", get(file_response))
         // Reference images ride in the JSON body as byte arrays, so a 1–2MB
-        // PNG blows past axum's 2MB default and 413s. Raise it for the API.
-        .layer(axum::extract::DefaultBodyLimit::max(64 * 1024 * 1024))
+        // PNG blows past axum's 2MB default and 413s. Raise the limit only on
+        // the upload routes — a global raise would also let the unauthenticated
+        // /session login parse 64MB bodies, a needless DoS amplifier.
+        .merge(
+            Router::new()
+                .route("/images/generate", post(enqueue_generate_image))
+                .route("/images/edit", post(enqueue_edit_image))
+                .layer(axum::extract::DefaultBodyLimit::max(64 * 1024 * 1024)),
+        )
         // Gate every /api route (except the /session login handled inside)
         // behind the access token / loopback policy.
         .layer(axum::middleware::from_fn_with_state(
