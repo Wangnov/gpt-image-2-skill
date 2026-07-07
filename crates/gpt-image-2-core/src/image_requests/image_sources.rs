@@ -183,25 +183,50 @@ fn read_capped(
     Ok(buf)
 }
 
-pub(crate) fn download_bytes(url: &str, proxy: &ProxyConfig) -> Result<Vec<u8>, AppError> {
-    // Redact query strings from anything we log — reference URLs can carry
-    // signed tokens.
+/// Fetch an **untrusted, user-supplied** reference image over http(s). Always
+/// direct-connect so the SSRF validation and address pinning actually hold — a
+/// remote-resolving proxy (http/socks5h, or a `no_proxy` miss) would resolve
+/// the host itself and defeat the pin. A URL only reachable through a proxy
+/// should be passed as a local file or data URL instead.
+pub(crate) fn download_reference_image_bytes(url: &str) -> Result<Vec<u8>, AppError> {
+    download_http_image_bytes(url, None)
+}
+
+/// Fetch a **trusted, provider-returned** result image URL (e.g. the `url` in
+/// an OpenAI image response). The URL comes from the provider's authenticated
+/// TLS response, so we honor the proxy the user configured to reach that
+/// provider's CDN; pinning can't apply through a resolving proxy, which is
+/// acceptable for a trusted source. Validation and bounded reads still apply.
+pub(crate) fn download_result_image_bytes(
+    url: &str,
+    proxy: &ProxyConfig,
+) -> Result<Vec<u8>, AppError> {
+    download_http_image_bytes(url, Some(proxy))
+}
+
+fn download_http_image_bytes(url: &str, proxy: Option<&ProxyConfig>) -> Result<Vec<u8>, AppError> {
+    // Redact query strings from anything we log — image URLs can carry signed
+    // tokens.
     let redacted = redact_url_for_log(url);
     // Follow redirects manually so every hop — not just the first — is both
-    // SSRF-validated and pinned to the addresses we validated. reqwest's
-    // resolve_to_addrs only pins the initial host, and its automatic redirect
-    // would re-resolve a redirect target, reopening a DNS-rebind hole. We
-    // validate unconditionally (a custom proxy with a matching `no_proxy` still
-    // direct-connects) and bound every body read.
+    // SSRF-validated and (when direct) pinned to the addresses we validated.
+    // reqwest's resolve_to_addrs only pins the initial host and its automatic
+    // redirect would re-resolve a redirect target, reopening a DNS-rebind hole.
+    // Every body read is bounded.
     let mut current = url.to_string();
     for _ in 0..=MAX_REDIRECT_HOPS {
-        let (_, host_label, addrs) = validate_remote_http_target(&current, "Reference image")?;
+        let (_, host_label, addrs) = validate_remote_http_target(&current, "Image download")?;
         let builder = reqwest::blocking::Client::builder()
             .timeout(Duration::from_secs(DEFAULT_REQUEST_TIMEOUT))
             .redirect(reqwest::redirect::Policy::none())
             .resolve_to_addrs(&host_label, &addrs)
             .user_agent(build_user_agent());
-        let client = apply_proxy(builder, proxy)?.build().map_err(|error| {
+        let client = match proxy {
+            Some(proxy) => apply_proxy(builder, proxy)?,
+            None => builder,
+        }
+        .build()
+        .map_err(|error| {
             AppError::new("network_error", "Unable to build download client.")
                 .with_detail(json!({ "error": error.to_string() }))
         })?;
@@ -248,7 +273,6 @@ pub(crate) fn download_bytes(url: &str, proxy: &ProxyConfig) -> Result<Vec<u8>, 
 pub(crate) fn load_image_source_bytes(
     source: &str,
     fallback_name: &str,
-    proxy: &ProxyConfig,
 ) -> Result<(String, Vec<u8>, String), AppError> {
     if source.starts_with("data:image/") {
         let (mime_type, bytes) = parse_data_url_image(source)?;
@@ -261,7 +285,7 @@ pub(crate) fn load_image_source_bytes(
     if let Ok(url) = Url::parse(source) {
         match url.scheme() {
             "http" | "https" => {
-                let bytes = download_bytes(source, proxy)?;
+                let bytes = download_reference_image_bytes(source)?;
                 let guessed_name = Path::new(url.path())
                     .file_name()
                     .and_then(|name| name.to_str())
@@ -330,7 +354,7 @@ mod download_ssrf_tests {
             "http://[::1]/x.png",
             "http://169.254.169.254/latest/meta-data/",
         ] {
-            let err = download_bytes(url, &ProxyConfig::default()).unwrap_err();
+            let err = download_reference_image_bytes(url).unwrap_err();
             assert_ne!(
                 err.code, "network_error",
                 "{url} should be rejected by the SSRF guard, not attempted"
