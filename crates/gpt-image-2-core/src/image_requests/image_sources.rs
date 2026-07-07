@@ -223,7 +223,10 @@ fn download_http_image_bytes(url: &str, proxy: Option<&ProxyConfig>) -> Result<V
             .user_agent(build_user_agent());
         let client = match proxy {
             Some(proxy) => apply_proxy(builder, proxy)?,
-            None => builder,
+            // Explicitly disable proxies for the untrusted path: reqwest
+            // otherwise auto-detects HTTP(S)_PROXY from the environment, which
+            // would let the proxy resolve the host and defeat the address pin.
+            None => builder.no_proxy(),
         }
         .build()
         .map_err(|error| {
