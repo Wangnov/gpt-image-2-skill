@@ -370,7 +370,6 @@ pub fn list_history_job_events(job_id: &str) -> Result<Vec<Value>, AppError> {
 /// Mark a history row as soft-deleted by stamping `deleted_at` with the
 /// current epoch seconds. Already-deleted rows are not re-stamped, keeping
 /// the original deletion time intact for trash retention windows.
-
 pub fn soft_delete_history_job(job_id: &str) -> Result<usize, AppError> {
     let conn = open_history_db()?;
     let now = SystemTime::now()
@@ -392,7 +391,6 @@ pub fn soft_delete_history_job(job_id: &str) -> Result<usize, AppError> {
 }
 
 /// Clear `deleted_at` so the row reappears in the default listing. Idempotent.
-
 pub fn restore_deleted_history_job(job_id: &str) -> Result<usize, AppError> {
     let conn = open_history_db()?;
     conn.execute(
@@ -410,7 +408,6 @@ pub fn restore_deleted_history_job(job_id: &str) -> Result<usize, AppError> {
 /// has elapsed). Used by the trash GC worker so the cutoff is anchored to
 /// when the row was soft-deleted, not to the trash directory's filesystem
 /// mtime (which `fs::rename` doesn't update).
-
 pub fn list_expired_deleted_history_jobs(
     threshold_epoch_secs: u64,
 ) -> Result<Vec<String>, AppError> {

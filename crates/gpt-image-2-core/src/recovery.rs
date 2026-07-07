@@ -75,7 +75,7 @@ impl Recoverability {
         }
     }
 
-    pub fn from_str(value: &str) -> Option<Self> {
+    pub fn parse(value: &str) -> Option<Self> {
         match value {
             "recoverable.never_dispatched" => Some(Self::NeverDispatched),
             "recoverable.local_response_cached" => Some(Self::LocalResponseCached),
@@ -705,7 +705,7 @@ pub fn write_batch_recovery_summary(
         let recoverability = state
             .recoverability
             .as_deref()
-            .and_then(Recoverability::from_str)
+            .and_then(Recoverability::parse)
             .unwrap_or_else(|| {
                 classify_from_state_and_evidence(&state, raw_response_path(child_dir).is_file())
             });
@@ -827,7 +827,7 @@ pub fn build_recovery_descriptor(job: &Value) -> Value {
     let mut recoverability = metadata
         .get("recoverability")
         .and_then(Value::as_str)
-        .and_then(Recoverability::from_str)
+        .and_then(Recoverability::parse)
         .unwrap_or_else(|| {
             let state = job_dir.as_deref().and_then(load_recovery_state);
             if let Some(state) = state {

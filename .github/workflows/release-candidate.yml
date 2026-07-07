@@ -4,6 +4,10 @@ on:
   pull_request:
   workflow_dispatch:
 
+concurrency:
+  group: release-candidate-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 jobs:
   candidate:
     runs-on: ubuntu-24.04
@@ -14,7 +18,47 @@ jobs:
       - uses: actions/setup-node@v6
         with:
           node-version: 22
+      - name: Install Tauri system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
       - name: Install cargo-dist
-        run: cargo install cargo-dist --locked --version 0.31.0
+        run: "curl --proto '=https' --tlsv1.2 -LsSf https://github.com/axodotdev/cargo-dist/releases/download/v0.31.0/cargo-dist-installer.sh | sh"
+      # tauri_build::build() refuses to compile when frontendDist is missing,
+      # and the workspace-wide gates below compile the Tauri crate too.
+      - name: Ensure frontend dist exists for tauri_build
+        run: mkdir -p apps/gpt-image-2-app/dist
       - name: Prepare release candidate
         run: scripts/release/prepare.sh
+
+  frontend:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: apps/gpt-image-2-app/package-lock.json
+      - name: Install dependencies
+        run: npm --prefix apps/gpt-image-2-app ci
+      - name: Test
+        run: npm --prefix apps/gpt-image-2-app run test
+      - name: Build
+        run: npm --prefix apps/gpt-image-2-app run build
+
+  relay:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: workers/gpt-image-2-relay/package-lock.json
+      - name: Install dependencies
+        run: npm --prefix workers/gpt-image-2-relay ci
+      - name: Type-check
+        run: npm --prefix workers/gpt-image-2-relay run typecheck
+      - name: Test
+        run: npm --prefix workers/gpt-image-2-relay run test

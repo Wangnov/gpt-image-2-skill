@@ -10,15 +10,11 @@ fn default_true() -> bool {
 
 #[derive(Debug, Clone, Serialize, Deserialize, Eq, PartialEq)]
 #[serde(rename_all = "snake_case")]
+#[derive(Default)]
 pub enum PathMode {
+    #[default]
     Default,
     Custom,
-}
-
-impl Default for PathMode {
-    fn default() -> Self {
-        Self::Default
-    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Eq, PartialEq)]
@@ -40,19 +36,15 @@ impl Default for PathRef {
 
 #[derive(Debug, Clone, Serialize, Deserialize, Eq, Ord, PartialEq, PartialOrd)]
 #[serde(rename_all = "snake_case")]
+#[derive(Default)]
 pub enum ExportDirMode {
     Downloads,
     Documents,
     Pictures,
+    #[default]
     ResultLibrary,
     Custom,
     BrowserDefault,
-}
-
-impl Default for ExportDirMode {
-    fn default() -> Self {
-        Self::ResultLibrary
-    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Eq, PartialEq)]

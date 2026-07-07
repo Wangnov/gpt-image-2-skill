@@ -7,16 +7,12 @@ use crate::CredentialRef;
 
 #[derive(Debug, Clone, Serialize, Deserialize, Eq, PartialEq)]
 #[serde(rename_all = "kebab-case")]
+#[derive(Default)]
 pub enum EmailTlsMode {
+    #[default]
     StartTls,
     Smtps,
     None,
-}
-
-impl Default for EmailTlsMode {
-    fn default() -> Self {
-        Self::StartTls
-    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Eq, PartialEq)]

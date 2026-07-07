@@ -54,8 +54,8 @@ pub(crate) fn export_files_into_dir(
     export_dir: &Path,
 ) -> Result<Vec<String>, String> {
     let sources = validate_source_paths(paths)?;
-    fs::create_dir_all(&export_dir).map_err(|error| format!("无法创建保存目录：{error}"))?;
-    if all_sources_within_dir(&sources, &export_dir) {
+    fs::create_dir_all(export_dir).map_err(|error| format!("无法创建保存目录：{error}"))?;
+    if all_sources_within_dir(&sources, export_dir) {
         return Ok(display_paths(&sources));
     }
 
@@ -65,7 +65,7 @@ pub(crate) fn export_files_into_dir(
             .file_name()
             .and_then(|name| name.to_str())
             .ok_or_else(|| "图片文件名无效。".to_string())?;
-        let destination = unique_destination(&export_dir, file_name);
+        let destination = unique_destination(export_dir, file_name);
         fs::copy(&source, &destination).map_err(|error| format!("保存图片失败：{error}"))?;
         saved.push(destination.display().to_string());
     }

@@ -7,8 +7,10 @@ pub(crate) fn default_result_library_mode() -> gpt_image_2_core::ExportDirMode {
 }
 
 pub(crate) fn sync_result_library_to_default_export_dir(config: &mut PathConfig) {
-    let mut preview = AppConfig::default();
-    preview.paths = config.clone();
+    let preview = AppConfig {
+        paths: config.clone(),
+        ..Default::default()
+    };
     let save_dir = product_default_export_dir(Some(&preview), ProductRuntime::Tauri);
     config.result_library_dir.mode = gpt_image_2_core::PathMode::Custom;
     config.result_library_dir.path = Some(save_dir);
@@ -42,12 +44,10 @@ pub(crate) fn normalize_product_storage_defaults(config: &mut AppConfig) {
     let fallback_dir = product_storage_fallback_dir(Some(config), ProductRuntime::Tauri);
     if let Some(StorageTargetConfig::Local { directory, .. }) =
         config.storage.targets.get_mut("local-default")
+        && (*directory == shared_config_dir().join("storage").join("fallback")
+            || directory.as_os_str().is_empty())
     {
-        if *directory == shared_config_dir().join("storage").join("fallback")
-            || directory.as_os_str().is_empty()
-        {
-            *directory = fallback_dir;
-        }
+        *directory = fallback_dir;
     }
     if matches!(
         config.paths.default_export_dir.mode,

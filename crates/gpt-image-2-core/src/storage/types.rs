@@ -178,16 +178,12 @@ pub struct BackendCapabilities {
 
 #[derive(Debug, Clone, Serialize, Deserialize, Eq, PartialEq)]
 #[serde(rename_all = "snake_case")]
+#[derive(Default)]
 pub enum StorageFallbackPolicy {
     Never,
+    #[default]
     OnFailure,
     Always,
-}
-
-impl Default for StorageFallbackPolicy {
-    fn default() -> Self {
-        Self::OnFailure
-    }
 }
 
 /// How `Result Origin` and `Archives` relate for a deployment. Replaces the
@@ -222,17 +218,13 @@ pub enum PipelineMode {
 /// objects are never deleted implicitly by these policies.
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, Eq, PartialEq)]
 #[serde(rename_all = "snake_case")]
+#[derive(Default)]
 pub enum CleanupMode {
+    #[default]
     Never,
     AfterArchiveSuccess,
     ByAge,
     BySize,
-}
-
-impl Default for CleanupMode {
-    fn default() -> Self {
-        Self::Never
-    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Eq, PartialEq, Default)]

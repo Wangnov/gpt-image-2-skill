@@ -12,7 +12,8 @@ cd "$ROOT_DIR"
 
 node scripts/release/sync-version-manifests.mjs
 cargo fmt --check
-cargo test -p "$CRATE_NAME"
+cargo clippy --workspace --all-targets -- -D warnings
+cargo test --workspace
 cargo run -q -p "$CRATE_NAME" -- --json doctor >/tmp/gpt-image-2-skill-doctor.json
 node scripts/smoke_skill_install.cjs >/tmp/gpt-image-2-skill-skill-smoke.json
 if {

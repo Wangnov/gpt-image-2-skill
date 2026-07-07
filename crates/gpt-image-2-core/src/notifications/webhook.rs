@@ -277,25 +277,21 @@ mod tests {
     #[test]
     fn webhook_ssrf_guard_rejects_non_http_schemes() {
         let err = validate_webhook_target("ftp://example.com/hook")
-            .err()
-            .expect("non-http scheme should be rejected");
+            .expect_err("non-http scheme should be rejected");
         assert_eq!(err.code, "notification_webhook_invalid");
     }
 
     #[test]
     fn webhook_ssrf_guard_rejects_malformed_urls() {
-        let err = validate_webhook_target("not a url")
-            .err()
-            .expect("malformed url should be rejected");
+        let err =
+            validate_webhook_target("not a url").expect_err("malformed url should be rejected");
         assert_eq!(err.code, "notification_webhook_invalid");
     }
 
     #[test]
     fn webhook_ssrf_guard_keeps_notification_owned_invalid_url_detail() {
         let url = format!("not a url {}", "x".repeat(300));
-        let err = validate_webhook_target(&url)
-            .err()
-            .expect("malformed url should be rejected");
+        let err = validate_webhook_target(&url).expect_err("malformed url should be rejected");
         assert_eq!(err.code, "notification_webhook_invalid");
         assert_eq!(err.detail.unwrap()["url"], url);
     }

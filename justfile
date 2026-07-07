@@ -16,9 +16,13 @@ sync-skill:
 smoke-skill-install:
     node scripts/smoke_skill_install.cjs
 
-# Run Rust tests for the CLI crate.
+# Run Rust tests for the whole workspace.
 test:
-    cargo test -p gpt-image-2-skill
+    cargo test --workspace
+
+# Run clippy across the whole workspace, failing on warnings.
+clippy:
+    cargo clippy --workspace --all-targets -- -D warnings
 
 # Build the CLI crate in debug mode.
 build:
@@ -43,6 +47,10 @@ app-build:
 # Build the HTTP-backed Web frontend.
 app-build-http:
     npm --prefix apps/gpt-image-2-app run build:http
+
+# Run the full frontend test suite.
+app-test:
+    npm --prefix apps/gpt-image-2-app run test
 
 # Run the browser transport tests.
 app-test-browser:
