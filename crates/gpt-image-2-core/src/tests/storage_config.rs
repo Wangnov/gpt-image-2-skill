@@ -537,13 +537,15 @@ fn effective_pipeline_with_explicit_pipeline_ignores_legacy_fields() {
 fn effective_pipeline_preserves_explicit_empty_archives() {
     // Explicitly empty Mirror archives is allowed at the type level — the UI
     // validator (pipelineConfigIssue) is responsible for warning the user.
-    let mut config = StorageConfig::default();
-    config.pipeline = Some(PipelineConfig {
-        mode: PipelineMode::Mirror,
-        origin: None,
-        archives: Vec::new(),
-        cleanup: CleanupPolicy::default(),
-    });
+    let config = StorageConfig {
+        pipeline: Some(PipelineConfig {
+            mode: PipelineMode::Mirror,
+            origin: None,
+            archives: Vec::new(),
+            cleanup: CleanupPolicy::default(),
+        }),
+        ..Default::default()
+    };
     let pipeline = config.effective_pipeline();
     assert_eq!(pipeline.mode, PipelineMode::Mirror);
     assert!(pipeline.archives.is_empty());
@@ -573,13 +575,15 @@ fn explicit_pipeline_serialises_without_legacy_pollution() {
     // When `pipeline` is set, serialised output should keep both new and
     // legacy fields so back-compat readers still see something — but
     // `pipeline` should appear and be re-readable on the other side.
-    let mut config = StorageConfig::default();
-    config.pipeline = Some(PipelineConfig {
-        mode: PipelineMode::CloudPrimary,
-        origin: Some("s3-main".to_string()),
-        archives: vec!["webdav-1".to_string()],
-        cleanup: CleanupPolicy::default(),
-    });
+    let config = StorageConfig {
+        pipeline: Some(PipelineConfig {
+            mode: PipelineMode::CloudPrimary,
+            origin: Some("s3-main".to_string()),
+            archives: vec!["webdav-1".to_string()],
+            cleanup: CleanupPolicy::default(),
+        }),
+        ..Default::default()
+    };
     let value = serde_json::to_value(&config).expect("serialise");
     assert_eq!(value["pipeline"]["mode"], "cloud_primary");
     assert_eq!(value["pipeline"]["origin"], "s3-main");

@@ -124,6 +124,7 @@ fn record_upload_attempt(
     Ok(completed)
 }
 
+#[allow(clippy::too_many_arguments)]
 fn upload_manifest(
     output: &UploadOutput,
     target_name: &str,

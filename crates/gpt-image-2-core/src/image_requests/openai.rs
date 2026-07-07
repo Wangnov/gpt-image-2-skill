@@ -45,7 +45,7 @@ pub(crate) fn request_openai_images_once(
         AppError::new("network_error", "OpenAI request failed.")
             .with_detail(json!({ "error": error.to_string() }))
     })?;
-    parse_openai_json_response(response, logger, recovery.as_deref_mut())
+    parse_openai_json_response(response, logger, recovery)
 }
 
 pub(crate) fn request_openai_edit_once(
@@ -99,7 +99,7 @@ pub(crate) fn request_openai_edit_once(
         AppError::new("network_error", "OpenAI multipart request failed.")
             .with_detail(json!({ "error": error.to_string() }))
     })?;
-    parse_openai_json_response(response, logger, recovery.as_deref_mut())
+    parse_openai_json_response(response, logger, recovery)
 }
 
 pub(crate) fn parse_openai_json_response(
@@ -122,7 +122,7 @@ pub(crate) fn parse_openai_json_response(
         )
         .with_detail(json!({ "error": error.to_string() }))
     })?;
-    if let Some(ctx) = recovery.as_deref_mut() {
+    if let Some(ctx) = recovery {
         ctx.mark_response_body_completed()?;
         ctx.spool_raw_response(&raw)?;
     }

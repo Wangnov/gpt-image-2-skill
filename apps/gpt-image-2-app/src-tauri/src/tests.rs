@@ -98,8 +98,10 @@ fn tauri_storage_defaults_keep_explicit_downloads_save_directory() {
 fn sync_result_library_uses_selected_standard_save_folder() {
     let mut paths = AppConfig::default().paths;
     paths.default_export_dir.mode = gpt_image_2_core::ExportDirMode::Downloads;
-    let mut preview = AppConfig::default();
-    preview.paths = paths.clone();
+    let preview = AppConfig {
+        paths: paths.clone(),
+        ..Default::default()
+    };
     let expected = product_default_export_dir(Some(&preview), ProductRuntime::Tauri);
 
     sync_result_library_to_default_export_dir(&mut paths);

@@ -11,30 +11,29 @@ pub(crate) fn output_paths_from_job(job: &Value) -> Vec<String> {
         .filter_map(|output| output.get("path").and_then(Value::as_str))
         .map(ToString::to_string)
         .collect::<Vec<_>>();
-    if paths.is_empty() {
-        if let Some(files) = job
+    if paths.is_empty()
+        && let Some(files) = job
             .get("metadata")
             .and_then(|metadata| metadata.get("output"))
             .and_then(|output| output.get("files"))
             .and_then(Value::as_array)
-        {
-            paths.extend(
-                files
-                    .iter()
-                    .filter_map(|output| output.get("path").and_then(Value::as_str))
-                    .map(ToString::to_string),
-            );
-        }
+    {
+        paths.extend(
+            files
+                .iter()
+                .filter_map(|output| output.get("path").and_then(Value::as_str))
+                .map(ToString::to_string),
+        );
     }
-    if paths.is_empty() {
-        if let Some(path) = job.get("output_path").and_then(Value::as_str).or_else(|| {
+    if paths.is_empty()
+        && let Some(path) = job.get("output_path").and_then(Value::as_str).or_else(|| {
             job.get("metadata")
                 .and_then(|metadata| metadata.get("output"))
                 .and_then(|output| output.get("path"))
                 .and_then(Value::as_str)
-        }) {
-            paths.push(path.to_string());
-        }
+        })
+    {
+        paths.push(path.to_string());
     }
     paths
 }

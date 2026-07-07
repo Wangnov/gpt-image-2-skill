@@ -30,7 +30,7 @@ if [[ -n "$RELEASE_DIR" ]]; then
 else
   node scripts/npm/build-matrix.mjs --check
 fi
-cargo test -p "$CRATE_NAME"
+cargo test --workspace
 cargo run -q -p "$CRATE_NAME" -- --json doctor >/tmp/gpt-image-2-skill-verify-doctor.json
 node scripts/smoke_skill_install.cjs >/tmp/gpt-image-2-skill-verify-skill.json
 

@@ -14,12 +14,10 @@ pub(crate) fn normalize_product_storage_defaults(config: &mut AppConfig) {
     let fallback_dir = product_storage_fallback_dir(Some(config), ProductRuntime::DockerWeb);
     if let Some(StorageTargetConfig::Local { directory, .. }) =
         config.storage.targets.get_mut("local-default")
+        && (*directory == shared_config_dir().join("storage").join("fallback")
+            || directory.as_os_str().is_empty())
     {
-        if *directory == shared_config_dir().join("storage").join("fallback")
-            || directory.as_os_str().is_empty()
-        {
-            *directory = fallback_dir;
-        }
+        *directory = fallback_dir;
     }
 }
 
