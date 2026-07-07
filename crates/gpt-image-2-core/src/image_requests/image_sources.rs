@@ -152,68 +152,97 @@ pub(crate) fn parse_data_url_image(value: &str) -> Result<(String, Vec<u8>), App
 /// Reference images fetched from a URL are capped so a hostile or accidental
 /// giant response can't exhaust memory. 64MB comfortably covers any real image.
 const MAX_REMOTE_IMAGE_BYTES: u64 = 64 * 1024 * 1024;
+/// Error bodies are only used for diagnostics, so bound them tightly.
+const MAX_ERROR_BODY_BYTES: u64 = 64 * 1024;
+const MAX_REDIRECT_HOPS: usize = 10;
 
-pub(crate) fn download_bytes(url: &str, proxy: &ProxyConfig) -> Result<Vec<u8>, AppError> {
+/// Read at most `max + 1` bytes so an over-limit (or Content-Length-less /
+/// chunked) body is detected without ever buffering the whole thing.
+fn read_capped(
+    response: reqwest::blocking::Response,
+    max: u64,
+    redacted: &str,
+) -> Result<Vec<u8>, AppError> {
     use std::io::Read;
-
-    // Redact query strings from anything we log — reference URLs can carry
-    // signed tokens.
-    let redacted = redact_url_for_log(url);
-    // SSRF guard, applied unconditionally: reject URLs whose host resolves to
-    // loopback/link-local/private ranges (e.g. the cloud metadata service).
-    // We can't exempt the custom-proxy case — a `no_proxy` match still makes
-    // reqwest connect directly — so we always validate and pin.
-    let (_, host_label, addrs) = validate_remote_http_target(url, "Reference image")?;
-    // Pin the initial host to the addresses we just validated (blocks a rebind
-    // between validation and connect) and re-validate every redirect hop, so a
-    // 302-to-internal can't smuggle us onto a blocked target either. Legitimate
-    // CDN redirects to other public hosts still work. Proxy is honored for
-    // egress.
-    let redirect_policy = reqwest::redirect::Policy::custom(|attempt| {
-        if attempt.previous().len() >= 10 {
-            return attempt.error(std::io::Error::other("too many redirects"));
-        }
-        match validate_remote_http_target(attempt.url().as_str(), "Reference image redirect") {
-            Ok(_) => attempt.follow(),
-            Err(_) => attempt.stop(),
-        }
-    });
-    let builder = reqwest::blocking::Client::builder()
-        .timeout(Duration::from_secs(DEFAULT_REQUEST_TIMEOUT))
-        .redirect(redirect_policy)
-        .resolve_to_addrs(&host_label, &addrs)
-        .user_agent(build_user_agent());
-    let client = apply_proxy(builder, proxy)?.build().map_err(|error| {
-        AppError::new("network_error", "Unable to build download client.")
-            .with_detail(json!({ "error": error.to_string() }))
-    })?;
-    let response = client.get(url).send().map_err(|error| {
-        AppError::new("network_error", "Unable to download image bytes.")
-            .with_detail(json!({ "error": error.to_string(), "url": redacted }))
-    })?;
-    if !response.status().is_success() {
-        let status = response.status();
-        let detail = response.text().unwrap_or_else(|_| String::new());
-        return Err(http_status_error(status, detail));
-    }
-    // Stream with a hard cap: reading `MAX + 1` bytes lets us detect an
-    // over-limit body (including chunked / Content-Length-less responses)
-    // without ever buffering the whole thing.
     let mut buf = Vec::new();
-    let mut limited = response.take(MAX_REMOTE_IMAGE_BYTES + 1);
-    limited.read_to_end(&mut buf).map_err(|error| {
-        AppError::new("network_error", "Unable to read downloaded image bytes.")
-            .with_detail(json!({ "error": error.to_string(), "url": redacted }))
-    })?;
-    if buf.len() as u64 > MAX_REMOTE_IMAGE_BYTES {
+    response
+        .take(max + 1)
+        .read_to_end(&mut buf)
+        .map_err(|error| {
+            AppError::new("network_error", "Unable to read downloaded image bytes.")
+                .with_detail(json!({ "error": error.to_string(), "url": redacted }))
+        })?;
+    if buf.len() as u64 > max {
         return Err(
             AppError::new("network_error", "Downloaded image is too large.").with_detail(json!({
                 "url": redacted,
-                "max_bytes": MAX_REMOTE_IMAGE_BYTES,
+                "max_bytes": max,
             })),
         );
     }
     Ok(buf)
+}
+
+pub(crate) fn download_bytes(url: &str, proxy: &ProxyConfig) -> Result<Vec<u8>, AppError> {
+    // Redact query strings from anything we log — reference URLs can carry
+    // signed tokens.
+    let redacted = redact_url_for_log(url);
+    // Follow redirects manually so every hop — not just the first — is both
+    // SSRF-validated and pinned to the addresses we validated. reqwest's
+    // resolve_to_addrs only pins the initial host, and its automatic redirect
+    // would re-resolve a redirect target, reopening a DNS-rebind hole. We
+    // validate unconditionally (a custom proxy with a matching `no_proxy` still
+    // direct-connects) and bound every body read.
+    let mut current = url.to_string();
+    for _ in 0..=MAX_REDIRECT_HOPS {
+        let (_, host_label, addrs) = validate_remote_http_target(&current, "Reference image")?;
+        let builder = reqwest::blocking::Client::builder()
+            .timeout(Duration::from_secs(DEFAULT_REQUEST_TIMEOUT))
+            .redirect(reqwest::redirect::Policy::none())
+            .resolve_to_addrs(&host_label, &addrs)
+            .user_agent(build_user_agent());
+        let client = apply_proxy(builder, proxy)?.build().map_err(|error| {
+            AppError::new("network_error", "Unable to build download client.")
+                .with_detail(json!({ "error": error.to_string() }))
+        })?;
+        let response = client.get(&current).send().map_err(|error| {
+            AppError::new("network_error", "Unable to download image bytes.")
+                .with_detail(json!({ "error": error.to_string(), "url": redacted }))
+        })?;
+        let status = response.status();
+        if status.is_redirection() {
+            let location = response
+                .headers()
+                .get(reqwest::header::LOCATION)
+                .and_then(|value| value.to_str().ok())
+                .ok_or_else(|| {
+                    AppError::new("network_error", "Redirect without a Location header.")
+                        .with_detail(json!({ "url": redacted }))
+                })?;
+            // Resolve relative redirects against the current URL. The next loop
+            // iteration validates and pins this target before connecting.
+            let next = Url::parse(&current)
+                .and_then(|base| base.join(location))
+                .map_err(|error| {
+                    AppError::new("network_error", "Invalid redirect target.")
+                        .with_detail(json!({ "error": error.to_string() }))
+                })?;
+            current = next.to_string();
+            continue;
+        }
+        if !status.is_success() {
+            let body = read_capped(response, MAX_ERROR_BODY_BYTES, &redacted)
+                .map(|bytes| String::from_utf8_lossy(&bytes).into_owned())
+                .unwrap_or_default();
+            return Err(http_status_error(status, body));
+        }
+        return read_capped(response, MAX_REMOTE_IMAGE_BYTES, &redacted);
+    }
+    Err(AppError::new(
+        "network_error",
+        "Too many redirects while downloading image.",
+    )
+    .with_detail(json!({ "url": redacted, "max_hops": MAX_REDIRECT_HOPS })))
 }
 
 pub(crate) fn load_image_source_bytes(
