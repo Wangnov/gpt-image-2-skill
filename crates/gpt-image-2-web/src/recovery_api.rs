@@ -39,16 +39,28 @@ pub(crate) async fn resume_job(
     State(state): State<JobQueueState>,
     Json(body): Json<ResumeRequest>,
 ) -> ApiResult {
+    // continue_save / fill_missing / reupload / discard all re-run recovery
+    // through core's blocking provider + storage clients, so they run on the
+    // blocking pool. resubmit only re-enqueues (retry_job is genuinely async)
+    // and stays on the tokio worker.
     match body.action.as_str() {
-        "continue_save" => continue_save_job(&job_id)
+        "continue_save" => run_core_blocking(move || continue_save_job(&job_id))
+            .await?
             .map(Json)
             .map_err(ApiError::internal),
-        "fill_missing" => fill_missing_job(&job_id)
+        "fill_missing" => run_core_blocking(move || fill_missing_job(&job_id))
+            .await?
             .map(Json)
             .map_err(ApiError::internal),
-        "reupload" => reupload_job(&job_id).map(Json).map_err(ApiError::internal),
+        "reupload" => run_core_blocking(move || reupload_job(&job_id))
+            .await?
+            .map(Json)
+            .map_err(ApiError::internal),
         "resubmit" => retry_job(Path(job_id), State(state)).await,
-        "discard" => discard_job(&job_id).map(Json).map_err(ApiError::internal),
+        "discard" => run_core_blocking(move || discard_job(&job_id))
+            .await?
+            .map(Json)
+            .map_err(ApiError::internal),
         _ => Err(ApiError::bad_request("Unsupported recovery action.")),
     }
 }

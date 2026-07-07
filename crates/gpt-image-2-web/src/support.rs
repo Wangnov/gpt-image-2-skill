@@ -6,6 +6,24 @@ pub(crate) fn app_error(error: gpt_image_2_core::AppError) -> String {
     format!("{}: {}", error.code, error.message)
 }
 
+/// Run a synchronous core operation on the blocking pool.
+///
+/// core's network and keyring I/O is built on blocking clients (reqwest
+/// blocking, ssh2, keyring). Calling those inline from a tokio worker
+/// doesn't just stall the runtime — dropping a blocking reqwest client in
+/// async context panics with "Cannot drop a runtime in a context where
+/// blocking is not allowed". Every handler that can reach core network or
+/// keyring paths must go through here (`test_storage` already did).
+pub(crate) async fn run_core_blocking<T, F>(task: F) -> Result<T, ApiError>
+where
+    F: FnOnce() -> T + Send + 'static,
+    T: Send + 'static,
+{
+    tokio::task::spawn_blocking(task)
+        .await
+        .map_err(|error| ApiError::internal(format!("Blocking task failed: {error}")))
+}
+
 pub(crate) fn load_config_or_default() -> AppConfig {
     load_config().unwrap_or_default()
 }

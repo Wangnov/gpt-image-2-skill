@@ -66,7 +66,12 @@ pub(crate) async fn cancel_job(
         error: Value::Null,
     });
     persist_job(&job).map_err(ApiError::internal)?;
-    let notification_deliveries = dispatch_notifications_for_job(&job);
+    // Firing webhook notifications goes through core's blocking HTTP client;
+    // run it on the blocking pool so a configured webhook can't panic the
+    // tokio worker on cancel.
+    let notify_job = job.clone();
+    let notification_deliveries =
+        run_core_blocking(move || dispatch_notifications_for_job(&notify_job)).await?;
     Ok(Json(json!({
         "job_id": job_id,
         "job": job,

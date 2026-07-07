@@ -2,6 +2,7 @@ use std::fs;
 use std::io::{Read, Write};
 use std::net::TcpStream;
 use std::path::{Component, Path, PathBuf};
+use std::time::Duration;
 
 use base64::Engine;
 use base64::engine::general_purpose::STANDARD;
@@ -14,6 +15,10 @@ use crate::{resolve_credential, validate_remote_tcp_target};
 use super::super::types::StorageTargetConfig;
 use super::super::util::*;
 use crate::{AppError, CredentialRef};
+
+const SFTP_CONNECT_TIMEOUT: Duration = Duration::from_secs(30);
+// Matches the 120s cap used by the HTTP-family storage backends.
+const SFTP_IO_TIMEOUT_MS: u32 = 120_000;
 
 fn ensure_remote_dir(sftp: &ssh2::Sftp, remote_dir: &Path) {
     let mut current = PathBuf::new();
@@ -85,12 +90,35 @@ pub(crate) fn connect_sftp_session(
 ) -> Result<(Session, String), AppError> {
     sftp_expected_host_key(host_key_sha256)?;
     let addrs = validate_remote_tcp_target(host, port, "SFTP storage")?;
-    let tcp = TcpStream::connect(addrs.as_slice()).map_err(|error| {
+    // Bounded connect + session timeouts: every HTTP-family backend caps
+    // I/O at 120s, while an SFTP server that blackholes TCP would pin an
+    // upload worker forever ("uploading" jobs that never settle).
+    // connect_timeout takes a single address, so walk the pinned list the
+    // way `connect(&[..])` would.
+    let mut last_error: Option<std::io::Error> = None;
+    let mut connected = None;
+    for addr in &addrs {
+        match TcpStream::connect_timeout(addr, SFTP_CONNECT_TIMEOUT) {
+            Ok(stream) => {
+                connected = Some(stream);
+                break;
+            }
+            Err(error) => last_error = Some(error),
+        }
+    }
+    let tcp = connected.ok_or_else(|| {
         AppError::new(
             "storage_sftp_connect_failed",
             "Unable to connect to SFTP server.",
         )
-        .with_detail(json!({"host": host, "port": port, "error": error.to_string()}))
+        .with_detail(json!({
+            "host": host,
+            "port": port,
+            "timeout_secs": SFTP_CONNECT_TIMEOUT.as_secs(),
+            "error": last_error
+                .map(|error| error.to_string())
+                .unwrap_or_else(|| "no resolved address".to_string()),
+        }))
     })?;
     let mut session = Session::new().map_err(|error| {
         AppError::new(
@@ -100,6 +128,7 @@ pub(crate) fn connect_sftp_session(
         .with_detail(json!({"error": error.to_string()}))
     })?;
     session.set_tcp_stream(tcp);
+    session.set_timeout(SFTP_IO_TIMEOUT_MS);
     session.handshake().map_err(|error| {
         AppError::new("storage_sftp_handshake_failed", "SFTP handshake failed.")
             .with_detail(json!({"host": host, "error": error.to_string()}))

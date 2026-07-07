@@ -73,16 +73,23 @@ pub(crate) async fn job_output_response(
     let job = show_history_job(&job_id)
         .map_err(app_error)
         .map_err(ApiError::not_found)?;
-    let readback = read_job_output_from_storage_with_options(
-        &config.storage,
-        &job,
-        output_index,
-        StorageReadbackOptions {
-            allow_archive_fallback: true,
-            rehydrate_local_cache: true,
-            local_cache_roots: local_cache_roots_for_product(&config),
-        },
-    )
+    // Storage readback can pull the image back from a remote target
+    // (S3/WebDAV/…) over core's blocking HTTP client, so it must run on the
+    // blocking pool rather than inline on the tokio worker.
+    let readback_job = job.clone();
+    let readback = run_core_blocking(move || {
+        read_job_output_from_storage_with_options(
+            &config.storage,
+            &readback_job,
+            output_index,
+            StorageReadbackOptions {
+                allow_archive_fallback: true,
+                rehydrate_local_cache: true,
+                local_cache_roots: local_cache_roots_for_product(&config),
+            },
+        )
+    })
+    .await?
     .map_err(app_error)
     .map_err(ApiError::not_found)?;
     let file_name = output_file_name_from_job(&job, output_index);
