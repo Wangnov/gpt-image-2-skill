@@ -1,242 +1,51 @@
 #![allow(unused_imports)]
 
 use super::*;
+pub(crate) use gpt_image_2_runtime::{
+    QueueRuntimeHooks, completed_event_data, completed_job_for_queue, failed_job_for_queue,
+    storage_overrides_from_job, uploading_job_for_queue,
+};
 
-pub(crate) fn completed_job_for_queue(queued: &QueuedJob, response: &Value) -> Value {
-    let metadata = merge_recovery_metadata(queued.metadata.clone(), &queued.dir);
-    let payload = response.get("payload").unwrap_or(response);
-    let provider = payload
-        .get("provider")
-        .and_then(Value::as_str)
-        .unwrap_or(&queued.provider);
-    let outputs = payload
-        .get("output")
-        .and_then(|output| output.get("files"))
-        .cloned()
-        .or_else(|| {
-            response
-                .get("job")
-                .and_then(|job| job.get("outputs"))
-                .cloned()
-        })
-        .unwrap_or_else(|| json!([]));
-    let output_path = output_path_from_payload(payload).or_else(|| {
-        response
-            .get("job")
-            .and_then(|job| job.get("output_path"))
-            .and_then(Value::as_str)
-            .map(ToString::to_string)
-    });
-    job_snapshot(JobSnapshotInput {
-        id: &queued.id,
-        command: &queued.command,
-        provider,
-        status: payload
-            .get("status")
-            .and_then(Value::as_str)
-            .unwrap_or("completed"),
-        created_at: &queued.created_at,
-        metadata,
-        output_path,
-        outputs,
-        error: payload.get("error").cloned().unwrap_or(Value::Null),
-    })
-}
-
-pub(crate) fn uploading_job_for_queue(queued: &QueuedJob, response: &Value) -> Value {
-    let metadata = merge_recovery_metadata(queued.metadata.clone(), &queued.dir);
-    let payload = response.get("payload").unwrap_or(response);
-    let provider = payload
-        .get("provider")
-        .and_then(Value::as_str)
-        .unwrap_or(&queued.provider);
-    let outputs = payload
-        .get("output")
-        .and_then(|output| output.get("files"))
-        .cloned()
-        .or_else(|| {
-            response
-                .get("job")
-                .and_then(|job| job.get("outputs"))
-                .cloned()
-        })
-        .unwrap_or_else(|| json!([]));
-    let output_path = output_path_from_payload(payload).or_else(|| {
-        response
-            .get("job")
-            .and_then(|job| job.get("output_path"))
-            .and_then(Value::as_str)
-            .map(ToString::to_string)
-    });
-    job_snapshot(JobSnapshotInput {
-        id: &queued.id,
-        command: &queued.command,
-        provider,
-        status: "uploading",
-        created_at: &queued.created_at,
-        metadata,
-        output_path,
-        outputs,
-        error: Value::Null,
-    })
-}
-
-pub(crate) fn failed_job_for_queue(queued: &QueuedJob, error: Value) -> Value {
-    let mut metadata = merge_recovery_metadata(queued.metadata.clone(), &queued.dir);
-    if let Value::Object(map) = &mut metadata {
-        map.insert("error".to_string(), error.clone());
-    }
-    job_snapshot(JobSnapshotInput {
-        id: &queued.id,
-        command: &queued.command,
-        provider: &queued.provider,
-        status: "failed",
-        created_at: &queued.created_at,
-        metadata,
-        output_path: None,
-        outputs: json!([]),
-        error,
-    })
-}
-
-pub(crate) fn completed_event_data(job: &Value) -> Value {
-    let status = job
-        .get("status")
-        .and_then(Value::as_str)
-        .unwrap_or("completed");
-    json!({
-        "status": status,
-        "output": {
-            "path": job.get("output_path").cloned().unwrap_or(Value::Null),
-            "files": job.get("outputs").cloned().unwrap_or_else(|| json!([])),
-        },
-        "error": job.get("error").cloned().unwrap_or(Value::Null),
-        "job": job,
-    })
-}
-
-pub(crate) fn append_terminal_queue_event(
-    app: &tauri::AppHandle,
-    state: &JobQueueState,
-    job_id: &str,
-    event_type: &str,
-    event_data: Value,
-) {
-    let event = match state.inner.lock() {
-        Ok(mut inner) => append_queue_event(&mut inner, job_id, "local", event_type, event_data),
-        Err(_) => return,
-    };
-    emit_queue_event(app, job_id, &event);
-}
-
-pub(crate) fn finish_queued_job(
+#[derive(Clone)]
+struct TauriQueueHooks {
     app: tauri::AppHandle,
-    state: JobQueueState,
-    queued: QueuedJob,
-    result: Result<Value, Value>,
-) {
-    let (job, event_type, event_data, completed) = match result {
-        Ok(response) => {
-            let payload = response.get("payload").unwrap_or(&response);
-            cleanup_child_history(payload, &queued.id);
-            let job = completed_job_for_queue(&queued, &response);
-            let data = completed_event_data(&job);
-            let status = job.get("status").and_then(Value::as_str);
-            let event_type = terminal_event_type(status);
-            let completed = terminal_status_runs_storage_upload(status);
-            if completed {
-                let uploading_job = uploading_job_for_queue(&queued, &response);
-                let _ = persist_job(&uploading_job);
-            }
-            // An Ok payload can still carry a terminal failure status (e.g.
-            // batch partial_failed), so classify the log from the terminal
-            // event type and include the cause when it failed.
-            let (log_level, log_type) = match event_type {
-                "job.failed" => (LogLevel::Error, "job.failed"),
-                "job.partial_failed" => (LogLevel::Warn, "job.partial_failed"),
-                "job.cancelled" => (LogLevel::Info, "job.cancelled"),
-                _ => (LogLevel::Info, "job.completed"),
-            };
-            let mut log_data = json!({
-                "job_id": queued.id,
-                "command": queued.command,
-                "provider": queued.provider,
-                "status": status.unwrap_or("completed"),
-            });
-            if matches!(event_type, "job.failed" | "job.partial_failed")
-                && let Some(error) = job.get("error").filter(|value| !value.is_null())
-            {
-                log_data["error"] = error.clone();
-            }
-            log_event(log_level, "local", log_type, log_data);
-            (job, event_type, data, completed)
-        }
-        Err(error) => {
-            // P0 hands us a structured JobError (code/message/detail); persist
-            // the same value so the logs panel can surface the real cause.
-            log_event(
-                LogLevel::Error,
-                "local",
-                "job.failed",
-                json!({
-                    "job_id": queued.id,
-                    "command": queued.command,
-                    "provider": queued.provider,
-                    "error": error,
-                }),
-            );
-            let job = failed_job_for_queue(&queued, error.clone());
-            (
-                job,
-                "job.failed",
-                json!({
-                    "status": "failed",
-                    "error": error,
-                }),
-                false,
-            )
-        }
-    };
-    if !completed {
-        let _ = persist_job(&job);
-    }
-    {
-        let mut inner = match state.inner.lock() {
-            Ok(inner) => inner,
-            Err(_) => return,
-        };
-        inner.running = inner.running.saturating_sub(1);
-    }
-    if completed {
-        spawn_storage_upload_then_notify(app.clone(), state.clone(), queued.id, job);
-    } else {
-        append_terminal_queue_event(&app, &state, &queued.id, event_type, event_data);
-        spawn_notification_dispatch(app.clone(), state.clone(), queued.id, job);
-    }
-    start_queued_jobs(app, state);
 }
 
-pub(crate) fn storage_overrides_from_job(job: &Value) -> StorageUploadOverrides {
-    let metadata = job.get("metadata").cloned().unwrap_or_else(|| json!({}));
-    StorageUploadOverrides {
-        targets: metadata.get("storage_targets").and_then(|targets| {
-            targets.as_array().map(|items| {
-                items
-                    .iter()
-                    .filter_map(Value::as_str)
-                    .map(ToString::to_string)
-                    .collect::<Vec<_>>()
-            })
-        }),
-        fallback_targets: metadata.get("fallback_targets").and_then(|targets| {
-            targets.as_array().map(|items| {
-                items
-                    .iter()
-                    .filter_map(Value::as_str)
-                    .map(ToString::to_string)
-                    .collect::<Vec<_>>()
-            })
-        }),
+impl QueueRuntimeHooks for TauriQueueHooks {
+    fn emit_queue_event(&self, job_id: &str, event: &Value) {
+        emit_queue_event(&self.app, job_id, event);
+    }
+
+    fn run_queued_task(
+        &self,
+        inner: Arc<Mutex<JobQueueInner>>,
+        queued: QueuedJob,
+    ) -> Result<Value, Value> {
+        let stream = StreamContext {
+            app: self.app.clone(),
+            inner,
+            job_id: queued.id.clone(),
+            command: queued.command.clone(),
+            provider: queued.provider.clone(),
+            created_at: queued.created_at.clone(),
+            metadata: queued.metadata.clone(),
+        };
+        match queued.task.clone() {
+            QueuedTask::Generate(request) => {
+                run_generate_request(request, queued.id.clone(), queued.dir.clone(), Some(stream))
+            }
+            QueuedTask::Edit(request) => {
+                run_edit_request(request, queued.id.clone(), queued.dir.clone(), Some(stream))
+            }
+        }
+    }
+
+    fn upload_completed_job_outputs(&self, job: &Value) -> Result<Value, String> {
+        upload_completed_job_outputs(job)
+    }
+
+    fn dispatch_notifications_for_job(&self, job: &Value) -> Vec<Value> {
+        dispatch_notifications_for_job(job)
     }
 }
 
@@ -259,148 +68,22 @@ pub(crate) fn upload_completed_job_outputs(job: &Value) -> Result<Value, String>
     Ok(enriched)
 }
 
-pub(crate) fn spawn_storage_upload_then_notify(
-    app: tauri::AppHandle,
-    state: JobQueueState,
-    job_id: String,
-    job: Value,
-) {
-    thread::spawn(move || {
-        let notify_job = match upload_completed_job_outputs(&job) {
-            Ok(job) => job,
-            Err(error) => {
-                eprintln!("storage upload failed before notification dispatch: {error}");
-                job.clone()
-            }
-        };
-        let event = match state.inner.lock() {
-            Ok(mut inner) => append_queue_event(
-                &mut inner,
-                &job_id,
-                "local",
-                "job.storage",
-                json!({
-                    "status": notify_job
-                        .get("storage_status")
-                        .cloned()
-                        .unwrap_or_else(|| json!("not_configured")),
-                    "job": notify_job,
-                }),
-            ),
-            Err(_) => return,
-        };
-        emit_queue_event(&app, &job_id, &event);
-        append_terminal_queue_event(
-            &app,
-            &state,
-            &job_id,
-            terminal_event_type(notify_job.get("status").and_then(Value::as_str)),
-            completed_event_data(&notify_job),
-        );
-        spawn_notification_dispatch(app, state, job_id, notify_job);
-    });
-}
-
-// Notification I/O (SMTP, webhooks) is blocking and may take seconds. Run it
-// off the worker / command thread so it cannot occupy a queue slot or stall
-// the IPC response.
 pub(crate) fn spawn_notification_dispatch(
     app: tauri::AppHandle,
     state: JobQueueState,
     job_id: String,
     job: Value,
 ) {
-    thread::spawn(move || {
-        let deliveries = dispatch_notifications_for_job(&job);
-        if deliveries.is_empty() {
-            return;
-        }
-        let event = match state.inner.lock() {
-            Ok(mut inner) => append_queue_event(
-                &mut inner,
-                &job_id,
-                "local",
-                "job.notifications",
-                json!({ "deliveries": deliveries }),
-            ),
-            Err(_) => return,
-        };
-        emit_queue_event(&app, &job_id, &event);
-    });
+    gpt_image_2_runtime::spawn_notification_dispatch(
+        state.inner.clone(),
+        TauriQueueHooks { app },
+        job_id,
+        job,
+    );
 }
 
 pub(crate) fn start_queued_jobs(app: tauri::AppHandle, state: JobQueueState) {
-    loop {
-        let (queued, event, running_job) = {
-            let mut inner = match state.inner.lock() {
-                Ok(inner) => inner,
-                Err(_) => return,
-            };
-            if inner.running >= inner.max_parallel {
-                return;
-            }
-            let Some(queued) = inner.queue.pop_front() else {
-                return;
-            };
-            inner.running += 1;
-            let running_job = job_snapshot(JobSnapshotInput {
-                id: &queued.id,
-                command: &queued.command,
-                provider: &queued.provider,
-                status: "running",
-                created_at: &queued.created_at,
-                metadata: queued.metadata.clone(),
-                output_path: None,
-                outputs: json!([]),
-                error: Value::Null,
-            });
-            let event = append_queue_event(
-                &mut inner,
-                &queued.id,
-                "local",
-                "job.running",
-                json!({"status": "running"}),
-            );
-            (queued, event, running_job)
-        };
-        let _ = persist_job(&running_job);
-        emit_queue_event(&app, &queued.id, &event);
-        log_event(
-            LogLevel::Info,
-            "local",
-            "job.started",
-            json!({
-                "job_id": queued.id,
-                "command": queued.command,
-                "provider": queued.provider,
-            }),
-        );
-        let worker_app = app.clone();
-        let worker_state = state.clone();
-        thread::spawn(move || {
-            let stream = StreamContext {
-                app: worker_app.clone(),
-                state: worker_state.clone(),
-                job_id: queued.id.clone(),
-                command: queued.command.clone(),
-                provider: queued.provider.clone(),
-                created_at: queued.created_at.clone(),
-                metadata: queued.metadata.clone(),
-            };
-            let result = match queued.task.clone() {
-                QueuedTask::Generate(request) => run_generate_request(
-                    request,
-                    queued.id.clone(),
-                    queued.dir.clone(),
-                    Some(stream),
-                ),
-                QueuedTask::Edit(request) => {
-                    run_edit_request(request, queued.id.clone(), queued.dir.clone(), Some(stream))
-                }
-            };
-            finish_queued_job(worker_app, worker_state, queued, result);
-        });
-    }
+    gpt_image_2_runtime::start_queued_jobs(state.inner.clone(), TauriQueueHooks { app });
 }
 
 pub(crate) fn enqueue_job(
@@ -408,43 +91,5 @@ pub(crate) fn enqueue_job(
     state: JobQueueState,
     queued: QueuedJob,
 ) -> Result<Value, String> {
-    let job = job_snapshot(JobSnapshotInput {
-        id: &queued.id,
-        command: &queued.command,
-        provider: &queued.provider,
-        status: "queued",
-        created_at: &queued.created_at,
-        metadata: queued.metadata.clone(),
-        output_path: None,
-        outputs: json!([]),
-        error: Value::Null,
-    });
-    persist_job(&job)?;
-    let job_id = queued.id.clone();
-    let (event, queue) = {
-        let mut inner = state
-            .inner
-            .lock()
-            .map_err(|_| "Job queue lock was poisoned.".to_string())?;
-        inner.queue.push_back(queued);
-        let position = inner.queue.len();
-        let event = append_queue_event(
-            &mut inner,
-            &job_id,
-            "local",
-            "job.queued",
-            json!({"status": "queued", "position": position}),
-        );
-        let queue = queue_snapshot_locked(&inner);
-        (event, queue)
-    };
-    emit_queue_event(&app, &job_id, &event);
-    start_queued_jobs(app, state);
-    Ok(json!({
-        "job_id": job_id,
-        "job": job,
-        "events": [event],
-        "queue": queue,
-        "queued": true,
-    }))
+    gpt_image_2_runtime::enqueue_job(state.inner.clone(), TauriQueueHooks { app }, queued)
 }

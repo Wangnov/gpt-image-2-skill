@@ -15,6 +15,7 @@ dist = false
 [dependencies]
 axum = "0.8.7"
 gpt-image-2-core = { path = "../gpt-image-2-core", version = "0.7.1" }
+gpt-image-2-runtime = { path = "../gpt-image-2-runtime", version = "0.7.1" }
 mime_guess = "2.0.5"
 serde = { version = "1.0.228", features = ["derive"] }
 serde_json = "1.0.145"

@@ -1,6 +1,7 @@
 #![allow(unused_imports)]
 
 use super::*;
+pub(crate) use gpt_image_2_runtime::{JobQueueInner, QueuedJob, QueuedTask};
 
 #[derive(Debug, Deserialize)]
 pub(crate) struct ProviderInput {
@@ -55,13 +56,7 @@ pub(crate) struct JobQueueState {
 impl Default for JobQueueState {
     fn default() -> Self {
         Self {
-            inner: Arc::new(Mutex::new(JobQueueInner {
-                max_parallel: 2,
-                running: 0,
-                queue: VecDeque::new(),
-                events: BTreeMap::new(),
-                next_seq: BTreeMap::new(),
-            })),
+            inner: Arc::new(Mutex::new(JobQueueInner::default())),
             auth: Arc::new(AuthPolicy::default()),
         }
     }
@@ -74,29 +69,4 @@ impl JobQueueState {
             ..Self::default()
         }
     }
-}
-
-pub(crate) struct JobQueueInner {
-    pub(crate) max_parallel: usize,
-    pub(crate) running: usize,
-    pub(crate) queue: VecDeque<QueuedJob>,
-    pub(crate) events: BTreeMap<String, Vec<Value>>,
-    pub(crate) next_seq: BTreeMap<String, u64>,
-}
-
-#[derive(Clone)]
-pub(crate) enum QueuedTask {
-    Generate(GenerateRequest),
-    Edit(EditRequest),
-}
-
-#[derive(Clone)]
-pub(crate) struct QueuedJob {
-    pub(crate) id: String,
-    pub(crate) command: String,
-    pub(crate) provider: String,
-    pub(crate) created_at: String,
-    pub(crate) dir: PathBuf,
-    pub(crate) metadata: Value,
-    pub(crate) task: QueuedTask,
 }

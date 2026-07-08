@@ -1,6 +1,7 @@
 [workspace]
 members = [
   "crates/gpt-image-2-core",
+  "crates/gpt-image-2-runtime",
   "crates/gpt-image-2-skill",
   "crates/gpt-image-2-web",
   "apps/gpt-image-2-app/src-tauri",
