@@ -5,6 +5,10 @@ members = [
   "crates/gpt-image-2-web",
   "apps/gpt-image-2-app/src-tauri",
 ]
+# gpt-image-2-runtime is a work-in-progress extraction of the shared job-queue
+# engine (see docs/runtime-merge-plan.md). Left out of the build until the
+# migration is finished so the workspace stays green.
+exclude = ["crates/gpt-image-2-runtime"]
 resolver = "2"
 
 [workspace.package]

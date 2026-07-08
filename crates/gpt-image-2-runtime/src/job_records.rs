@@ -1,0 +1,161 @@
+#![allow(unused_imports)]
+
+use super::*;
+
+pub fn output_path_from_payload(payload: &Value) -> Option<String> {
+    payload
+        .get("output")
+        .and_then(|output| output.get("path"))
+        .and_then(Value::as_str)
+        .map(ToString::to_string)
+        .or_else(|| {
+            payload
+                .get("output")
+                .and_then(|output| output.get("files"))
+                .and_then(Value::as_array)
+                .and_then(|files| {
+                    files
+                        .iter()
+                        .find(|file| file.get("index").and_then(Value::as_u64) == Some(0))
+                })
+                .and_then(|file| file.get("path"))
+                .and_then(Value::as_str)
+                .map(ToString::to_string)
+        })
+}
+
+pub struct JobSnapshotInput<'a> {
+    pub id: &'a str,
+    pub command: &'a str,
+    pub provider: &'a str,
+    pub status: &'a str,
+    pub created_at: &'a str,
+    pub metadata: Value,
+    pub output_path: Option<String>,
+    pub outputs: Value,
+    pub error: Value,
+}
+
+pub fn job_snapshot(input: JobSnapshotInput<'_>) -> Value {
+    json!({
+        "id": input.id,
+        "command": input.command,
+        "provider": input.provider,
+        "status": input.status,
+        "created_at": input.created_at,
+        "updated_at": chrono_like_now(),
+        "metadata": input.metadata,
+        "outputs": input.outputs,
+        "output_path": input.output_path,
+        "error": input.error,
+    })
+}
+
+pub fn append_updated_at(metadata: &mut Value) {
+    if let Value::Object(object) = metadata {
+        object.insert("updated_at".to_string(), json!(chrono_like_now()));
+    }
+}
+
+pub fn persist_job(job: &Value) -> Result<(), String> {
+    let id = job
+        .get("id")
+        .and_then(Value::as_str)
+        .ok_or_else(|| "Job id is missing.".to_string())?;
+    let command = job
+        .get("command")
+        .and_then(Value::as_str)
+        .unwrap_or("images generate");
+    let provider = job
+        .get("provider")
+        .and_then(Value::as_str)
+        .unwrap_or("auto");
+    let status = job
+        .get("status")
+        .and_then(Value::as_str)
+        .unwrap_or("queued");
+    let created_at = job.get("created_at").and_then(Value::as_str);
+    let output_path = job
+        .get("output_path")
+        .and_then(Value::as_str)
+        .map(PathBuf::from);
+    let mut metadata = job.get("metadata").cloned().unwrap_or_else(|| json!({}));
+    append_updated_at(&mut metadata);
+    if let Value::Object(object) = &mut metadata {
+        if let Some(outputs) = job.get("outputs")
+            && !outputs.is_null()
+        {
+            object.insert(
+                "output".to_string(),
+                json!({
+                    "path": job.get("output_path").cloned().unwrap_or(Value::Null),
+                    "files": outputs,
+                }),
+            );
+        }
+        if let Some(error) = job.get("error")
+            && !error.is_null()
+        {
+            object.insert("error".to_string(), error.clone());
+        }
+    }
+    upsert_history_job(
+        id,
+        command,
+        provider,
+        status,
+        output_path.as_deref(),
+        created_at,
+        metadata,
+    )
+    .map_err(app_error)
+}
+
+pub fn job_from_payload(
+    payload: &Value,
+    fallback_id: &str,
+    command: &str,
+    request: Value,
+) -> Value {
+    let job_id = payload
+        .get("history")
+        .and_then(|history| history.get("job_id"))
+        .and_then(Value::as_str)
+        .unwrap_or(fallback_id);
+    let output = payload.get("output").cloned().unwrap_or_else(|| json!({}));
+    let output_path = output.get("path").and_then(Value::as_str).or_else(|| {
+        output
+            .get("files")
+            .and_then(Value::as_array)
+            .and_then(|files| {
+                files
+                    .iter()
+                    .find(|file| file.get("index").and_then(Value::as_u64) == Some(0))
+            })
+            .and_then(|file| file.get("path"))
+            .and_then(Value::as_str)
+    });
+    json!({
+        "id": job_id,
+        "command": command,
+        "provider": payload.get("provider").cloned().unwrap_or(Value::Null),
+        "status": payload
+            .get("status")
+            .and_then(Value::as_str)
+            .unwrap_or_else(|| if payload.get("ok").and_then(Value::as_bool).unwrap_or(false) { "completed" } else { "failed" }),
+        "created_at": chrono_like_now(),
+        "updated_at": chrono_like_now(),
+        "metadata": request,
+        "outputs": output.get("files").cloned().unwrap_or_else(|| json!([])),
+        "output_path": output_path,
+        "error": payload.get("error").cloned(),
+    })
+}
+
+pub fn chrono_like_now() -> String {
+    let secs = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_secs();
+    format!("{secs}")
+}
