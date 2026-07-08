@@ -1765,6 +1765,7 @@ name = "gpt-image-2-app"
 version = "0.7.1"
 dependencies = [
  "gpt-image-2-core",
+ "gpt-image-2-runtime",
  "image",
  "rfd",
  "serde",
@@ -1805,6 +1806,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "gpt-image-2-runtime"
+version = "0.7.1"
+dependencies = [
+ "gpt-image-2-core",
+ "serde_json",
+]
+
+[[package]]
 name = "gpt-image-2-skill"
 version = "0.7.1"
 dependencies = [
@@ -1818,6 +1827,7 @@ version = "0.7.1"
 dependencies = [
  "axum",
  "gpt-image-2-core",
+ "gpt-image-2-runtime",
  "mime_guess",
  "serde",
  "serde_json",

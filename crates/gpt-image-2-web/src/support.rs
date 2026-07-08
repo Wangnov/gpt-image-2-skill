@@ -244,16 +244,6 @@ pub(crate) fn error_value_from_message(message: impl Into<String>) -> Value {
     json!({ "message": message.into() })
 }
 
-/// Best-effort human-readable message from a JobError-shaped value, used where a
-/// flat string is still required (e.g. logging, summaries).
-pub(crate) fn error_message_from_value(error: &Value) -> String {
-    error
-        .get("message")
-        .and_then(Value::as_str)
-        .map(ToString::to_string)
-        .unwrap_or_else(|| "Command failed".to_string())
-}
-
 /// Run the CLI and, on failure, preserve the entire `error` object from the
 /// payload (already redacted by core's `build_error_payload`) instead of
 /// flattening it to `error.message`. The Err value is JobError-shaped
@@ -277,6 +267,7 @@ pub(crate) fn cli_json_result(args: &[String]) -> Result<Value, Value> {
 mod tests {
     use super::*;
     use std::sync::Mutex;
+    use std::time::UNIX_EPOCH;
 
     static SUPPORT_TEST_LOCK: Mutex<()> = Mutex::new(());
 

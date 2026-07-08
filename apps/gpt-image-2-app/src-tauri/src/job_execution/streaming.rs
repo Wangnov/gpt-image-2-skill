@@ -1,6 +1,7 @@
 #![allow(unused_imports)]
 
 use super::*;
+pub(crate) use gpt_image_2_runtime::BatchItemError;
 
 #[derive(Clone)]
 pub(crate) struct StreamContext {
@@ -11,31 +12,6 @@ pub(crate) struct StreamContext {
     pub(crate) provider: String,
     pub(crate) created_at: String,
     pub(crate) metadata: Value,
-}
-
-#[derive(Debug, Clone)]
-pub(crate) struct BatchItemError {
-    pub(crate) index: usize,
-    pub(crate) code: Option<String>,
-    pub(crate) message: String,
-    pub(crate) detail: Option<Value>,
-}
-
-impl BatchItemError {
-    /// Build a structured per-slot error from a JobError-shaped `Value`
-    /// (`{ code, message, detail }`) as produced by `cli_json_result`, keeping
-    /// `code`/`detail` so the merged payload's `error.items[*]` stay rich.
-    pub(crate) fn from_error_value(index: usize, error: Value) -> Self {
-        Self {
-            index,
-            code: error
-                .get("code")
-                .and_then(Value::as_str)
-                .map(ToString::to_string),
-            message: error_message_from_value(&error),
-            detail: error.get("detail").cloned(),
-        }
-    }
 }
 
 #[derive(Debug, Clone)]
