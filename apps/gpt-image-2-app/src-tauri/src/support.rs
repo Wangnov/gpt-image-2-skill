@@ -1,6 +1,7 @@
 #![allow(unused_imports)]
 
 use super::*;
+pub(crate) use gpt_image_2_runtime::{cli_json_result, error_value_from_message};
 
 pub(crate) fn default_result_library_mode() -> gpt_image_2_core::ExportDirMode {
     gpt_image_2_core::ExportDirMode::ResultLibrary
@@ -272,30 +273,4 @@ pub(crate) fn cli_json(args: &[String]) -> Value {
     let mut argv = vec!["gpt-image-2-skill".to_string(), "--json".to_string()];
     argv.extend(args.iter().cloned());
     run_json(&argv).payload
-}
-
-/// Wrap a bare error string into a JobError-shaped object (`{ "message": ... }`)
-/// so internal validation/IO errors flow through the same `Value` channel as the
-/// structured payload errors produced by the core. Keeps `detail` optional.
-pub(crate) fn error_value_from_message(message: impl Into<String>) -> Value {
-    json!({ "message": message.into() })
-}
-
-/// Run the CLI and, on failure, preserve the entire `error` object from the
-/// payload (already redacted by core's `build_error_payload`) instead of
-/// flattening it to `error.message`. The Err value is JobError-shaped
-/// (`{ code, message, detail }`).
-pub(crate) fn cli_json_result(args: &[String]) -> Result<Value, Value> {
-    let mut argv = vec!["gpt-image-2-skill".to_string(), "--json".to_string()];
-    argv.extend(args.iter().cloned());
-    let outcome = run_json(&argv);
-    if outcome.exit_status == 0 {
-        Ok(outcome.payload)
-    } else {
-        Err(outcome
-            .payload
-            .get("error")
-            .cloned()
-            .unwrap_or_else(|| error_value_from_message("Command failed")))
-    }
 }
