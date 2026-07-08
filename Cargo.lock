@@ -1794,7 +1794,7 @@ dependencies = [
 
 [[package]]
 name = "gpt-image-2-app"
-version = "0.7.2"
+version = "0.7.3"
 dependencies = [
  "gpt-image-2-core",
  "gpt-image-2-runtime",
@@ -1814,7 +1814,7 @@ dependencies = [
 
 [[package]]
 name = "gpt-image-2-core"
-version = "0.7.2"
+version = "0.7.3"
 dependencies = [
  "anyhow",
  "base64 0.22.1",
@@ -1839,7 +1839,7 @@ dependencies = [
 
 [[package]]
 name = "gpt-image-2-runtime"
-version = "0.7.2"
+version = "0.7.3"
 dependencies = [
  "gpt-image-2-core",
  "serde_json",
@@ -1847,7 +1847,7 @@ dependencies = [
 
 [[package]]
 name = "gpt-image-2-skill"
-version = "0.7.2"
+version = "0.7.3"
 dependencies = [
  "gpt-image-2-core",
  "tempfile",
@@ -1855,7 +1855,7 @@ dependencies = [
 
 [[package]]
 name = "gpt-image-2-web"
-version = "0.7.2"
+version = "0.7.3"
 dependencies = [
  "axum",
  "gpt-image-2-core",

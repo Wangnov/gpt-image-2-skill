@@ -1,6 +1,6 @@
 [package]
 name = "gpt-image-2-runtime"
-version = "0.7.2"
+version = "0.7.3"
 edition.workspace = true
 license.workspace = true
 repository.workspace = true
@@ -13,5 +13,5 @@ description = "Shared runtime helpers for GPT Image 2 web and Tauri queues."
 dist = false
 
 [dependencies]
-gpt-image-2-core = { path = "../gpt-image-2-core", version = "0.7.2" }
+gpt-image-2-core = { path = "../gpt-image-2-core", version = "0.7.3" }
 serde_json = "1.0.145"
