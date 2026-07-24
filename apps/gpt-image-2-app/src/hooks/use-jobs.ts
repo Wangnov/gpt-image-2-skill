@@ -14,9 +14,7 @@ export function useJobs() {
     queryFn: api.listJobs,
     refetchInterval: (query) => {
       const jobs = query.state.data as Job[] | undefined;
-      return jobs?.some((job) => isActiveJobStatus(job.status))
-        ? 1_500
-        : 8_000;
+      return jobs?.some((job) => isActiveJobStatus(job.status)) ? 1_500 : 8_000;
     },
   });
 }
@@ -105,7 +103,13 @@ export function useResumeJob() {
       action,
     }: {
       id: string;
-      action: "continue_save" | "fill_missing" | "reupload" | "resubmit" | "discard";
+      action:
+        | "continue_save"
+        | "resume_remote"
+        | "fill_missing"
+        | "reupload"
+        | "resubmit"
+        | "discard";
     }) => api.resumeJob(id, action),
     onSettled: () => qc.invalidateQueries({ queryKey: ["jobs"] }),
   });

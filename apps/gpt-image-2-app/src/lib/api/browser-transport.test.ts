@@ -1,6 +1,7 @@
 import "fake-indexeddb/auto";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { browserApi, __resetBrowserApiForTests } from "./browser-transport";
+import { retryAfterSeconds } from "./browser/openai";
 import type { ProviderConfig, StorageConfig } from "../types";
 
 type CapturedRequest = {
@@ -41,7 +42,7 @@ async function addProvider(overrides: Partial<ProviderConfig> = {}) {
 }
 
 async function waitForJob(jobId: string) {
-  for (let i = 0; i < 80; i += 1) {
+  for (let i = 0; i < 250; i += 1) {
     const payload = await browserApi.getJob(jobId);
     if (
       payload.job.status === "completed" ||
@@ -92,6 +93,15 @@ describe("browserApi", () => {
     vi.restoreAllMocks();
   });
 
+  it("treats the configured polling interval as a lower bound", () => {
+    const response = new Response("{}", {
+      headers: { "Retry-After": "3" },
+    });
+
+    expect(retryAfterSeconds(response, 10)).toBe(10);
+    expect(retryAfterSeconds(response, 1)).toBe(3);
+  });
+
   it("stores API keys locally while returning sanitized browser config", async () => {
     await addProvider();
 
@@ -106,6 +116,24 @@ describe("browserApi", () => {
 
     const secret = await browserApi.revealProviderCredential("mock", "api_key");
     expect(secret.value).toBe("sk-test");
+  });
+
+  it("round-trips provider preset and image transport independently", async () => {
+    await addProvider({
+      preset: "sub2api",
+      image_transport: "sub2api-async",
+      poll_interval_seconds: 5,
+      poll_timeout_seconds: 900,
+    });
+
+    const config = await browserApi.getConfig();
+
+    expect(config.providers.mock).toMatchObject({
+      preset: "sub2api",
+      image_transport: "sub2api-async",
+      poll_interval_seconds: 5,
+      poll_timeout_seconds: 900,
+    });
   });
 
   it("keeps browser notification preferences while disabling server channels and scrubbing inline secrets", async () => {
@@ -331,6 +359,211 @@ describe("browserApi", () => {
     );
     expect(bodies).toHaveLength(1);
     expect(bodies[0]).toMatchObject({ prompt: "native n", n: 2 });
+  });
+
+  it("submits and polls sub2api async image tasks without resubmitting", async () => {
+    const requests: CapturedRequest[] = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+        const url = String(input);
+        requests.push({ url, init });
+        if (url.endsWith("/images/generations/async")) {
+          return new Response(
+            JSON.stringify({
+              task_id: "task-123",
+              status: "processing",
+              poll_url: "/v1/images/tasks/task-123",
+            }),
+            {
+              status: 202,
+              headers: {
+                "Content-Type": "application/json",
+                "Retry-After": "1",
+              },
+            },
+          );
+        }
+        if (url.endsWith("/images/tasks/task-123")) {
+          return okJson({
+            task_id: "task-123",
+            status: "completed",
+            result: { data: [{ b64_json: tinyPng }] },
+          });
+        }
+        throw new Error(`unexpected fetch: ${url}`);
+      }),
+    );
+    await addProvider({
+      preset: "sub2api",
+      image_transport: "sub2api-async",
+      poll_interval_seconds: 1,
+      poll_timeout_seconds: 30,
+    });
+
+    const result = await browserApi.createGenerate({
+      prompt: "async task",
+      provider: "mock",
+      format: "png",
+      n: 1,
+    });
+    const job = await waitForJob(result.job_id);
+
+    expect(job.status).toBe("completed");
+    expect(job.metadata.async_task).toMatchObject({
+      task_id: "task-123",
+      status: "completed",
+      poll_attempts: 1,
+    });
+    expect(requests.map((request) => request.url)).toEqual([
+      "https://mock.example/v1/images/generations/async",
+      "https://mock.example/v1/images/tasks/task-123",
+    ]);
+    expect(requests[0].init?.method).toBe("POST");
+    expect(requests[1].init?.method).toBeUndefined();
+    expect(new Headers(requests[1].init?.headers).get("Authorization")).toBe(
+      "Bearer sk-test",
+    );
+  });
+
+  it("routes an async submission through the relay without a direct POST first", async () => {
+    installBrowserGlobals({ __GPT_IMAGE_2_RELAY_BASE__: "/api/relay" });
+    await __resetBrowserApiForTests();
+    const requests: CapturedRequest[] = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+        requests.push({ url: String(input), init });
+        if (String(input) !== "/api/relay") {
+          throw new Error(`unexpected direct submission: ${String(input)}`);
+        }
+        const headers = new Headers(init?.headers);
+        expect(headers.get("X-GPT-Image-2-Upstream")).toBe(
+          "https://mock.example/v1/images/generations/async",
+        );
+        expect(headers.get("X-GPT-Image-2-Method")).toBe("POST");
+        expect(headers.get("Authorization")).toBe("Bearer sk-test");
+        return new Response(
+          JSON.stringify({
+            task_id: "task-relay",
+            status: "completed",
+            result: { data: [{ b64_json: tinyPng }] },
+          }),
+          {
+            status: 202,
+            headers: { "Content-Type": "application/json" },
+          },
+        );
+      }),
+    );
+    await addProvider({
+      preset: "sub2api",
+      image_transport: "sub2api-async",
+    });
+
+    const result = await browserApi.createGenerate({
+      prompt: "single async submission",
+      provider: "mock",
+      format: "png",
+      n: 1,
+    });
+    const job = await waitForJob(result.job_id);
+
+    expect(job.status).toBe("completed");
+    expect(requests.map((request) => request.url)).toEqual(["/api/relay"]);
+  });
+
+  it("submits sub2api async edits as multipart data", async () => {
+    const requests: CapturedRequest[] = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+        requests.push({ url: String(input), init });
+        return new Response(
+          JSON.stringify({
+            task_id: "task-edit",
+            status: "completed",
+            result: { data: [{ b64_json: tinyPng }] },
+          }),
+          {
+            status: 202,
+            headers: { "Content-Type": "application/json" },
+          },
+        );
+      }),
+    );
+    await addProvider({
+      preset: "sub2api",
+      image_transport: "sub2api-async",
+      supports_n: true,
+      edit_region_mode: "native-mask",
+    });
+    const form = new FormData();
+    form.append(
+      "meta",
+      JSON.stringify({
+        prompt: "async edit",
+        provider: "mock",
+        format: "png",
+        n: 1,
+      }),
+    );
+    form.append("ref_00", new File(["ref"], "ref.png", { type: "image/png" }));
+    form.append("mask", new File(["mask"], "mask.png", { type: "image/png" }));
+
+    const result = await browserApi.createEdit(form);
+    const job = await waitForJob(result.job_id);
+
+    expect(job.status).toBe("completed");
+    expect(job.metadata.async_task).toMatchObject({
+      task_id: "task-edit",
+      status: "completed",
+      poll_attempts: 0,
+    });
+    expect(requests).toHaveLength(1);
+    expect(requests[0].url).toBe("https://mock.example/v1/images/edits/async");
+    expect(requests[0].init?.method).toBe("POST");
+    const body = requests[0].init?.body as FormData;
+    expect(body.get("prompt")).toBe("async edit");
+    expect(body.getAll("image[]")).toHaveLength(1);
+    expect(body.get("mask")).toBeInstanceOf(File);
+  });
+
+  it("rejects cross-origin sub2api poll URLs before sending the API key", async () => {
+    const requests: CapturedRequest[] = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+        requests.push({ url: String(input), init });
+        return new Response(
+          JSON.stringify({
+            task_id: "task-cross-origin",
+            status: "processing",
+            poll_url: "https://evil.example/tasks/task-cross-origin",
+          }),
+          {
+            status: 202,
+            headers: { "Content-Type": "application/json" },
+          },
+        );
+      }),
+    );
+    await addProvider({
+      preset: "sub2api",
+      image_transport: "sub2api-async",
+    });
+
+    const result = await browserApi.createGenerate({
+      prompt: "do not leak",
+      provider: "mock",
+      format: "png",
+      n: 1,
+    });
+    const job = await waitForJob(result.job_id);
+
+    expect(job.status).toBe("failed");
+    expect(job.error?.message).toContain("不同源");
+    expect(requests).toHaveLength(1);
   });
 
   it("retries generate jobs from the stored request with a new job id", async () => {

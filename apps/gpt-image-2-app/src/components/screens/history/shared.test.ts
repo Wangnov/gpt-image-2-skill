@@ -118,6 +118,26 @@ describe("history job display helpers", () => {
     expect(jobRecoveryAction(value).action).toBe("fill_missing");
   });
 
+  it("continues an accepted remote task without resubmitting", () => {
+    const value = job({
+      status: "failed",
+      outputs: [],
+      output_path: "",
+      metadata: {
+        prompt: "make it",
+        recoverability: "recoverable.remote_in_progress",
+        remote_task: {
+          task_id: "task-1",
+          status: "processing",
+        },
+      },
+    });
+
+    const recovery = jobRecoveryAction(value);
+    expect(recovery.action).toBe("resume_remote");
+    expect(recovery.title).toContain("不重新提交");
+  });
+
   it("falls back to resubmit when local recovery actions are unavailable", () => {
     const partial = job({
       status: "partial_failed",
