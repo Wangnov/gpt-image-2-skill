@@ -183,19 +183,22 @@ pub(crate) fn run_config_add_provider(
     } else {
         None
     };
-    config.providers.insert(
-        args.name.clone(),
-        ProviderConfig {
-            provider_type: args.provider_type.clone(),
-            api_base: args.api_base.clone(),
-            endpoint: args.endpoint.clone(),
-            model,
-            credentials,
-            supports_n,
-            edit_region_mode,
-            proxy: None,
-        },
-    );
+    let provider = ProviderConfig {
+        provider_type: args.provider_type.clone(),
+        api_base: args.api_base.clone(),
+        endpoint: args.endpoint.clone(),
+        model,
+        credentials,
+        supports_n,
+        edit_region_mode,
+        preset: args.preset.clone(),
+        image_transport: Some(args.image_transport.clone()),
+        poll_interval_seconds: args.poll_interval_seconds,
+        poll_timeout_seconds: args.poll_timeout_seconds,
+        proxy: None,
+    };
+    validate_provider_config(&provider)?;
+    config.providers.insert(args.name.clone(), provider);
     if args.set_default || config.default_provider.is_none() {
         config.default_provider = Some(args.name.clone());
     }

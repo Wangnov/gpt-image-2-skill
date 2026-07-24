@@ -141,17 +141,19 @@ pub(crate) fn run_request_create_openai(
     let auth_state = load_openai_auth_state_for(cli, selection)?;
     let proxy = effective_proxy_for(cli, &selection.resolved)?;
     let body = read_body_json(&args.body_file)?;
-    let endpoint =
-        build_openai_operation_endpoint(&selection.api_base, args.request_operation.as_str())?;
     let mut logger = JsonEventLogger::new(cli.json_events);
-    let (payload, retry_count) =
-        execute_openai_with_retry(&mut logger, &selection.resolved, |logger| {
-            if args.request_operation == RequestOperation::Edit {
-                request_openai_edit_once(&endpoint, &auth_state, &body, logger, None, &proxy)
-            } else {
-                request_openai_images_once(&endpoint, &auth_state, &body, logger, None, &proxy)
-            }
-        })?;
+    let request_outcome = request_openai_with_transport(
+        selection,
+        args.request_operation.as_str(),
+        &auth_state,
+        &body,
+        &mut logger,
+        None,
+        &proxy,
+    )?;
+    let payload = request_outcome.payload;
+    let retry_count = request_outcome.retry_count;
+    let async_task = request_outcome.async_task;
     let (image_bytes_list, revised_prompts) = decode_openai_images(&payload, &proxy)?;
     let image_output = if image_bytes_list.is_empty() {
         None
@@ -181,16 +183,20 @@ pub(crate) fn run_request_create_openai(
             "The response did not include a generated image.",
         ));
     }
+    let mut history_metadata = json!({
+        "operation": args.request_operation.as_str(),
+        "provider_selection": selection.payload(),
+        "image_output": image_output.clone(),
+    });
+    if let Some(task) = &async_task {
+        history_metadata["async_task"] = task.clone();
+    }
     let history_job_id = record_history_job(
         "request create",
         &selection.resolved,
         "completed",
         args.out_image.as_deref().map(Path::new),
-        json!({
-            "operation": args.request_operation.as_str(),
-            "provider_selection": selection.payload(),
-            "image_output": image_output.clone(),
-        }),
+        history_metadata,
     )
     .ok();
     Ok(CommandOutcome {
@@ -199,6 +205,7 @@ pub(crate) fn run_request_create_openai(
             "command": "request create",
             "provider": selection.resolved,
             "provider_selection": selection.payload(),
+            "async_task": async_task,
             "request": {
                 "operation": args.request_operation.as_str(),
                 "body_file": args.body_file,

@@ -19,6 +19,14 @@ pub(crate) struct ProviderInput {
     #[serde(default)]
     pub(crate) edit_region_mode: Option<String>,
     #[serde(default)]
+    pub(crate) preset: Option<String>,
+    #[serde(default)]
+    pub(crate) image_transport: Option<String>,
+    #[serde(default)]
+    pub(crate) poll_interval_seconds: Option<u64>,
+    #[serde(default)]
+    pub(crate) poll_timeout_seconds: Option<u64>,
+    #[serde(default)]
     pub(crate) proxy: Option<ProxyConfig>,
     #[serde(default)]
     pub(crate) set_default: bool,
