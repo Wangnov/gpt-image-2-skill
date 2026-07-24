@@ -9,10 +9,8 @@ import { Button } from "@/components/ui/button";
 import { Dialog } from "@/components/ui/dialog";
 import { Field } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
-import {
-  Segmented,
-  type SegmentedOption,
-} from "@/components/ui/segmented";
+import { Select } from "@/components/ui/select";
+import { Segmented, type SegmentedOption } from "@/components/ui/segmented";
 import { Textarea } from "@/components/ui/textarea";
 import { useUpsertProvider } from "@/hooks/use-config";
 import { api } from "@/lib/api";
@@ -20,8 +18,10 @@ import { normalizeProxyConfig } from "@/lib/api/shared";
 import { runtimeCopy } from "@/lib/runtime-copy";
 import type {
   CredentialSource,
+  ImageTransport,
   ProviderConfig,
   ProviderKind,
+  ProviderPreset,
   ProxyConfig,
 } from "@/lib/types";
 
@@ -32,6 +32,29 @@ function defaultEditRegionMode(kind: ProviderKind): EditRegionMode {
   if (kind === "codex") return "reference-hint";
   return "reference-hint";
 }
+
+const PROVIDER_PRESET_OPTIONS = [
+  {
+    value: "openai",
+    label: "OpenAI 官方",
+    description: "官方 OpenAI Images API",
+  },
+  {
+    value: "new-api",
+    label: "New API",
+    description: "按 OpenAI Images 同步协议接入",
+  },
+  {
+    value: "sub2api",
+    label: "sub2api",
+    description: "可选同步 Images 或异步任务协议",
+  },
+  {
+    value: "custom",
+    label: "自定义兼容服务",
+    description: "自行确认接口能力",
+  },
+] as const;
 
 /**
  * Map a stored per-provider override onto the dialog's three-way picker.
@@ -62,6 +85,11 @@ export function AddProviderDialog({
 }) {
   const [name, setName] = useState("");
   const [kind, setKind] = useState<ProviderKind>("openai-compatible");
+  const [preset, setPreset] = useState<ProviderPreset>("custom");
+  const [imageTransport, setImageTransport] =
+    useState<ImageTransport>("openai-sync");
+  const [pollIntervalSeconds, setPollIntervalSeconds] = useState(3);
+  const [pollTimeoutSeconds, setPollTimeoutSeconds] = useState(1800);
   const [apiBase, setApiBase] = useState("https://example.com/v1");
   const [model, setModel] = useState("gpt-image-2");
   const [supportsN, setSupportsN] = useState(false);
@@ -117,6 +145,10 @@ export function AddProviderDialog({
   const reset = () => {
     setName("");
     setKind("openai-compatible");
+    setPreset("custom");
+    setImageTransport("openai-sync");
+    setPollIntervalSeconds(3);
+    setPollTimeoutSeconds(1800);
     setApiBase("https://example.com/v1");
     setModel("gpt-image-2");
     setSupportsN(false);
@@ -146,6 +178,12 @@ export function AddProviderDialog({
 
     setName(providerName);
     setKind(browserRuntime ? "openai-compatible" : provider.type);
+    setPreset(
+      provider.preset ?? (provider.type === "openai" ? "openai" : "custom"),
+    );
+    setImageTransport(provider.image_transport ?? "openai-sync");
+    setPollIntervalSeconds(provider.poll_interval_seconds ?? 3);
+    setPollTimeoutSeconds(provider.poll_timeout_seconds ?? 1800);
     setApiBase(provider.api_base ?? "https://example.com/v1");
     setModel(provider.model ?? "gpt-image-2");
     setSupportsN(Boolean(provider.supports_n));
@@ -154,7 +192,9 @@ export function AddProviderDialog({
     );
 
     const apiKeyCredential = provider.credentials.api_key;
-    setKeySource(browserRuntime ? "file" : (apiKeyCredential?.source ?? "file"));
+    setKeySource(
+      browserRuntime ? "file" : (apiKeyCredential?.source ?? "file"),
+    );
     setApiKey("");
     setEnvName(apiKeyCredential?.env ?? "OPENAI_API_KEY");
     setKeychainAccount(apiKeyCredential?.account ?? "");
@@ -173,6 +213,20 @@ export function AddProviderDialog({
         : "",
     );
   }, [browserRuntime, editing, open, provider, providerName]);
+
+  const applyPreset = (next: ProviderPreset) => {
+    setPreset(next);
+    const official = next === "openai";
+    setKind(official && !browserRuntime ? "openai" : "openai-compatible");
+    setApiBase(
+      official ? "https://api.openai.com/v1" : "https://example.com/v1",
+    );
+    setModel("gpt-image-2");
+    setSupportsN(official);
+    setEditRegionMode(official ? "native-mask" : "reference-hint");
+    setImageTransport(next === "sub2api" ? "sub2api-async" : "openai-sync");
+    if (browserRuntime) setKeySource("file");
+  };
 
   const fileCredential = (value: string) =>
     value ? { source: "file" as const, value } : { source: "file" as const };
@@ -216,6 +270,14 @@ export function AddProviderDialog({
           model: model || undefined,
           supports_n: kind === "codex" ? false : supportsN,
           edit_region_mode: editRegionMode,
+          preset: kind === "codex" ? undefined : preset,
+          image_transport: kind === "codex" ? "openai-sync" : imageTransport,
+          poll_interval_seconds:
+            imageTransport === "sub2api-async"
+              ? pollIntervalSeconds
+              : undefined,
+          poll_timeout_seconds:
+            imageTransport === "sub2api-async" ? pollTimeoutSeconds : undefined,
           proxy: proxyOverride,
           credentials:
             kind === "codex"
@@ -321,16 +383,37 @@ export function AddProviderDialog({
             disabled={editing}
           />
         </Field>
-        <Field label="类型">
+        {kind !== "codex" && (
+          <Field
+            label="服务预设"
+            hint="预设只填写推荐默认值；实际请求协议在下方单独选择"
+          >
+            <Select
+              value={preset}
+              onValueChange={(value) => applyPreset(value as ProviderPreset)}
+              options={PROVIDER_PRESET_OPTIONS}
+              ariaLabel="服务预设"
+            />
+          </Field>
+        )}
+        <Field label="协议基线">
           <Segmented
             value={kind}
             onChange={(next) => {
               setKind(next);
               setSupportsN(next === "openai");
               setEditRegionMode(defaultEditRegionMode(next));
+              if (next === "openai") {
+                setPreset("openai");
+                setApiBase("https://api.openai.com/v1");
+                setImageTransport("openai-sync");
+              }
+              if (next === "codex") {
+                setImageTransport("openai-sync");
+              }
               if (browserRuntime) setKeySource("file");
             }}
-            ariaLabel="凭证类型"
+            ariaLabel="协议基线"
             className="w-full overflow-x-auto scrollbar-none"
             options={
               browserRuntime
@@ -361,59 +444,122 @@ export function AddProviderDialog({
             monospace
           />
         </Field>
-        <Field
-          label="批量策略"
-          hint={
-            kind === "codex"
-              ? "Codex 会由 App 自动并行生成多张"
-              : "不确定时选「App 自动并行」最稳"
-          }
-        >
-          {kind === "codex" ? (
-            <div className="flex h-8 items-center justify-between rounded-md border border-border bg-sunken px-2.5 text-[12px]">
-              <span className="font-semibold">App 自动并行</span>
-              <span className="text-faint">适合批量生成</span>
-            </div>
-          ) : (
-            <Segmented
-              value={supportsN ? "yes" : "no"}
-              onChange={(value) => setSupportsN(value === "yes")}
-              ariaLabel="批量策略"
-              options={[
-                { value: "no", label: "App 自动并行" },
-                { value: "yes", label: "接口一次返回多张" },
-              ]}
-            />
+        {kind !== "codex" &&
+          (preset === "sub2api" || imageTransport === "sub2api-async") && (
+            <>
+              <Field label="图片请求模式" hint="异步任务适合绕过长请求超时">
+                <Segmented
+                  value={imageTransport}
+                  onChange={setImageTransport}
+                  ariaLabel="图片请求模式"
+                  options={[
+                    { value: "openai-sync", label: "OpenAI 同步" },
+                    { value: "sub2api-async", label: "sub2api 异步" },
+                  ]}
+                />
+              </Field>
+              {imageTransport === "sub2api-async" && (
+                <div className="rounded-lg border border-[color:var(--accent-20)] bg-[color:var(--accent-05)] px-3 py-2.5 text-[11.5px] leading-relaxed text-muted">
+                  App 会先提交任务，再用任务 ID 轮询结果。服务端必须启用
+                  <span className="mx-1 font-mono text-foreground">
+                    image_storage
+                  </span>
+                  ；停止本地轮询不会取消远端任务。
+                </div>
+              )}
+            </>
           )}
-        </Field>
-        <Field
-          label="局部编辑"
-          hint={
-            kind === "openai"
-              ? "OpenAI 官方可使用精确遮罩"
-              : "不确定时选「软选区参考」最稳"
-          }
-        >
-          {kind === "codex" ? (
-            <div className="flex h-8 items-center justify-between rounded-md border border-border bg-sunken px-2.5 text-[12px]">
-              <span className="font-semibold">软选区参考</span>
-              <span className="text-faint">适合当前 Codex 通道</span>
-            </div>
-          ) : (
-            <Segmented
-              value={editRegionMode}
-              onChange={setEditRegionMode}
-              ariaLabel="局部编辑模式"
-              className="w-full overflow-x-auto scrollbar-none"
-              options={[
-                { value: "reference-hint", label: "软选区参考" },
-                { value: "native-mask", label: "精确遮罩" },
-                { value: "none", label: "不支持" },
-              ]}
-            />
-          )}
-        </Field>
       </div>
+      <details className="group mt-3.5 rounded-lg border border-border-faint bg-sunken">
+        <summary className="flex cursor-pointer list-none items-center justify-between px-3 py-2.5 text-[12px] font-semibold text-muted">
+          高级兼容选项
+          <span className="text-[11px] font-normal text-faint group-open:hidden">
+            批量、局部编辑与轮询
+          </span>
+        </summary>
+        <div className="grid gap-3.5 border-t border-border-faint p-3">
+          <Field
+            label="批量策略"
+            hint={
+              kind === "codex"
+                ? "Codex 会由 App 自动并行生成多张"
+                : "不确定时选「App 自动并行」最稳"
+            }
+          >
+            {kind === "codex" ? (
+              <div className="flex h-8 items-center justify-between rounded-md border border-border bg-surface px-2.5 text-[12px]">
+                <span className="font-semibold">App 自动并行</span>
+                <span className="text-faint">适合批量生成</span>
+              </div>
+            ) : (
+              <Segmented
+                value={supportsN ? "yes" : "no"}
+                onChange={(value) => setSupportsN(value === "yes")}
+                ariaLabel="批量策略"
+                options={[
+                  { value: "no", label: "App 自动并行" },
+                  { value: "yes", label: "接口一次返回多张" },
+                ]}
+              />
+            )}
+          </Field>
+          <Field
+            label="局部编辑"
+            hint={
+              kind === "openai"
+                ? "OpenAI 官方可使用精确遮罩"
+                : "不确定时选「软选区参考」最稳"
+            }
+          >
+            {kind === "codex" ? (
+              <div className="flex h-8 items-center justify-between rounded-md border border-border bg-surface px-2.5 text-[12px]">
+                <span className="font-semibold">软选区参考</span>
+                <span className="text-faint">适合当前 Codex 通道</span>
+              </div>
+            ) : (
+              <Segmented
+                value={editRegionMode}
+                onChange={setEditRegionMode}
+                ariaLabel="局部编辑模式"
+                className="w-full overflow-x-auto scrollbar-none"
+                options={[
+                  { value: "reference-hint", label: "软选区参考" },
+                  { value: "native-mask", label: "精确遮罩" },
+                  { value: "none", label: "不支持" },
+                ]}
+              />
+            )}
+          </Field>
+          {imageTransport === "sub2api-async" && kind !== "codex" && (
+            <div className="grid grid-cols-2 gap-3">
+              <Field label="轮询间隔" hint="1–60 秒">
+                <Input
+                  value={String(pollIntervalSeconds)}
+                  onChange={(event) =>
+                    setPollIntervalSeconds(Number(event.target.value))
+                  }
+                  type="number"
+                  min={1}
+                  max={60}
+                  monospace
+                />
+              </Field>
+              <Field label="最长等待" hint="30–3600 秒">
+                <Input
+                  value={String(pollTimeoutSeconds)}
+                  onChange={(event) =>
+                    setPollTimeoutSeconds(Number(event.target.value))
+                  }
+                  type="number"
+                  min={30}
+                  max={3600}
+                  monospace
+                />
+              </Field>
+            </div>
+          )}
+        </div>
+      </details>
       {kind === "codex" && (
         <div className="mt-1 grid gap-3.5">
           <Field
@@ -520,10 +666,7 @@ export function AddProviderDialog({
       )}
       {api.kind !== "browser" && (
         <div className="mt-1 grid gap-3.5 border-t border-border-faint pt-3.5">
-          <Field
-            label="网络代理"
-            hint="默认跟随全局设置"
-          >
+          <Field label="网络代理" hint="默认跟随全局设置">
             <Segmented
               value={proxyMode}
               onChange={setProxyMode}
@@ -534,10 +677,7 @@ export function AddProviderDialog({
           </Field>
           {proxyMode === "custom" && (
             <>
-              <Field
-                label="代理地址"
-                hint="scheme://[user:pass@]host:port"
-              >
+              <Field label="代理地址" hint="scheme://[user:pass@]host:port">
                 <Input
                   value={proxyUrl}
                   onChange={(e) => setProxyUrl(e.target.value)}
@@ -545,10 +685,7 @@ export function AddProviderDialog({
                   monospace
                 />
               </Field>
-              <Field
-                label="绕过代理的主机"
-                hint="可选，每行一个或逗号分隔"
-              >
+              <Field label="绕过代理的主机" hint="可选，每行一个或逗号分隔">
                 <Textarea
                   value={proxyNoProxyText}
                   onChange={(e) => setProxyNoProxyText(e.target.value)}
@@ -559,7 +696,8 @@ export function AddProviderDialog({
               </Field>
               <p className="text-[11px] text-faint">
                 支持 http / https / socks5 / socks5h；socks5h:// 由代理端做 DNS
-                解析。保存后地址只回显 scheme://host:port，重填完整地址才更新密码。
+                解析。保存后地址只回显
+                scheme://host:port，重填完整地址才更新密码。
               </p>
             </>
           )}

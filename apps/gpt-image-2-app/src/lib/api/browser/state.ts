@@ -60,6 +60,24 @@ export type OpenAiImagePayload = {
   error?: { message?: string };
 };
 
+export type AsyncImageTask = {
+  task_id: string;
+  poll_url: string;
+  status: string;
+  poll_attempts?: number;
+  transient_retries?: number;
+  remote_task_may_still_be_running?: boolean;
+};
+
+export type Sub2ApiTaskPayload = {
+  id?: string;
+  task_id?: string;
+  status?: string;
+  poll_url?: string;
+  result?: OpenAiImagePayload | string;
+  error?: unknown;
+};
+
 export const dbPromise = { current: null as Promise<IDBDatabase> | null };
 export const objectUrls = new Map<string, string>();
 export const blobsByPath = new Map<string, Blob>();

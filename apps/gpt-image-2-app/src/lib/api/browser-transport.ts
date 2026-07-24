@@ -164,6 +164,33 @@ export const browserApi: ApiClient = {
     if (cfg.type !== "openai-compatible") {
       throw new Error("静态 Web 只支持 OpenAI-compatible API Key 凭证。");
     }
+    if (
+      cfg.preset &&
+      !["openai", "new-api", "sub2api", "custom"].includes(cfg.preset)
+    ) {
+      throw new Error("不支持的服务预设。");
+    }
+    if (
+      cfg.image_transport &&
+      !["openai-sync", "sub2api-async"].includes(cfg.image_transport)
+    ) {
+      throw new Error("不支持的图片请求模式。");
+    }
+    if (
+      cfg.poll_interval_seconds !== undefined &&
+      (cfg.poll_interval_seconds < 1 || cfg.poll_interval_seconds > 60)
+    ) {
+      throw new Error("轮询间隔必须在 1–60 秒之间。");
+    }
+    if (
+      cfg.poll_timeout_seconds !== undefined &&
+      (cfg.poll_timeout_seconds < 30 ||
+        cfg.poll_timeout_seconds > 3_600 ||
+        (cfg.poll_interval_seconds !== undefined &&
+          cfg.poll_timeout_seconds < cfg.poll_interval_seconds))
+    ) {
+      throw new Error("最长等待必须在 30–3600 秒之间，且不能短于轮询间隔。");
+    }
     const apiKey = cfg.credentials.api_key;
     if (!apiKey || apiKey.source !== "file") {
       throw new Error(
@@ -190,6 +217,10 @@ export const browserApi: ApiClient = {
       model: cfg.model || "gpt-image-2",
       supports_n: Boolean(cfg.supports_n),
       edit_region_mode: cfg.edit_region_mode ?? "reference-hint",
+      preset: cfg.preset ?? "custom",
+      image_transport: cfg.image_transport ?? "openai-sync",
+      poll_interval_seconds: cfg.poll_interval_seconds,
+      poll_timeout_seconds: cfg.poll_timeout_seconds,
       credentials: { api_key: { source: "file", value } },
     };
     if (cfg.set_default || !config.default_provider) {
@@ -457,6 +488,7 @@ export const browserApi: ApiClient = {
     jobId: string,
     action:
       | "continue_save"
+      | "resume_remote"
       | "fill_missing"
       | "reupload"
       | "resubmit"

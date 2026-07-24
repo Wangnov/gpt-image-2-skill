@@ -1,4 +1,5 @@
 import type { ProviderConfig, ServerConfig } from "./types";
+import { imageTransportLabel } from "./provider-protocol";
 
 export function providerNativeSupportsMultipleOutputs(
   config: ServerConfig | undefined,
@@ -11,19 +12,33 @@ export function providerNativeSupportsMultipleOutputs(
   return cfg.supports_n ?? cfg.type === "openai";
 }
 
-export function providerSupportsMultipleOutputs(_config: ServerConfig | undefined, _provider: string) {
+export function providerSupportsMultipleOutputs(
+  _config: ServerConfig | undefined,
+  _provider: string,
+) {
   return true;
 }
 
-export function effectiveOutputCount(_config: ServerConfig | undefined, _provider: string, requested: number) {
+export function effectiveOutputCount(
+  _config: ServerConfig | undefined,
+  _provider: string,
+  requested: number,
+) {
   return requested;
 }
 
-export function requestOutputCount(_config: ServerConfig | undefined, _provider: string, requested: number) {
+export function requestOutputCount(
+  _config: ServerConfig | undefined,
+  _provider: string,
+  requested: number,
+) {
   return requested;
 }
 
-export function providerEditRegionMode(config: ServerConfig | undefined, provider: string): NonNullable<ProviderConfig["edit_region_mode"]> {
+export function providerEditRegionMode(
+  config: ServerConfig | undefined,
+  provider: string,
+): NonNullable<ProviderConfig["edit_region_mode"]> {
   if (provider === "openai") return "native-mask";
   if (provider === "codex") return "reference-hint";
   const cfg = provider ? config?.providers[provider] : undefined;
@@ -37,9 +52,11 @@ export function providerCapabilityBadges(
   config: ServerConfig | undefined,
   provider: string,
 ) {
+  const cfg = provider ? config?.providers[provider] : undefined;
   const nativeN = providerNativeSupportsMultipleOutputs(config, provider);
   const editMode = providerEditRegionMode(config, provider);
   return [
+    cfg ? imageTransportLabel(cfg) : "同步 Images",
     nativeN ? "接口多图" : "App 并发多图",
     editMode === "native-mask"
       ? "原生遮罩"

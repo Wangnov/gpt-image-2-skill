@@ -196,6 +196,23 @@ docker run --rm -p 8787:8787 \
 
 实际命中的 provider 会在 `doctor` 输出的 `provider_selection.resolved` 里报告。
 
+### OpenAI-compatible 服务预设与图片协议
+
+服务预设和运行时协议是两层独立配置，避免把品牌名误当成兼容保证：
+
+| 服务预设 | `preset` | 当前协议 | 说明 |
+|---|---|---|---|
+| OpenAI 官方 | `openai` | `openai-sync` | 官方 `/images/generations`、`/images/edits` |
+| New API | `new-api` | `openai-sync` | 目前按标准 OpenAI Images 同步协议接入，没有 New API 专用适配层 |
+| sub2api | `sub2api` | `openai-sync` 或 `sub2api-async` | 异步模式使用 `/images/*/async` 提交，再轮询 `/images/tasks/{task_id}` |
+| 自定义服务 | `custom` | `openai-sync` | 由用户确认服务实现的 OpenAI-compatible 能力 |
+
+真正决定请求行为的是 `image_transport`，`preset` 只负责 UI 默认值和说明文案。旧配置缺少这两个字段时仍按 `openai-sync` 执行，不会静默切换协议。前端新建 sub2api 凭证时会优先选择异步模式，但仍可显式改回同步。
+
+sub2api 异步模式要求服务端启用 `image_storage`。停止 App/浏览器本地轮询不会取消远端任务；任务 ID 和最后状态会保留在历史记录中。桌面 App 与 Docker Web 可从失败任务选择“继续获取结果”，只恢复原 task ID 的轮询与落盘，不会重新提交生成请求。静态 Web 会保留 task ID，但刷新后的恢复仍建议改用 App/Docker。
+
+默认轮询间隔为 3 秒、最长等待 1800 秒，可通过 provider 配置调整；`poll_interval_seconds` 是请求频率下限，即使服务端返回更短的 `Retry-After` 也不会更频繁地轮询。异步提交本身不会自动重发，避免“服务端已受理但响应丢失”时重复创建和计费。
+
 ## 核心能力
 
 ### 图像生成与编辑
@@ -319,6 +336,13 @@ gpt-image-2-skill --json config add-provider \
   --name my-image-api --type openai-compatible \
   --api-base https://example.com/v1 --api-key sk-... --set-default
 
+# sub2api 异步任务协议
+gpt-image-2-skill --json config add-provider \
+  --name my-sub2api --type openai-compatible --preset sub2api \
+  --image-transport sub2api-async --api-base https://example.com/v1 \
+  --api-key sk-... --poll-interval-seconds 3 \
+  --poll-timeout-seconds 1800
+
 # 凭据存储到 macOS Keychain / Linux Secret Service / Windows Credential Manager
 gpt-image-2-skill --json secret set --provider my-image-api --field api_key
 
@@ -356,6 +380,8 @@ gpt-image-2-skill --json \
       "type": "openai-compatible",
       "api_base": "https://example.com/v1",
       "model": "gpt-image-2",
+      "preset": "new-api",
+      "image_transport": "openai-sync",
       "credentials": {
         "api_key": { "source": "file", "value": "sk-..." }
       }
@@ -763,6 +789,23 @@ Selection (`--provider <value>`):
 
 The actual provider used is reported under `provider_selection.resolved` in the `doctor` output.
 
+### OpenAI-compatible service presets and image transports
+
+Service presets and runtime transports are intentionally separate so a product name is not treated as a compatibility guarantee:
+
+| Service preset | `preset` | Current transport | Behavior |
+|---|---|---|---|
+| Official OpenAI | `openai` | `openai-sync` | Official `/images/generations` and `/images/edits` |
+| New API | `new-api` | `openai-sync` | Uses the standard synchronous OpenAI Images protocol; there is no New API-specific runtime adapter |
+| sub2api | `sub2api` | `openai-sync` or `sub2api-async` | Async mode submits to `/images/*/async`, then polls `/images/tasks/{task_id}` |
+| Custom service | `custom` | `openai-sync` | The user is responsible for confirming OpenAI-compatible behavior |
+
+`image_transport` controls request behavior; `preset` only supplies UI defaults and explanatory copy. Existing configs without either field continue to use `openai-sync`, so no protocol changes happen silently. The UI initially selects async mode for a newly created sub2api credential, while still allowing an explicit switch back to sync.
+
+sub2api async mode requires server-side `image_storage`. Stopping local polling in the App/browser does not cancel the remote task; the task ID and last status remain in history. Desktop App and Docker Web expose **Continue fetching result** on an interrupted task; this resumes polling and materialization for the existing task ID without submitting a new generation. Static Web preserves the task ID, but post-refresh recovery should still be completed in App/Docker.
+
+Polling defaults to every 3 seconds with an 1800-second overall timeout and can be adjusted per provider. `poll_interval_seconds` is a lower bound, so a shorter server `Retry-After` never increases the configured polling rate. Async submissions themselves are not automatically retried, preventing duplicate task creation and billing when acceptance is uncertain.
+
 ## Capabilities
 
 ### Image generation and edit
@@ -886,6 +929,13 @@ gpt-image-2-skill --json config add-provider \
   --name my-image-api --type openai-compatible \
   --api-base https://example.com/v1 --api-key sk-... --set-default
 
+# sub2api async task transport
+gpt-image-2-skill --json config add-provider \
+  --name my-sub2api --type openai-compatible --preset sub2api \
+  --image-transport sub2api-async --api-base https://example.com/v1 \
+  --api-key sk-... --poll-interval-seconds 3 \
+  --poll-timeout-seconds 1800
+
 # Store credentials in macOS Keychain / Linux Secret Service / Windows Credential Manager
 gpt-image-2-skill --json secret set --provider my-image-api --field api_key
 
@@ -923,6 +973,8 @@ Example `config.json`:
       "type": "openai-compatible",
       "api_base": "https://example.com/v1",
       "model": "gpt-image-2",
+      "preset": "new-api",
+      "image_transport": "openai-sync",
       "credentials": {
         "api_key": { "source": "file", "value": "sk-..." }
       }

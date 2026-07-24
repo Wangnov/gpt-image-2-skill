@@ -18,15 +18,16 @@ OpenAI image API 当前实现使用非流式完整 JSON 调用（[openai.rs:36](
 
 "重试"作为命名是错的——它把"前端断了、后端在跑"、"响应在本地、写盘失败"、"图在本地、上传失败" 等**完全不同的恢复路径**合并成一个动作，而每条路径的计费后果天差地别。
 
-正确命名是 **任务恢复（Task Recovery）**，包含五类**互不相同**的动作。下表 UI label 为最终用户面前的中文按钮文案（说明文风克制专业 + 按钮命名"完成/生成"，详见 §8）：
+正确命名是 **任务恢复（Task Recovery）**，包含六类**互不相同**的动作。下表 UI label 为最终用户面前的中文按钮文案（说明文风克制专业 + 按钮命名"完成/生成"，详见 §8）：
 
 | 动作（UI label） | 内部 action id | 触发条件 | 计费 | V1 |
 |---|---|---|---|---|
 | **继续完成** | `continue_save` | 远端响应已到本地，本地落盘失败 | ❌ 不计费 | ✅ |
+| **继续获取结果** | `resume_remote` | sub2api 已返回 task ID，但本地轮询/落盘中断 | ❌ 不计费，不重新 POST | ✅ |
 | **重新生成** | `resubmit` | 无法证明远端结果可恢复 | ✅ 全额，等同新请求 | ✅ |
 | **生成缺失的 N 张** | `fill_missing` | 多图任务部分成功 | ⚠️ 仅缺失部分 | V2 |
 | **重新上传** | `reupload` | 图已在本地，远端 Origin/Archive 上传失败 | ❌ 不计费 | V2 |
-| 同步状态 | （走 GET /recovery 幂等读取） | 前端断了、后端仍在跑 | ❌ 不计费 | 无独立动作 |
+| 同步状态 | （走 GET /recovery 幂等读取） | 仅刷新本地恢复描述 | ❌ 不计费 | 无独立动作 |
 
 绝不出现"重试"、"复活"、"抢救"、"挽回"这类词。
 
@@ -38,7 +39,7 @@ OpenAI image API 当前实现使用非流式完整 JSON 调用（[openai.rs:36](
 4. **REST 纯洁性**：`GET /recovery` 幂等只读，所有 reconcile 入口共用；`POST /resume` 只做有副作用动作。
 5. **单协议、双实施**：恢复协议放在 `gpt-image-2-core` 共享 crate，Tauri sidecar 与 `gpt-image-2-web` 都消费同一套定义。V1 不合并队列（`JobQueueInner`），只下沉业务层避免行为漂移。
 6. **不破坏现有契约**：V1 不动 retry/timeout 默认值（`DEFAULT_REQUEST_TIMEOUT=300`、`DEFAULT_RETRY_COUNT=3`），不动 top-level job status 枚举，不建新表。
-7. **不做无法兑现的承诺**：状态机里保留 `recoverable.remote_in_progress` 类别作为语义占位，但**V1 不会真正产生此状态**——它需要 provider 能力（远端状态查询/结果回拉）支持。
+7. **不做无法兑现的承诺**：同步 OpenAI Images 仍无法查询已失联请求；启用 `sub2api-async` 后，因为服务端提供 task ID、状态查询和结果回拉，状态机才会真实产生 `recoverable.remote_in_progress`。
 
 ## 3. 场景全景与动作映射
 
@@ -48,10 +49,10 @@ OpenAI image API 当前实现使用非流式完整 JSON 调用（[openai.rs:36](
 | B | 请求 in-flight、连接断 | `ambiguous.remote_maybe_accepted` | 重新生成 · 将再次调用 API（含警告）|
 | C | 响应 body 传输中断 | `ambiguous.remote_maybe_accepted` | 重新生成 · 将再次调用 API（含警告）|
 | D | 响应已收到、本地落盘成功、后续失败 | `recoverable.local_response_cached` | **继续完成** |
-| D' | 响应已收到、但 raw_response 未原子写入 | `terminal.local_recovery_unavailable` | 仅副按钮"重新生成 · 将再次调用 API"|
+| D' | 响应已收到、但 raw_response 未原子写入 | `terminal.local_recovery_unavailable` | 有已保存 sub2api task 时“继续获取结果”；否则仅副按钮“重新生成” |
 | E | n=4 任务收 2 张后失败 | `recoverable.partial_outputs` | (V2) 生成缺失的 N 张 |
 | F | 进程被杀 | 启动扫描后归类到 A–E 之一 | 由扫描决定 |
-| G | 前端断网、后端在跑 | `recoverable.remote_in_progress` | (语义保留，V1 不产生) |
+| G | sub2api task 已受理，前端断网/进程退出 | `recoverable.remote_in_progress` | **继续获取结果** |
 | H | 图已存、上传失败 | `recoverable.upload_failed` | (V2) 重新上传 |
 | I | provider 拒绝（4xx） | `terminal.provider_rejected` | 仅显示原因 |
 | J | 用户取消 | `terminal.user_cancelled` | overflow 菜单"重新生成 · 将再次调用 API" |
@@ -77,18 +78,23 @@ recoverable.never_dispatched              请求未发出
 recoverable.local_response_cached         响应完整收到且已 spool → 零 API 恢复
 recoverable.partial_outputs               (V2) 多图部分成功
 recoverable.upload_failed                 (V2) 图在本地、上传失败
-recoverable.remote_in_progress            (V1 不产生；需 provider 能力支持)
+recoverable.remote_in_progress            sub2api 异步任务已受理、仍可按 task ID 查询
 ambiguous.remote_maybe_accepted           provider 是否扣费无法证明
 terminal.local_recovery_unavailable       完整响应曾到达但未成功 spool（罕见边角）
 terminal.provider_rejected                provider 4xx
 terminal.user_cancelled                   用户主动取消
 ```
 
-`recoverable.*` → 主按钮做对应动作；`ambiguous.*` → 主按钮"重新提交" + 显著扣费风险提示；`terminal.*` → 不显示恢复按钮，仅显示原因。
+`recoverable.*` → 主按钮做对应动作；`ambiguous.*` → 主按钮"重新提交" + 显著扣费风险提示；`terminal.*` 默认只显示原因。唯一例外是 `terminal.local_recovery_unavailable` 同时带有可信 sub2api task ID / 同源 poll URL 时，可通过 `resume_remote` 再次 GET 原任务结果。
 
 ### 4.3 判定主规则（唯一权威）
 
 ```text
+IF sub2api remote_task exists AND raw_response 不存在
+  AND status 非 failed/cancelled/expired
+  → recoverable.remote_in_progress 或 terminal.local_recovery_unavailable
+  → resume_remote（只 GET 原 task，不重新 POST）
+
 取 last_attempt = attempts[-1]
 
 IF !last_attempt.request_started_at
@@ -194,10 +200,12 @@ V1 第 0 步：在 `gpt-image-2-core` 增加 `recovery` 模块，定义：
 
 ### 6.2 HTTP 层
 
-**V1 保持现有 transport policy 不变**：
+**同步 OpenAI transport 保持现有 policy 不变**：
 - `DEFAULT_REQUEST_TIMEOUT = 300` ([constants.rs:29](crates/gpt-image-2-core/src/constants.rs:29))
 - `DEFAULT_RETRY_COUNT = 3` ([constants.rs:25](crates/gpt-image-2-core/src/constants.rs:25))
 - 现有指数退避保留
+
+`sub2api-async` 是明确例外：创建远端任务的 POST 不自动重发，因为连接中断或 5xx 不能证明服务端未受理，重发可能重复创建并计费。只有已有 task ID 后的 GET 轮询会对网络错误、429 与 5xx 做临时重试；provider 的 `poll_interval_seconds` 是 `Retry-After` 的下限。
 
 本协议**只在响应层增加 evidence capture**（headers_received_at / body_completed_at / raw_response_path），不改 transport policy。任何 retry/timeout 调整应单独评估。
 

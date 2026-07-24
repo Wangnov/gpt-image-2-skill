@@ -57,3 +57,40 @@ fn build_openai_edit_form_contains_required_parts() {
     });
     assert!(build_openai_edit_form(&body).is_ok());
 }
+
+#[test]
+fn sub2api_async_endpoints_extend_openai_image_paths() {
+    assert_eq!(
+        build_sub2api_async_endpoint("https://example.com/v1/", "generate").unwrap(),
+        "https://example.com/v1/images/generations/async"
+    );
+    assert_eq!(
+        build_sub2api_async_endpoint("https://example.com/v1", "edit").unwrap(),
+        "https://example.com/v1/images/edits/async"
+    );
+}
+
+#[test]
+fn sub2api_poll_url_accepts_relative_same_origin_paths() {
+    assert_eq!(
+        resolve_sub2api_poll_url(
+            "https://example.com/v1",
+            Some("/v1/images/tasks/task-1"),
+            "task-1",
+        )
+        .unwrap(),
+        "https://example.com/v1/images/tasks/task-1"
+    );
+}
+
+#[test]
+fn sub2api_poll_url_rejects_cross_origin_credentials_redirect() {
+    let error = resolve_sub2api_poll_url(
+        "https://example.com/v1",
+        Some("https://evil.example/images/tasks/task-1"),
+        "task-1",
+    )
+    .unwrap_err();
+
+    assert_eq!(error.code, "async_poll_url_untrusted");
+}
