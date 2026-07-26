@@ -1,0 +1,70 @@
+# Pull-request quality gate.
+#
+# Every other workflow in this repo publishes or releases something; none of
+# them run the test suites, so `vitest` and `cargo test` only ever ran locally.
+# This workflow is the missing gate: it runs the same checks a maintainer would
+# run by hand before merging.
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  node:
+    name: Node (${{ matrix.package }})
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        package:
+          - apps/gpt-image-2-app
+          - workers/gpt-image-2-relay
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: ${{ matrix.package }}/package-lock.json
+      - name: Install
+        working-directory: ${{ matrix.package }}
+        run: npm ci
+      - name: Typecheck
+        working-directory: ${{ matrix.package }}
+        run: npm run typecheck
+      - name: Test
+        working-directory: ${{ matrix.package }}
+        run: npm test
+
+  rust:
+    name: Rust
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v6
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+      - uses: Swatinem/rust-cache@v2
+      - name: Install Tauri system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
+      # tauri_build::build() refuses to compile when frontendDist is missing.
+      - name: Ensure frontend dist exists for tauri_build
+        run: mkdir -p apps/gpt-image-2-app/dist
+      - name: Format
+        run: cargo fmt --all -- --check
+      - name: Clippy
+        run: cargo clippy --workspace --all-targets --all-features -- -D warnings
+      - name: Test
+        run: cargo test --workspace
