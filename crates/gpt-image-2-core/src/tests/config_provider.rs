@@ -24,6 +24,7 @@ fn app_config_round_trips_with_file_secret() {
             supports_n: Some(false),
             edit_region_mode: Some(EDIT_REGION_REFERENCE_HINT.to_string()),
             proxy: None,
+            ..ProviderConfig::default()
         },
     );
     save_app_config(&config_path, &config).unwrap();
@@ -51,12 +52,56 @@ fn configured_openai_provider_resolves_with_file_secret() {
         supports_n: Some(true),
         edit_region_mode: None,
         proxy: None,
+        ..ProviderConfig::default()
     };
     let selection = configured_provider_selection("local", &provider, "test", None).unwrap();
     assert_eq!(selection.resolved, "local");
     assert_eq!(selection.api_base, "https://example.com/v1");
     assert!(matches!(selection.kind, ProviderKind::OpenAi));
     assert_eq!(selection.edit_region_mode, EDIT_REGION_REFERENCE_HINT);
+    assert_eq!(selection.preset, PROVIDER_PRESET_CUSTOM);
+    assert_eq!(selection.image_transport, IMAGE_TRANSPORT_OPENAI_SYNC);
+}
+
+#[test]
+fn configured_sub2api_async_provider_resolves_transport_and_polling() {
+    let provider = ProviderConfig {
+        provider_type: "openai-compatible".to_string(),
+        api_base: Some("https://images.example.com/v1".to_string()),
+        credentials: BTreeMap::from([(
+            "api_key".to_string(),
+            CredentialRef::File {
+                value: "sk-test".to_string(),
+            },
+        )]),
+        preset: Some(PROVIDER_PRESET_SUB2API.to_string()),
+        image_transport: Some(IMAGE_TRANSPORT_SUB2API_ASYNC.to_string()),
+        poll_interval_seconds: Some(5),
+        poll_timeout_seconds: Some(900),
+        ..ProviderConfig::default()
+    };
+
+    let selection = configured_provider_selection("sub2api", &provider, "test", None).unwrap();
+
+    assert_eq!(selection.preset, PROVIDER_PRESET_SUB2API);
+    assert_eq!(selection.image_transport, IMAGE_TRANSPORT_SUB2API_ASYNC);
+    assert_eq!(selection.poll_interval_seconds, 5);
+    assert_eq!(selection.poll_timeout_seconds, 900);
+}
+
+#[test]
+fn provider_config_rejects_invalid_async_polling() {
+    let provider = ProviderConfig {
+        provider_type: "openai-compatible".to_string(),
+        image_transport: Some(IMAGE_TRANSPORT_SUB2API_ASYNC.to_string()),
+        poll_interval_seconds: Some(0),
+        ..ProviderConfig::default()
+    };
+
+    let error = validate_provider_config(&provider).unwrap_err();
+
+    assert_eq!(error.code, "invalid_provider_config");
+    assert!(error.message.contains("poll_interval_seconds"));
 }
 
 #[test]
@@ -80,6 +125,7 @@ fn explicit_builtin_name_uses_configured_provider_when_present() {
             supports_n: Some(false),
             edit_region_mode: Some(EDIT_REGION_REFERENCE_HINT.to_string()),
             proxy: None,
+            ..ProviderConfig::default()
         },
     );
     save_app_config(&config_path, &config).unwrap();
@@ -124,6 +170,7 @@ fn configured_openai_name_loads_config_secret_for_image_auth() {
             supports_n: Some(false),
             edit_region_mode: Some(EDIT_REGION_REFERENCE_HINT.to_string()),
             proxy: None,
+            ..ProviderConfig::default()
         },
     );
     save_app_config(&config_path, &config).unwrap();

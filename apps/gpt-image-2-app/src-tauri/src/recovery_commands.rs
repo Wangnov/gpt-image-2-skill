@@ -38,6 +38,7 @@ pub(crate) fn resume_job(
 ) -> Result<Value, String> {
     match action.as_str() {
         "continue_save" => continue_save_job(&job_id),
+        "resume_remote" => recover_remote_job(&job_id),
         "fill_missing" => fill_missing_job(&job_id),
         "reupload" => reupload_job(&job_id),
         "resubmit" => retry_job(job_id, app, state),
@@ -139,6 +140,72 @@ pub(crate) fn continue_save_job(job_id: &str) -> Result<Value, String> {
     }))
 }
 
+fn recover_remote_job(job_id: &str) -> Result<Value, String> {
+    let job = show_history_job(job_id).map_err(app_error)?;
+    let metadata = job.get("metadata").cloned().unwrap_or_else(|| json!({}));
+    let job_dir =
+        recovery_job_dir(&metadata).ok_or_else(|| "Recovery job dir is missing.".to_string())?;
+    if raw_response_path(&job_dir).is_file() {
+        return continue_save_job(job_id);
+    }
+    let provider = job
+        .get("provider")
+        .and_then(Value::as_str)
+        .filter(|provider| !provider.is_empty())
+        .ok_or_else(|| "远端任务缺少 provider，无法继续获取。".to_string())?;
+    let (remote_task, remote_tasks) = recovery_remote_task_entries(&metadata, Some(&job_dir));
+    if let Some(remote_task) = remote_task {
+        if matches!(
+            remote_task.status.as_str(),
+            "failed" | "cancelled" | "expired"
+        ) {
+            return Err(format!(
+                "sub2api 远端任务 {} 已结束：{}",
+                remote_task.task_id, remote_task.status
+            ));
+        }
+        resume_sub2api_remote_task(provider, job_id, &job_dir, &remote_task).map_err(app_error)?;
+        return continue_save_job(job_id);
+    }
+    if remote_tasks.is_empty() {
+        return Err("没有找到可继续获取的 sub2api 远端任务。".to_string());
+    }
+    for (index, remote_task) in remote_tasks {
+        if matches!(
+            remote_task.status.as_str(),
+            "failed" | "cancelled" | "expired"
+        ) {
+            continue;
+        }
+        let slot = u8::try_from(index).map_err(|_| "远端任务图片序号超出范围。".to_string())?;
+        let child_dir = batch_recovery_job_dir(&job_dir, slot);
+        if raw_response_path(&child_dir).is_file() {
+            continue;
+        }
+        let child_id = batch_recovery_job_id(job_id, slot);
+        if let Err(error) =
+            resume_sub2api_remote_task(provider, &child_id, &child_dir, &remote_task)
+        {
+            log_event(
+                LogLevel::Warn,
+                "local",
+                "job.remote_recovery_failed",
+                json!({
+                    "job_id": job_id,
+                    "slot": index,
+                    "task_id": remote_task.task_id,
+                    "error": {
+                        "code": error.code,
+                        "message": error.message,
+                        "detail": error.detail,
+                    },
+                }),
+            );
+        }
+    }
+    fill_missing_job_with_policy(job_id, false)
+}
+
 fn expected_slot_count(metadata: &Value, job: &Value) -> usize {
     metadata
         .get("generation_slots")
@@ -204,6 +271,10 @@ fn materialize_cached_slot_payload(
 }
 
 fn fill_missing_job(job_id: &str) -> Result<Value, String> {
+    fill_missing_job_with_policy(job_id, true)
+}
+
+fn fill_missing_job_with_policy(job_id: &str, allow_resubmit: bool) -> Result<Value, String> {
     let job = show_history_job(job_id).map_err(app_error)?;
     let metadata = job.get("metadata").cloned().unwrap_or_else(|| json!({}));
     let job_dir =
@@ -254,6 +325,13 @@ fn fill_missing_job(job_id: &str) -> Result<Value, String> {
                     }
                     continue;
                 }
+                if !allow_resubmit {
+                    errors.push(BatchItemError::from_error_value(
+                        *index,
+                        error_value_from_message("没有可取回的远端结果；未重新提交图片生成请求。"),
+                    ));
+                    continue;
+                }
                 match cli_json_result(&generate_args_with_recovery(
                     &request,
                     &out,
@@ -287,6 +365,13 @@ fn fill_missing_job(job_id: &str) -> Result<Value, String> {
                             error_value_from_message(message),
                         )),
                     }
+                    continue;
+                }
+                if !allow_resubmit {
+                    errors.push(BatchItemError::from_error_value(
+                        *index,
+                        error_value_from_message("没有可取回的远端结果；未重新提交图片编辑请求。"),
+                    ));
                     continue;
                 }
                 match cli_json_result(&edit_args_with_recovery(

@@ -183,6 +183,8 @@ pub(crate) fn config_for_ui(config: &AppConfig) -> Value {
                 "credentials": {},
                 "builtin": true,
                 "edit_region_mode": "reference-hint",
+                "preset": "custom",
+                "image_transport": "openai-sync",
             })
         });
         providers.entry("openai".to_string()).or_insert_with(|| {
@@ -196,6 +198,8 @@ pub(crate) fn config_for_ui(config: &AppConfig) -> Value {
                 },
                 "builtin": true,
                 "edit_region_mode": "native-mask",
+                "preset": "openai",
+                "image_transport": "openai-sync",
             })
         });
     }

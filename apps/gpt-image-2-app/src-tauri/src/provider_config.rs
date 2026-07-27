@@ -74,17 +74,20 @@ pub(crate) fn convert_provider_input(
         }
         None => None,
     };
-    Ok((
-        ProviderConfig {
-            provider_type: input.provider_type,
-            api_base: input.api_base,
-            endpoint: input.endpoint,
-            model: input.model,
-            credentials,
-            supports_n: input.supports_n,
-            edit_region_mode: input.edit_region_mode,
-            proxy,
-        },
-        input.set_default,
-    ))
+    let config = ProviderConfig {
+        provider_type: input.provider_type,
+        api_base: input.api_base,
+        endpoint: input.endpoint,
+        model: input.model,
+        credentials,
+        supports_n: input.supports_n,
+        edit_region_mode: input.edit_region_mode,
+        preset: input.preset,
+        image_transport: input.image_transport,
+        poll_interval_seconds: input.poll_interval_seconds,
+        poll_timeout_seconds: input.poll_timeout_seconds,
+        proxy,
+    };
+    gpt_image_2_core::validate_provider_config(&config).map_err(app_error)?;
+    Ok((config, input.set_default))
 }

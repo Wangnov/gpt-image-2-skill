@@ -6,7 +6,10 @@ import { Spinner } from "@/components/ui/spinner";
 import { SourceChip } from "@/components/ui/source-chip";
 import { Tooltip } from "@/components/ui/tooltip";
 import { ProviderLogo } from "@/components/provider-logo";
-import { providerKindLabel } from "@/lib/format";
+import {
+  imageTransportLabel,
+  providerPresetLabel,
+} from "@/lib/provider-protocol";
 import type { ProviderConfig } from "@/lib/types";
 
 export function ProviderRow({
@@ -54,13 +57,17 @@ export function ProviderRow({
           )}
         </div>
         <div className="mt-0.5 flex min-w-0 items-center gap-1.5 overflow-hidden whitespace-nowrap text-[11px] text-muted">
-          <span className="shrink-0">{providerKindLabel(prov.type)}</span>
+          <span className="shrink-0">{providerPresetLabel(prov)}</span>
           {prov.disabled && prov.disabled_reason && (
             <>
               <span>·</span>
-              <span className="truncate text-faint">{prov.disabled_reason}</span>
+              <span className="truncate text-faint">
+                {prov.disabled_reason}
+              </span>
             </>
           )}
+          <span>·</span>
+          <span className="shrink-0">{imageTransportLabel(prov)}</span>
           <span>·</span>
           <span className="t-mono shrink-0">{prov.model ?? "—"}</span>
           {prov.api_base && (

@@ -199,6 +199,14 @@ pub struct AddProviderArgs {
     pub no_supports_n: bool,
     #[arg(long)]
     pub edit_region_mode: Option<String>,
+    #[arg(long)]
+    pub preset: Option<String>,
+    #[arg(long, default_value = IMAGE_TRANSPORT_OPENAI_SYNC)]
+    pub image_transport: String,
+    #[arg(long)]
+    pub poll_interval_seconds: Option<u64>,
+    #[arg(long)]
+    pub poll_timeout_seconds: Option<u64>,
     #[arg(long, action = ArgAction::SetTrue)]
     pub set_default: bool,
 }

@@ -101,6 +101,7 @@ pub use history_list::{
     list_history_jobs_page, show_history_job,
 };
 pub(crate) use image_commands::*;
+pub use image_requests::resume_sub2api_remote_task;
 pub(crate) use image_requests::*;
 pub use json_events::JsonEventLogger;
 pub(crate) use logging::*;
@@ -131,17 +132,27 @@ pub(crate) use paths::{
     resolve_path_ref,
 };
 pub(crate) use provider_selection::*;
-pub use provider_types::ProviderConfig;
+pub use provider_selection::{
+    effective_image_transport, effective_poll_interval_seconds, effective_poll_timeout_seconds,
+    effective_provider_preset, validate_provider_config,
+};
 pub(crate) use provider_types::*;
+pub use provider_types::{
+    DEFAULT_IMAGE_POLL_INTERVAL_SECONDS, DEFAULT_IMAGE_POLL_TIMEOUT_SECONDS,
+    IMAGE_TRANSPORT_OPENAI_SYNC, IMAGE_TRANSPORT_SUB2API_ASYNC, PROVIDER_PRESET_CUSTOM,
+    PROVIDER_PRESET_NEW_API, PROVIDER_PRESET_OPENAI, PROVIDER_PRESET_SUB2API, ProviderConfig,
+};
 pub(crate) use proxy::*;
 pub use proxy::{effective_proxy_for_provider, preserve_proxy_secrets, validate_proxy_config};
 pub use recovery::{
     Recoverability, RecoveryAttempt, RecoveryContext, RecoveryStage, RecoveryState,
-    annotate_recovery_job_dir, batch_recovery_job_dir, batch_recovery_job_id,
-    build_recovery_descriptor, generation_slots_from_batch_payload, generation_slots_from_outputs,
+    RemoteImageTask, annotate_recovery_job_dir, batch_recovery_job_dir, batch_recovery_job_id,
+    build_recovery_descriptor, classify_from_state_and_evidence,
+    generation_slots_from_batch_payload, generation_slots_from_outputs,
     mark_interrupted_jobs_on_startup, materialize_openai_raw_response, merge_recovery_metadata,
     missing_generation_slot_indices, raw_response_path, raw_response_sha256,
-    recovery_attempts_from_metadata, recovery_job_dir, test_fault, write_batch_recovery_summary,
+    recovery_attempts_from_metadata, recovery_job_dir, recovery_remote_task_entries, test_fault,
+    write_batch_recovery_summary,
 };
 pub(crate) use request_commands::*;
 pub use request_commands::{run, run_json};

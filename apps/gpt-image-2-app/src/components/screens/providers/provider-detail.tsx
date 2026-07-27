@@ -10,6 +10,10 @@ import { Icon } from "@/components/icon";
 import { ProviderLogo } from "@/components/provider-logo";
 import { api } from "@/lib/api";
 import { providerKindLabel } from "@/lib/format";
+import {
+  imageTransportLabel,
+  providerPresetLabel,
+} from "@/lib/provider-protocol";
 import { copyText } from "@/lib/user-actions";
 import { runtimeCopy } from "@/lib/runtime-copy";
 import type { ProviderConfig } from "@/lib/types";
@@ -124,7 +128,9 @@ export function ProviderDetail({
             {prov.disabled && <Badge tone="neutral">不可用</Badge>}
           </div>
           <div className="flex items-center gap-1.5 mt-1 text-[12px] text-muted">
-            <span>{providerKindLabel(prov.type)}</span>
+            <span>{providerPresetLabel(prov)}</span>
+            <span>·</span>
+            <span>{imageTransportLabel(prov)}</span>
             <span>·</span>
             <span className="t-mono">{prov.model ?? "—"}</span>
           </div>
@@ -181,6 +187,10 @@ export function ProviderDetail({
           >
             <span className="t-tiny pt-0.5">类型</span>
             <span>{providerKindLabel(prov.type)}</span>
+            <span className="t-tiny pt-0.5">服务预设</span>
+            <span>{providerPresetLabel(prov)}</span>
+            <span className="t-tiny pt-0.5">图片请求</span>
+            <span>{imageTransportLabel(prov)}</span>
             <span className="t-tiny pt-0.5">服务地址</span>
             <span className="t-mono">
               {prov.api_base ?? <span className="text-faint">— 使用内置</span>}
@@ -195,6 +205,15 @@ export function ProviderDetail({
             </span>
             <span className="t-tiny pt-0.5">局部编辑</span>
             <span>{editRegionModeLabel(prov)}</span>
+            {prov.image_transport === "sub2api-async" && (
+              <>
+                <span className="t-tiny pt-0.5">任务轮询</span>
+                <span>
+                  每 {prov.poll_interval_seconds ?? 3} 秒，最长等待{" "}
+                  {prov.poll_timeout_seconds ?? 1800} 秒
+                </span>
+              </>
+            )}
           </div>
         </div>
       </Card>

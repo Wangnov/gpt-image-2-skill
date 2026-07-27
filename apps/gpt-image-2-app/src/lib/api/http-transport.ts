@@ -331,6 +331,7 @@ export const httpApi: ApiClient = {
     jobId: string,
     action:
       | "continue_save"
+      | "resume_remote"
       | "fill_missing"
       | "reupload"
       | "resubmit"

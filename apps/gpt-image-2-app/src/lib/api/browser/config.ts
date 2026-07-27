@@ -311,6 +311,8 @@ export function browserConfigForUi(config: ServerConfig): ServerConfig {
     model: "gpt-5.4",
     credentials: {},
     builtin: true,
+    preset: "custom",
+    image_transport: "openai-sync",
     disabled: true,
     disabled_reason:
       "静态 Web 不能读取 Codex 登录态，请使用桌面 App 或 Docker。",

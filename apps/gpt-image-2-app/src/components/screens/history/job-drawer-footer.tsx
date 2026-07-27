@@ -39,6 +39,14 @@ export function JobDrawerFooter({
   onCancel?: (id: string) => void;
   onDelete?: (id: string) => void;
 }) {
+  const asyncTaskActive = Boolean(
+    job.metadata?.async_task ||
+    job.metadata?.remote_task ||
+    (Array.isArray(job.metadata?.async_tasks) &&
+      job.metadata.async_tasks.length > 0) ||
+    (Array.isArray(job.metadata?.remote_tasks) &&
+      job.metadata.remote_tasks.length > 0),
+  );
   return (
     <div className="px-[18px] py-3 border-t border-border-faint flex flex-col gap-1.5">
       {canCancel ? (
@@ -48,7 +56,7 @@ export function JobDrawerFooter({
           className="w-full justify-center"
           onClick={() => onCancel?.(job.id)}
         >
-          取消任务
+          {asyncTaskActive && api.kind === "browser" ? "停止等待" : "取消任务"}
         </Button>
       ) : (
         <Button
