@@ -36,6 +36,8 @@ jobs:
           cache-dependency-path: |
             apps/gpt-image-2-app/package-lock.json
             workers/gpt-image-2-relay/package-lock.json
+      - name: Test skill bootstrap integrity
+        run: node --test scripts/security/test-skill-wrapper.cjs
       - name: Audit npm dependencies
         run: |
           npm --prefix apps/gpt-image-2-app ci
