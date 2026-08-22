@@ -3,6 +3,10 @@
   "version": "0.7.3",
   "private": true,
   "type": "module",
+  "allowScripts": {
+    "esbuild@0.25.12": true,
+    "fsevents": false
+  },
   "scripts": {
     "dev": "vite",
     "build": "tsc --noEmit && vite build",

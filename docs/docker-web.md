@@ -27,11 +27,26 @@ back stored provider keys — is reachable by anything that can reach the port.
 The server therefore **refuses to start on a non-loopback host unless
 `GPT_IMAGE_2_WEB_TOKEN` is set**. Set it to a secret and the whole `/api`
 surface requires that token (sent as `Authorization: Bearer <token>` or, for
-the web UI, exchanged for an HttpOnly session cookie at first load):
+the web UI, exchanged for a short-lived signed HttpOnly session cookie at first
+load). The shared token itself is never copied into the cookie:
 
 ```bash
 -e GPT_IMAGE_2_WEB_TOKEN="$(openssl rand -hex 32)"
 ```
+
+When HTTPS terminates at a reverse proxy, require HTTPS at that proxy and add
+the `Secure` attribute to browser sessions:
+
+```bash
+-e GPT_IMAGE_2_WEB_SECURE_COOKIE=1
+```
+
+The signed session lasts 12 hours by default. It can be changed with
+`GPT_IMAGE_2_WEB_SESSION_TTL_SECONDS` from 300 seconds through 604800 seconds
+(7 days). Rotating `GPT_IMAGE_2_WEB_TOKEN` immediately invalidates all existing
+browser sessions. Leave `GPT_IMAGE_2_WEB_SECURE_COOKIE` unset only for an
+intentional plain-HTTP local deployment; the server emits a warning when a
+token-protected non-loopback listener lacks it.
 
 To run without a token, bind loopback only (`-e GPT_IMAGE_2_WEB_HOST=127.0.0.1`
 and publish to `127.0.0.1:8787:8787`); token-less mode also rejects requests

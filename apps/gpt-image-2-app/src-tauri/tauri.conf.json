@@ -27,7 +27,19 @@
       }
     ],
     "security": {
-      "csp": null,
+      "csp": {
+        "default-src": "'self' customprotocol: asset:",
+        "script-src": "'self'",
+        "style-src": "'self' 'unsafe-inline' https://api.fontshare.com",
+        "font-src": "'self' data: https://cdn.fontshare.com",
+        "img-src": "'self' asset: http://asset.localhost data: blob: https:",
+        "connect-src": "ipc: http://ipc.localhost asset: http://asset.localhost data: blob: https:",
+        "object-src": "'none'",
+        "base-uri": "'none'",
+        "frame-src": "'none'",
+        "frame-ancestors": "'none'",
+        "form-action": "'none'"
+      },
       "assetProtocol": {
         "enable": true,
         "scope": [

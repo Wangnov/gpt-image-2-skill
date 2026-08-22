@@ -4,5 +4,6 @@ export * from "./events";
 export * from "./config";
 export * from "./capabilities";
 export * from "./openai";
+export * from "./relay-client";
 export * from "./queue";
 export * from "./downloads";

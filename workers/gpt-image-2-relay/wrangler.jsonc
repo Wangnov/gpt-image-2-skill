@@ -3,25 +3,42 @@
   "name": "gpt-image-2-relay",
   "main": "src/index.ts",
   "compatibility_date": "2026-04-30",
-  "compatibility_flags": ["nodejs_compat"],
+  "compatibility_flags": ["nodejs_compat", "global_fetch_strictly_public"],
   "workers_dev": false,
   "routes": [
     {
       "pattern": "image.codex-pool.com/api/relay*",
-      "zone_name": "codex-pool.com"
-    }
+      "zone_name": "codex-pool.com",
+    },
   ],
   "observability": {
     "enabled": true,
-    "head_sampling_rate": 1
+    "head_sampling_rate": 1,
   },
+  "ratelimits": [
+    {
+      "name": "RELAY_SESSION_RATE",
+      "namespace_id": "983746201",
+      "simple": { "limit": 120, "period": 60 },
+    },
+    {
+      "name": "RELAY_SESSION_ISSUE_RATE",
+      "namespace_id": "983746202",
+      "simple": { "limit": 10, "period": 60 },
+    },
+    {
+      "name": "RELAY_LEGACY_RATE",
+      "namespace_id": "983746203",
+      "simple": { "limit": 80, "period": 60 },
+    },
+  ],
   "vars": {
     "RELAY_ENABLED": "true",
-    "RELAY_MODE": "open",
-    "RELAY_ALLOWLIST_REPORT_ONLY": "true",
-    "RELAY_ALLOWED_ORIGINS": "https://image.codex-pool.com,https://gpt-image-2-dpm.pages.dev",
-    "RELAY_MAX_REQUEST_BYTES": "52428800",
-    "RELAY_MAX_RESPONSE_BYTES": "125829120",
-    "RELAY_ALLOWED_METHODS": "GET,POST,OPTIONS"
-  }
+    "RELAY_V2_ENABLED": "true",
+    "RELAY_V1_MODE": "restricted",
+    "RELAY_ALLOWED_ORIGINS": "https://image.codex-pool.com",
+    "RELAY_BLOCKED_HOSTS": "image.codex-pool.com,gpt-image-2-dpm.pages.dev",
+    "RELAY_SESSION_TTL_SECONDS": "86400",
+    "RELAY_COOKIE_SECURE": "true",
+  },
 }

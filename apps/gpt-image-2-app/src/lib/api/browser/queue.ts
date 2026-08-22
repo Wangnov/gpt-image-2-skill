@@ -18,6 +18,7 @@ import {
   runEditRequest,
   runGenerationRequest,
 } from "./openai";
+import { resetRelayClientForTests } from "./relay-client";
 import { deleteDatabase, readStoredJobs, storeOutput, writeJob } from "./store";
 import {
   dbPromise,
@@ -408,6 +409,7 @@ export function prepareBrowserRuntime() {
 }
 
 export async function __resetBrowserApiForTests() {
+  resetRelayClientForTests();
   queue.splice(0, queue.length);
   for (const task of running.values()) {
     task.cancelled = true;

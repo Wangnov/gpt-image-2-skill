@@ -1,385 +1,620 @@
-type RelayMode = "open" | "allowlist";
+import {
+  allowedOrigins,
+  relayEnabled,
+  sessionTtlSeconds,
+  v2Ready,
+} from "./config";
+import {
+  API_BASE_HEADER,
+  API_MAX_ERROR_RESPONSE_BYTES,
+  ASSET_MAX_REDIRECTS,
+  ASSET_MAX_ERROR_RESPONSE_BYTES,
+  ASSET_MAX_REQUEST_BYTES,
+  ASSET_MAX_RESPONSE_BYTES,
+  ASSET_TIMEOUT_MS,
+  classifyLegacyRequest,
+  LEGACY_METHOD_HEADER,
+  LEGACY_UPSTREAM_HEADER,
+  operationUrl,
+  OPERATION_SPECS,
+  requireLegacyRequestOrigin,
+  requireSameOriginPost,
+  requireSameOriginRead,
+  validateApiBase,
+  validateAssetTarget,
+  validateContentLength,
+  validateContentType,
+  type OperationSpec,
+} from "./policy";
+import {
+  createSessionCookie,
+  enforceRateLimit,
+  rateKeyForRequest,
+  verifySession,
+  verifyTurnstile,
+} from "./session";
+import {
+  limitRequestBody,
+  limitResponseBody,
+  readJsonLimited,
+} from "./streams";
+import { RelayHttpError, type Env, type RelayOperation } from "./types";
 
-export interface Env {
-  RELAY_ENABLED?: string;
-  RELAY_MODE?: string;
-  RELAY_ALLOWLIST_REPORT_ONLY?: string;
-  RELAY_ALLOWED_ORIGINS?: string;
-  RELAY_ALLOWED_METHODS?: string;
-  RELAY_MAX_REQUEST_BYTES?: string;
-  RELAY_MAX_RESPONSE_BYTES?: string;
-  RELAY_ALLOWLIST_JSON?: string;
-}
+export type { Env } from "./types";
 
-type AllowlistEntry = {
-  name?: string;
-  origin: string;
-  basePath?: string;
-  paths?: string[];
-  methods?: string[];
-};
-
-const RELAY_HEADER = "x-gpt-image-2-upstream";
-const RELAY_METHOD_HEADER = "x-gpt-image-2-method";
-const DEFAULT_ALLOWED_METHODS = ["GET", "POST", "OPTIONS"];
-const DEFAULT_ALLOWED_ORIGINS = [
-  "https://image.codex-pool.com",
-  "https://gpt-image-2-dpm.pages.dev",
-];
-const DEFAULT_MAX_REQUEST_BYTES = 50 * 1024 * 1024;
-const DEFAULT_MAX_RESPONSE_BYTES = 120 * 1024 * 1024;
-
-const REQUEST_HEADER_BLOCKLIST = new Set([
-  "accept-encoding",
-  "cf-connecting-ip",
-  "cf-ipcountry",
-  "cf-ray",
-  "cf-visitor",
-  "connection",
-  "cookie",
-  "host",
-  "origin",
-  "referer",
-  "x-forwarded-for",
-  "x-forwarded-host",
-  "x-forwarded-proto",
+const RELAY_ROOT = "/api/relay";
+const V2_ROOT = `${RELAY_ROOT}/v2`;
+const API_RESPONSE_HEADERS = new Set([
+  "content-disposition",
+  "content-type",
+  "openai-request-id",
+  "request-id",
+  "retry-after",
+  "x-request-id",
 ]);
 
-const RESPONSE_HEADER_BLOCKLIST = new Set([
-  "connection",
-  "content-length",
-  "set-cookie",
-  "transfer-encoding",
-]);
-
-function csv(value: string | undefined, fallback: string[]) {
-  const items = (value ?? "")
-    .split(",")
-    .map((item) => item.trim())
-    .filter(Boolean);
-  return items.length > 0 ? items : fallback;
+function securityHeaders(headers = new Headers()): Headers {
+  headers.set("Cache-Control", "no-store");
+  headers.set("Referrer-Policy", "no-referrer");
+  headers.set("X-Content-Type-Options", "nosniff");
+  return headers;
 }
 
-function boolEnv(value: string | undefined, fallback: boolean) {
-  if (value === undefined || value.trim() === "") return fallback;
-  return ["1", "true", "yes", "on"].includes(value.trim().toLowerCase());
-}
-
-function numberEnv(value: string | undefined, fallback: number) {
-  const parsed = Number(value);
-  return Number.isFinite(parsed) && parsed > 0 ? Math.floor(parsed) : fallback;
-}
-
-function relayMode(env: Env): RelayMode {
-  return env.RELAY_MODE === "allowlist" ? "allowlist" : "open";
-}
-
-function allowedOrigins(env: Env) {
-  return csv(env.RELAY_ALLOWED_ORIGINS, DEFAULT_ALLOWED_ORIGINS);
-}
-
-function allowedMethods(env: Env) {
-  return csv(env.RELAY_ALLOWED_METHODS, DEFAULT_ALLOWED_METHODS).map((method) =>
-    method.toUpperCase(),
+function legacyCorsHeaders(request: Request, env: Env): Headers {
+  const headers = new Headers();
+  const origin = request.headers.get("Origin");
+  if (origin && allowedOrigins(env).includes(origin)) {
+    headers.set("Access-Control-Allow-Origin", origin);
+    headers.set("Vary", "Origin");
+  }
+  headers.set("Access-Control-Allow-Methods", "POST, OPTIONS");
+  headers.set(
+    "Access-Control-Allow-Headers",
+    "authorization,content-type,accept,x-gpt-image-2-upstream,x-gpt-image-2-method",
   );
+  headers.set(
+    "Access-Control-Expose-Headers",
+    "content-type,content-disposition,deprecation,retry-after,request-id,x-request-id,openai-request-id,x-gpt-image-2-relay,x-gpt-image-2-relay-policy",
+  );
+  headers.set("Access-Control-Max-Age", "86400");
+  return headers;
 }
 
 function jsonResponse(
   status: number,
-  message: string,
-  request: Request,
-  env: Env,
-) {
-  return new Response(JSON.stringify({ error: { message } }), {
+  value: unknown,
+  request?: Request,
+  env?: Env,
+  legacy = false,
+  extraHeaders?: HeadersInit,
+): Response {
+  const headers = new Headers(extraHeaders);
+  headers.set("Content-Type", "application/json; charset=utf-8");
+  if (legacy && request && env) {
+    legacyCorsHeaders(request, env).forEach((value, key) =>
+      headers.set(key, value),
+    );
+    headers.set("Deprecation", "true");
+  }
+  return new Response(JSON.stringify(value), {
     status,
-    headers: {
-      "Content-Type": "application/json; charset=utf-8",
-      ...corsHeaders(request, env),
-    },
+    headers: securityHeaders(headers),
   });
 }
 
-function corsHeaders(request: Request, env: Env) {
-  const origin = request.headers.get("Origin");
-  const allowed = allowedOrigins(env);
-  const allowOrigin =
-    origin && (allowed.includes("*") || allowed.includes(origin))
-      ? origin
-      : allowed[0];
-  return {
-    "Access-Control-Allow-Origin": allowOrigin,
-    "Access-Control-Allow-Methods": allowedMethods(env).join(", "),
-    "Access-Control-Allow-Headers":
-      "authorization,content-type,accept,x-gpt-image-2-upstream,x-gpt-image-2-method",
-    "Access-Control-Expose-Headers":
-      "content-type,x-gpt-image-2-relay,x-gpt-image-2-relay-policy",
-    "Access-Control-Max-Age": "86400",
-    Vary: "Origin",
-  };
-}
-
-function originAllowed(request: Request, env: Env) {
-  const origin = request.headers.get("Origin");
-  if (!origin) return true;
-  const allowed = allowedOrigins(env);
-  return allowed.includes("*") || allowed.includes(origin);
-}
-
-function parseAllowlist(env: Env): AllowlistEntry[] {
-  if (!env.RELAY_ALLOWLIST_JSON?.trim()) return [];
-  try {
-    const parsed = JSON.parse(env.RELAY_ALLOWLIST_JSON) as AllowlistEntry[];
-    return Array.isArray(parsed) ? parsed : [];
-  } catch {
-    return [];
-  }
-}
-
-function matchAllowlistEntry(
-  upstream: URL,
-  method: string,
-  entry: AllowlistEntry,
-) {
-  let origin: URL;
-  try {
-    origin = new URL(entry.origin);
-  } catch {
-    return false;
-  }
-  if (origin.origin !== upstream.origin) return false;
-  if (entry.basePath && !upstream.pathname.startsWith(entry.basePath)) {
-    return false;
-  }
-  if (entry.paths && !entry.paths.includes(upstream.pathname)) return false;
-  if (
-    entry.methods &&
-    !entry.methods.map((item) => item.toUpperCase()).includes(method)
-  ) {
-    return false;
-  }
-  return true;
-}
-
-function allowlistDecision(upstream: URL, method: string, env: Env) {
-  const entries = parseAllowlist(env);
-  return entries.some((entry) => matchAllowlistEntry(upstream, method, entry));
-}
-
-function parseIpv4(hostname: string) {
-  const parts = hostname.split(".");
-  if (parts.length !== 4) return undefined;
-  const bytes = parts.map((part) => Number(part));
-  if (
-    bytes.some(
-      (byte, index) =>
-        !Number.isInteger(byte) ||
-        byte < 0 ||
-        byte > 255 ||
-        String(byte) !== parts[index],
-    )
-  ) {
-    return undefined;
-  }
-  return bytes;
-}
-
-function privateIpv4(bytes: number[]) {
-  const [a, b] = bytes;
-  return (
-    a === 0 ||
-    a === 10 ||
-    a === 127 ||
-    (a === 100 && b >= 64 && b <= 127) ||
-    (a === 169 && b === 254) ||
-    (a === 172 && b >= 16 && b <= 31) ||
-    (a === 192 && b === 168) ||
-    (a === 198 && (b === 18 || b === 19)) ||
-    a >= 224
-  );
-}
-
-function validateUpstream(raw: string | null) {
-  if (!raw?.trim()) return "Missing x-gpt-image-2-upstream.";
-  let upstream: URL;
-  try {
-    upstream = new URL(raw);
-  } catch {
-    return "Invalid upstream URL.";
-  }
-  if (upstream.protocol !== "https:")
-    return "Only HTTPS upstreams are allowed.";
-  if (upstream.username || upstream.password) {
-    return "Upstream URLs must not include credentials.";
-  }
-  if (upstream.port && upstream.port !== "443") {
-    return "Only the default HTTPS port is allowed.";
-  }
-  const hostname = upstream.hostname.toLowerCase();
-  if (
-    hostname === "localhost" ||
-    hostname.endsWith(".localhost") ||
-    hostname.endsWith(".local")
-  ) {
-    return "Local upstreams are not allowed.";
-  }
-  if (hostname.includes(":")) return "IPv6 literal upstreams are not allowed.";
-  const ipv4 = parseIpv4(hostname);
-  if (ipv4 && privateIpv4(ipv4)) {
-    return "Private network upstreams are not allowed.";
-  }
-  return upstream;
-}
-
-function validateContentLength(request: Request, env: Env) {
-  const max = numberEnv(env.RELAY_MAX_REQUEST_BYTES, DEFAULT_MAX_REQUEST_BYTES);
-  const header = request.headers.get("Content-Length");
-  if (!header) return undefined;
-  const length = Number(header);
-  if (Number.isFinite(length) && length > max) {
-    return `Relay request is too large. Limit is ${max} bytes.`;
-  }
-  return undefined;
-}
-
-function requestHeadersForUpstream(request: Request) {
-  const headers = new Headers();
-  request.headers.forEach((value, key) => {
-    const normalized = key.toLowerCase();
-    if (REQUEST_HEADER_BLOCKLIST.has(normalized)) return;
-    if (normalized.startsWith("x-gpt-image-2-")) return;
-    headers.set(key, value);
-  });
-  return headers;
-}
-
-function responseHeadersForBrowser(
-  response: Response,
+function errorResponse(
+  error: RelayHttpError,
   request: Request,
   env: Env,
-  policy: RelayMode,
-) {
+  legacy: boolean,
+): Response {
   const headers = new Headers();
-  response.headers.forEach((value, key) => {
-    if (RESPONSE_HEADER_BLOCKLIST.has(key.toLowerCase())) return;
-    headers.set(key, value);
+  if (error.retryAfter) headers.set("Retry-After", String(error.retryAfter));
+  const payload: {
+    error: {
+      message: string;
+      code: string;
+      retry_after_seconds?: number;
+    };
+  } = { error: { message: error.message, code: error.code } };
+  if (error.retryAfter) {
+    payload.error.retry_after_seconds = error.retryAfter;
+  }
+  return jsonResponse(error.status, payload, request, env, legacy, headers);
+}
+
+function responseHeaders(
+  upstream: Response,
+  request: Request,
+  env: Env,
+  legacy: boolean,
+): Headers {
+  const headers = new Headers();
+  upstream.headers.forEach((value, key) => {
+    const normalized = key.toLowerCase();
+    if (
+      API_RESPONSE_HEADERS.has(normalized) ||
+      normalized.startsWith("x-ratelimit-") ||
+      normalized.startsWith("ratelimit-")
+    ) {
+      headers.set(key, value);
+    }
   });
-  Object.entries(corsHeaders(request, env)).forEach(([key, value]) => {
-    headers.set(key, value);
-  });
-  headers.set("Cache-Control", "no-store");
+  if (legacy) {
+    legacyCorsHeaders(request, env).forEach((value, key) =>
+      headers.set(key, value),
+    );
+    headers.set("Deprecation", "true");
+  }
   headers.set("X-GPT-Image-2-Relay", "1");
-  headers.set("X-GPT-Image-2-Relay-Policy", policy);
+  headers.set("X-GPT-Image-2-Relay-Policy", legacy ? "restricted-v1" : "v2");
+  return securityHeaders(headers);
+}
+
+function checkUpstreamContentLength(
+  response: Response,
+  maxBytes: number,
+): void {
+  const raw = response.headers.get("Content-Length");
+  if (!raw) return;
+  const length = Number(raw);
+  if (Number.isFinite(length) && length > maxBytes) {
+    response.body?.cancel("relay response exceeded size limit");
+    throw new RelayHttpError(
+      413,
+      `Relay response exceeds the ${maxBytes}-byte limit.`,
+      "response_too_large",
+    );
+  }
+}
+
+function relayResponse(
+  upstream: Response,
+  maxBytes: number,
+  request: Request,
+  env: Env,
+  legacy: boolean,
+): Response {
+  checkUpstreamContentLength(upstream, maxBytes);
+  return new Response(
+    upstream.body ? limitResponseBody(upstream.body, maxBytes) : null,
+    {
+      status: upstream.status,
+      statusText: upstream.statusText,
+      headers: responseHeaders(upstream, request, env, legacy),
+    },
+  );
+}
+
+function authorizationHeader(request: Request): string {
+  const authorization = request.headers.get("Authorization")?.trim() ?? "";
+  if (!authorization || authorization.length > 16 * 1024) {
+    throw new RelayHttpError(
+      400,
+      "A valid Authorization header is required.",
+      "authorization_required",
+    );
+  }
+  return authorization;
+}
+
+function apiRequestHeaders(request: Request, spec: OperationSpec): Headers {
+  const headers = new Headers({
+    Authorization: authorizationHeader(request),
+    "Accept-Encoding": "identity",
+  });
+  const accept = request.headers.get("Accept");
+  if (accept && accept.length <= 512) headers.set("Accept", accept);
+  if (spec.requestContentType) {
+    const contentType = request.headers.get("Content-Type");
+    if (!contentType || contentType.length > 1024) {
+      throw new RelayHttpError(
+        415,
+        "Invalid relay request Content-Type.",
+        "unsupported_media_type",
+      );
+    }
+    headers.set("Content-Type", contentType);
+  }
   return headers;
 }
 
-function limitResponseBody(body: ReadableStream<Uint8Array>, maxBytes: number) {
-  const reader = body.getReader();
-  let total = 0;
-  return new ReadableStream<Uint8Array>({
-    async pull(controller) {
-      const chunk = await reader.read();
-      if (chunk.done) {
-        controller.close();
-        return;
+function requireIdentityEncoding(response: Response): void {
+  const encoding = response.headers
+    .get("Content-Encoding")
+    ?.trim()
+    .toLowerCase();
+  if (encoding && encoding !== "identity") {
+    response.body?.cancel("encoded upstream response rejected");
+    throw new RelayHttpError(
+      502,
+      "Upstream ignored the relay's identity encoding requirement.",
+      "upstream_encoding_denied",
+    );
+  }
+}
+
+function requireJsonSuccessResponse(response: Response): void {
+  if (!response.ok) return;
+  const mediaType =
+    response.headers
+      .get("Content-Type")
+      ?.split(";", 1)[0]
+      .trim()
+      .toLowerCase() ?? "";
+  if (
+    mediaType !== "application/json" &&
+    mediaType !== "text/json" &&
+    !mediaType.endsWith("+json")
+  ) {
+    response.body?.cancel("non-JSON upstream response rejected");
+    throw new RelayHttpError(
+      502,
+      "Upstream returned an unsupported success content type.",
+      "upstream_content_type_denied",
+    );
+  }
+}
+
+async function fetchApiOperation(
+  request: Request,
+  env: Env,
+  spec: OperationSpec,
+  base: URL,
+  legacy: boolean,
+): Promise<Response> {
+  if (spec.requestContentType)
+    validateContentType(request, spec.requestContentType);
+  validateContentLength(request, spec.maxRequestBytes);
+  if (spec.upstreamMethod === "POST" && !request.body) {
+    throw new RelayHttpError(400, "Request body is required.", "body_required");
+  }
+  if (spec.upstreamMethod === "GET" && request.body) {
+    throw new RelayHttpError(
+      400,
+      "Models request must not have a body.",
+      "body_not_allowed",
+    );
+  }
+
+  let upstream: Response;
+  try {
+    upstream = await fetch(operationUrl(base, spec), {
+      method: spec.upstreamMethod,
+      headers: apiRequestHeaders(request, spec),
+      body:
+        spec.upstreamMethod === "POST"
+          ? limitRequestBody(request.body, spec.maxRequestBytes)
+          : undefined,
+      redirect: "manual",
+      cache: "no-store",
+      signal: AbortSignal.any([
+        request.signal,
+        AbortSignal.timeout(spec.timeoutMs),
+      ]),
+    });
+  } catch (error) {
+    if (error instanceof RelayHttpError) throw error;
+    throw new RelayHttpError(
+      502,
+      "Upstream request failed.",
+      "upstream_unavailable",
+    );
+  }
+  if (upstream.status >= 300 && upstream.status < 400) {
+    upstream.body?.cancel("upstream redirect rejected");
+    throw new RelayHttpError(
+      502,
+      "Upstream API redirects are not allowed.",
+      "upstream_redirect_denied",
+    );
+  }
+  requireIdentityEncoding(upstream);
+  requireJsonSuccessResponse(upstream);
+  return relayResponse(
+    upstream,
+    upstream.ok
+      ? spec.maxResponseBytes
+      : Math.min(spec.maxResponseBytes, API_MAX_ERROR_RESPONSE_BYTES),
+    request,
+    env,
+    legacy,
+  );
+}
+
+async function fetchAsset(
+  request: Request,
+  env: Env,
+  initialTarget: URL,
+  legacy: boolean,
+): Promise<Response> {
+  let target = initialTarget;
+  const signal = AbortSignal.any([
+    request.signal,
+    AbortSignal.timeout(ASSET_TIMEOUT_MS),
+  ]);
+  for (let redirects = 0; redirects <= ASSET_MAX_REDIRECTS; redirects += 1) {
+    let upstream: Response;
+    try {
+      upstream = await fetch(target, {
+        method: "GET",
+        headers: {
+          Accept: "image/*, application/octet-stream;q=0.9, */*;q=0.1",
+          "Accept-Encoding": "identity",
+        },
+        redirect: "manual",
+        cache: "no-store",
+        signal,
+      });
+    } catch {
+      throw new RelayHttpError(
+        502,
+        "Asset download failed.",
+        "asset_unavailable",
+      );
+    }
+
+    if (upstream.status >= 300 && upstream.status < 400) {
+      const location = upstream.headers.get("Location");
+      upstream.body?.cancel("following validated asset redirect");
+      if (!location || redirects === ASSET_MAX_REDIRECTS) {
+        throw new RelayHttpError(
+          502,
+          "Asset redirect could not be followed safely.",
+          "asset_redirect_denied",
+        );
       }
-      total += chunk.value.byteLength;
-      if (total > maxBytes) {
-        await reader.cancel("relay response too large");
-        controller.error(new Error("Relay response exceeded size limit."));
-        return;
+      let next: URL;
+      try {
+        next = new URL(location, target);
+      } catch {
+        throw new RelayHttpError(
+          502,
+          "Asset redirect could not be followed safely.",
+          "asset_redirect_denied",
+        );
       }
-      controller.enqueue(chunk.value);
-    },
-    cancel(reason) {
-      return reader.cancel(reason);
-    },
+      try {
+        target = validateAssetTarget(next.href, new URL(request.url), env);
+      } catch {
+        throw new RelayHttpError(
+          502,
+          "Asset redirect could not be followed safely.",
+          "asset_redirect_denied",
+        );
+      }
+      continue;
+    }
+
+    requireIdentityEncoding(upstream);
+
+    if (upstream.ok) {
+      const contentType =
+        upstream.headers.get("Content-Type")?.toLowerCase() ?? "";
+      if (
+        !contentType.startsWith("image/") &&
+        !contentType.startsWith("application/octet-stream") &&
+        !contentType.startsWith("binary/octet-stream")
+      ) {
+        upstream.body?.cancel("unexpected asset content type");
+        throw new RelayHttpError(
+          502,
+          "Asset server returned an unsupported content type.",
+          "asset_content_type_denied",
+        );
+      }
+    }
+    return relayResponse(
+      upstream,
+      upstream.ok ? ASSET_MAX_RESPONSE_BYTES : ASSET_MAX_ERROR_RESPONSE_BYTES,
+      request,
+      env,
+      legacy,
+    );
+  }
+  throw new RelayHttpError(502, "Asset download failed.", "asset_unavailable");
+}
+
+function requireRelayEnabled(env: Env): void {
+  if (!relayEnabled(env)) {
+    throw new RelayHttpError(503, "Relay is disabled.", "relay_disabled");
+  }
+}
+
+function requireV2Ready(env: Env): void {
+  if (!v2Ready(env)) {
+    throw new RelayHttpError(
+      503,
+      "Relay v2 is not configured.",
+      "relay_not_configured",
+    );
+  }
+}
+
+async function handleSessionCreate(
+  request: Request,
+  env: Env,
+): Promise<Response> {
+  requireV2Ready(env);
+  const origin = requireSameOriginPost(request, env);
+  validateContentType(request, "application/json");
+  validateContentLength(request, 8 * 1024);
+  await enforceRateLimit(
+    env.RELAY_SESSION_ISSUE_RATE,
+    await rateKeyForRequest(request),
+  );
+  const payload = await readJsonLimited<{ token?: unknown }>(
+    request.body,
+    8 * 1024,
+  );
+  const token = typeof payload.token === "string" ? payload.token : "";
+  await verifyTurnstile(request, env, token, origin);
+  const issued = await createSessionCookie(env);
+  return jsonResponse(
+    201,
+    { active: true, expires_at: issued.session.expiresAt },
+    request,
+    env,
+    false,
+    { "Set-Cookie": issued.header },
+  );
+}
+
+async function handleSessionStatus(
+  request: Request,
+  env: Env,
+): Promise<Response> {
+  requireV2Ready(env);
+  requireSameOriginRead(request, env);
+  const session = await verifySession(request, env);
+  return jsonResponse(200, {
+    active: Boolean(session),
+    expires_at: session?.expiresAt ?? null,
   });
 }
 
-async function handleRelay(request: Request, env: Env) {
-  if (!boolEnv(env.RELAY_ENABLED, true)) {
-    return jsonResponse(503, "Relay is disabled.", request, env);
+async function authenticatedV2Session(request: Request, env: Env) {
+  requireV2Ready(env);
+  requireSameOriginPost(request, env);
+  const session = await verifySession(request, env);
+  if (!session) {
+    throw new RelayHttpError(
+      401,
+      "Relay session is missing or expired.",
+      "session_required",
+    );
   }
-  if (!originAllowed(request, env)) {
-    return jsonResponse(403, "Origin is not allowed.", request, env);
+  await enforceRateLimit(env.RELAY_SESSION_RATE, session.sid);
+  return session;
+}
+
+async function handleV2Operation(
+  request: Request,
+  env: Env,
+  operation: RelayOperation,
+): Promise<Response> {
+  await authenticatedV2Session(request, env);
+  if (operation === "asset") {
+    validateContentType(request, "application/json");
+    validateContentLength(request, ASSET_MAX_REQUEST_BYTES);
+    const payload = await readJsonLimited<{ url?: unknown }>(
+      request.body,
+      ASSET_MAX_REQUEST_BYTES,
+    );
+    const target = validateAssetTarget(
+      typeof payload.url === "string" ? payload.url : null,
+      new URL(request.url),
+      env,
+    );
+    return fetchAsset(request, env, target, false);
   }
 
-  const method =
-    request.headers.get(RELAY_METHOD_HEADER)?.trim().toUpperCase() ||
-    request.method.toUpperCase();
-  if (!allowedMethods(env).includes(method)) {
-    return jsonResponse(405, "Method is not allowed.", request, env);
-  }
-
-  const upstreamResult = validateUpstream(request.headers.get(RELAY_HEADER));
-  if (typeof upstreamResult === "string") {
-    return jsonResponse(400, upstreamResult, request, env);
-  }
-  const upstream = upstreamResult;
-  const requestSizeError = validateContentLength(request, env);
-  if (requestSizeError)
-    return jsonResponse(413, requestSizeError, request, env);
-
-  const mode = relayMode(env);
-  const allowlisted = allowlistDecision(upstream, method, env);
-  const reportOnly = boolEnv(env.RELAY_ALLOWLIST_REPORT_ONLY, true);
-  if (mode === "allowlist" && !allowlisted && !reportOnly) {
-    return jsonResponse(403, "Upstream is not allowlisted.", request, env);
-  }
-
-  const responseMax = numberEnv(
-    env.RELAY_MAX_RESPONSE_BYTES,
-    DEFAULT_MAX_RESPONSE_BYTES,
+  const spec = OPERATION_SPECS[operation];
+  const base = validateApiBase(
+    request.headers.get(API_BASE_HEADER),
+    new URL(request.url),
+    env,
   );
-  const upstreamContentLength = Number(
-    request.headers.get("X-GPT-Image-2-Expected-Response-Bytes") || NaN,
+  return fetchApiOperation(request, env, spec, base, false);
+}
+
+async function handleLegacy(request: Request, env: Env): Promise<Response> {
+  requireRelayEnabled(env);
+  if (env.RELAY_V1_MODE?.trim().toLowerCase() === "disabled") {
+    throw new RelayHttpError(
+      410,
+      "Legacy relay has been disabled.",
+      "legacy_relay_disabled",
+    );
+  }
+  requireLegacyRequestOrigin(request, env);
+  await enforceRateLimit(
+    env.RELAY_LEGACY_RATE,
+    await rateKeyForRequest(request),
   );
+  const method = request.headers.get(LEGACY_METHOD_HEADER) ?? "";
+  const decision = classifyLegacyRequest(
+    request.headers.get(LEGACY_UPSTREAM_HEADER),
+    method,
+    Boolean(request.headers.get("Authorization")),
+    new URL(request.url),
+    env,
+  );
+  if (decision.operation === "asset") {
+    validateContentLength(request, 0);
+    if (request.body) {
+      throw new RelayHttpError(
+        400,
+        "Asset requests must not have a body.",
+        "body_not_allowed",
+      );
+    }
+    return fetchAsset(request, env, decision.target, true);
+  }
+  return fetchApiOperation(
+    request,
+    env,
+    OPERATION_SPECS[decision.operation],
+    decision.base,
+    true,
+  );
+}
+
+function configResponse(env: Env): Response {
+  return jsonResponse(200, {
+    version: 2,
+    enabled: v2Ready(env),
+    auth_mode: "turnstile",
+    turnstile_site_key: env.TURNSTILE_SITE_KEY?.trim() || null,
+    session_ttl_seconds: sessionTtlSeconds(env),
+    operations: ["models", "generations", "edits", "asset"],
+  });
+}
+
+function methodNotAllowed(allow: string): never {
+  throw new RelayHttpError(
+    405,
+    `Method must be ${allow}.`,
+    "method_not_allowed",
+  );
+}
+
+async function route(request: Request, env: Env): Promise<Response> {
+  const path = new URL(request.url).pathname;
+  const method = request.method.toUpperCase();
+
+  if (path === `${V2_ROOT}/config`) {
+    if (method !== "GET") methodNotAllowed("GET");
+    return configResponse(env);
+  }
+  if (path === `${V2_ROOT}/session`) {
+    if (method === "GET") return handleSessionStatus(request, env);
+    if (method === "POST") return handleSessionCreate(request, env);
+    methodNotAllowed("GET or POST");
+  }
+
+  const operation = path.slice(`${V2_ROOT}/`.length) as RelayOperation;
   if (
-    Number.isFinite(upstreamContentLength) &&
-    upstreamContentLength > responseMax
+    path.startsWith(`${V2_ROOT}/`) &&
+    ["models", "generations", "edits", "asset"].includes(operation)
   ) {
-    return jsonResponse(
-      413,
-      `Relay response is too large. Limit is ${responseMax} bytes.`,
-      request,
-      env,
-    );
+    if (method !== "POST") methodNotAllowed("POST");
+    return handleV2Operation(request, env, operation);
   }
 
-  const body = method === "GET" || method === "HEAD" ? undefined : request.body;
-  let upstreamResponse: Response;
-  try {
-    upstreamResponse = await fetch(upstream, {
-      method,
-      headers: requestHeadersForUpstream(request),
-      body,
-      redirect: "manual",
-    });
-  } catch {
-    return jsonResponse(502, "Upstream request failed.", request, env);
+  if (path === RELAY_ROOT) {
+    if (method === "OPTIONS") {
+      requireLegacyRequestOrigin(request, env);
+      return new Response(null, {
+        status: 204,
+        headers: securityHeaders(legacyCorsHeaders(request, env)),
+      });
+    }
+    if (method !== "POST") methodNotAllowed("POST");
+    return handleLegacy(request, env);
   }
 
-  const contentLength = Number(upstreamResponse.headers.get("Content-Length"));
-  if (Number.isFinite(contentLength) && contentLength > responseMax) {
-    upstreamResponse.body?.cancel("relay response too large");
-    return jsonResponse(
-      413,
-      `Relay response is too large. Limit is ${responseMax} bytes.`,
-      request,
-      env,
-    );
-  }
-
-  return new Response(
-    upstreamResponse.body
-      ? limitResponseBody(upstreamResponse.body, responseMax)
-      : null,
-    {
-      status: upstreamResponse.status,
-      statusText: upstreamResponse.statusText,
-      headers: responseHeadersForBrowser(upstreamResponse, request, env, mode),
-    },
-  );
+  throw new RelayHttpError(404, "Relay route was not found.", "not_found");
 }
 
 export default {
@@ -388,15 +623,19 @@ export default {
     env: Env,
     _ctx: ExecutionContext,
   ): Promise<Response> {
-    if (request.method.toUpperCase() === "OPTIONS") {
-      if (!originAllowed(request, env)) {
-        return jsonResponse(403, "Origin is not allowed.", request, env);
+    const legacy = new URL(request.url).pathname === RELAY_ROOT;
+    try {
+      return await route(request, env);
+    } catch (error) {
+      if (error instanceof RelayHttpError) {
+        return errorResponse(error, request, env, legacy);
       }
-      return new Response(null, {
-        status: 204,
-        headers: corsHeaders(request, env),
-      });
+      return errorResponse(
+        new RelayHttpError(500, "Relay request failed.", "internal_error"),
+        request,
+        env,
+        legacy,
+      );
     }
-    return handleRelay(request, env);
   },
 };
