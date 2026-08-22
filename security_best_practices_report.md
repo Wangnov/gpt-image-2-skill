@@ -1,16 +1,18 @@
 # 安全审查报告
 
-审查日期：2026-08-22；修复复核：2026-08-23（Asia/Shanghai）  
-审查基线：GitHub `main`，commit `49b0a6b8e6692869027f9ffd39d6b8240a6b50cc`  
+审查日期：2026-08-22；修复与上线复核：2026-08-23（Asia/Shanghai）
+
+审查基线：GitHub `main`；生产部署 commit `f3b71fb86e3139f1980b3571ce4c271c616b123e`
+
 范围：GitHub 安全设置、GitHub Actions、Rust workspace、React/Vite/Tauri、Docker Web、Cloudflare relay、npm/Cargo 依赖，以及线上响应头。
 
 ## 执行摘要
 
-没有发现已提交的真实密钥，GitHub Secret Scanning 当前也没有未关闭告警。最需要立即处理的是生产 Cloudflare relay 仍以 `open` 模式运行：未带 `Origin` 的任意客户端无需认证即可让它访问任意公网 HTTPS 地址。线上实测已通过该 relay 成功获取 `https://example.com/`，响应明确返回 `x-gpt-image-2-relay-policy: open`。这使项目承担公开代理滥用、Cloudflare 配额/费用和来源信誉风险。
+没有发现已提交的真实密钥，GitHub Secret Scanning 当前也没有未关闭告警。审查时确认的最高风险——生产 Cloudflare relay 作为无认证开放公网代理——已经完成代码修复和生产替换。线上现为 operation-based Relay v2：Turnstile 换取短期签名 HttpOnly 会话，旧 v1 只保留四类固定操作的精确同源兼容。上线后独立探针确认：无 `Origin` 与非法 `Origin` 的 v1 POST 均为 403；无会话的合法同源 v2 操作为 401；配置端点显示 v2 已启用。
 
-GitHub 当前有 9 个未关闭的 Dependabot 告警，但应按本项目可达性重新排序：`lettre` 的 Critical 告警只影响 `boring-tls`，本项目明确启用 `rustls`，因此不是当前可利用的 Critical；`undici` 位于 Wrangler 开发依赖链；`nanoid` 位于构建工具链。与此同时，`cargo audit` 发现 GitHub 列表尚未显示的 `h2` 与多个 `quick-xml` 告警。
+原有 9 个 Dependabot 告警已降到 2 个：`glib 0.18.5`（Medium）来自 Linux Tauri/GTK 运行链，`rand 0.7.3`（Low）来自 Tauri HTML 解析构建链。当前 Tauri 兼容依赖没有可直接落地的修复版本，两条均保留为 open、没有 dismiss；`cargo audit` 为 0 个 vulnerability。
 
-本报告保留审查时的生产基线证据。`codex/relay-v2-security` 已完成 operation-based Relay v2、受限 v1、Turnstile 会话、限速和 SSRF 纵深防御，也已处理可升级的 Rust 漏洞、Pages/Tauri CSP、GitHub Actions SHA pinning、CodeQL/Dependabot 配置与 Docker Web 会话安全。截至 2026-08-23 的本地复核，两个 npm workspace 均为 0 漏洞，`cargo audit` 为 0 个 vulnerability；生产部署和 GitHub 仓库级设置仍须在合并后验证，不能把本地通过表述为线上已修复。
+生产 Worker 与 Pages 已由 GitHub Actions run `32586116751` 顺序部署成功；Worker 100% 版本的注释精确绑定上述 commit，Pages production deployment 的 source 也为该 commit。生产首页返回 CSP、`frame-ancestors 'none'`、DENY、Permissions Policy、HSTS 与 nosniff；真实 Chrome 页面加载完成且无 warning/error。GitHub 已启用 Dependabot security updates、Actions SHA enforcement 与精确第三方 action allowlist，并为 `main` 强制严格状态检查、PR、管理员执行及对话解决；`cloudflare-production` 环境已增加 reviewer。Cloudflare 现有全局凭据未改动，部署改用独立最小权限 token。
 
 ## High
 
@@ -25,7 +27,7 @@ GitHub 当前有 9 个未关闭的 Dependabot 告警，但应按本项目可达�
 - 修复：不枚举用户上游域名，改为 operation-based Relay：服务端只拼接模型检查、生成、编辑三个固定路径和无凭证图片下载；通过 Turnstile 换取短期签名 HttpOnly 会话，并叠加精确 Origin、Fetch Metadata、Cloudflare Rate Limiting、请求大小与公网 HTTPS/重定向校验。旧入口只保留同样四类操作的受限兼容；删除 `RELAY_MODE=open`，且绝不把 `Origin` 当作唯一认证信号。
 - 缓解：修复发布前，先在 Cloudflare WAF/Worker route 层限制请求速率、请求体大小和允许的上游；监控异常目的域名、出站字节和 4xx/5xx。
 - False positive notes：不是误报；已对生产端点做最小化只读验证并成功代理公开测试站点。
-- 本分支状态：已实现并通过 Worker/前端安全测试与 Wrangler dry-run，生产 Turnstile、灰度和部署结果见最终上线记录；在上线验证完成前，本条仍按生产未修复处理。
+- 生产状态：已修复。2026-08-23 上线后，v2 配置、会话状态、v1 非法来源拒绝、v2 无会话拒绝均通过；后台汇总只能证明历史上存在持续调用，不能识别唯一用户，因此保留受限 v1 兼容而没有直接关停。
 
 ## Medium
 
@@ -51,7 +53,7 @@ GitHub 当前有 9 个未关闭的 Dependabot 告警，但应按本项目可达�
 - 修复：为 Tauri 配置最小可用 CSP；为 Cloudflare Pages/自托管 Web 设置响应头 CSP（至少严格 `script-src`）、`frame-ancestors 'none'`、`Permissions-Policy`。字体来源应精确允许，避免 `unsafe-eval`/`unsafe-inline`。
 - 缓解：缩小 asset protocol scope；继续避免 `dangerouslySetInnerHTML`、动态脚本和任意 URL sink。
 - False positive notes：线上头部已验证，不是“仓库中不可见”的推断。
-- 本分支状态：静态 Pages 已新增并构建验证 CSP、`frame-ancestors 'none'`、Permissions Policy、HSTS、nosniff、DENY 等响应头；Tauri 已启用拒绝远程脚本/对象/Frame/Form 的最小 CSP，并保留 IPC、本地 asset、用户 HTTPS 图片与指定字体来源。Tauri crate 编译通过；生产 Pages 仍需部署后验头。
+- 生产状态：已修复。静态 Pages 线上响应已复核 CSP、`frame-ancestors 'none'`、Permissions Policy、HSTS、nosniff 与 DENY；Tauri 已启用拒绝远程脚本/对象/Frame/Form 的最小 CSP，并保留 IPC、本地 asset、用户 HTTPS 图片与指定字体来源，Tauri crate 编译通过。
 
 ### SEC-004：发布工作流使用可变 action 标签和 pipe-to-shell，且持有发布权限/签名密钥
 
@@ -63,7 +65,17 @@ GitHub 当前有 9 个未关闭的 Dependabot 告警，但应按本项目可达�
 - 修复：把第三方与官方 actions 全部固定到完整 commit SHA，并由 Dependabot/Renovate 更新；下载工具后校验 SHA256/签名再执行；把发布 job 的 permissions 与 secrets 拆到最小粒度环境并加 environment approval。
 - 缓解：仓库层启用 SHA pinning，限制允许的 actions 到 GitHub-owned 与明确 allowlist。
 - False positive notes：可变标签本身不表示当前 action 已被攻陷；这是高价值发布链上的防御缺口。
-- 本分支状态：全部外部 Actions 已固定到 40 位 commit SHA；cargo-dist 改为仓库内跨平台安装器并固定各平台归档 SHA-256；CI 新增检查，拒绝可变 Action 引用及远程 pipe-to-shell。
+- 当前状态：已修复。全部外部 Actions 固定到 40 位 commit SHA；cargo-dist 改为仓库内跨平台安装器并固定各平台归档 SHA-256；CI 拒绝可变 Action 引用及远程 pipe-to-shell。仓库后台同时要求 SHA pinning，只允许 GitHub-owned actions 与 7 个精确第三方仓库。
+
+### SEC-009：skill wrapper 将网络下载的可执行归档直接写盘并运行
+
+- Rule ID：`js/http-to-file-access` / release bootstrap integrity
+- 严重度：Medium
+- 位置：`skills/gpt-image-2-skill/scripts/gpt_image_2_skill.cjs`
+- 证据：旧实现对固定 GitHub Release URL 执行 `fetch()`，随后把响应直接 `writeFileSync()` 到临时目录、解包、复制到缓存并执行；没有在落盘/执行前校验 cargo-dist 同步发布的 SHA-256 sidecar，也没有下载体积上限或重定向终点约束。CodeQL 因此产生 1 条 open alert。
+- 影响：TLS 或 GitHub 发布资产信任链异常、错误资产或超大响应可能变成本地可执行文件，构成供应链执行与资源耗尽风险。
+- 修复：只接受固定 GitHub/release-assets HTTPS 主机和受限资产名；先读取并严格解析同版本 `.sha256`，流式限制 checksum 为 1 KiB、归档为 16 MiB，使用常量时间 SHA-256 比较；校验通过后从内存把归档交给 `tar`，`.tar.xz` 显式使用 `-J` 以兼容 GNU tar，不再把网络响应直接写入归档文件。增加 8 个完整性、格式与负向测试，并用真实 v0.7.3 macOS tar.xz 与 Windows zip 验证解包。
+- 当前状态：本次收尾提交已修复；以默认分支 CodeQL 复扫不再报告该数据流作为关闭判据。
 
 ### SEC-005：GitHub 安全与合并门禁不完整
 
@@ -75,7 +87,7 @@ GitHub 当前有 9 个未关闭的 Dependabot 告警，但应按本项目可达�
 - 修复：启用 CodeQL（Rust、JavaScript/TypeScript）；启用 Dependabot security updates；要求 CI、至少 1 个 review、conversation resolution，并对管理员执行规则；启用 action SHA pinning。
 - 缓解：若单人维护不适合强制 review，至少强制 CI、禁止绕过规则，并为 release environment 设置人工批准。
 - False positive notes：以上均来自当前 GitHub API 设置，不涉及推断。
-- 本分支状态：已新增 Rust/JavaScript/TypeScript/GitHub Actions CodeQL、四类 Dependabot 更新和 `Security` CI 门禁。Dependabot security updates、Actions SHA enforcement、main 分支保护和 Environment reviewer 属于 GitHub 后台状态，须在合并后通过 API 启用并复核。
+- 当前状态：已修复。Rust、JavaScript/TypeScript 与 GitHub Actions CodeQL 和 `Security` CI 门禁均启用；Dependabot security updates、Actions SHA enforcement、精确 action allowlist、`main` 严格 required checks、PR（单人仓库为 0 强制 approval）、conversation resolution、admin enforcement、禁止 force-push/delete，以及 production Environment reviewer 均已通过 API 回读。CodeQL 新发现的 3 条 Release Candidate workflow 权限告警已通过顶层 `contents: read` 修复，SEC-009 的数据流也已实质修复。
 
 ### SEC-006：HTTPS 部署时 session cookie 没有 `Secure`
 
@@ -91,21 +103,16 @@ GitHub 当前有 9 个未关闭的 Dependabot 告警，但应按本项目可达�
 
 ## Low / 依赖可达性待确认
 
-### SEC-007：GitHub Dependabot 的 9 条告警需要清理，但严重度不能照单全收
+### SEC-007：GitHub Dependabot 的残余告警需要按可达性持续跟踪
 
 - Rule ID：REACT-SUPPLY-001
 - 严重度：Low 到 High（依赖具体路径）
 - 位置：GitHub Dependabot；`Cargo.lock`；两个 npm lockfile。
-- 证据与判断：
-  - `lettre 0.11.21`：GitHub 标 Critical，修复为 0.11.22；但漏洞仅影响 `boring-tls`。`crates/gpt-image-2-core/Cargo.toml:21` 明确启用 `rustls`，实际不可利用性高，仍应升级以关闭告警。
-  - `nanoid <3.3.18`：1 条 High，位于前端构建依赖链；漏洞要求调用自定义生成器且传入 size 0，目前未发现项目代码调用。
-  - `undici 7.28.0`：1 High + 4 Medium，均经 Wrangler/Miniflare 开发依赖链进入；生产 Worker 使用 Cloudflare 原生 `fetch`，未发现项目直接调用这些受影响 API。升级 Wrangler 仍是正确处理。
-  - `glib 0.18.5`：1 Medium，Linux Tauri GTK 运行时依赖；项目自身未使用 `VariantStrIter`，触发性待上游/平台路径确认。
-  - `rand 0.7.3`：1 Low，构建依赖链；漏洞需要 `log` + `thread_rng` + 自定义 logger 重入等组合，当前 feature tree 未显示 `log`，实际不可达。
+- 证据与判断：原有 `lettre`、`nanoid`、`undici` 告警已通过兼容升级关闭；当前只剩 `glib 0.18.5`（Linux Tauri GTK 运行时链）和 `rand 0.7.3`（Tauri HTML 解析构建链）两条。项目未调用 advisory 指向的 `glib::VariantStrIter`，rand 路径不进入产品运行时；当前兼容 Tauri 依赖仍固定这些版本。
 - 修复：更新 lockfile：`lettre >=0.11.22`、Wrangler/Undici、nanoid 所属父依赖、可升级的 GTK/Tauri 依赖；对不可达告警在完成证据记录后再 dismiss，不要仅凭严重度关闭。
 - 缓解：CI 增加 `npm audit` 与 `cargo audit`，并对确认为不可达的 advisory 使用有到期日和理由的审计配置。
 - False positive notes：本节明确区分“存在受影响版本”与“本项目路径可利用”。
-- 本分支状态：Wrangler 已升至 4.125.0、其工具链 `undici` 已升至 7.29.0，两个 npm lockfile 的 `nanoid` 已升至 3.3.18，`lettre` 已升至 0.11.23；当前两个 npm workspace 的 `npm audit` 均为 0，并显式允许必要的 `esbuild`/`workerd` install script、拒绝可选 `fsevents`。GitHub 告警要等改动进入默认分支后重新计算。
+- 当前状态：Wrangler 已升至 4.125.0、其工具链 `undici` 已升至 7.29.0，两个 npm lockfile 的 `nanoid` 已升至 3.3.18，`lettre` 已升至 0.11.23；当前两个 npm workspace 的 `npm audit` 均为 0。剩余 2 条不做无证据 dismiss，继续由每周 Dependabot 与 CI 跟踪兼容修复。
 
 ### SEC-008：`cargo audit` 另报多个 `quick-xml` DoS，主要位于平台/构建依赖链
 
@@ -124,7 +131,7 @@ GitHub 当前有 9 个未关闭的 Dependabot 告警，但应按本项目可达�
 - Docker Web 在非 loopback 绑定且无 token 时默认拒绝启动；API 包含 Host 检查、常量时间 token 比较、HttpOnly + SameSite=Strict cookie。
 - Tauri updater 使用公钥签名校验，macOS 开启 hardened runtime。
 - React 扫描未发现 `dangerouslySetInnerHTML`、`eval`、`document.write` 或不安全 `postMessage` 处理。
-- 新 Relay v2 分支采用请求/响应 header allowlist、固定操作、公网 HTTPS 目标校验、Cloudflare 公网出站限制、逐级重定向复验和请求/响应流上限；生产环境仍是报告前述旧版本，需完成灰度后才能把该项视为线上控制。
+- 生产 Relay v2 采用请求/响应 header allowlist、固定操作、公网 HTTPS 目标校验、Cloudflare 公网出站限制、逐级重定向复验和请求/响应流上限。
 - CI 使用 lockfile + `npm ci`；GitHub 默认 workflow token 权限为 read，不能批准 PR。
 
 ## 上游残余风险（未静默忽略）
@@ -133,16 +140,16 @@ GitHub 当前有 9 个未关闭的 Dependabot 告警，但应按本项目可达�
 
 这些项目没有写入 `audit.toml` ignore，也没有在 GitHub 告警中 dismiss。CI 每次运行 `cargo audit`，Dependabot 每周检查 Cargo 与 Actions；上游一旦发布兼容修复，门禁会把升级变成明确改动。Linux 桌面端仍应把系统 WebKit/GTK 安全更新视为部署前置条件。
 
-## 建议修复顺序
+## 后续维护顺序
 
-1. 按 `docs/relay-security-runbook.md` 配置 Turnstile/会话 secret，先部署向后兼容 Worker并做负向探针，再发布 v2 前端；不得回退到 open/report-only。
-2. 用真实浏览器完成可直连与必须 Relay 两条 canary，确认未知结果的生成 POST 不会自动重放；随后检查无敏感字段的后台路径/状态码汇总。
-3. 合并后启用 CodeQL、Dependabot security updates、main 分支 CI 门禁、Actions SHA enforcement 和 production Environment reviewer，并通过 API 回读结果。
-4. 持续跟进 Tauri 平台依赖中的 GTK3、`glib`、`anyhow` 与 `event-listener`；兼容修复出现后立即升级，不以 ignore/dismiss 代替处理。
+1. 不得把 Relay 回退到 open/report-only；每次生产变更继续执行 v2 配置、v1 来源拒绝、v2 无会话拒绝及安全响应头探针。
+2. 在具备中国大陆与海外真实网络出口时补做双地域 canary；本次只完成单一出口的真实 Chrome 加载，不能据此声称覆盖全部地区。
+3. 持续跟进 Tauri 平台依赖中的 GTK3、`glib`、`rand`、`anyhow` 与 `event-listener`；兼容修复出现后立即升级，不以 ignore/dismiss 代替处理。
+4. GitHub 当前套餐不支持或未开放 Secret Scanning non-provider patterns 与 validity checks，保持 provider secret scanning + push protection，并在能力可用后再启用这两项。
 
 ## 验证方法
 
 - GitHub API：repository security settings、Dependabot/Code/Secret Scanning、Actions permissions、main branch protection。
 - 依赖：`npm audit --omit=dev`、relay 全量 `npm audit`、`cargo audit --json`、`cargo tree -i ... --target all`。
 - 静态扫描：React/DOM sink、storage/token、网络目标、Tauri capability/CSP、GitHub workflow 权限与 action 引用。
-- 线上只读验证：两个页面的 HTTP 响应头；relay 的无 Origin/非法 Origin行为；通过 relay 获取 `https://example.com/`。
+- 线上只读验证：生产页面 HTTP 响应头；v2 config/session；v1 无 Origin/非法 Origin POST；v2 合法同源但无会话请求；Cloudflare Worker 与 Pages commit 绑定；真实 Chrome DOM、视觉与控制台状态。

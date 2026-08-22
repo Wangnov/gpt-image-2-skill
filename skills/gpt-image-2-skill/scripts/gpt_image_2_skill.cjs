@@ -4,6 +4,7 @@ const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
 const childProcess = require("node:child_process");
+const crypto = require("node:crypto");
 
 const CLI_NAME = "gpt-image-2-skill";
 const VERSION = "0.7.3";
@@ -20,6 +21,13 @@ const APP_BIN_ENV = "GPT_IMAGE_2_SKILL_APP_BIN";
 const REPO_ENV = "GPT_IMAGE_2_SKILL_REPO_ROOT";
 const SKIP_BOOTSTRAP_ENV = "GPT_IMAGE_2_SKILL_SKIP_BOOTSTRAP";
 const SKILL_ROOT = path.resolve(__dirname, "..");
+const MAX_RELEASE_ARCHIVE_BYTES = 16 * 1024 * 1024;
+const MAX_RELEASE_CHECKSUM_BYTES = 1024;
+const RELEASE_ASSET_NAME = /^gpt-image-2-skill-(?:(?:aarch64|x86_64)-apple-darwin\.tar\.xz|(?:aarch64|x86_64)-unknown-linux-(?:gnu|musl)\.tar\.xz|(?:aarch64|x86_64)-pc-windows-msvc\.zip)(?:\.sha256)?$/;
+const TRUSTED_RELEASE_HOSTS = new Set([
+  "github.com",
+  "release-assets.githubusercontent.com",
+]);
 
 function wantsJson(argv) {
   return argv.includes("--json");
@@ -284,8 +292,17 @@ function findFile(rootDir, fileName) {
   return null;
 }
 
-async function downloadArchive(url, archivePath) {
+function releaseAssetUrl(assetName) {
+  if (!RELEASE_ASSET_NAME.test(assetName)) {
+    throw new Error(`Invalid release asset name: ${assetName}`);
+  }
+  return `${RELEASE_BASE_URL}/${assetName}`;
+}
+
+async function downloadReleaseAsset(assetName, maxBytes) {
+  const url = releaseAssetUrl(assetName);
   const response = await fetch(url, {
+    redirect: "follow",
     headers: {
       "user-agent": `${CLI_NAME}/${VERSION} skill-wrapper`,
     },
@@ -293,23 +310,93 @@ async function downloadArchive(url, archivePath) {
   if (!response.ok) {
     throw new Error(`Release asset unavailable: ${url} (HTTP ${response.status})`);
   }
-  const bytes = Buffer.from(await response.arrayBuffer());
-  fs.writeFileSync(archivePath, bytes);
+
+  const finalUrl = new URL(response.url);
+  if (finalUrl.protocol !== "https:" || !TRUSTED_RELEASE_HOSTS.has(finalUrl.hostname)) {
+    throw new Error(`Release asset redirected to an untrusted host: ${finalUrl.hostname}`);
+  }
+
+  const declaredLength = response.headers.get("content-length");
+  if (declaredLength !== null) {
+    const parsedLength = /^\d+$/.test(declaredLength) ? Number(declaredLength) : Number.NaN;
+    if (!Number.isSafeInteger(parsedLength) || parsedLength < 0 || parsedLength > maxBytes) {
+      throw new Error(`Release asset exceeds the ${maxBytes}-byte limit: ${assetName}`);
+    }
+  }
+
+  if (!response.body) {
+    throw new Error(`Release asset has no response body: ${assetName}`);
+  }
+  const reader = response.body.getReader();
+  const chunks = [];
+  let totalBytes = 0;
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) {
+        break;
+      }
+      totalBytes += value.byteLength;
+      if (totalBytes > maxBytes) {
+        await reader.cancel();
+        throw new Error(`Release asset exceeds the ${maxBytes}-byte limit: ${assetName}`);
+      }
+      chunks.push(Buffer.from(value));
+    }
+  } finally {
+    reader.releaseLock();
+  }
+  return Buffer.concat(chunks, totalBytes);
 }
 
-function extractArchive(archivePath, extractDir) {
+function expectedArchiveSha256(checksumBytes, archiveName) {
+  const checksum = checksumBytes.toString("utf8").trimEnd();
+  const match = /^([a-f0-9]{64}) ([ *])([A-Za-z0-9._-]+)$/.exec(checksum);
+  if (!match || match[3] !== archiveName) {
+    throw new Error(`Invalid SHA-256 sidecar for ${archiveName}`);
+  }
+  return match[1];
+}
+
+async function downloadArchive(archiveName) {
+  const checksumBytes = await downloadReleaseAsset(
+    `${archiveName}.sha256`,
+    MAX_RELEASE_CHECKSUM_BYTES
+  );
+  const expected = Buffer.from(expectedArchiveSha256(checksumBytes, archiveName), "hex");
+  const bytes = await downloadReleaseAsset(archiveName, MAX_RELEASE_ARCHIVE_BYTES);
+  const actual = crypto.createHash("sha256").update(bytes).digest();
+  if (actual.length !== expected.length || !crypto.timingSafeEqual(actual, expected)) {
+    throw new Error(`SHA-256 verification failed for ${archiveName}`);
+  }
+  return bytes;
+}
+
+function archiveExtractionArgs(archiveName, extractDir) {
+  if (archiveName.endsWith(".tar.xz")) {
+    return ["-xJf", "-", "-C", extractDir];
+  }
+  if (archiveName.endsWith(".zip")) {
+    return ["-xf", "-", "-C", extractDir];
+  }
+  throw new Error(`Unsupported release archive format: ${archiveName}`);
+}
+
+function extractArchive(archiveBytes, archiveName, extractDir) {
   const tarBinary = resolveExecutable("tar");
   if (!tarBinary) {
     throw new Error("Archive extraction requires tar in PATH.");
   }
-  const result = childProcess.spawnSync(tarBinary, ["-xf", archivePath, "-C", extractDir], {
+  const result = childProcess.spawnSync(tarBinary, archiveExtractionArgs(archiveName, extractDir), {
     encoding: "utf8",
+    input: archiveBytes,
+    maxBuffer: 1024 * 1024,
   });
   if (result.error) {
     throw result.error;
   }
   if (result.status !== 0) {
-    throw new Error(result.stderr.trim() || `Unable to extract ${archivePath}`);
+    throw new Error(result.stderr.trim() || `Unable to extract ${archiveName}`);
   }
 }
 
@@ -332,11 +419,10 @@ async function bootstrapReleaseBinary() {
     try {
       fs.mkdirSync(path.dirname(destination), { recursive: true });
       const archiveName = assetName(triple);
-      const archivePath = path.join(tempRoot, archiveName);
-      await downloadArchive(`${RELEASE_BASE_URL}/${archiveName}`, archivePath);
+      const archiveBytes = await downloadArchive(archiveName);
       const extractDir = path.join(tempRoot, "extract");
       fs.mkdirSync(extractDir, { recursive: true });
-      extractArchive(archivePath, extractDir);
+      extractArchive(archiveBytes, archiveName, extractDir);
 
       const binaryName = `${CLI_NAME}${extension}`;
       const extractedBinary = findFile(extractDir, binaryName);
@@ -416,6 +502,18 @@ async function main(argv = process.argv.slice(2)) {
   }
 }
 
-main().then((code) => {
-  process.exit(code);
-});
+if (require.main === module) {
+  main().then((code) => {
+    process.exit(code);
+  });
+}
+
+module.exports = {
+  __test: {
+    archiveExtractionArgs,
+    downloadArchive,
+    downloadReleaseAsset,
+    expectedArchiveSha256,
+    extractArchive,
+  },
+};
