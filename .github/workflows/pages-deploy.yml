@@ -22,12 +22,11 @@ env:
   PAGES_PRODUCTION_BRANCH: codex/static-byok-web-runtime
 
 jobs:
-  deploy:
-    name: Deploy static app to Cloudflare Pages
+  verify:
+    name: Verify relay and static app
     runs-on: ubuntu-24.04
-    env:
-      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+    outputs:
+      commit: ${{ steps.verified.outputs.commit }}
     steps:
       - name: Resolve release tag
         id: release
@@ -43,11 +42,16 @@ jobs:
           fi
           echo "tag=$tag" >> "$GITHUB_OUTPUT"
 
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
           ref: ${{ steps.release.outputs.tag }}
 
-      - uses: actions/setup-node@v6
+      - name: Record the immutable verified commit
+        id: verified
+        shell: bash
+        run: echo "commit=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
         with:
           node-version: 22
           cache: npm
@@ -61,8 +65,66 @@ jobs:
       - name: Install Wrangler dependencies
         run: npm ci --prefix workers/gpt-image-2-relay
 
+      - name: Test relay security boundaries
+        run: |
+          npm --prefix workers/gpt-image-2-relay audit --audit-level=high
+          npm --prefix workers/gpt-image-2-relay run typecheck
+          npm --prefix workers/gpt-image-2-relay run test
+          npm --prefix workers/gpt-image-2-relay run dry-run
+
+      - name: Test static app
+        run: |
+          npm --prefix apps/gpt-image-2-app audit --audit-level=high
+          npm --prefix apps/gpt-image-2-app run test
+
       - name: Build static app
         run: npm --prefix apps/gpt-image-2-app run build
+
+      - name: Verify static security headers
+        shell: bash
+        run: |
+          test -f apps/gpt-image-2-app/dist/_headers
+          grep -Fq "Content-Security-Policy:" apps/gpt-image-2-app/dist/_headers
+          grep -Fq "frame-ancestors 'none'" apps/gpt-image-2-app/dist/_headers
+
+  deploy:
+    name: Deploy relay, then static app to Cloudflare Pages
+    needs: verify
+    runs-on: ubuntu-24.04
+    environment:
+      name: cloudflare-production
+      url: https://image.codex-pool.com
+    env:
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          ref: ${{ needs.verify.outputs.commit }}
+
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: |
+            apps/gpt-image-2-app/package-lock.json
+            workers/gpt-image-2-relay/package-lock.json
+
+      - name: Install app dependencies
+        run: npm ci --prefix apps/gpt-image-2-app
+
+      - name: Install Wrangler dependencies
+        run: npm ci --prefix workers/gpt-image-2-relay
+
+      - name: Rebuild the verified static app
+        run: npm --prefix apps/gpt-image-2-app run build
+
+      - name: Verify rebuilt security headers
+        shell: bash
+        run: |
+          test -f apps/gpt-image-2-app/dist/_headers
+          grep -Fq "Content-Security-Policy:" apps/gpt-image-2-app/dist/_headers
+          grep -Fq "frame-ancestors 'none'" apps/gpt-image-2-app/dist/_headers
 
       - name: Check Cloudflare credentials
         shell: bash
@@ -76,12 +138,48 @@ jobs:
             exit 1
           fi
 
+      - name: Check relay secrets without exposing values
+        shell: bash
+        run: |
+          secrets_json="$(./workers/gpt-image-2-relay/node_modules/.bin/wrangler secret list \
+            --config workers/gpt-image-2-relay/wrangler.jsonc \
+            --format json)"
+          for secret_name in TURNSTILE_SITE_KEY TURNSTILE_SECRET_KEY RELAY_SESSION_HMAC_KEY; do
+            if ! jq -e --arg name "$secret_name" \
+              'map(.name) | index($name) != null' <<<"$secrets_json" >/dev/null; then
+              echo "::error::Missing Worker secret $secret_name. Refusing to deploy."
+              exit 1
+            fi
+          done
+
+      - name: Deploy relay Worker first
+        run: npm --prefix workers/gpt-image-2-relay run deploy
+
+      - name: Require a ready relay v2 before publishing the static app
+        shell: bash
+        run: |
+          config_file="$RUNNER_TEMP/relay-v2-config.json"
+          for attempt in {1..18}; do
+            if curl --fail --silent --show-error --max-time 10 \
+              "https://image.codex-pool.com/api/relay/v2/config" \
+              --output "$config_file" \
+              && jq -e \
+                '.version == 2 and .enabled == true and .auth_mode == "turnstile" and (.turnstile_site_key | type == "string" and length > 0)' \
+                "$config_file" >/dev/null; then
+              exit 0
+            fi
+            sleep 5
+          done
+          echo "::error::Relay v2 did not become ready; static deployment is blocked."
+          exit 1
+
       - name: Deploy to Cloudflare Pages
         shell: bash
         run: |
           commit_hash="$(git rev-parse HEAD)"
           commit_message="$(git log -1 --pretty=%s)"
-          ./workers/gpt-image-2-relay/node_modules/.bin/wrangler pages deploy apps/gpt-image-2-app/dist \
+          ./workers/gpt-image-2-relay/node_modules/.bin/wrangler pages deploy dist \
+            --cwd apps/gpt-image-2-app \
             --project-name "$PAGES_PROJECT_NAME" \
             --branch "$PAGES_PRODUCTION_BRANCH" \
             --commit-hash "$commit_hash" \

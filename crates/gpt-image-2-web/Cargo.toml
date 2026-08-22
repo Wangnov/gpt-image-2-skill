@@ -14,11 +14,14 @@ dist = false
 
 [dependencies]
 axum = "0.8.7"
+base64 = "0.22.1"
 gpt-image-2-core = { path = "../gpt-image-2-core", version = "0.7.3" }
 gpt-image-2-runtime = { path = "../gpt-image-2-runtime", version = "0.7.3" }
+hmac = "0.12.1"
 mime_guess = "2.0.5"
 serde = { version = "1.0.228", features = ["derive"] }
 serde_json = "1.0.145"
+sha2 = "0.10.9"
 tokio = { version = "1.48.0", features = ["fs", "macros", "net", "rt-multi-thread"] }
 tower-http = { version = "0.6.7", features = ["fs"] }
 

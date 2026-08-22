@@ -3,11 +3,22 @@
 use super::*;
 use axum::extract::Request;
 use axum::middleware::Next;
+use base64::{Engine as _, engine::general_purpose::URL_SAFE_NO_PAD};
+use hmac::{Hmac, Mac};
+use sha2::Sha256;
+use std::fmt;
+use std::time::{SystemTime, UNIX_EPOCH};
 
 pub(crate) const SESSION_COOKIE: &str = "gpt2_session";
 const TOKEN_ENV: &str = "GPT_IMAGE_2_WEB_TOKEN";
 const ALLOWED_HOSTS_ENV: &str = "GPT_IMAGE_2_WEB_ALLOWED_HOSTS";
 const ALLOW_UNAUTH_ENV: &str = "GPT_IMAGE_2_WEB_ALLOW_UNAUTHENTICATED";
+const SECURE_COOKIE_ENV: &str = "GPT_IMAGE_2_WEB_SECURE_COOKIE";
+const SESSION_TTL_ENV: &str = "GPT_IMAGE_2_WEB_SESSION_TTL_SECONDS";
+const DEFAULT_SESSION_TTL_SECONDS: u64 = 43_200;
+const MIN_SESSION_TTL_SECONDS: u64 = 300;
+const MAX_SESSION_TTL_SECONDS: u64 = 604_800;
+type HmacSha256 = Hmac<Sha256>;
 
 fn env_flag(name: &str) -> bool {
     env::var(name)
@@ -16,12 +27,29 @@ fn env_flag(name: &str) -> bool {
 }
 
 /// Resolved auth policy for the server, decided once at startup.
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 pub(crate) struct AuthPolicy {
     /// The shared secret from `GPT_IMAGE_2_WEB_TOKEN`, if configured.
     token: Option<String>,
     /// Host names allowed when running token-less (anti-DNS-rebinding).
     allowed_hosts: Vec<String>,
+    /// Whether the browser session cookie is restricted to HTTPS.
+    secure_cookie: bool,
+    /// Lifetime of the signed browser session. The shared token itself is
+    /// never copied into the cookie.
+    session_ttl_seconds: u64,
+}
+
+impl fmt::Debug for AuthPolicy {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter
+            .debug_struct("AuthPolicy")
+            .field("token_configured", &self.token.is_some())
+            .field("allowed_hosts", &self.allowed_hosts)
+            .field("secure_cookie", &self.secure_cookie)
+            .field("session_ttl_seconds", &self.session_ttl_seconds)
+            .finish()
+    }
 }
 
 impl Default for AuthPolicy {
@@ -35,6 +63,8 @@ impl Default for AuthPolicy {
                 "127.0.0.1".to_string(),
                 "::1".to_string(),
             ],
+            secure_cookie: false,
+            session_ttl_seconds: DEFAULT_SESSION_TTL_SECONDS,
         }
     }
 }
@@ -87,15 +117,119 @@ impl AuthPolicy {
             ];
         }
 
+        let secure_cookie = env_flag(SECURE_COOKIE_ENV);
+        let session_ttl_seconds = match env::var(SESSION_TTL_ENV) {
+            Ok(value) => value.trim().parse::<u64>().map_err(|_| {
+                format!(
+                    "{SESSION_TTL_ENV} must be an integer between \
+                     {MIN_SESSION_TTL_SECONDS} and {MAX_SESSION_TTL_SECONDS} seconds."
+                )
+            })?,
+            Err(_) => DEFAULT_SESSION_TTL_SECONDS,
+        };
+        if !(MIN_SESSION_TTL_SECONDS..=MAX_SESSION_TTL_SECONDS).contains(&session_ttl_seconds) {
+            return Err(format!(
+                "{SESSION_TTL_ENV} must be between {MIN_SESSION_TTL_SECONDS} and \
+                 {MAX_SESSION_TTL_SECONDS} seconds."
+            ));
+        }
+        if token.is_some() && !host_is_loopback(bind_host) && !secure_cookie {
+            eprintln!(
+                "gpt-image-2-web: WARNING — browser sessions do not have the Secure cookie \
+                 attribute. Set {SECURE_COOKIE_ENV}=1 when HTTPS terminates at a reverse proxy; \
+                 leave it unset only for intentional plain-HTTP deployments."
+            );
+        }
+
         Ok(Self {
             token,
             allowed_hosts,
+            secure_cookie,
+            session_ttl_seconds,
         })
     }
 
     pub(crate) fn requires_token(&self) -> bool {
         self.token.is_some()
     }
+
+    fn issue_session_at(&self, now: u64) -> Option<String> {
+        let token = self.token.as_deref()?;
+        let expires_at = now.checked_add(self.session_ttl_seconds)?;
+        let payload = format!("v1.{expires_at}");
+        let mut mac = HmacSha256::new_from_slice(token.as_bytes()).ok()?;
+        mac.update(payload.as_bytes());
+        let signature = URL_SAFE_NO_PAD.encode(mac.finalize().into_bytes());
+        Some(format!("{payload}.{signature}"))
+    }
+
+    fn issue_session(&self) -> Option<String> {
+        self.issue_session_at(unix_time_seconds()?)
+    }
+
+    fn verify_session_at(&self, value: &str, now: u64) -> bool {
+        let Some(token) = self.token.as_deref() else {
+            return false;
+        };
+        let mut parts = value.split('.');
+        let (Some(version), Some(expires), Some(signature), None) =
+            (parts.next(), parts.next(), parts.next(), parts.next())
+        else {
+            return false;
+        };
+        if version != "v1" {
+            return false;
+        }
+        let Ok(expires_at) = expires.parse::<u64>() else {
+            return false;
+        };
+        if expires_at < now || expires_at > now.saturating_add(self.session_ttl_seconds) {
+            return false;
+        }
+        let Ok(signature) = URL_SAFE_NO_PAD.decode(signature) else {
+            return false;
+        };
+        let payload = format!("{version}.{expires}");
+        let Ok(mut mac) = HmacSha256::new_from_slice(token.as_bytes()) else {
+            return false;
+        };
+        mac.update(payload.as_bytes());
+        mac.verify_slice(&signature).is_ok()
+    }
+
+    fn verify_session(&self, value: &str) -> bool {
+        unix_time_seconds()
+            .map(|now| self.verify_session_at(value, now))
+            .unwrap_or(false)
+    }
+
+    fn request_is_authorized(&self, request: &Request) -> bool {
+        let Some(expected) = self.token.as_deref() else {
+            return true;
+        };
+        bearer_token(request)
+            .map(|token| constant_time_eq(&token, expected))
+            .unwrap_or(false)
+            || session_cookie(request)
+                .map(|cookie| self.verify_session(&cookie))
+                .unwrap_or(false)
+    }
+
+    fn session_cookie_header(&self, value: &str) -> String {
+        let secure = if self.secure_cookie { "; Secure" } else { "" };
+        format!(
+            "{SESSION_COOKIE}={value}; HttpOnly; SameSite=Strict; Path=/; \
+             Max-Age={}{secure}",
+            self.session_ttl_seconds
+        )
+    }
+}
+
+fn unix_time_seconds() -> Option<u64> {
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .ok()
+        .map(|duration| duration.as_secs())
 }
 
 fn host_is_loopback(host: &str) -> bool {
@@ -140,15 +274,18 @@ fn constant_time_eq(a: &str, b: &str) -> bool {
     diff == 0
 }
 
-fn presented_token(request: &Request) -> Option<String> {
-    if let Some(value) = request
+fn bearer_token(request: &Request) -> Option<String> {
+    let value = request
         .headers()
         .get(header::AUTHORIZATION)
-        .and_then(|value| value.to_str().ok())
-        && let Some(token) = value.strip_prefix("Bearer ")
-    {
-        return Some(token.trim().to_string());
-    }
+        .and_then(|value| value.to_str().ok())?;
+    let (scheme, token) = value.split_once(' ')?;
+    scheme
+        .eq_ignore_ascii_case("Bearer")
+        .then(|| token.trim().to_string())
+}
+
+fn session_cookie(request: &Request) -> Option<String> {
     request
         .headers()
         .get(header::COOKIE)
@@ -181,10 +318,8 @@ pub(crate) async fn require_auth(
     }
 
     match &policy.token {
-        Some(expected) => match presented_token(&request) {
-            Some(token) if constant_time_eq(&token, expected) => next.run(request).await,
-            _ => unauthorized("Missing or invalid access token."),
-        },
+        Some(_) if policy.request_is_authorized(&request) => next.run(request).await,
+        Some(_) => unauthorized("Missing or invalid access token."),
         None => {
             let host_ok = request
                 .headers()
@@ -214,11 +349,22 @@ pub(crate) async fn create_session(
         return (StatusCode::NO_CONTENT, ()).into_response();
     };
     if constant_time_eq(body.token.trim(), expected) {
-        let cookie = format!(
-            "{SESSION_COOKIE}={}; HttpOnly; SameSite=Strict; Path=/; Max-Age=1209600",
-            expected
-        );
-        (StatusCode::NO_CONTENT, [(header::SET_COOKIE, cookie)]).into_response()
+        let Some(session) = state.auth.issue_session() else {
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(json!({ "error": { "message": "Could not create session." } })),
+            )
+                .into_response();
+        };
+        let cookie = state.auth.session_cookie_header(&session);
+        (
+            StatusCode::NO_CONTENT,
+            [
+                (header::SET_COOKIE, cookie),
+                (header::CACHE_CONTROL, "no-store".to_string()),
+            ],
+        )
+            .into_response()
     } else {
         unauthorized("Invalid access token.")
     }
@@ -231,12 +377,7 @@ pub(crate) async fn session_status(
     request: Request,
 ) -> Json<Value> {
     let required = state.auth.requires_token();
-    let authorized = match &state.auth.token {
-        Some(expected) => presented_token(&request)
-            .map(|token| constant_time_eq(&token, expected))
-            .unwrap_or(false),
-        None => true,
-    };
+    let authorized = state.auth.request_is_authorized(&request);
     Json(json!({ "auth_required": required, "authorized": authorized }))
 }
 
@@ -291,5 +432,55 @@ mod tests {
         assert!(!constant_time_eq("secret", "secret-longer"));
         assert!(!constant_time_eq("", "x"));
         assert!(constant_time_eq("", ""));
+    }
+
+    fn token_policy(secure_cookie: bool) -> AuthPolicy {
+        AuthPolicy {
+            token: Some("shared-secret-that-must-not-enter-the-cookie".to_string()),
+            allowed_hosts: vec!["localhost".to_string()],
+            secure_cookie,
+            session_ttl_seconds: 3_600,
+        }
+    }
+
+    #[test]
+    fn signed_session_never_contains_the_shared_token() {
+        let policy = token_policy(true);
+        let session = policy.issue_session_at(1_000).expect("session");
+        assert!(!session.contains("shared-secret"));
+        assert!(policy.verify_session_at(&session, 1_001));
+        assert!(policy.verify_session_at(&session, 4_600));
+        assert!(!policy.verify_session_at(&session, 4_601));
+    }
+
+    #[test]
+    fn signed_session_rejects_tampering_and_wrong_keys() {
+        let policy = token_policy(true);
+        let session = policy.issue_session_at(1_000).expect("session");
+        let tampered = session.replacen("4600", "5600", 1);
+        assert!(!policy.verify_session_at(&tampered, 1_001));
+
+        let mut other_policy = policy.clone();
+        other_policy.token = Some("rotated-secret".to_string());
+        assert!(!other_policy.verify_session_at(&session, 1_001));
+    }
+
+    #[test]
+    fn session_cookie_uses_secure_only_when_configured() {
+        let secure = token_policy(true).session_cookie_header("signed-value");
+        assert!(secure.contains("; Secure"));
+        assert!(secure.contains("HttpOnly"));
+        assert!(secure.contains("SameSite=Strict"));
+        assert!(secure.contains("Max-Age=3600"));
+
+        let plain_http = token_policy(false).session_cookie_header("signed-value");
+        assert!(!plain_http.contains("; Secure"));
+    }
+
+    #[test]
+    fn auth_policy_debug_output_redacts_the_token() {
+        let debug = format!("{:?}", token_policy(true));
+        assert!(debug.contains("token_configured: true"));
+        assert!(!debug.contains("shared-secret"));
     }
 }

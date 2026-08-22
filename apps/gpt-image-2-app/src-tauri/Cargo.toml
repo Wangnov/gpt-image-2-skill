@@ -38,7 +38,7 @@ tauri-plugin-updater = "2.10.1"
 # dependency and the extra capability/permission wiring; the dialog runs
 # behind a Tauri command, so the existing Tauri runtime gating already
 # scopes its availability.
-rfd = { version = "0.15", default-features = false, features = ["xdg-portal", "tokio"] }
+rfd = { version = "0.17", default-features = false, features = ["xdg-portal"] }
 
 [features]
 recovery-fault-injection = ["gpt-image-2-core/recovery-fault-injection"]

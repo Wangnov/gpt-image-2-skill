@@ -1,57 +1,24 @@
 import type { GenerateRequest, Job, ProviderConfig } from "../../types";
+import {
+  configuredRelayBase,
+  fetchWithSafeTransport,
+  isLikelyCorsError,
+  trimTrailingSlash,
+} from "./relay-client";
 import { CORS_MESSAGE } from "./state";
-import type { OpenAiImageItem, OpenAiImagePayload, StoredJobInput, StoredUpload } from "./state";
+import type {
+  OpenAiImageItem,
+  OpenAiImagePayload,
+  StoredJobInput,
+  StoredUpload,
+} from "./state";
+
+export { configuredRelayBase, isLikelyCorsError, trimTrailingSlash };
 
 export function endpointFor(provider: ProviderConfig, path: string) {
   const base = provider.api_base?.trim().replace(/\/+$/, "");
   if (!base) throw new Error("服务地址不能为空。");
   return `${base}${path}`;
-}
-
-export function trimTrailingSlash(value: string) {
-  return value.endsWith("/") ? value.slice(0, -1) : value;
-}
-
-export function configuredRelayBase() {
-  if (typeof window === "undefined") return undefined;
-  const configured =
-    window.__GPT_IMAGE_2_RELAY_BASE__ ||
-    import.meta.env.VITE_GPT_IMAGE_2_RELAY_BASE;
-  const value = configured?.trim();
-  if (value) return trimTrailingSlash(value);
-  const host = window.location?.hostname;
-  if (
-    host === "image.codex-pool.com" ||
-    host === "gpt-image-2-dpm.pages.dev" ||
-    host?.endsWith(".gpt-image-2-dpm.pages.dev")
-  ) {
-    return "/api/relay";
-  }
-  return undefined;
-}
-
-export function relayRequest(endpoint: string, init: RequestInit) {
-  const relayBase = configuredRelayBase();
-  if (!relayBase) return undefined;
-  try {
-    const upstream = new URL(endpoint);
-    if (window.location?.origin && upstream.origin === window.location.origin) {
-      return undefined;
-    }
-  } catch {
-    return undefined;
-  }
-  const headers = new Headers(init.headers);
-  headers.set("X-GPT-Image-2-Upstream", endpoint);
-  headers.set("X-GPT-Image-2-Method", init.method || "GET");
-  return {
-    url: relayBase,
-    init: {
-      ...init,
-      method: "POST",
-      headers,
-    } satisfies RequestInit,
-  };
 }
 
 export function imageMime(format?: string) {
@@ -66,7 +33,9 @@ export function imageExtensionFromBlob(blob: Blob) {
   return "png";
 }
 
-export function cloneGenerateRequest(request: GenerateRequest): GenerateRequest {
+export function cloneGenerateRequest(
+  request: GenerateRequest,
+): GenerateRequest {
   return JSON.parse(JSON.stringify(request)) as GenerateRequest;
 }
 
@@ -79,31 +48,27 @@ export function base64ToBlob(value: string, type: string) {
   return new Blob([bytes], { type });
 }
 
-export function isLikelyCorsError(error: unknown) {
-  return (
-    error instanceof TypeError || String(error).includes("Failed to fetch")
-  );
+function endpointForMessage(endpoint: string) {
+  try {
+    const parsed = new URL(endpoint);
+    return `${parsed.origin}${parsed.pathname}`;
+  } catch {
+    return "服务地址已省略";
+  }
 }
 
 export function networkError(error: unknown, endpoint: string) {
   if (isLikelyCorsError(error)) {
-    return new Error(`${CORS_MESSAGE}\n${endpoint}`);
+    return new Error(`${CORS_MESSAGE}\n${endpointForMessage(endpoint)}`);
   }
   return error instanceof Error ? error : new Error(String(error));
 }
 
 export async function fetchProvider(endpoint: string, init: RequestInit) {
   try {
-    return await fetch(endpoint, init);
+    return await fetchWithSafeTransport(endpoint, init);
   } catch (error) {
-    if (!isLikelyCorsError(error)) throw networkError(error, endpoint);
-    const relay = relayRequest(endpoint, init);
-    if (!relay) throw networkError(error, endpoint);
-    try {
-      return await fetch(relay.url, relay.init);
-    } catch (relayError) {
-      throw networkError(relayError, endpoint);
-    }
+    throw networkError(error, endpoint);
   }
 }
 
@@ -120,7 +85,10 @@ export function explainOriginDnsError(endpoint?: string) {
   return `上游服务域名无法解析或回源失败（Cloudflare 1016/530）。请检查 Base URL 是否写错，或换一个当前可公网访问的服务地址。${hostHint}`;
 }
 
-export async function parseErrorResponse(response: Response, endpoint?: string) {
+export async function parseErrorResponse(
+  response: Response,
+  endpoint?: string,
+) {
   const text = await response.text().catch(() => "");
   if (response.status === 530 && /error code:\s*1016/i.test(text)) {
     return explainOriginDnsError(endpoint);
@@ -299,7 +267,9 @@ export async function storedEditInputFromForm(jobId: string, form: FormData) {
   return { jobId, kind: "edit" as const, meta, files };
 }
 
-export function formFromStoredEdit(input: Extract<StoredJobInput, { kind: "edit" }>) {
+export function formFromStoredEdit(
+  input: Extract<StoredJobInput, { kind: "edit" }>,
+) {
   const form = new FormData();
   form.append("meta", JSON.stringify(input.meta));
   for (const file of input.files) {

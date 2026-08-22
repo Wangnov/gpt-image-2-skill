@@ -471,16 +471,19 @@ Linux glibc 沙箱下,缓存与 bootstrap 阶段会先检查 GNU target(`*-unkno
 
 主要能力:
 
-- `RELAY_MODE`:`open`(任意上游 URL,凭 `x-gpt-image-2-upstream` header 指定)或 `allowlist`(只允许配置中列出的 origin)
-- `RELAY_ALLOWED_ORIGINS` / `RELAY_ALLOWED_METHODS` / `RELAY_MAX_REQUEST_BYTES` / `RELAY_MAX_RESPONSE_BYTES` 全部可调
-- 请求 / 响应 header 黑名单清理(剥离 `cookie`、`set-cookie`、`cf-*` 等)
-- `report-only` 模式可在不阻断流量的情况下采集 allowlist 命中率
+- 不要求预先收集用户的中转站域名:用户仍可填写任意公网 HTTPS API Base,但 Worker 只会拼接 `/models`、`/images/generations`、`/images/edits` 三个固定 API 路径,以及执行无凭证的图片下载
+- 前端先用无副作用的 `/models` 探测直连能力;生成/编辑 POST 在响应状态不明时绝不自动换通道重放,避免重复生成和重复扣费
+- Relay v2 使用 Turnstile 换取短期、签名、`HttpOnly`、`SameSite=Strict` cookie,并强制精确 Origin、Fetch Metadata、会话限速和请求大小上限
+- `global_fetch_strictly_public`、公网 HTTPS URL 校验、逐级重定向复验、请求/响应 header allowlist 和流式响应上限共同收紧 SSRF 与数据泄漏边界
+- 旧 `/api/relay` 只为缓存页面保留受限兼容,同样只接受四类标准操作;不再存在 `RELAY_MODE=open`
 
 ```bash
 just relay-test    # 跑 vitest + tsc
 just relay-dry     # wrangler dry-run
 just relay-deploy  # 部署到生产路由
 ```
+
+部署前必须在 Cloudflare Worker secret 中配置 `TURNSTILE_SITE_KEY`、`TURNSTILE_SECRET_KEY` 和至少 32 字节随机值的 `RELAY_SESSION_HMAC_KEY`。Release workflow 会先检查 secret、部署并验证 Worker v2，确认 `enabled: true` 后才发布静态页面。完整灰度、验证和回滚步骤见 [`docs/relay-security-runbook.md`](docs/relay-security-runbook.md)。
 
 如果只用 CLI / 桌面 App / Docker Web,这一段可以忽略。它存在的意义是让浏览器侧 transport 不必把 API key 嵌进前端 bundle。
 
@@ -1040,16 +1043,19 @@ See [`skills/gpt-image-2-skill/SKILL.md`](skills/gpt-image-2-skill/SKILL.md) and
 
 Key features:
 
-- `RELAY_MODE`: `open` (any upstream URL via the `x-gpt-image-2-upstream` header) or `allowlist` (only origins listed in config)
-- Configurable `RELAY_ALLOWED_ORIGINS` / `RELAY_ALLOWED_METHODS` / `RELAY_MAX_REQUEST_BYTES` / `RELAY_MAX_RESPONSE_BYTES`
-- Request / response header blocklist (strips `cookie`, `set-cookie`, `cf-*`, etc.)
-- Report-only mode collects allowlist hit-rate without blocking traffic
+- Users may keep arbitrary public HTTPS API Base domains, while the Worker itself constructs only `/models`, `/images/generations`, `/images/edits`, and credential-free asset download requests.
+- The browser negotiates transport with a side-effect-free `/models` probe. It never replays an ambiguous generation/edit POST through another transport, preventing duplicate work and charges.
+- Relay v2 exchanges Turnstile for a short-lived signed `HttpOnly`, `SameSite=Strict` cookie and enforces exact origins, Fetch Metadata, per-session rate limits, and operation-specific body limits.
+- `global_fetch_strictly_public`, public-HTTPS URL validation, redirect revalidation, strict header allowlists, and streamed response limits narrow SSRF and data-leak boundaries.
+- The old `/api/relay` route remains only as a restricted compatibility path for cached pages. `RELAY_MODE=open` no longer exists.
 
 ```bash
 just relay-test    # vitest + tsc
 just relay-dry     # wrangler dry-run
 just relay-deploy  # deploy to the production route
 ```
+
+Before deployment, configure `TURNSTILE_SITE_KEY`, `TURNSTILE_SECRET_KEY`, and a random 32-byte-or-longer `RELAY_SESSION_HMAC_KEY` as Cloudflare Worker secrets. The release workflow verifies the secrets, deploys and checks Relay v2, and publishes the static app only after the live config reports `enabled: true`. See [`docs/relay-security-runbook.md`](docs/relay-security-runbook.md) for rollout, verification, and rollback steps.
 
 If you only use the CLI, desktop app, or Docker Web, you can ignore this surface. It exists so browser-side transports do not have to embed an API key in the frontend bundle.
 
