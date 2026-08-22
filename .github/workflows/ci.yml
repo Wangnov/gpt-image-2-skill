@@ -31,13 +31,15 @@ jobs:
         run: scripts/security/check-workflows.sh
       - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
         with:
-          node-version: 22
+          node-version: 24.19.0
           cache: npm
           cache-dependency-path: |
             apps/gpt-image-2-app/package-lock.json
             workers/gpt-image-2-relay/package-lock.json
       - name: Audit npm dependencies
         run: |
+          npm --prefix apps/gpt-image-2-app ci
+          npm --prefix workers/gpt-image-2-relay ci
           npm --prefix apps/gpt-image-2-app audit --audit-level=high
           npm --prefix workers/gpt-image-2-relay audit --audit-level=high
           npm --prefix apps/gpt-image-2-app install-scripts ls --json | jq -e '.allowScripts | length == 0'
@@ -63,7 +65,7 @@ jobs:
           persist-credentials: false
       - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
         with:
-          node-version: 22
+          node-version: 24.19.0
           cache: npm
           cache-dependency-path: ${{ matrix.package }}/package-lock.json
       - name: Install
