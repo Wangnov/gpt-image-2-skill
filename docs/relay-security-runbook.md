@@ -65,6 +65,8 @@ test -f apps/gpt-image-2-app/dist/_headers
 
 这保证新网页不会先于新 Worker 上线。Worker 部署后即使 Pages 步骤失败，旧缓存页面仍走受限 v1；不会回退到开放代理。
 
+Cloudflare Bot Fight Mode 可能在请求到达 Worker 前对 GitHub-hosted runner 返回 Managed Challenge。部署门禁只在响应明确包含 `cf-mitigated: challenge` 时允许替代验证：通过已认证的 Cloudflare API 确认最新 deployment 是本次 commit 标记的单一 100% Worker 版本，并逐项核对 restricted v1、v2、精确 Origin、Secure Cookie、3 个 Secret、3 个 rate-limit binding 与 `global_fetch_strictly_public`。普通 403、5xx、网络错误或任一绑定不符仍必须阻止 Pages 发布。
+
 首次上线不要直接发正式 Pages。先单独部署 Worker并验证旧页面，再安排静态页面 canary：
 
 ```bash
