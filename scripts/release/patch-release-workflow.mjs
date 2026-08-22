@@ -18,7 +18,21 @@ const muslStepPattern =
   /      - name: Configure musl toolchain\n        if: \$\{\{ runner\.os == 'Linux' && contains\(join\(matrix\.targets, ','\), 'unknown-linux-musl'\) \}\}\n        shell: bash\n        run: \|\n(?:.*\n)+?(?=      - name: (?:Refresh WiX path|Build artifacts))/;
 const wixStepName = "      - name: Refresh WiX path";
 const announceSectionMarker = "  announce:\n";
-const announceCheckoutMarker = `      - uses: actions/checkout@v6
+const actionPins = new Map([
+  [
+    "actions/checkout@v6",
+    "actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6",
+  ],
+  [
+    "actions/upload-artifact@v6",
+    "actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6",
+  ],
+  [
+    "actions/download-artifact@v7",
+    "actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7",
+  ],
+]);
+const announceCheckoutMarker = `      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
           persist-credentials: false
           submodules: recursive
@@ -83,6 +97,13 @@ const legacyLinuxDepsStepPattern =
   /      - name: Install Linux keyring build dependencies\n        if: \$\{\{ runner\.os == 'Linux' \}\}\n        run: \|\n(?:          .+\n)+/;
 
 let source = fs.readFileSync(workflowPath, "utf8");
+
+// cargo-dist regenerates mutable major-version refs. Normalize them before
+// applying structural patches so a regenerated release workflow still obeys
+// the repository-wide full-SHA policy.
+for (const [mutableRef, pinnedRef] of actionPins) {
+  source = source.replaceAll(mutableRef, pinnedRef);
+}
 
 source = source.replace(legacyLinuxDepsStepPattern, "");
 source = source.replace(
