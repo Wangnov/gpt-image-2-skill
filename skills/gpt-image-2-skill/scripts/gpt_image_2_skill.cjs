@@ -372,12 +372,22 @@ async function downloadArchive(archiveName) {
   return bytes;
 }
 
+function archiveExtractionArgs(archiveName, extractDir) {
+  if (archiveName.endsWith(".tar.xz")) {
+    return ["-xJf", "-", "-C", extractDir];
+  }
+  if (archiveName.endsWith(".zip")) {
+    return ["-xf", "-", "-C", extractDir];
+  }
+  throw new Error(`Unsupported release archive format: ${archiveName}`);
+}
+
 function extractArchive(archiveBytes, archiveName, extractDir) {
   const tarBinary = resolveExecutable("tar");
   if (!tarBinary) {
     throw new Error("Archive extraction requires tar in PATH.");
   }
-  const result = childProcess.spawnSync(tarBinary, ["-xf", "-", "-C", extractDir], {
+  const result = childProcess.spawnSync(tarBinary, archiveExtractionArgs(archiveName, extractDir), {
     encoding: "utf8",
     input: archiveBytes,
     maxBuffer: 1024 * 1024,
@@ -500,6 +510,7 @@ if (require.main === module) {
 
 module.exports = {
   __test: {
+    archiveExtractionArgs,
     downloadArchive,
     downloadReleaseAsset,
     expectedArchiveSha256,

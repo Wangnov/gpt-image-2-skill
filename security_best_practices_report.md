@@ -74,7 +74,7 @@
 - 位置：`skills/gpt-image-2-skill/scripts/gpt_image_2_skill.cjs`
 - 证据：旧实现对固定 GitHub Release URL 执行 `fetch()`，随后把响应直接 `writeFileSync()` 到临时目录、解包、复制到缓存并执行；没有在落盘/执行前校验 cargo-dist 同步发布的 SHA-256 sidecar，也没有下载体积上限或重定向终点约束。CodeQL 因此产生 1 条 open alert。
 - 影响：TLS 或 GitHub 发布资产信任链异常、错误资产或超大响应可能变成本地可执行文件，构成供应链执行与资源耗尽风险。
-- 修复：只接受固定 GitHub/release-assets HTTPS 主机和受限资产名；先读取并严格解析同版本 `.sha256`，流式限制 checksum 为 1 KiB、归档为 16 MiB，使用常量时间 SHA-256 比较；校验通过后从内存把归档交给 `tar`，不再把网络响应直接写入归档文件。增加 6 个完整性与负向测试，并用真实 v0.7.3 macOS tar.xz 与 Windows zip 验证解包。
+- 修复：只接受固定 GitHub/release-assets HTTPS 主机和受限资产名；先读取并严格解析同版本 `.sha256`，流式限制 checksum 为 1 KiB、归档为 16 MiB，使用常量时间 SHA-256 比较；校验通过后从内存把归档交给 `tar`，`.tar.xz` 显式使用 `-J` 以兼容 GNU tar，不再把网络响应直接写入归档文件。增加 8 个完整性、格式与负向测试，并用真实 v0.7.3 macOS tar.xz 与 Windows zip 验证解包。
 - 当前状态：本次收尾提交已修复；以默认分支 CodeQL 复扫不再报告该数据流作为关闭判据。
 
 ### SEC-005：GitHub 安全与合并门禁不完整
