@@ -31,7 +31,7 @@ jobs:
         run: scripts/security/check-workflows.sh
       - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
         with:
-          node-version: 24.19.0
+          node-version: 26.6.0
           cache: npm
           cache-dependency-path: |
             apps/gpt-image-2-app/package-lock.json
@@ -65,7 +65,7 @@ jobs:
           persist-credentials: false
       - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
         with:
-          node-version: 24.19.0
+          node-version: 26.6.0
           cache: npm
           cache-dependency-path: ${{ matrix.package }}/package-lock.json
       - name: Install

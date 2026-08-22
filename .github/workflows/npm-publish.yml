@@ -32,7 +32,7 @@ jobs:
           ref: ${{ env.TAG_NAME }}
       - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
         with:
-          node-version: 24.19.0
+          node-version: 26.6.0
       - name: Install trusted publishing npm
         run: npm install -g npm@^11.10.0
       - name: Download release assets
