@@ -60,6 +60,31 @@ fn configured_openai_provider_resolves_with_file_secret() {
 }
 
 #[test]
+fn configured_atlas_provider_uses_async_image_defaults() {
+    let provider = ProviderConfig {
+        provider_type: "atlas".to_string(),
+        api_base: None,
+        endpoint: None,
+        model: None,
+        credentials: BTreeMap::from([(
+            "api_key".to_string(),
+            CredentialRef::File {
+                value: "atlas-test".to_string(),
+            },
+        )]),
+        supports_n: Some(true),
+        edit_region_mode: Some(EDIT_REGION_NATIVE_MASK.to_string()),
+        proxy: None,
+    };
+    let selection = configured_provider_selection("atlas-cloud", &provider, "test", None).unwrap();
+    assert!(matches!(selection.kind, ProviderKind::Atlas));
+    assert_eq!(selection.api_base, DEFAULT_ATLAS_API_BASE);
+    assert_eq!(selection.default_model, DEFAULT_ATLAS_MODEL);
+    assert!(!selection.supports_n);
+    assert_eq!(selection.edit_region_mode, EDIT_REGION_NONE);
+}
+
+#[test]
 fn explicit_builtin_name_uses_configured_provider_when_present() {
     let temp_dir = tempfile::tempdir().unwrap();
     let config_path = temp_dir.path().join("config.json");

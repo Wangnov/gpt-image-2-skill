@@ -7,10 +7,13 @@ pub(crate) fn generate_source_image(
     selection: &ProviderSelection,
     shared: &SharedImageArgs,
 ) -> Result<Value, AppError> {
-    if matches!(selection.kind, ProviderKind::OpenAi) {
-        generate_openai_source_image(cli, selection, shared)
-    } else {
-        generate_codex_source_image(cli, selection, shared)
+    match selection.kind {
+        ProviderKind::OpenAi => generate_openai_source_image(cli, selection, shared),
+        ProviderKind::Codex => generate_codex_source_image(cli, selection, shared),
+        ProviderKind::Atlas => Err(AppError::new(
+            "unsupported_operation",
+            "The Atlas provider does not support transparent source generation.",
+        )),
     }
 }
 

@@ -62,7 +62,9 @@ pub(crate) fn run_doctor(cli: &Cli) -> CommandOutcome {
             let proxy =
                 resolve_effective_proxy(&config.proxy, config.providers.get(&selection.resolved));
             let endpoint = match selection.kind {
-                ProviderKind::OpenAi => check_endpoint_reachability(&selection.api_base, &proxy),
+                ProviderKind::OpenAi | ProviderKind::Atlas => {
+                    check_endpoint_reachability(&selection.api_base, &proxy)
+                }
                 ProviderKind::Codex => {
                     check_endpoint_reachability(&selection.codex_endpoint, &proxy)
                 }
