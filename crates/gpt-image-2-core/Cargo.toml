@@ -14,7 +14,7 @@ anyhow = "1.0.100"
 base64 = "0.22.1"
 clap = { version = "4.5.51", features = ["derive"] }
 dirs = "6.0.0"
-keyring = "3.6.3"
+keyring = "4.1.6"
 image = { version = "0.25.8", default-features = false, features = ["jpeg", "png", "webp"] }
 chrono = { version = "0.4.44", default-features = false, features = ["clock"] }
 hmac = "0.12.1"
