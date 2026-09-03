@@ -38,7 +38,7 @@
     "lucide-react": "^0.468.0",
     "motion": "^12.38.0",
     "ogl": "^1.0.11",
-    "react": "^19.0.0",
+    "react": "^19.2.8",
     "react-dom": "^19.0.0",
     "sonner": "^2.0.7",
     "tailwind-merge": "^2.6.0",
@@ -49,7 +49,7 @@
   "devDependencies": {
     "@tauri-apps/cli": "^2.11.4",
     "@types/node": "^22.19.17",
-    "@types/react": "^19.0.0",
+    "@types/react": "^19.2.18",
     "@types/react-dom": "^19.0.0",
     "@types/three": "^0.182.0",
     "@vitejs/plugin-react": "^4.3.0",
