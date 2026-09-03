@@ -41,7 +41,7 @@
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
     "sonner": "^2.0.7",
-    "tailwind-merge": "^2.6.0",
+    "tailwind-merge": "^3.6.0",
     "three": "^0.182.0",
     "typescript": "^5.7.0",
     "vite": "^6.0.0"
