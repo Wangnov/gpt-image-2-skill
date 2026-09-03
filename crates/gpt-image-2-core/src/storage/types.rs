@@ -435,7 +435,10 @@ impl StorageConfig {
                     (false, false) => match self.fallback_policy {
                         StorageFallbackPolicy::Never => primary.clone(),
                         StorageFallbackPolicy::OnFailure | StorageFallbackPolicy::Always => {
-                            let mut out = Vec::with_capacity(primary.len() + fallback.len());
+                            // These legacy lists come from serialized configuration. Avoid
+                            // deriving an eager allocation size from untrusted lengths; the
+                            // vector grows incrementally as deduplicated entries are copied.
+                            let mut out = Vec::new();
                             for name in primary.iter().chain(fallback.iter()) {
                                 if !out.iter().any(|existing: &String| existing == name) {
                                     out.push(name.clone());
