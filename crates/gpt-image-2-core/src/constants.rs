@@ -10,6 +10,18 @@ pub const DEFAULT_CODEX_ENDPOINT: &str = "https://chatgpt.com/backend-api/codex/
 
 pub const DEFAULT_OPENAI_API_BASE: &str = "https://api.openai.com/v1";
 
+pub const DEFAULT_ATLAS_API_BASE: &str = "https://api.atlascloud.ai";
+
+pub const DEFAULT_ATLAS_MODEL: &str = "openai/gpt-image-2/text-to-image";
+
+pub const ATLAS_GENERATE_PATH: &str = "/api/v1/model/generateImage";
+
+pub const ATLAS_RESULT_PATH: &str = "/api/v1/model/result";
+
+pub const ATLAS_POLL_ATTEMPTS: usize = 60;
+
+pub const ATLAS_POLL_DELAY_SECONDS: u64 = 2;
+
 pub const OPENAI_GENERATIONS_PATH: &str = "/images/generations";
 
 pub const OPENAI_EDITS_PATH: &str = "/images/edits";

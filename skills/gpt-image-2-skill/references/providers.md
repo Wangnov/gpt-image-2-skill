@@ -7,7 +7,7 @@ Built-in providers and named providers share the same command surface. Pick a bu
 - `--provider openai` — force OpenAI HTTP API.
 - `--provider codex` — force Codex `image_generation` tool through `~/.codex/auth.json`.
 - `--provider auto` (default) — use `default_provider` from shared config, then legacy OpenAI/Codex auto-selection.
-- `--provider <name>` — resolve an `openai-compatible` or `codex` provider from `$CODEX_HOME/gpt-image-2-skill/config.json`.
+- `--provider <name>` — resolve an `openai-compatible`, `codex`, or `atlas` provider from `$CODEX_HOME/gpt-image-2-skill/config.json`.
 
 The resolved provider appears in `doctor` output as `provider_selection.resolved`.
 
@@ -73,6 +73,31 @@ OpenAI-compatible bases (e.g. `https://api.duckcoding.ai/v1`) work as long as th
 | Refresh endpoint | `https://auth.openai.com/oauth/token` |
 
 Codex `401` triggers exactly one access-token refresh, then a single retry. Refresh failures surface as `refresh_failed` errors.
+
+## Atlas Cloud provider
+
+Atlas Cloud uses an asynchronous image API, so configure it as `type: "atlas"` rather than `openai-compatible`:
+
+```json
+{
+  "version": 1,
+  "providers": {
+    "atlas-cloud": {
+      "type": "atlas",
+      "model": "openai/gpt-image-2/text-to-image",
+      "supports_n": false,
+      "edit_region_mode": "none",
+      "credentials": {
+        "api_key": { "source": "env", "env": "ATLASCLOUD_API_KEY" }
+      }
+    }
+  }
+}
+```
+
+Run text-to-image generation with `--provider atlas-cloud`. The default API base is `https://api.atlascloud.ai`; `api_base` can override it for testing or a compatible deployment. Atlas generation POSTs are never retried. The client only retries bounded result polling GETs and downloads completed output URLs without forwarding the Atlas authorization header.
+
+The Atlas provider currently supports one generated image in `jpeg` or `png` format. Image editing, transparent source generation, non-auto backgrounds, WebP, and output compression fail before submission.
 
 ## Runtime discovery and update
 
