@@ -7,7 +7,7 @@ const childProcess = require("node:child_process");
 const crypto = require("node:crypto");
 
 const CLI_NAME = "gpt-image-2-skill";
-const VERSION = "0.7.3";
+const VERSION = "0.7.4";
 const REPOSITORY = "Wangnov/gpt-image-2-skill";
 const RELEASE_BASE_URL = `https://github.com/${REPOSITORY}/releases/download/v${VERSION}`;
 const REPO_ROOT = path.resolve(__dirname, "..", "..", "..");
