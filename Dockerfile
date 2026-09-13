@@ -8,9 +8,10 @@ RUN npm --prefix apps/gpt-image-2-app run build:http
 FROM rust:1-bookworm AS rust-builder
 WORKDIR /app
 COPY Cargo.toml Cargo.lock ./
+COPY vendor ./vendor
 COPY crates ./crates
 COPY apps/gpt-image-2-app/src-tauri ./apps/gpt-image-2-app/src-tauri
-RUN cargo build --release -p gpt-image-2-web
+RUN cargo build --locked --release -p gpt-image-2-web
 
 FROM debian:bookworm-slim
 LABEL org.opencontainers.image.title="GPT Image 2 Web" \
