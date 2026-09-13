@@ -226,7 +226,7 @@ gpt-image-2-skill --json --json-events \
 
 支持的输入 / 输出参数:
 
-- `--format png|jpeg|webp`,`--quality high|medium|low|auto`,`--compression`,`--input-fidelity`(OpenAI only)
+- `--format png|jpeg|webp`,`--quality max|xhigh|high|medium|low|auto`,`--compression`,`--input-fidelity`(OpenAI only)
 - `--ref-image` 最多 16 张,`--mask`(OpenAI only)
 - `--size`:`2K` → `2048x2048`,`4K` → `3840x2160`,`4K` 竖版 → `2160x3840`,方图高分辨率上限 `2880x2880`,自定义 `WIDTHxHEIGHT` 须满足:边都是 16 的倍数、最大边长 `3840`、最大总像素 `8294400`、最大长宽比 `3:1`
 - 默认 retry 3 次,Codex `401` 自动 refresh 一次后重试;`--retries`、`--retry-delay-seconds`、`--request-timeout-seconds` 可调
@@ -796,7 +796,7 @@ gpt-image-2-skill --json --json-events \
 
 Supported parameters:
 
-- `--format png|jpeg|webp`, `--quality high|medium|low|auto`, `--compression`, `--input-fidelity` (OpenAI only)
+- `--format png|jpeg|webp`, `--quality max|xhigh|high|medium|low|auto`, `--compression`, `--input-fidelity` (OpenAI only)
 - `--ref-image` up to 16, `--mask` (OpenAI only)
 - `--size`: `2K` → `2048x2048`, `4K` → `3840x2160`, portrait `4K` → `2160x3840`, square high-res ceiling `2880x2880`. Custom `WIDTHxHEIGHT` must satisfy: both edges multiples of 16, max edge `3840`, max total pixels `8294400`, max aspect ratio `3:1`.
 - Default 3 retries; Codex `401` triggers one OAuth refresh and a single retry. `--retries`, `--retry-delay-seconds`, `--request-timeout-seconds` are all configurable.
