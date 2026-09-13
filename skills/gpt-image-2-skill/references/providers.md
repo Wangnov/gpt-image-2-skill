@@ -66,11 +66,13 @@ OpenAI-compatible bases (e.g. `https://api.duckcoding.ai/v1`) work as long as th
 
 | Item | Default |
 |---|---|
-| Model | `gpt-5.4` (override with `-m/--model`) |
+| 外层模型 | CLI 默认 `gpt-5.4` 已在本次账户测试中被拒绝；显式使用 `--model gpt-6-astra`，其他账户需验证 |
 | Endpoint | `https://chatgpt.com/backend-api/codex/responses` |
-| Image tool | `image_generation` (delegates to `gpt-image-2` server-side) |
+| Image tool | `image_generation`；普通命令由服务端选模型，实际读取 SSE `data.response.tools[].model` |
 | Auth source | `~/.codex/auth.json` or `$CODEX_HOME/auth.json` |
 | Refresh endpoint | `https://auth.openai.com/oauth/token` |
+
+参见 [本地实测](codex-local-verification.md)。外层 `--model` 与绘图模型是两个字段；不要用图像模型替换外层模型，也不要把本地硬编码的 `delegated_image_model` 当作上游证据。
 
 Codex `401` triggers exactly one access-token refresh, then a single retry. Refresh failures surface as `refresh_failed` errors.
 
@@ -140,3 +142,9 @@ The Node wrapper at `scripts/gpt_image_2_skill.cjs` resolves the underlying Rust
 6. Bootstrap: download the matching GitHub Release archive, extract the binary, cache it
 
 Set `GPT_IMAGE_2_SKILL_SKIP_BOOTSTRAP=1` to disable the download step.
+
+## Image 2.5 接入
+
+官方通道应显式选择 `--provider openai --openai-api-base https://api.openai.com/v1`，使用该通道的官方凭据；不能把官方 key 发送到第三方地址。`images generate` 和 `images edit` 均可传 `--model gpt-image-2.5-flare` 或 `--model gpt-image-2.5-sunburst`，并用 `--quality low|medium|high|xhigh|max|auto`。模型名是字符串透传，CLI 不会替换为1.5；服务端不支持时保留错误。
+
+PackyAPI 等兼容通道使用命名 provider，配置其 Base URL 和专属 key，模型名以该服务实际公布的 ID 为准。截至2026-09-13，查到的 Packy 绘图文档只列 `gpt-image-2` 和 Images API，不据此承诺2.5已上线。不要使用官方 key 试探第三方通道。

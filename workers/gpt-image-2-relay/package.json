@@ -6,7 +6,7 @@
   "allowScripts": {
     "esbuild@0.28.1": true,
     "fsevents": false,
-    "workerd@1.20260820.1": true
+    "workerd@1.20260911.1": true
   },
   "scripts": {
     "deploy": "wrangler deploy",
@@ -17,7 +17,7 @@
   "devDependencies": {
     "@cloudflare/workers-types": "^5.20260726.1",
     "typescript": "^5.7.0",
-    "vitest": "^4.1.5",
-    "wrangler": "^4.125.0"
+    "vitest": "^4.1.11",
+    "wrangler": "^4.131.1"
   }
 }

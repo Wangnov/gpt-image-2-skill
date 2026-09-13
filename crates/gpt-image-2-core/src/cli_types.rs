@@ -25,6 +25,8 @@ pub enum Quality {
     Low,
     Medium,
     High,
+    Xhigh,
+    Max,
 }
 
 impl Quality {
@@ -34,6 +36,8 @@ impl Quality {
             Self::Low => "low",
             Self::Medium => "medium",
             Self::High => "high",
+            Self::Xhigh => "xhigh",
+            Self::Max => "max",
         }
     }
 }

@@ -50,7 +50,9 @@ jobs:
       - name: Install cargo-audit
         run: cargo install cargo-audit --version 0.22.2 --locked
       - name: Audit Rust dependencies
-        run: cargo audit
+        run: |
+          python3 scripts/security/check-dependency-mitigations.py
+          cargo audit
 
   node:
     name: Node (${{ matrix.package }})
@@ -104,3 +106,5 @@ jobs:
         run: cargo clippy --workspace --all-targets --all-features -- -D warnings
       - name: Test
         run: cargo test --workspace
+      - name: Test glib security backport with optimizations
+        run: cargo test --manifest-path vendor/glib/Cargo.toml --release test_variant_str_iter

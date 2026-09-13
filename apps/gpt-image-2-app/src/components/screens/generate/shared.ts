@@ -6,6 +6,8 @@ export const QUALITY_CHIP_OPTIONS = [
   { value: "low", label: "低" },
   { value: "medium", label: "中" },
   { value: "high", label: "高" },
+  { value: "xhigh", label: "超高（2.5）" },
+  { value: "max", label: "最高（2.5）" },
 ];
 
 export const FORMAT_OPTIONS = [

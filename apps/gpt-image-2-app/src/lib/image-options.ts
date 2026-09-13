@@ -3,6 +3,8 @@ export const QUALITY_OPTIONS = [
   { value: "low", label: "低" },
   { value: "medium", label: "中" },
   { value: "high", label: "高" },
+  { value: "xhigh", label: "超高（2.5）" },
+  { value: "max", label: "最高（2.5）" },
 ] as const;
 
 export const BACKGROUND_OPTIONS = [
