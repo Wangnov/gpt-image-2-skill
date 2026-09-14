@@ -6,6 +6,7 @@ use super::*;
 pub(crate) enum ProviderKind {
     OpenAi,
     Codex,
+    Atlas,
 }
 
 #[derive(Debug, Clone)]
@@ -29,6 +30,7 @@ impl ProviderSelection {
             "kind": match self.kind {
                 ProviderKind::OpenAi => "openai-compatible",
                 ProviderKind::Codex => "codex",
+                ProviderKind::Atlas => "atlas",
             },
             "reason": self.reason,
             "supports_n": self.supports_n,

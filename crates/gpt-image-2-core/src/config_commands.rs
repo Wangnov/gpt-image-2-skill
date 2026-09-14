@@ -92,7 +92,9 @@ pub(crate) fn run_config_command(
             let proxy =
                 resolve_effective_proxy(&config.proxy, config.providers.get(&selection.resolved));
             let endpoint = match selection.kind {
-                ProviderKind::OpenAi => check_endpoint_reachability(&selection.api_base, &proxy),
+                ProviderKind::OpenAi | ProviderKind::Atlas => {
+                    check_endpoint_reachability(&selection.api_base, &proxy)
+                }
                 ProviderKind::Codex => {
                     check_endpoint_reachability(&selection.codex_endpoint, &proxy)
                 }
@@ -174,6 +176,7 @@ pub(crate) fn run_config_add_provider(
         .clone()
         .or_else(|| match args.provider_type.as_str() {
             "codex" => Some(DEFAULT_CODEX_MODEL.to_string()),
+            "atlas" => Some(DEFAULT_ATLAS_MODEL.to_string()),
             _ => Some(DEFAULT_OPENAI_MODEL.to_string()),
         });
     let supports_n = if args.supports_n {

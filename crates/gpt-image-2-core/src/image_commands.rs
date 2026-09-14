@@ -377,20 +377,20 @@ pub(crate) fn run_batched_image_command(
         let handles = jobs
             .into_iter()
             .map(|next| {
-                scope.spawn(move || {
-                    if matches!(selection.kind, ProviderKind::OpenAi) {
-                        run_openai_image_command(
-                            cli,
-                            selection,
-                            &next,
-                            operation,
-                            ref_images,
-                            mask,
-                            input_fidelity,
-                        )
-                    } else {
+                scope.spawn(move || match selection.kind {
+                    ProviderKind::OpenAi => run_openai_image_command(
+                        cli,
+                        selection,
+                        &next,
+                        operation,
+                        ref_images,
+                        mask,
+                        input_fidelity,
+                    ),
+                    ProviderKind::Codex => {
                         run_codex_image_command(cli, selection, &next, operation, ref_images)
                     }
+                    ProviderKind::Atlas => run_atlas_image_command(cli, selection, &next),
                 })
             })
             .collect::<Vec<_>>();
@@ -461,6 +461,10 @@ pub(crate) fn run_images_command(
     let selection = select_image_provider(cli)?;
     match subcommand {
         ImagesSubcommand::Generate(args) => {
+            if matches!(selection.kind, ProviderKind::Atlas) {
+                validate_provider_specific_image_args(&selection, &args.shared, None, None)?;
+                return run_atlas_image_command(cli, &selection, &args.shared);
+            }
             let use_batch = args.shared.n.unwrap_or(1) > 1 && !selection.supports_n;
             let mut validation_shared = args.shared.clone();
             if use_batch {
@@ -485,6 +489,12 @@ pub(crate) fn run_images_command(
             }
         }
         ImagesSubcommand::Edit(args) => {
+            if matches!(selection.kind, ProviderKind::Atlas) {
+                return Err(AppError::new(
+                    "unsupported_operation",
+                    "The Atlas provider currently supports text-to-image generation only.",
+                ));
+            }
             validate_reference_image_count(args.ref_image.len())?;
             let use_batch = args.shared.n.unwrap_or(1) > 1 && !selection.supports_n;
             let mut validation_shared = args.shared.clone();

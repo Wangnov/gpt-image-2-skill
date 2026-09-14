@@ -239,10 +239,13 @@ pub(crate) fn run_request_create(
     args: &RequestCreateArgs,
 ) -> Result<CommandOutcome, AppError> {
     let selection = select_request_provider(cli, args)?;
-    if matches!(selection.kind, ProviderKind::OpenAi) {
-        run_request_create_openai(cli, &selection, args)
-    } else {
-        run_request_create_codex(cli, &selection, args)
+    match selection.kind {
+        ProviderKind::OpenAi => run_request_create_openai(cli, &selection, args),
+        ProviderKind::Codex => run_request_create_codex(cli, &selection, args),
+        ProviderKind::Atlas => Err(AppError::new(
+            "unsupported_operation",
+            "The Atlas provider is available through `images generate`.",
+        )),
     }
 }
 

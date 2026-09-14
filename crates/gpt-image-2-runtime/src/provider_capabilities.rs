@@ -42,6 +42,7 @@ pub fn default_edit_region_mode_for_provider_type(provider_type: &str) -> String
     match provider_type {
         "openai" => "native-mask".to_string(),
         "codex" => "reference-hint".to_string(),
+        "atlas" => "none".to_string(),
         _ => "reference-hint".to_string(),
     }
 }
@@ -115,6 +116,33 @@ mod tests {
         assert_eq!(
             provider_edit_region_mode_from_config(Some(&config), Some("openai")),
             "native-mask"
+        );
+    }
+
+    #[test]
+    fn atlas_provider_disables_native_multiple_outputs_and_editing() {
+        let mut config = AppConfig::default();
+        config.providers.insert(
+            "atlas-cloud".to_string(),
+            ProviderConfig {
+                provider_type: "atlas".to_string(),
+                api_base: None,
+                endpoint: None,
+                model: None,
+                credentials: BTreeMap::new(),
+                supports_n: None,
+                edit_region_mode: None,
+                proxy: None,
+            },
+        );
+
+        assert!(!provider_supports_n_from_config(
+            Some(&config),
+            Some("atlas-cloud")
+        ));
+        assert_eq!(
+            provider_edit_region_mode_from_config(Some(&config), Some("atlas-cloud")),
+            "none"
         );
     }
 }
