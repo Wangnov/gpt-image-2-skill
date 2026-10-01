@@ -28,7 +28,7 @@ jobs:
       - name: Install AppImage build and smoke dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf xvfb dbus-x11
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf xvfb dbus-x11 squashfs-tools
       - run: npm ci --prefix apps/gpt-image-2-app
       - name: Build AppImage candidate
         run: npm --prefix apps/gpt-image-2-app run tauri -- build --bundles appimage --ci --config '{"bundle":{"createUpdaterArtifacts":false}}'
@@ -37,6 +37,15 @@ jobs:
         run: |
           images=(target/release/bundle/appimage/*.AppImage)
           bash scripts/release/verify-appimage.sh "${images[0]}"
+
+      - name: Retain AppImage candidate
+        if: always()
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
+        with:
+          name: appimage-candidate
+          path: target/release/bundle/appimage/*.AppImage
+          if-no-files-found: ignore
+          retention-days: 7
 
   candidate:
     runs-on: ubuntu-24.04
