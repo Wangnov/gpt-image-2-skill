@@ -1,5 +1,14 @@
 # Dependency advisory remediation — 2026-09-13
 
+## 2026-10-01 更新
+
+- rustls 升级到 0.23.45，修复 RUSTSEC-2026-0285；rustls-webpki 同步到 0.103.15。
+- Wrangler 升级到 4.145.0，其依赖 undici 7.29.1 修复 GHSA-w293-vg96-wgc3。原 Dependabot 候选 Wrangler 4.139.0 仍包含受影响版本，因此使用更新的补丁链。
+- Workers 类型同步到 5.20261001.1；relay 类型检查、19 项测试和部署 dry-run 均通过。
+- 已核对 workerd 1.20260930.2 的安装脚本：选择当前平台的 Cloudflare 二进制，必要时从 npm 获取同一精确版本，并检查二进制版本。仅将该精确版本加入 allowScripts，未扩大脚本授权范围。
+
+漏洞来源：[RustSec](https://rustsec.org/advisories/RUSTSEC-2026-0285.html)、[GitHub Advisory](https://github.com/advisories/GHSA-w293-vg96-wgc3)。
+
 - Vitest and @vitest/mocker: update both npm workspaces to patched 4.1.11 or later.
 - sharp/libheif: update Wrangler dependency graph to sharp 0.35.4.
 - anyhow RUSTSEC-2026-0190 and event-listener RUSTSEC-2026-0221: update to patched versions (>=1.0.103 and >=5.4.2).
