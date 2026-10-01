@@ -1,3 +1,4 @@
+import { t } from "@/lib/i18n";
 import type { CredentialRef } from "./types";
 
 export function maskKey(value: string) {
@@ -12,7 +13,7 @@ export function credentialSecretDisplay(credential?: CredentialRef | null) {
     return maskKey(credential.value);
   }
   if (credential.present) {
-    return "已保存";
+    return t("已保存");
   }
   return null;
 }

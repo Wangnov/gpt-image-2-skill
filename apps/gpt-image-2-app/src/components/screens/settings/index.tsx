@@ -1,3 +1,4 @@
+import { t } from "@/lib/i18n";
 import { useRef, useState, type ReactNode } from "react";
 import { AnimatePresence, motion } from "motion/react";
 import { PromptTemplatesPanel } from "@/components/screens/settings/prompt-templates-panel";
@@ -35,7 +36,7 @@ export function SettingsScreen({ config }: { config?: ServerConfig } = {}) {
       <>
         {storageDirty && (
           <span className="flex h-7 items-center text-[12px] leading-none text-[color:var(--accent-70)]">
-            有未保存的改动
+            {t("有未保存的改动")}
           </span>
         )}
         <button
@@ -44,7 +45,7 @@ export function SettingsScreen({ config }: { config?: ServerConfig } = {}) {
           onClick={() => storageSaveRef.current()}
           className="flex h-7 items-center rounded-md bg-[color:var(--accent-55)] px-3 text-[12.5px] font-medium leading-none text-foreground transition-opacity disabled:cursor-not-allowed disabled:opacity-40"
         >
-          保存
+          {t("保存")}
         </button>
       </>
     ) : undefined;

@@ -1,3 +1,4 @@
+import { t, getLocale } from "@/lib/i18n";
 import { type ReactNode, useMemo } from "react";
 import * as RadixDialog from "@radix-ui/react-dialog";
 import { SlidersHorizontal, X } from "lucide-react";
@@ -36,7 +37,7 @@ function optionLabel(options: readonly SelectOption[], value: string) {
 
 function compactSizeLabel(value: string) {
   const normalized = value.trim().toLowerCase().replaceAll("×", "x");
-  if (normalized === "auto") return "自动";
+  if (normalized === "auto") return t("自动");
   const match = normalized.match(/^(\d{3,5})x(\d{3,5})$/);
   if (!match) return value;
   const width = Number(match[1]);
@@ -69,7 +70,7 @@ function ParamsFields({
     return (
       <div className="grid grid-cols-2 gap-2">
         <div className="space-y-1.5">
-          <div className="t-caps px-0.5">尺寸</div>
+          <div className="t-caps px-0.5">{t("尺寸")}</div>
           <GlassCombobox
             value={size}
             onValueChange={onSizeChange}
@@ -80,7 +81,7 @@ function ParamsFields({
           />
         </div>
         <div className="space-y-1.5">
-          <div className="t-caps px-0.5">质量</div>
+          <div className="t-caps px-0.5">{t("质量")}</div>
           <GlassSelect
             value={quality}
             onValueChange={onQualityChange}
@@ -88,7 +89,7 @@ function ParamsFields({
           />
         </div>
         <div className="space-y-1.5">
-          <div className="t-caps px-0.5">格式</div>
+          <div className="t-caps px-0.5">{t("格式")}</div>
           <GlassSelect
             value={format}
             onValueChange={onFormatChange}
@@ -96,7 +97,7 @@ function ParamsFields({
           />
         </div>
         <div className="space-y-1.5">
-          <div className="t-caps px-0.5">数量</div>
+          <div className="t-caps px-0.5">{t("数量")}</div>
           <GlassCombobox
             value={count}
             onValueChange={onCountChange}
@@ -116,7 +117,7 @@ function ParamsFields({
     <>
       <GlassCombobox
         variant="chip"
-        label="尺寸"
+        label={t("尺寸")}
         value={size}
         options={sizeOptions}
         onValueChange={onSizeChange}
@@ -126,7 +127,7 @@ function ParamsFields({
       />
       <GlassSelect
         variant="chip"
-        label="质量"
+        label={t("质量")}
         value={quality}
         options={qualityOptions}
         onValueChange={onQualityChange}
@@ -134,7 +135,7 @@ function ParamsFields({
       />
       <GlassSelect
         variant="chip"
-        label="格式"
+        label={t("格式")}
         value={format}
         options={formatOptions}
         onValueChange={onFormatChange}
@@ -142,7 +143,7 @@ function ParamsFields({
       />
       <GlassCombobox
         variant="chip"
-        label="数量"
+        label={t("数量")}
         value={count}
         options={countOptions}
         onValueChange={onCountChange}
@@ -162,7 +163,7 @@ function MobileParamsSheet(props: Omit<CreationParamsBarProps, "action">) {
       compactSizeLabel(props.size),
       optionLabel(props.qualityOptions, props.quality),
       optionLabel(props.formatOptions, props.format),
-      `${props.count || "1"}张`,
+      t("{p0}张", { p0: props.count || "1" }),
     ],
     [
       props.count,
@@ -171,6 +172,8 @@ function MobileParamsSheet(props: Omit<CreationParamsBarProps, "action">) {
       props.quality,
       props.qualityOptions,
       props.size,
+      ,
+      getLocale(),
     ],
   );
 
@@ -182,7 +185,7 @@ function MobileParamsSheet(props: Omit<CreationParamsBarProps, "action">) {
           className="flex h-10 w-full items-center gap-2 rounded-md border border-border bg-[color:var(--w-04)] px-3 text-left text-[12.5px] text-foreground transition-colors hover:bg-[color:var(--w-07)]"
         >
           <SlidersHorizontal size={13} className="shrink-0 text-muted" />
-          <span className="t-caps shrink-0">参数</span>
+          <span className="t-caps shrink-0">{t("参数")}</span>
           <span className="min-w-0 flex-1 truncate text-[13px]">
             {summary.join(" · ")}
           </span>
@@ -211,7 +214,7 @@ function MobileParamsSheet(props: Omit<CreationParamsBarProps, "action">) {
         >
           <div className="mb-3 flex items-center gap-2">
             <RadixDialog.Title className="text-[13px] font-semibold text-foreground">
-              生成参数
+              {t("生成参数")}
             </RadixDialog.Title>
             <div className="min-w-0 flex-1 truncate text-[11px] text-faint">
               {summary.join(" · ")}
@@ -220,7 +223,7 @@ function MobileParamsSheet(props: Omit<CreationParamsBarProps, "action">) {
               <button
                 type="button"
                 className="inline-flex h-8 w-8 items-center justify-center rounded-md text-muted transition-colors hover:bg-[color:var(--w-06)] hover:text-foreground"
-                aria-label="关闭参数"
+                aria-label={t("关闭参数")}
               >
                 <X size={14} />
               </button>

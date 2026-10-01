@@ -1,3 +1,4 @@
+import { t } from "@/lib/i18n";
 import { useEffect } from "react";
 import { toast } from "sonner";
 import {
@@ -110,7 +111,7 @@ export function useTauriImageDrop(
             })
             .catch((error) => {
               if (disposed) return;
-              toast.error("无法读取拖入的图片", {
+              toast.error(t("无法读取拖入的图片"), {
                 description:
                   error instanceof Error ? error.message : String(error),
               });
@@ -123,7 +124,7 @@ export function useTauriImageDrop(
       })
       .catch((error) => {
         if (disposed) return;
-        toast.error("无法启用 Tauri 拖拽上传", {
+        toast.error(t("无法启用 Tauri 拖拽上传"), {
           description: error instanceof Error ? error.message : String(error),
         });
       });

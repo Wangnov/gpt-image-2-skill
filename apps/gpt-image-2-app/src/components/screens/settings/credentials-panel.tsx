@@ -1,6 +1,16 @@
+import { t } from "@/lib/i18n";
 import { useEffect, useState } from "react";
 import { AnimatePresence, motion, useAnimationControls } from "motion/react";
-import { Check, Eye, Loader2, Pencil, Play, Plus, Trash2, X } from "lucide-react";
+import {
+  Check,
+  Eye,
+  Loader2,
+  Pencil,
+  Play,
+  Plus,
+  Trash2,
+  X,
+} from "lucide-react";
 import { toast } from "sonner";
 import { ProviderLogo } from "@/components/provider-logo";
 import { AddProviderDialog } from "@/components/screens/providers/add-provider-dialog";
@@ -104,12 +114,12 @@ function CredCard({
               className="text-[10.5px] font-medium tracking-wide"
               style={{ color: "var(--status-ok-soft)" }}
             >
-              当前使用
+              {t("当前使用")}
             </span>
           )}
           <span className="t-caps">
             {prov.type === "openai-compatible"
-              ? "OpenAI 兼容"
+              ? t("OpenAI 兼容")
               : prov.type === "codex"
                 ? "Codex"
                 : "OpenAI"}
@@ -149,10 +159,10 @@ function CredCard({
         <Tooltip
           text={
             testStatus === "ok"
-              ? "连接正常 · 重新测试"
+              ? t("连接正常 · 重新测试")
               : testStatus === "err"
-                ? "连接失败 · 重新测试"
-                : "测试连接"
+                ? t("连接失败 · 重新测试")
+                : t("测试连接")
           }
         >
           <motion.button
@@ -166,7 +176,7 @@ function CredCard({
             // retries — `key`-based remount drops keyboard focus.
             animate={shakeControls}
             className="relative h-8 w-8 inline-flex items-center justify-center rounded-md text-muted hover:text-foreground hover:bg-[color:var(--w-06)] transition-colors disabled:opacity-50"
-            aria-label={`测试 ${name} 的连接`}
+            aria-label={t("测试 {p0} 的连接", { p0: name })}
           >
             {/* Success ring pulse — radial accent fading from 0.7 -> 0
                 as it scales out. Only paints on each fresh "ok" via
@@ -218,37 +228,37 @@ function CredCard({
             </AnimatePresence>
           </motion.button>
         </Tooltip>
-        <Tooltip text="编辑凭证">
+        <Tooltip text={t("编辑凭证")}>
           <button
             type="button"
             onClick={onEdit}
             className="h-8 w-8 inline-flex items-center justify-center rounded-md text-muted hover:text-foreground hover:bg-[color:var(--w-06)] transition-colors"
-            aria-label={`编辑 ${name}`}
+            aria-label={t("编辑 {p0}", { p0: name })}
           >
             <Pencil size={13} />
           </button>
         </Tooltip>
         {!isDefault && (
-          <Tooltip text="设为默认凭证">
+          <Tooltip text={t("设为默认凭证")}>
             <Button size="sm" onClick={onUse}>
-              使用
+              {t("使用")}
             </Button>
           </Tooltip>
         )}
-        <Tooltip text="删除凭证">
+        <Tooltip text={t("删除凭证")}>
           <button
             type="button"
             onClick={async () => {
               const ok = await confirm({
-                title: `删除凭证「${name}」`,
-                description: "此操作无法撤销。",
-                confirmText: "删除",
+                title: t("删除凭证「{p0}」", { p0: name }),
+                description: t("此操作无法撤销。"),
+                confirmText: t("删除"),
                 variant: "danger",
               });
               if (ok) onDelete();
             }}
             className="h-8 w-8 inline-flex items-center justify-center rounded-md text-muted hover:text-[color:var(--status-err)] hover:bg-[color:var(--status-err-10)] transition-colors"
-            aria-label={`删除 ${name}`}
+            aria-label={t("删除 {p0}", { p0: name })}
           >
             <Trash2 size={13} />
           </button>
@@ -281,22 +291,24 @@ export function CredsPanel({ config }: { config?: ServerConfig }) {
         [name]: { status: r.ok ? "ok" : "err" },
       }));
       if (r.ok)
-        toast.success("连接正常", { description: `${name} 可以使用。` });
-      else toast.error("连接失败", { description: r.message });
+        toast.success(t("连接正常"), {
+          description: t("{p0} 可以使用。", { p0: name }),
+        });
+      else toast.error(t("连接失败"), { description: r.message });
     } catch (e) {
       setTestMap((m) => ({ ...m, [name]: { status: "err" } }));
-      toast.error("连接失败", { description: (e as Error).message });
+      toast.error(t("连接失败"), { description: (e as Error).message });
     }
   };
 
   const makeDefault = async (name: string) => {
     try {
       await setDefault.mutateAsync(name);
-      toast.success("默认凭证已更新", {
-        description: `之后会优先使用 ${name}。`,
+      toast.success(t("默认凭证已更新"), {
+        description: t("之后会优先使用 {p0}。", { p0: name }),
       });
     } catch (error) {
-      toast.error("设置失败", {
+      toast.error(t("设置失败"), {
         description: error instanceof Error ? error.message : String(error),
       });
     }
@@ -305,9 +317,9 @@ export function CredsPanel({ config }: { config?: ServerConfig }) {
   const removeProvider = async (name: string) => {
     try {
       await deleteProv.mutateAsync(name);
-      toast.success("凭证已删除", { description: name });
+      toast.success(t("凭证已删除"), { description: name });
     } catch (error) {
-      toast.error("删除失败", {
+      toast.error(t("删除失败"), {
         description: error instanceof Error ? error.message : String(error),
       });
     }
@@ -318,8 +330,8 @@ export function CredsPanel({ config }: { config?: ServerConfig }) {
       {names.length === 0 ? (
         <Empty
           icon="providers"
-          title="还没有配置凭证"
-          subtitle="支持 OpenAI / Azure / 自定义供应商。"
+          title={t("还没有配置凭证")}
+          subtitle={t("支持 OpenAI / Azure / 自定义供应商。")}
           action={
             <Button
               variant="primary"
@@ -327,7 +339,7 @@ export function CredsPanel({ config }: { config?: ServerConfig }) {
               icon="plus"
               onClick={() => setShowAdd(true)}
             >
-              添加凭证
+              {t("添加凭证")}
             </Button>
           }
         />
@@ -339,9 +351,7 @@ export function CredsPanel({ config }: { config?: ServerConfig }) {
                 key={name}
                 layout="position"
                 initial={
-                  reducedMotion
-                    ? false
-                    : { opacity: 0, y: 6, scale: 0.98 }
+                  reducedMotion ? false : { opacity: 0, y: 6, scale: 0.98 }
                 }
                 animate={{ opacity: 1, y: 0, scale: 1 }}
                 exit={
@@ -379,7 +389,7 @@ export function CredsPanel({ config }: { config?: ServerConfig }) {
           }}
         >
           <Plus size={15} />
-          添加凭证
+          {t("添加凭证")}
         </button>
       )}
 

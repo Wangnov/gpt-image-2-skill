@@ -1,3 +1,4 @@
+import { t } from "@/lib/i18n";
 import { type ReactNode, type RefObject } from "react";
 import {
   Brush,
@@ -96,7 +97,7 @@ export function MaskToolbar({
         }}
       >
         <div className="flex shrink-0 items-center gap-0.5">
-          <MaskToolbarTip label="画笔">
+          <MaskToolbarTip label={t("画笔")}>
             <button
               type="button"
               onClick={() => setMaskTool("brush")}
@@ -105,13 +106,13 @@ export function MaskToolbar({
                 maskTool === "brush" &&
                   "bg-[color:var(--accent-18)] text-foreground",
               )}
-              aria-label="画笔"
+              aria-label={t("画笔")}
               aria-pressed={maskTool === "brush"}
             >
               <Brush size={15} />
             </button>
           </MaskToolbarTip>
-          <MaskToolbarTip label="橡皮">
+          <MaskToolbarTip label={t("橡皮")}>
             <button
               type="button"
               onClick={() => setMaskTool("erase")}
@@ -120,13 +121,13 @@ export function MaskToolbar({
                 maskTool === "erase" &&
                   "bg-[color:var(--accent-18)] text-foreground",
               )}
-              aria-label="橡皮"
+              aria-label={t("橡皮")}
               aria-pressed={maskTool === "erase"}
             >
               <Eraser size={15} />
             </button>
           </MaskToolbarTip>
-          <MaskToolbarTip label="方形选区">
+          <MaskToolbarTip label={t("方形选区")}>
             <button
               type="button"
               onClick={() => setMaskTool("rect")}
@@ -135,13 +136,13 @@ export function MaskToolbar({
                 maskTool === "rect" &&
                   "bg-[color:var(--accent-18)] text-foreground",
               )}
-              aria-label="方形选区"
+              aria-label={t("方形选区")}
               aria-pressed={maskTool === "rect"}
             >
               <Square size={15} />
             </button>
           </MaskToolbarTip>
-          <MaskToolbarTip label="圆形选区">
+          <MaskToolbarTip label={t("圆形选区")}>
             <button
               type="button"
               onClick={() => setMaskTool("ellipse")}
@@ -150,18 +151,18 @@ export function MaskToolbar({
                 maskTool === "ellipse" &&
                   "bg-[color:var(--accent-18)] text-foreground",
               )}
-              aria-label="圆形选区"
+              aria-label={t("圆形选区")}
               aria-pressed={maskTool === "ellipse"}
             >
               <Circle size={15} />
             </button>
           </MaskToolbarTip>
-          <MaskToolbarTip label="清空选区">
+          <MaskToolbarTip label={t("清空选区")}>
             <button
               type="button"
               onClick={clearMask}
               className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-muted transition-colors hover:bg-[color:var(--status-err-10)] hover:text-[color:var(--status-err)]"
-              aria-label="清空选区"
+              aria-label={t("清空选区")}
             >
               <Trash2 size={15} />
             </button>
@@ -169,24 +170,24 @@ export function MaskToolbar({
         </div>
         <div className="h-5 w-px shrink-0 bg-border-faint" aria-hidden />
         <div className="flex shrink-0 items-center gap-0.5">
-          <MaskToolbarTip label="撤回">
+          <MaskToolbarTip label={t("撤回")}>
             <button
               type="button"
               onClick={triggerUndo}
               disabled={!maskHistory.canUndo}
               className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-muted transition-colors hover:bg-[color:var(--w-08)] hover:text-foreground disabled:cursor-not-allowed disabled:opacity-35"
-              aria-label="撤回"
+              aria-label={t("撤回")}
             >
               <Undo2 size={15} />
             </button>
           </MaskToolbarTip>
-          <MaskToolbarTip label="重做">
+          <MaskToolbarTip label={t("重做")}>
             <button
               type="button"
               onClick={triggerRedo}
               disabled={!maskHistory.canRedo}
               className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-muted transition-colors hover:bg-[color:var(--w-08)] hover:text-foreground disabled:cursor-not-allowed disabled:opacity-35"
-              aria-label="重做"
+              aria-label={t("重做")}
             >
               <Redo2 size={15} />
             </button>
@@ -194,12 +195,12 @@ export function MaskToolbar({
         </div>
         <div className="h-5 w-px shrink-0 bg-border-faint" aria-hidden />
         <Popover>
-          <MaskToolbarTip label="调整粗细">
+          <MaskToolbarTip label={t("调整粗细")}>
             <PopoverTrigger asChild>
               <button
                 type="button"
                 className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-foreground transition-colors hover:bg-[color:var(--w-08)]"
-                aria-label="调整粗细"
+                aria-label={t("调整粗细")}
               >
                 <SlidersHorizontal size={14} />
               </button>
@@ -207,7 +208,7 @@ export function MaskToolbar({
           </MaskToolbarTip>
           <PopoverContent side="top" align="center" className="w-[210px]">
             <div className="flex items-center justify-between gap-3">
-              <span className="t-caps">粗细</span>
+              <span className="t-caps">{t("粗细")}</span>
               <span className="font-mono text-[11px] text-muted">
                 {brushSize}
               </span>
@@ -229,42 +230,42 @@ export function MaskToolbar({
                 value={brushSize}
                 onChange={(event) => setBrushSize(Number(event.target.value))}
                 className="h-5 flex-1 accent-[color:var(--accent)]"
-                aria-label="选区工具粗细"
+                aria-label={t("选区工具粗细")}
               />
             </div>
           </PopoverContent>
         </Popover>
-        <MaskToolbarTip label="适应窗口">
+        <MaskToolbarTip label={t("适应窗口")}>
           <button
             type="button"
             onClick={fitCanvasToViewport}
             className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-foreground hover:bg-[color:var(--w-08)]"
-            aria-label="适应窗口"
+            aria-label={t("适应窗口")}
           >
             <Maximize2 size={13} />
           </button>
         </MaskToolbarTip>
-        <MaskToolbarTip label="缩小">
+        <MaskToolbarTip label={t("缩小")}>
           <button
             type="button"
             onClick={zoomOut}
             className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-foreground hover:bg-[color:var(--w-08)]"
-            aria-label="缩小"
+            aria-label={t("缩小")}
           >
             <ZoomOut size={13} />
           </button>
         </MaskToolbarTip>
-        <MaskToolbarTip label="放大">
+        <MaskToolbarTip label={t("放大")}>
           <button
             type="button"
             onClick={zoomIn}
             className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-foreground hover:bg-[color:var(--w-08)]"
-            aria-label="放大"
+            aria-label={t("放大")}
           >
             <ZoomIn size={13} />
           </button>
         </MaskToolbarTip>
-        <MaskToolbarTip label="平移">
+        <MaskToolbarTip label={t("平移")}>
           <button
             type="button"
             onClick={() => setPanPinned((current) => !current)}
@@ -272,7 +273,7 @@ export function MaskToolbar({
               "inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-foreground hover:bg-[color:var(--w-08)]",
               panPinned && "bg-[color:var(--accent-18)]",
             )}
-            aria-label="平移"
+            aria-label={t("平移")}
             aria-pressed={panPinned}
           >
             <Move size={13} />

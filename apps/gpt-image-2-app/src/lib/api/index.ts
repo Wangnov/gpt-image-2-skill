@@ -1,3 +1,4 @@
+import { t } from "@/lib/i18n";
 import { browserApi } from "./browser-transport";
 import type { ApiClient, RuntimeKind } from "./types";
 
@@ -97,25 +98,23 @@ export const api: ApiClient = {
   updatePaths: (config) =>
     loadClient().then((client) => {
       if (!client.updatePaths) {
-        throw new Error("当前运行环境不支持修改本机路径。");
+        throw new Error(t("当前运行环境不支持修改本机路径。"));
       }
       return client.updatePaths(config);
     }),
   updateStorage: (config) =>
     loadClient().then((client) => {
       if (!client.updateStorage) {
-        throw new Error("当前运行环境不支持修改存储配置。");
+        throw new Error(t("当前运行环境不支持修改存储配置。"));
       }
       return client.updateStorage(config);
     }),
   updateProxy: (config) =>
-    invokeClient("updateProxy", config) as ReturnType<
-      ApiClient["updateProxy"]
-    >,
+    invokeClient("updateProxy", config) as ReturnType<ApiClient["updateProxy"]>,
   testStorageTarget: (name, target) =>
     loadClient().then((client) => {
       if (!client.testStorageTarget) {
-        throw new Error("当前运行环境不支持测试存储目标。");
+        throw new Error(t("当前运行环境不支持测试存储目标。"));
       }
       return client.testStorageTarget(name, target);
     }),
@@ -128,7 +127,7 @@ export const api: ApiClient = {
   openLogsDir: () =>
     loadClient().then((client) => {
       if (!client.openLogsDir) {
-        throw new Error("当前运行环境不支持打开日志文件夹。");
+        throw new Error(t("当前运行环境不支持打开日志文件夹。"));
       }
       return client.openLogsDir();
     }),

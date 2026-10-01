@@ -1,3 +1,4 @@
+import { t } from "@/lib/i18n";
 import { FileText, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/cn";
@@ -25,14 +26,14 @@ export function PromptTemplateGroups({
 }) {
   return (
     <TemplateSection
-      title="分组"
-      description="分组可自定义；删除分组会删除其中模板。"
+      title={t("分组")}
+      description={t("分组可自定义；删除分组会删除其中模板。")}
     >
       <div className="flex gap-2">
         <TextInput
           value={newGroupName}
           onChange={setNewGroupName}
-          placeholder="新分组名称"
+          placeholder={t("新分组名称")}
         />
         <Button
           variant="secondary"
@@ -41,13 +42,13 @@ export function PromptTemplateGroups({
           disabled={!newGroupName.trim()}
           onClick={addGroup}
         >
-          添加
+          {t("添加")}
         </Button>
       </div>
       <div className="mt-3 flex flex-col gap-2">
         {groups.length === 0 ? (
           <div className="rounded-lg border border-dashed border-border-faint px-3 py-4 text-center text-[12px] text-muted">
-            暂无分组，添加一个分组后即可创建模板。
+            {t("暂无分组，添加一个分组后即可创建模板。")}
           </div>
         ) : (
           groups.map((group) => {
@@ -76,19 +77,19 @@ export function PromptTemplateGroups({
                   )}
                 >
                   <FileText size={12} />
-                  {isSelected ? "当前" : "切换"}
+                  {isSelected ? t("当前") : t("切换")}
                 </button>
                 <TextInput
                   value={group.name}
                   onChange={(name) => renameGroup(group.id, name)}
-                  ariaLabel="分组名称"
+                  ariaLabel={t("分组名称")}
                 />
                 <button
                   type="button"
                   onClick={() => removeGroup(group.id)}
                   className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-muted transition-colors hover:bg-[color:var(--status-err-10)] hover:text-[color:var(--status-err)]"
-                  title="删除分组"
-                  aria-label="删除分组"
+                  title={t("删除分组")}
+                  aria-label={t("删除分组")}
                 >
                   <Trash2 size={13} />
                 </button>

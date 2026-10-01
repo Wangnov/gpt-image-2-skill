@@ -1,3 +1,4 @@
+import { t } from "@/lib/i18n";
 import { toast } from "sonner";
 import { api } from "@/lib/api";
 import { openQuickLook } from "@/components/ui/quick-look";
@@ -26,7 +27,7 @@ const quickLook: ImageAction = {
   // Quick Look isn't shown inside the right-click menu — Space is a much
   // stickier mental model for it, and the action would just bloat the menu.
   // Hover toolbar (first slot) and command palette still see it.
-  label: () => "快速查看",
+  label: () => t("快速查看"),
   icon: "eye",
   shortcut: "Space",
   group: "transfer",
@@ -39,7 +40,7 @@ const quickLook: ImageAction = {
 
 const copyImage: ImageAction = {
   id: "copy-image",
-  label: () => "复制图片",
+  label: () => t("复制图片"),
   icon: "copy",
   shortcut: "⌘C",
   group: "transfer",
@@ -50,13 +51,13 @@ const copyImage: ImageAction = {
   },
   execute: async ({ asset }) => {
     await copyImageToClipboard(asset);
-    toast.success("已复制图片", { duration: 1_500 });
+    toast.success(t("已复制图片"), { duration: 1_500 });
   },
 };
 
 const copyPrompt: ImageAction = {
   id: "copy-prompt",
-  label: () => "复制提示词",
+  label: () => t("复制提示词"),
   icon: "copy",
   shortcut: "⇧⌘C",
   group: "transfer",
@@ -64,15 +65,16 @@ const copyPrompt: ImageAction = {
   // back to image" here because the user explicitly asked for the prompt.
   isAvailable: ({ asset }) => Boolean(asset.prompt?.trim()),
   execute: async ({ asset }) => {
-    if (!asset.prompt) throw new Error("没有提示词。");
+    if (!asset.prompt) throw new Error(t("没有提示词。"));
     await navigator.clipboard.writeText(asset.prompt);
-    toast.success("已复制提示词", { duration: 1_500 });
+    toast.success(t("已复制提示词"), { duration: 1_500 });
   },
 };
 
 const copyPathOrLink: ImageAction = {
   id: "copy-path-or-link",
-  label: ({ runtime }) => (runtime === "tauri" ? "复制文件路径" : "复制链接"),
+  label: ({ runtime }) =>
+    runtime === "tauri" ? t("复制文件路径") : t("复制链接"),
   icon: "external",
   shortcut: "⌥⌘C",
   group: "transfer",
@@ -85,10 +87,10 @@ const copyPathOrLink: ImageAction = {
     return Boolean(asset.src);
   },
   execute: async ({ asset, runtime }) => {
-    const value = runtime === "tauri" ? asset.path ?? "" : asset.src;
-    if (!value) throw new Error("没有可复制的路径或链接。");
+    const value = runtime === "tauri" ? (asset.path ?? "") : asset.src;
+    if (!value) throw new Error(t("没有可复制的路径或链接。"));
     await navigator.clipboard.writeText(value);
-    toast.success(runtime === "tauri" ? "已复制路径" : "已复制链接", {
+    toast.success(runtime === "tauri" ? t("已复制路径") : t("已复制链接"), {
       duration: 1_500,
     });
   },
@@ -96,8 +98,7 @@ const copyPathOrLink: ImageAction = {
 
 const saveAs: ImageAction = {
   id: "save-as",
-  label: ({ runtime }) =>
-    runtime === "tauri" ? "保存图片" : "下载图片",
+  label: ({ runtime }) => (runtime === "tauri" ? t("保存图片") : t("下载图片")),
   icon: "download",
   shortcut: "⌘S",
   group: "export",
@@ -108,7 +109,9 @@ const saveAs: ImageAction = {
         asset.jobId,
         asset.outputIndex,
       );
-      toast.success(`已保存 ${saved.length} 张图片`, { duration: 2_000 });
+      toast.success(t("已保存 {p0} 张图片", { p0: saved.length }), {
+        duration: 2_000,
+      });
       return;
     }
     // Web fallback — trigger an anchor download. Modern Chromium / Safari
@@ -120,40 +123,40 @@ const saveAs: ImageAction = {
     document.body.appendChild(a);
     a.click();
     a.remove();
-    toast.success("已开始下载", { duration: 1_500 });
+    toast.success(t("已开始下载"), { duration: 1_500 });
   },
 };
 
 const revealInFinder: ImageAction = {
   id: "reveal-in-finder",
-  label: () => "在 Finder 中显示",
+  label: () => t("在 Finder 中显示"),
   icon: "folder",
   shortcut: "⌥⌘R",
   group: "export",
   isAvailable: ({ runtime, asset }) =>
     runtime === "tauri" && Boolean(asset.path),
   execute: async ({ asset }) => {
-    if (!asset.path) throw new Error("无可定位的路径。");
+    if (!asset.path) throw new Error(t("无可定位的路径。"));
     await api.revealPath(asset.path);
   },
 };
 
 const openWithDefault: ImageAction = {
   id: "open-with-default",
-  label: () => "用默认应用打开",
+  label: () => t("用默认应用打开"),
   icon: "external",
   group: "export",
   isAvailable: ({ runtime, asset }) =>
     runtime === "tauri" && Boolean(asset.path),
   execute: async ({ asset }) => {
-    if (!asset.path) throw new Error("无可打开的路径。");
+    if (!asset.path) throw new Error(t("无可打开的路径。"));
     await api.openPath(asset.path);
   },
 };
 
 const useAsReference: ImageAction = {
   id: "use-as-reference",
-  label: () => "用作参考图",
+  label: () => t("用作参考图"),
   icon: "arrowin",
   group: "generate",
   isAvailable: ({ asset }) => Boolean(asset.path || asset.src),
@@ -170,12 +173,12 @@ const useAsReference: ImageAction = {
 
 const editWithPrompt: ImageAction = {
   id: "edit-with-prompt",
-  label: () => "用提示词编辑",
+  label: () => t("用提示词编辑"),
   icon: "edit",
   group: "generate",
   isAvailable: ({ asset }) => Boolean(asset.path || asset.src),
   isEnabled: ({ asset }) => Boolean(asset.prompt?.trim()),
-  disabledReason: () => "这个任务没有保存提示词",
+  disabledReason: () => t("这个任务没有保存提示词"),
   execute: ({ asset }) => {
     sendImageToEdit({
       jobId: asset.jobId,
@@ -190,7 +193,7 @@ const editWithPrompt: ImageAction = {
 
 const revealJobInHistory: ImageAction = {
   id: "reveal-job-in-history",
-  label: () => "在历史中查看任务",
+  label: () => t("在历史中查看任务"),
   icon: "history",
   group: "manage",
   isAvailable: ({ asset }) => Boolean(asset.jobId),
@@ -205,7 +208,7 @@ const revealJobInHistory: ImageAction = {
 
 const shareAction: ImageAction = {
   id: "share",
-  label: () => "分享…",
+  label: () => t("分享…"),
   icon: "external",
   group: "transfer",
   isAvailable: ({ runtime, asset }) => {
@@ -217,7 +220,7 @@ const shareAction: ImageAction = {
   execute: async ({ asset }) => {
     const response = await fetch(asset.src);
     if (!response.ok) {
-      throw new Error(`无法读取图片：HTTP ${response.status}`);
+      throw new Error(t("无法读取图片：HTTP {p0}", { p0: response.status }));
     }
     // Match the share payload's mime + filename extension to the actual
     // image format so JPEG/WEBP/GIF jobs don't get sent to native share
@@ -225,7 +228,10 @@ const shareAction: ImageAction = {
     const mime = inferImageMime(asset);
     const ext = inferImageExtension(asset);
     const raw = await response.blob();
-    const blob = raw.type === mime ? raw : new Blob([await raw.arrayBuffer()], { type: mime });
+    const blob =
+      raw.type === mime
+        ? raw
+        : new Blob([await raw.arrayBuffer()], { type: mime });
     const filename = `${asset.jobId}-${asset.outputIndex}.${ext}`;
     const file = new File([blob], filename, { type: mime });
     const shareData: ShareData = { files: [file] };
@@ -248,7 +254,7 @@ const shareAction: ImageAction = {
 
 const deleteAction: ImageAction = {
   id: "delete",
-  label: () => "删除任务",
+  label: () => t("删除任务"),
   icon: "trash",
   shortcut: "⌘⌫",
   group: "destructive",
@@ -263,12 +269,15 @@ const deleteAction: ImageAction = {
     const outputCount = asset.job?.outputs?.length ?? 1;
     const description =
       outputCount > 1
-        ? `这是包含 ${outputCount} 张图的任务，删除会移除本地任务记录和全部 ${outputCount} 张图；远端 Origin/Archive 不会被删除，且无法分别删除单张。`
-        : "这会删除本地任务记录和这张图；远端 Origin/Archive 不会被删除。";
+        ? t(
+            "这是包含 {p0} 张图的任务，删除会移除本地任务记录和全部 {p1} 张图；远端 Origin/Archive 不会被删除，且无法分别删除单张。",
+            { p0: outputCount, p1: outputCount },
+          )
+        : t("这会删除本地任务记录和这张图；远端 Origin/Archive 不会被删除。");
     const ok = await actionsConfirm({
-      title: "删除任务？",
+      title: t("删除任务？"),
       description,
-      confirmText: "删除任务",
+      confirmText: t("删除任务"),
       variant: "danger",
     });
     if (!ok) return;

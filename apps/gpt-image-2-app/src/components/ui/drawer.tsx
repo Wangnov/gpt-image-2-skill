@@ -1,3 +1,4 @@
+import { t } from "@/lib/i18n";
 import * as Radix from "@radix-ui/react-dialog";
 import { type ReactNode } from "react";
 import { X } from "lucide-react";
@@ -73,9 +74,7 @@ export function Drawer({
             <div className="flex shrink-0 items-center gap-2 px-5 py-3.5 border-b border-[color:var(--w-06)]">
               <div className="flex-1 min-w-0">
                 {title && (
-                  <Radix.Title className="t-h2 truncate">
-                    {title}
-                  </Radix.Title>
+                  <Radix.Title className="t-h2 truncate">{title}</Radix.Title>
                 )}
                 {description && (
                   <Radix.Description className="mt-0.5 line-clamp-2 break-anywhere text-[12px] leading-relaxed text-muted">
@@ -87,7 +86,7 @@ export function Drawer({
               <Radix.Close asChild>
                 <button
                   type="button"
-                  aria-label="关闭"
+                  aria-label={t("关闭")}
                   className="inline-flex items-center justify-center h-8 w-8 rounded-md text-muted hover:text-foreground hover:bg-[color:var(--w-06)] transition-colors"
                 >
                   <X size={15} />

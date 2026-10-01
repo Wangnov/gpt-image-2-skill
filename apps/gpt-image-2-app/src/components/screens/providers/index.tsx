@@ -1,3 +1,4 @@
+import { t } from "@/lib/i18n";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -54,25 +55,27 @@ export function ProvidersScreen({ config }: { config?: ServerConfig }) {
         [name]: { status: r.ok ? "ok" : "err", message: r.message },
       }));
       if (r.ok)
-        toast.success("连接正常", { description: `${name} 可以使用。` });
-      if (!r.ok) toast.error("连接失败", { description: r.message });
+        toast.success(t("连接正常"), {
+          description: t("{p0} 可以使用。", { p0: name }),
+        });
+      if (!r.ok) toast.error(t("连接失败"), { description: r.message });
     } catch (e) {
       setTestMap((m) => ({
         ...m,
         [name]: { status: "err", message: (e as Error).message },
       }));
-      toast.error("连接失败", { description: (e as Error).message });
+      toast.error(t("连接失败"), { description: (e as Error).message });
     }
   };
 
   const makeDefault = async (name: string) => {
     try {
       await setDefault.mutateAsync(name);
-      toast.success("默认凭证已更新", {
-        description: `之后会优先使用 ${name}。`,
+      toast.success(t("默认凭证已更新"), {
+        description: t("之后会优先使用 {p0}。", { p0: name }),
       });
     } catch (error) {
-      toast.error("设置失败", {
+      toast.error(t("设置失败"), {
         description: error instanceof Error ? error.message : String(error),
       });
     }
@@ -81,10 +84,10 @@ export function ProvidersScreen({ config }: { config?: ServerConfig }) {
   const removeProvider = async (name: string) => {
     try {
       await deleteProv.mutateAsync(name);
-      toast.success("凭证已删除", { description: name });
+      toast.success(t("凭证已删除"), { description: name });
       setSelected(undefined);
     } catch (error) {
-      toast.error("删除失败", {
+      toast.error(t("删除失败"), {
         description: error instanceof Error ? error.message : String(error),
       });
     }
@@ -99,7 +102,7 @@ export function ProvidersScreen({ config }: { config?: ServerConfig }) {
           <Input
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="搜索凭证…"
+            placeholder={t("搜索凭证…")}
             icon="search"
             size="sm"
             wrapperClassName="flex-1"
@@ -110,13 +113,13 @@ export function ProvidersScreen({ config }: { config?: ServerConfig }) {
             icon="plus"
             onClick={() => setShowAdd(true)}
           >
-            添加
+            {t("添加")}
           </Button>
         </div>
         <div className="flex-1 overflow-auto">
           {filteredNames.length === 0 ? (
             <div className="p-6 text-center text-faint text-[12px]">
-              尚未添加任何凭证。点击「添加」开始。
+              {t("尚未添加任何凭证。点击「添加」开始。")}
             </div>
           ) : (
             filteredNames.map((name) => (
@@ -140,10 +143,10 @@ export function ProvidersScreen({ config }: { config?: ServerConfig }) {
           <Icon name="folder" size={11} />
           <span className="truncate">
             {copy.kind === "tauri"
-              ? "凭证配置会保存在桌面 App 配置中，并和 CLI、Skill 共用。"
+              ? t("凭证配置会保存在桌面 App 配置中，并和 CLI、Skill 共用。")
               : copy.kind === "http"
-                ? "凭证配置由后端服务维护，网页只负责管理和测试。"
-                : "API Key 只保留在当前浏览器数据中。"}
+                ? t("凭证配置由后端服务维护，网页只负责管理和测试。")
+                : t("API Key 只保留在当前浏览器数据中。")}
           </span>
         </div>
       </div>

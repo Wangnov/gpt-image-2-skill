@@ -1,3 +1,4 @@
+import { t } from "@/lib/i18n";
 import { useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Loader2 } from "lucide-react";
@@ -53,7 +54,7 @@ export function AboutPanel() {
       unlockPreset("letter-matrix");
       window.dispatchEvent(new CustomEvent(UNLOCK_EVENT));
       toast.success("You've found it.", {
-        description: "「字符矩阵」主题已解锁，可在「外观」里随时切换。",
+        description: t("「字符矩阵」主题已解锁，可在「外观」里随时切换。"),
         duration: 4500,
       });
     }
@@ -67,24 +68,24 @@ export function AboutPanel() {
       const result = await checkForAppUpdate();
       if (result.status === "unavailable") {
         setAvailableUpdate(null);
-        toast.info("当前运行环境不支持 App 内更新", {
-          description: "静态 Page 和 Docker Web 仍按部署端更新。",
+        toast.info(t("当前运行环境不支持 App 内更新"), {
+          description: t("静态 Page 和 Docker Web 仍按部署端更新。"),
         });
         return;
       }
       if (result.status === "up-to-date") {
         setAvailableUpdate(null);
-        toast.success("已经是最新版本", {
-          description: `当前版本 ${result.currentVersion}`,
+        toast.success(t("已经是最新版本"), {
+          description: t("当前版本 {p0}", { p0: result.currentVersion }),
         });
         return;
       }
       setAvailableUpdate(result.update);
-      toast.success(`发现新版本 ${result.update.version}`, {
-        description: "可以直接下载并安装。",
+      toast.success(t("发现新版本 {p0}", { p0: result.update.version }), {
+        description: t("可以直接下载并安装。"),
       });
     } catch (error) {
-      toast.error("检查更新失败", {
+      toast.error(t("检查更新失败"), {
         description: error instanceof Error ? error.message : String(error),
       });
     } finally {
@@ -94,11 +95,11 @@ export function AboutPanel() {
 
   const handleInstallUpdate = async () => {
     setInstallingUpdate(true);
-    setUpdateProgress("准备下载");
+    setUpdateProgress(t("准备下载"));
     try {
       const result = await installAppUpdate((progress) => {
         if (progress.phase === "starting") {
-          setUpdateProgress("开始下载");
+          setUpdateProgress(t("开始下载"));
           return;
         }
         if (progress.phase === "downloading") {
@@ -109,20 +110,20 @@ export function AboutPanel() {
                 (progress.downloadedBytes / progress.contentLength) * 100,
               ),
             );
-            setUpdateProgress(`下载中 ${pct}%`);
+            setUpdateProgress(t("下载中 {p0}%", { p0: pct }));
           } else {
-            setUpdateProgress("下载中");
+            setUpdateProgress(t("下载中"));
           }
           return;
         }
-        setUpdateProgress("正在安装");
+        setUpdateProgress(t("正在安装"));
       });
       if (result.status === "up-to-date") {
         setAvailableUpdate(null);
-        toast.success("已经是最新版本");
+        toast.success(t("已经是最新版本"));
       }
     } catch (error) {
-      toast.error("安装更新失败", {
+      toast.error(t("安装更新失败"), {
         description: error instanceof Error ? error.message : String(error),
       });
     } finally {
@@ -153,28 +154,28 @@ export function AboutPanel() {
         </div>
         <div className="text-[11.5px] text-muted">
           {copy.kind === "tauri"
-            ? "本地图像生成与编辑桌面客户端。"
+            ? t("本地图像生成与编辑桌面客户端。")
             : copy.kind === "http"
-              ? "连接后端服务的 Web 创作工作台。"
-              : "浏览器直连的 Web 创作工作台。"}
+              ? t("连接后端服务的 Web 创作工作台。")
+              : t("浏览器直连的 Web 创作工作台。")}
         </div>
       </header>
 
       {desktopRuntime ? (
         <>
           <Section
-            title="应用更新"
-            description="桌面 App 使用 Tauri 官方更新器。"
+            title={t("应用更新")}
+            description={t("桌面 App 使用 Tauri 官方更新器。")}
           >
             <Row
               title={
                 availableUpdate
-                  ? `可更新到 ${availableUpdate.version}`
-                  : "检查桌面端更新"
+                  ? t("可更新到 {p0}", { p0: availableUpdate.version })
+                  : t("检查桌面端更新")
               }
               description={
                 availableUpdate?.body ||
-                "有新版本时会下载签名更新包，安装完成后自动重启 App。"
+                t("有新版本时会下载签名更新包，安装完成后自动重启 App。")
               }
               control={
                 availableUpdate ? (
@@ -188,10 +189,10 @@ export function AboutPanel() {
                     {installingUpdate ? (
                       <>
                         <Loader2 size={13} className="animate-spin" />
-                        {updateProgress ?? "安装中"}
+                        {updateProgress ?? t("安装中")}
                       </>
                     ) : (
-                      "下载并重启"
+                      t("下载并重启")
                     )}
                   </Button>
                 ) : (
@@ -205,10 +206,10 @@ export function AboutPanel() {
                     {checkingUpdate ? (
                       <>
                         <Loader2 size={13} className="animate-spin" />
-                        检查中
+                        {t("检查中")}
                       </>
                     ) : (
-                      "检查更新"
+                      t("检查更新")
                     )}
                   </Button>
                 )
@@ -217,40 +218,40 @@ export function AboutPanel() {
           </Section>
 
           <Section
-            title="数据位置"
-            description="本地配置、历史和图片保存位置。只读信息。"
+            title={t("数据位置")}
+            description={t("本地配置、历史和图片保存位置。只读信息。")}
           >
-            <PathRow title="配置文件" path={paths?.config_file} />
-            <PathRow title="历史数据库" path={paths?.history_file} />
+            <PathRow title={t("配置文件")} path={paths?.config_file} />
+            <PathRow title={t("历史数据库")} path={paths?.history_file} />
             <PathRow
-              title="图片保存位置"
+              title={t("图片保存位置")}
               path={paths?.default_export_dir ?? paths?.result_library_dir}
               isFolder
             />
             <PathRow
-              title="旧共享目录"
+              title={t("旧共享目录")}
               path={paths?.legacy_jobs_dir}
               isFolder
             />
-            <PathRow title="配置目录" path={paths?.config_dir} isFolder />
+            <PathRow title={t("配置目录")} path={paths?.config_dir} isFolder />
           </Section>
         </>
       ) : (
         <>
           <Section
-            title="版本"
+            title={t("版本")}
             description={
               copy.kind === "http"
-                ? "Web 前端和后端服务由部署端更新，页面内不安装桌面更新包。"
-                : "静态 Web 由站点部署更新，页面内不安装桌面更新包。"
+                ? t("Web 前端和后端服务由部署端更新，页面内不安装桌面更新包。")
+                : t("静态 Web 由站点部署更新，页面内不安装桌面更新包。")
             }
           >
             <Row
-              title={`当前前端版本 v${__APP_VERSION__}`}
+              title={t("当前前端版本 v{p0}", { p0: __APP_VERSION__ })}
               description={
                 copy.kind === "http"
-                  ? "后端服务更新后，刷新页面即可使用新的 Web 前端。"
-                  : "站点发布后，刷新页面即可使用新的静态 Web 前端。"
+                  ? t("后端服务更新后，刷新页面即可使用新的 Web 前端。")
+                  : t("站点发布后，刷新页面即可使用新的静态 Web 前端。")
               }
               control={
                 <span className="inline-flex h-8 items-center rounded-full border border-border-faint px-3 text-[11px] font-semibold text-muted">
@@ -261,19 +262,19 @@ export function AboutPanel() {
           </Section>
 
           <Section
-            title={copy.kind === "http" ? "服务端数据" : "结果下载"}
+            title={copy.kind === "http" ? t("服务端数据") : t("结果下载")}
             description={
               copy.kind === "http"
-                ? "任务历史和结果由后端服务维护，网页只提供预览和下载入口。"
-                : "需要长期保留的图片，请使用下载按钮。"
+                ? t("任务历史和结果由后端服务维护，网页只提供预览和下载入口。")
+                : t("需要长期保留的图片，请使用下载按钮。")
             }
           >
             <Row
-              title="结果获取"
+              title={t("结果获取")}
               description={
                 copy.kind === "http"
-                  ? "单图可直接下载，多图任务会打包为 ZIP 下载。"
-                  : "单图可直接下载，多图任务会打包为 ZIP 下载。"
+                  ? t("单图可直接下载，多图任务会打包为 ZIP 下载。")
+                  : t("单图可直接下载，多图任务会打包为 ZIP 下载。")
               }
               control={
                 <span className="inline-flex h-8 items-center rounded-full border border-border-faint px-3 text-[11px] font-semibold text-muted">
@@ -289,10 +290,10 @@ export function AboutPanel() {
         <Icon name="info" size={11} />
         <span>
           {desktopRuntime
-            ? "偏好保存在桌面 App 配置里；并发上限会实时同步到后台队列。"
+            ? t("偏好保存在桌面 App 配置里；并发上限会实时同步到后台队列。")
             : copy.kind === "http"
-              ? "网页不会显示服务器目录；需要结果文件时请使用下载按钮。"
-              : "需要结果文件时请使用下载按钮。"}
+              ? t("网页不会显示服务器目录；需要结果文件时请使用下载按钮。")
+              : t("需要结果文件时请使用下载按钮。")}
         </span>
       </div>
     </div>

@@ -1,4 +1,5 @@
-import { describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it } from "vitest";
+import { setLanguagePreference } from "@/lib/i18n";
 import type { Job } from "@/lib/types";
 import {
   derivedRecoverability,
@@ -38,6 +39,7 @@ function job(overrides: Partial<Job> = {}): Job {
 }
 
 describe("history job display helpers", () => {
+  beforeEach(() => setLanguagePreference("zh-CN"));
   it("summarizes provider, quality, ratio, and partial counts", () => {
     const value = job({
       status: "partial_failed",

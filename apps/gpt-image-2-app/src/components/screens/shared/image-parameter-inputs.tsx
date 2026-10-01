@@ -1,3 +1,4 @@
+import { t } from "@/lib/i18n";
 import { Input } from "@/components/ui/input";
 import {
   OUTPUT_COUNT_OPTIONS,
@@ -19,7 +20,7 @@ export function ImageSizeInput({
       <Input
         value={value}
         onChange={(event) => onChange(event.target.value)}
-        placeholder="auto 或 1536x1024"
+        placeholder={t("auto 或 1536x1024")}
         monospace
       />
       <div className="flex flex-wrap gap-1">
@@ -68,7 +69,7 @@ export function OutputCountInput({
           onChange(event.target.value === "" ? 0 : Number(event.target.value))
         }
         monospace
-        suffix={<span className="text-[11px] text-faint">张</span>}
+        suffix={<span className="text-[11px] text-faint">{t("张")}</span>}
       />
       <div className="flex flex-wrap gap-1">
         {OUTPUT_COUNT_OPTIONS.map((option) => (

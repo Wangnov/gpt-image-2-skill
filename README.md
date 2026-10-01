@@ -378,6 +378,8 @@ gpt-image-2-skill --json \
 
 源码位于 [`apps/gpt-image-2-app`](apps/gpt-image-2-app),基于 Tauri + React,通过 sidecar 调用同版本 CLI 二进制。
 
+界面支持简体中文和 English,默认跟随系统语言:中文环境显示中文,其他环境显示英文。「设置 → 外观 → 界面语言」可即时切换并记住选择,不会修改提示词、凭证或任务数据。网页和 Docker Web 使用同一套语言设置。
+
 **安装**:
 
 ```bash

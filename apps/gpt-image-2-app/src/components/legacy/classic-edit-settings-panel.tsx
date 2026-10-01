@@ -1,3 +1,4 @@
+import { t } from "@/lib/i18n";
 import { Button } from "@/components/ui/button";
 import { Field } from "@/components/ui/field";
 import { GlassCombobox } from "@/components/ui/combobox";
@@ -103,10 +104,10 @@ export function ClassicEditSettingsPanel({
             setRunNotice(null);
           }}
           size="sm"
-          ariaLabel="编辑模式"
+          ariaLabel={t("编辑模式")}
           options={[
-            { value: "reference", label: "多图参考", icon: "image" },
-            { value: "region", label: "局部编辑", icon: "mask" },
+            { value: "reference", label: t("多图参考"), icon: "image" },
+            { value: "region", label: t("局部编辑"), icon: "mask" },
           ]}
         />
       </div>
@@ -130,16 +131,16 @@ export function ClassicEditSettingsPanel({
         </div>
       )}
 
-      <Field label="提示词">
+      <Field label={t("提示词")}>
         <Textarea
           value={prompt}
           onChange={(event) => setPrompt(event.target.value)}
-          placeholder="描述如何编辑这些图片..."
+          placeholder={t("描述如何编辑这些图片...")}
           minHeight={96}
         />
       </Field>
 
-      <Field label="凭证">
+      <Field label={t("凭证")}>
         <GlassSelect
           value={provider}
           onValueChange={(value) => {
@@ -151,12 +152,12 @@ export function ClassicEditSettingsPanel({
             label: name,
           }))}
           disabled={providerNames.length === 0}
-          placeholder="（无可用凭证）"
+          placeholder={t("（无可用凭证）")}
         />
       </Field>
 
       <Field
-        label="尺寸"
+        label={t("尺寸")}
         error={!sizeValidation.ok ? sizeValidation.message : undefined}
       >
         <GlassCombobox
@@ -169,14 +170,14 @@ export function ClassicEditSettingsPanel({
       </Field>
 
       <div className="grid grid-cols-2 gap-2">
-        <Field label="质量">
+        <Field label={t("质量")}>
           <GlassSelect
             value={quality}
             onValueChange={setQuality}
             options={QUALITY_OPTIONS}
           />
         </Field>
-        <Field label="格式">
+        <Field label={t("格式")}>
           <GlassSelect
             value={format}
             onValueChange={setFormat}
@@ -184,9 +185,11 @@ export function ClassicEditSettingsPanel({
           />
         </Field>
         <Field
-          label="数量"
+          label={t("数量")}
           error={
-            !outputCountValidation.ok ? outputCountValidation.message : undefined
+            !outputCountValidation.ok
+              ? outputCountValidation.message
+              : undefined
           }
         >
           <GlassCombobox
@@ -203,7 +206,7 @@ export function ClassicEditSettingsPanel({
       {usesRegion && (
         <div className="mb-3 rounded-md border border-border bg-sunken p-2.5">
           <div className="mb-2 flex items-center justify-between gap-2">
-            <div className="t-caps">遮罩</div>
+            <div className="t-caps">{t("遮罩")}</div>
             <span className="text-[11px] text-faint">
               {regionModeLabel(editRegionMode)}
             </span>
@@ -212,14 +215,14 @@ export function ClassicEditSettingsPanel({
             value={maskMode}
             onChange={setMaskMode}
             size="sm"
-            ariaLabel="涂抹模式"
+            ariaLabel={t("涂抹模式")}
             options={[
-              { value: "paint", label: "绘制", icon: "brush" },
-              { value: "erase", label: "擦除", icon: "eraser" },
+              { value: "paint", label: t("绘制"), icon: "brush" },
+              { value: "erase", label: t("擦除"), icon: "eraser" },
             ]}
           />
           <label className="mt-2 flex items-center gap-2 text-[11px] text-muted">
-            <span className="shrink-0">笔刷</span>
+            <span className="shrink-0">{t("笔刷")}</span>
             <input
               type="range"
               min={8}
@@ -240,7 +243,7 @@ export function ClassicEditSettingsPanel({
             onClick={() => setClearKey((key) => key + 1)}
             className="mt-2"
           >
-            清除选区
+            {t("清除选区")}
           </Button>
         </div>
       )}
@@ -253,14 +256,14 @@ export function ClassicEditSettingsPanel({
         onClick={handleRun}
         className="w-full justify-center"
       >
-        {isSubmitting ? "提交中" : "应用编辑"}
+        {isSubmitting ? t("提交中") : t("应用编辑")}
       </Button>
       <div className="mt-2 text-[11px] text-faint">
         {regionUnavailable
           ? regionModeHint(editRegionMode)
           : supportsMultipleOutputs
-            ? `计划输出 ${displayN} 张`
-            : "当前凭证只输出 1 张"}
+            ? t("计划输出 {p0} 张", { p0: displayN })
+            : t("当前凭证只输出 1 张")}
       </div>
     </section>
   );

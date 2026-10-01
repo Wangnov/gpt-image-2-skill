@@ -1,13 +1,44 @@
+import { t } from "@/lib/i18n";
 import { OUTPUT_COUNT_OPTIONS } from "@/lib/image-options";
 import type { Job } from "@/lib/types";
 
 export const QUALITY_CHIP_OPTIONS = [
-  { value: "auto", label: "自动" },
-  { value: "low", label: "低" },
-  { value: "medium", label: "中" },
-  { value: "high", label: "高" },
-  { value: "xhigh", label: "超高（2.5）" },
-  { value: "max", label: "最高（2.5）" },
+  {
+    value: "auto",
+    get label() {
+      return t("自动");
+    },
+  },
+  {
+    value: "low",
+    get label() {
+      return t("低");
+    },
+  },
+  {
+    value: "medium",
+    get label() {
+      return t("中");
+    },
+  },
+  {
+    value: "high",
+    get label() {
+      return t("高");
+    },
+  },
+  {
+    value: "xhigh",
+    get label() {
+      return t("超高（2.5）");
+    },
+  },
+  {
+    value: "max",
+    get label() {
+      return t("最高（2.5）");
+    },
+  },
 ];
 
 export const FORMAT_OPTIONS = [

@@ -1,3 +1,4 @@
+import { t, getLocale } from "@/lib/i18n";
 import { useEffect, useMemo, useState } from "react";
 import { Icon } from "@/components/icon";
 import { PlaceholderImage } from "@/components/screens/shared/placeholder-image";
@@ -48,10 +49,10 @@ export function JobDrawerPreview({
     "cancelled",
     "canceled",
   ].includes(job.status);
-  const outputErrors = useMemo(() => jobOutputErrors(job), [job]);
+  const outputErrors = useMemo(() => jobOutputErrors(job), [job, getLocale()]);
   const errorsByIndex = useMemo(
     () => new Map(outputErrors.map((error) => [error.index, error])),
-    [outputErrors],
+    [outputErrors, getLocale()],
   );
   const slots = useMemo(() => {
     const indexes = new Set<number>();
@@ -59,7 +60,7 @@ export function JobDrawerPreview({
     for (const index of jobOutputIndexes(job)) indexes.add(index);
     for (const error of outputErrors) indexes.add(error.index);
     return Array.from(indexes).sort((a, b) => a - b);
-  }, [job, outputErrors, planned]);
+  }, [job, outputErrors, planned, getLocale()]);
   const selectedError = errorsByIndex.get(selectedOutput);
   const selectedMissing = terminal && !displayUrl && !selectedError;
 
@@ -99,7 +100,7 @@ export function JobDrawerPreview({
         {displayUrl && !imageFailed ? (
           <img
             src={displayUrl}
-            alt={`生成图片预览 · 候选 ${selectedLabel}`}
+            alt={t("生成图片预览 · 候选 {p0}", { p0: selectedLabel })}
             decoding="async"
             className="w-full h-full object-cover"
             onError={recoverVisibleOutput}
@@ -113,7 +114,8 @@ export function JobDrawerPreview({
               style={{ color: "var(--status-err)" }}
             />
             <div className="text-[12.5px] font-semibold text-status-err">
-              候选 {selectedLabel} 失败
+              {t("候选 ")}
+              {selectedLabel} {t("失败")}
             </div>
             <div className="line-clamp-5 whitespace-pre-wrap break-words text-[12px] leading-relaxed text-muted">
               {selectedError.message}
@@ -123,13 +125,14 @@ export function JobDrawerPreview({
           <div className="flex h-full w-full flex-col items-center justify-center gap-2 bg-sunken px-5 text-center text-faint">
             <Icon name="circle" size={24} aria-hidden="true" />
             <div className="text-[12.5px] font-semibold">
-              候选 {selectedLabel} 未生成
+              {t("候选 ")}
+              {selectedLabel} {t("未生成")}
             </div>
           </div>
         ) : doneCount >= 1 || job.status === "completed" ? (
           <PlaceholderImage
             seed={seed + selectedOutput}
-            label={displayUrl && imageFailed ? "远端不可用" : undefined}
+            label={displayUrl && imageFailed ? t("远端不可用") : undefined}
           />
         ) : job.status === "failed" ||
           job.status === "cancelled" ||
@@ -167,21 +170,21 @@ export function JobDrawerPreview({
                 aria-pressed={isSelected}
                 aria-label={
                   slotError
-                    ? `候选 ${label} · 失败`
+                    ? t("候选 {p0} · 失败", { p0: label })
                     : missing
-                      ? `候选 ${label} · 未生成`
-                    : selectable
-                      ? `候选 ${label}`
-                      : `候选 ${label} · 等待生成`
+                      ? t("候选 {p0} · 未生成", { p0: label })
+                      : selectable
+                        ? t("候选 {p0}", { p0: label })
+                        : t("候选 {p0} · 等待生成", { p0: label })
                 }
                 title={
                   slotError
-                    ? `候选 ${label} · 失败`
+                    ? t("候选 {p0} · 失败", { p0: label })
                     : missing
-                      ? `候选 ${label} · 未生成`
-                    : selectable
-                      ? `候选 ${label}`
-                      : `候选 ${label} · 等待生成`
+                      ? t("候选 {p0} · 未生成", { p0: label })
+                      : selectable
+                        ? t("候选 {p0}", { p0: label })
+                        : t("候选 {p0} · 等待生成", { p0: label })
                 }
                 className={cn(
                   "relative h-12 w-12 shrink-0 overflow-hidden rounded-md border bg-raised transition-colors focus-visible:outline-none",
@@ -191,9 +194,9 @@ export function JobDrawerPreview({
                       ? "cursor-pointer border-[color:var(--status-err-25)] hover:border-[color:var(--status-err)]"
                       : missing
                         ? "cursor-pointer border-border-faint text-faint hover:border-border"
-                      : !selectable
-                        ? "cursor-default border-border-faint"
-                        : "cursor-pointer border-border hover:border-border-strong",
+                        : !selectable
+                          ? "cursor-default border-border-faint"
+                          : "cursor-pointer border-border hover:border-border-strong",
                 )}
               >
                 {url ? (

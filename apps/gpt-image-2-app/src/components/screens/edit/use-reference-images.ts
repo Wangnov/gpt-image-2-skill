@@ -1,6 +1,11 @@
+import { t } from "@/lib/i18n";
 import { type DragEvent, type RefObject, useCallback, useEffect } from "react";
 import { toast } from "sonner";
-import { isTauriRuntime, useGlobalImagePaste, useTauriImageDrop } from "@/hooks/use-image-ingest";
+import {
+  isTauriRuntime,
+  useGlobalImagePaste,
+  useTauriImageDrop,
+} from "@/hooks/use-image-ingest";
 import {
   dataTransferHasImage,
   imageFilesFromDataTransfer,
@@ -11,10 +16,7 @@ import {
   SEND_TO_EDIT_EVENT,
   type SendToEditPayload,
 } from "@/lib/job-navigation";
-import {
-  transferredImageFile,
-  type RefWithFile,
-} from "./shared";
+import { transferredImageFile, type RefWithFile } from "./shared";
 
 export function useReferenceImages({
   refs,
@@ -31,14 +33,20 @@ export function useReferenceImages({
   setIsDraggingImages,
 }: {
   refs: RefWithFile[];
-  setRefs: (value: RefWithFile[] | ((current: RefWithFile[]) => RefWithFile[])) => void;
+  setRefs: (
+    value: RefWithFile[] | ((current: RefWithFile[]) => RefWithFile[]),
+  ) => void;
   refsRef: RefObject<RefWithFile[]>;
   dragDepthRef: RefObject<number>;
   maxReferenceImages: number;
   selectedRef: string | null;
-  setSelectedRef: (value: string | null | ((current: string | null) => string | null)) => void;
+  setSelectedRef: (
+    value: string | null | ((current: string | null) => string | null),
+  ) => void;
   targetRefId: string | null;
-  setTargetRefId: (value: string | null | ((current: string | null) => string | null)) => void;
+  setTargetRefId: (
+    value: string | null | ((current: string | null) => string | null),
+  ) => void;
   setPrompt: (value: string) => void;
   setMaskSnapshots: (
     value:
@@ -50,14 +58,14 @@ export function useReferenceImages({
   const addRefFiles = useCallback(
     (imageFiles: File[], source: ImageFileSource, ignored = 0) => {
       if (ignored > 0) {
-        toast.warning("已忽略非图片文件", {
-          description: `跳过 ${ignored} 个不支持的文件。`,
+        toast.warning(t("已忽略非图片文件"), {
+          description: t("跳过 {p0} 个不支持的文件。", { p0: ignored }),
         });
       }
       if (imageFiles.length === 0) {
         if (ignored > 0) {
-          toast.error("没有可添加的图片", {
-            description: "请拖入、粘贴或选择图片文件。",
+          toast.error(t("没有可添加的图片"), {
+            description: t("请拖入、粘贴或选择图片文件。"),
           });
         }
         return;
@@ -73,8 +81,8 @@ export function useReferenceImages({
       const available = Math.max(0, maxReferenceImages - currentRefs.length);
       if (available === 0) {
         additions.forEach((ref) => URL.revokeObjectURL(ref.url));
-        toast.error("参考图已达上限", {
-          description: `最多上传 ${maxReferenceImages} 张。`,
+        toast.error(t("参考图已达上限"), {
+          description: t("最多上传 {p0} 张。", { p0: maxReferenceImages }),
         });
         return;
       }
@@ -91,18 +99,18 @@ export function useReferenceImages({
         setTargetRefId((current) => current ?? firstAcceptedId);
       }
       if (accepted.length < additions.length) {
-        toast.warning("已按上限添加参考图", {
-          description: `最多上传 ${maxReferenceImages} 张。`,
+        toast.warning(t("已按上限添加参考图"), {
+          description: t("最多上传 {p0} 张。", { p0: maxReferenceImages }),
         });
       }
       if (source === "drop") {
-        toast.success(`已添加 ${accepted.length} 张参考图`, {
-          description: "来自拖拽上传。",
+        toast.success(t("已添加 {p0} 张参考图", { p0: accepted.length }), {
+          description: t("来自拖拽上传。"),
         });
       }
       if (source === "paste") {
-        toast.success(`已添加 ${accepted.length} 张参考图`, {
-          description: "来自剪贴板。",
+        toast.success(t("已添加 {p0} 张参考图", { p0: accepted.length }), {
+          description: t("来自剪贴板。"),
         });
       }
     },
@@ -120,18 +128,18 @@ export function useReferenceImages({
   const handleSendToEdit = useCallback(
     async (payload: SendToEditPayload) => {
       if (refsRef.current.length >= maxReferenceImages) {
-        toast.error("参考图已达上限", {
-          description: `最多上传 ${maxReferenceImages} 张。`,
+        toast.error(t("参考图已达上限"), {
+          description: t("最多上传 {p0} 张。", { p0: maxReferenceImages }),
         });
         return;
       }
-      const toastId = toast.loading("正在发送到编辑");
+      const toastId = toast.loading(t("正在发送到编辑"));
       try {
         const file = await transferredImageFile(payload);
         if (refsRef.current.length >= maxReferenceImages) {
-          toast.error("参考图已达上限", {
+          toast.error(t("参考图已达上限"), {
             id: toastId,
-            description: `最多上传 ${maxReferenceImages} 张。`,
+            description: t("最多上传 {p0} 张。", { p0: maxReferenceImages }),
           });
           return;
         }
@@ -139,12 +147,12 @@ export function useReferenceImages({
         if (payload.prompt && payload.prompt.trim().length > 0) {
           setPrompt(payload.prompt);
         }
-        toast.success("已发送到编辑", {
+        toast.success(t("已发送到编辑"), {
           id: toastId,
-          description: "已作为新的参考图添加。",
+          description: t("已作为新的参考图添加。"),
         });
       } catch (error) {
-        toast.error("发送到编辑失败", {
+        toast.error(t("发送到编辑失败"), {
           id: toastId,
           description: error instanceof Error ? error.message : String(error),
         });

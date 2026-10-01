@@ -1,7 +1,9 @@
+import { t } from "@/lib/i18n";
 import { useEffect, useState, type ReactNode } from "react";
 import { hasConfiguredHttpRuntime } from "@/lib/api/http/client";
 import { getSessionStatus, login } from "@/lib/api/http/session";
 import { Button } from "@/components/ui/button";
+import { useLanguage } from "@/hooks/use-language";
 
 type GateState =
   | { phase: "checking" }
@@ -16,8 +18,11 @@ type GateState =
  * both fetch and `<img>` requests authenticate automatically.
  */
 export function AuthGate({ children }: { children: ReactNode }) {
+  useLanguage();
   const [state, setState] = useState<GateState>(() =>
-    hasConfiguredHttpRuntime() ? { phase: "checking" } : { phase: "authorized" },
+    hasConfiguredHttpRuntime()
+      ? { phase: "checking" }
+      : { phase: "authorized" },
   );
   const [token, setToken] = useState("");
   const [submitting, setSubmitting] = useState(false);
@@ -53,7 +58,7 @@ export function AuthGate({ children }: { children: ReactNode }) {
       setToken("");
       setState({ phase: "authorized" });
     } else {
-      setError("访问令牌不正确。");
+      setError(t("访问令牌不正确。"));
     }
   };
 
@@ -63,18 +68,19 @@ export function AuthGate({ children }: { children: ReactNode }) {
         onSubmit={onSubmit}
         className="w-full max-w-[360px] rounded-2xl border border-[color:var(--w-10)] bg-[color:var(--w-04)] p-6 shadow-xl"
       >
-        <h1 className="t-h2 mb-1 text-foreground">需要访问令牌</h1>
+        <h1 className="t-h2 mb-1 text-foreground">{t("需要访问令牌")}</h1>
         <p className="mb-4 text-[13px] text-muted">
-          这个服务端设置了 <code>GPT_IMAGE_2_WEB_TOKEN</code>
-          。输入访问令牌以继续。
+          {t("这个服务端设置了 ")}
+          <code>GPT_IMAGE_2_WEB_TOKEN</code>
+          {t("。输入访问令牌以继续。")}
         </p>
         <input
           type="password"
           autoFocus
           value={token}
           onChange={(e) => setToken(e.target.value)}
-          placeholder="访问令牌"
-          aria-label="访问令牌"
+          placeholder={t("访问令牌")}
+          aria-label={t("访问令牌")}
           className="mb-3 w-full rounded-lg border border-[color:var(--w-10)] bg-[color:var(--w-02)] px-3 py-2 text-[14px] text-foreground outline-none focus:border-[color:var(--accent-40)]"
         />
         {error && <p className="mb-3 text-[12.5px] text-red-400">{error}</p>}
@@ -85,7 +91,7 @@ export function AuthGate({ children }: { children: ReactNode }) {
           disabled={!token.trim() || submitting}
           className="w-full"
         >
-          {submitting ? "验证中…" : "进入"}
+          {submitting ? t("验证中…") : t("进入")}
         </Button>
       </form>
     </div>

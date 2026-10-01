@@ -1,3 +1,4 @@
+import { t } from "@/lib/i18n";
 import { useEffect, useState } from "react";
 import * as Radix from "@radix-ui/react-dialog";
 import { ChevronLeft, ChevronRight, X } from "lucide-react";
@@ -82,8 +83,7 @@ export function QuickLookHost() {
   const peerCount = peers?.length ?? 0;
   const activePosition =
     peers?.findIndex(
-      (p) =>
-        p.jobId === asset.jobId && p.outputIndex === asset.outputIndex,
+      (p) => p.jobId === asset.jobId && p.outputIndex === asset.outputIndex,
     ) ?? -1;
 
   const goPrev = () => {
@@ -114,11 +114,11 @@ export function QuickLookHost() {
           aria-describedby={undefined}
           className="fixed left-1/2 top-1/2 z-[61] -translate-x-1/2 -translate-y-1/2 max-w-[92vw] max-h-[92vh] outline-none data-[state=open]:animate-in data-[state=open]:zoom-in-95 data-[state=closed]:animate-out data-[state=closed]:zoom-out-95"
         >
-          <Radix.Title className="sr-only">作品详情</Radix.Title>
+          <Radix.Title className="sr-only">{t("作品详情")}</Radix.Title>
           <ImageContextMenu asset={asset}>
             <RevealImage
               src={asset.src}
-              alt="作品详情"
+              alt={t("作品详情")}
               decoding="async"
               duration={500}
               className="block max-w-[92vw] max-h-[92vh] object-contain rounded-lg shadow-[var(--shadow-floating)]"
@@ -129,7 +129,7 @@ export function QuickLookHost() {
               <button
                 type="button"
                 onClick={goPrev}
-                aria-label="上一张"
+                aria-label={t("上一张")}
                 className="absolute left-3 top-1/2 inline-flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full border border-[color:var(--surface-floating-border)] bg-[color:var(--surface-floating)] text-foreground backdrop-blur transition-colors hover:bg-[color:var(--surface-floating-strong)]"
                 style={{ boxShadow: "var(--shadow-floating)" }}
               >
@@ -138,7 +138,7 @@ export function QuickLookHost() {
               <button
                 type="button"
                 onClick={goNext}
-                aria-label="下一张"
+                aria-label={t("下一张")}
                 className="absolute right-3 top-1/2 inline-flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full border border-[color:var(--surface-floating-border)] bg-[color:var(--surface-floating)] text-foreground backdrop-blur transition-colors hover:bg-[color:var(--surface-floating-strong)]"
                 style={{ boxShadow: "var(--shadow-floating)" }}
               >
@@ -163,7 +163,7 @@ export function QuickLookHost() {
                           ? "border-[color:var(--accent)] opacity-100"
                           : "border-transparent opacity-55 hover:opacity-90",
                       )}
-                      aria-label={`切换到第 ${i + 1} 张`}
+                      aria-label={t("切换到第 {p0} 张", { p0: i + 1 })}
                     >
                       <img
                         src={peer.src}
@@ -182,7 +182,7 @@ export function QuickLookHost() {
           <Radix.Close asChild>
             <button
               type="button"
-              aria-label="关闭"
+              aria-label={t("关闭")}
               className="absolute -top-2 -right-2 h-9 w-9 rounded-full inline-flex items-center justify-center bg-[color:var(--surface-floating)] backdrop-blur border border-[color:var(--surface-floating-border)] text-foreground hover:bg-[color:var(--surface-floating-strong)] transition-colors"
               style={{ boxShadow: "var(--shadow-floating)" }}
             >

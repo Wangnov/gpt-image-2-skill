@@ -1,3 +1,4 @@
+import { t, getLocale } from "@/lib/i18n";
 import { Fragment, useMemo, useState } from "react";
 import { AnimatePresence, motion } from "motion/react";
 import { useReducedMotion } from "@/hooks/use-reduced-motion";
@@ -39,12 +40,12 @@ function plannedCount(job: Job) {
 }
 
 function storageStatusLabel(status?: string) {
-  if (status === "completed") return "已上传";
-  if (status === "fallback_completed") return "已回退";
-  if (status === "partial_failed") return "部分失败";
-  if (status === "failed") return "上传失败";
-  if (status === "running") return "上传中";
-  if (status === "pending") return "待上传";
+  if (status === "completed") return t("已上传");
+  if (status === "fallback_completed") return t("已回退");
+  if (status === "partial_failed") return t("部分失败");
+  if (status === "failed") return t("上传失败");
+  if (status === "running") return t("上传中");
+  if (status === "pending") return t("待上传");
   return "";
 }
 
@@ -148,7 +149,7 @@ function ExpandedOutputs({
       map.set(0, job.output_path);
     }
     return map;
-  }, [job.outputs, job.output_path]);
+  }, [job.outputs, job.output_path, getLocale()]);
 
   if (planned <= 1) return null;
 
@@ -162,7 +163,7 @@ function ExpandedOutputs({
         {Array.from({ length: planned }).map((_, index) => {
           const path = byIndex.get(index);
           const url = path ? api.fileUrl(path) : "";
-          const label = `候选 ${outputLabel(index)}`;
+          const label = t("候选 {p0}", { p0: outputLabel(index) });
           const disabled = !path;
           return (
             <button
@@ -178,8 +179,8 @@ function ExpandedOutputs({
                   ? "cursor-default border-border-faint"
                   : "cursor-pointer border-border hover:border-border-strong",
               )}
-              aria-label={`查看${label}`}
-              title={disabled ? `${label} · 等待生成` : label}
+              aria-label={t("查看{p0}", { p0: label })}
+              title={disabled ? t("{p0} · 等待生成", { p0: label }) : label}
             >
               {url ? (
                 <JobPreviewImage
@@ -339,8 +340,8 @@ export function JobRow({
                 "transition-transform",
                 expanded ? "rotate-180" : "rotate-0",
               )}
-              title={expanded ? "收起本批次" : "展开本批次"}
-              aria-label={expanded ? "收起本批次" : "展开本批次"}
+              title={expanded ? t("收起本批次") : t("展开本批次")}
+              aria-label={expanded ? t("收起本批次") : t("展开本批次")}
             />
           )}
           {(hover || focusWithin) && onDelete && (
@@ -352,8 +353,8 @@ export function JobRow({
                 e.stopPropagation();
                 onDelete();
               }}
-              title="删除"
-              aria-label="删除任务"
+              title={t("删除")}
+              aria-label={t("删除任务")}
             />
           )}
         </div>

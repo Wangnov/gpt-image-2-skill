@@ -1,3 +1,4 @@
+import { t, getLocale } from "@/lib/i18n";
 import {
   useCallback,
   useEffect,
@@ -7,10 +8,7 @@ import {
   useState,
 } from "react";
 import { toast } from "sonner";
-import {
-  Sparkles,
-  ListChecks,
-} from "lucide-react";
+import { Sparkles, ListChecks } from "lucide-react";
 import { motion } from "motion/react";
 import GradientText from "@/components/reactbits/text/GradientText";
 import ShinyText from "@/components/reactbits/text/ShinyText";
@@ -69,7 +67,10 @@ export function GenerateScreen({
   onOpenSettings?: () => void;
 }) {
   const reducedMotion = useReducedMotion();
-  const providerNames = useMemo(() => readProviderNames(config), [config]);
+  const providerNames = useMemo(
+    () => readProviderNames(config),
+    [config, getLocale()],
+  );
   // ClickSpark needs a real CSS color value, not a var() reference,
   // so tint it to whatever preset is active.
   const { tweaks } = useTweaks();
@@ -94,14 +95,22 @@ export function GenerateScreen({
   const [pulseKey, setPulseKey] = useState(0);
   const promptId = useId();
 
-  const applyDraft = useCallback((draft: Pick<GenerateDraft, "prompt" | "provider" | "size" | "format" | "quality" | "n">) => {
-    setPrompt(draft.prompt);
-    setProvider(draft.provider);
-    setSize(draft.size);
-    setFormat(draft.format);
-    setQuality(draft.quality);
-    setN(draft.n);
-  }, []);
+  const applyDraft = useCallback(
+    (
+      draft: Pick<
+        GenerateDraft,
+        "prompt" | "provider" | "size" | "format" | "quality" | "n"
+      >,
+    ) => {
+      setPrompt(draft.prompt);
+      setProvider(draft.provider);
+      setSize(draft.size);
+      setFormat(draft.format);
+      setQuality(draft.quality);
+      setN(draft.n);
+    },
+    [],
+  );
 
   const { running } = useJobEvents(jobId);
   const mutate = useCreateGenerate();
@@ -152,11 +161,11 @@ export function GenerateScreen({
       .then((drafts) => {
         if (cancelled || drafts.length === 0) return;
         const draft = drafts[0];
-        toast.message(`有 ${drafts.length} 个离线任务草稿`, {
-          description: "网络恢复后可继续提交。",
+        toast.message(t("有 {p0} 个离线任务草稿", { p0: drafts.length }), {
+          description: t("网络恢复后可继续提交。"),
           duration: 8_000,
           action: {
-            label: "恢复",
+            label: t("恢复"),
             onClick: () => {
               applyDraft(draft);
               void removeOfflineGenerateDraft(draft.id);
@@ -209,8 +218,8 @@ export function GenerateScreen({
       if (typeof data.n === "number") setN(data.n);
       pendingRerunAppliedRef.current = true;
       localStorage.removeItem("gpt2.pendingRerun");
-      toast.message("已预填上一次的提示词", {
-        description: "改一下再点「生成」就能跑变体。",
+      toast.message(t("已预填上一次的提示词"), {
+        description: t("改一下再点「生成」就能跑变体。"),
         duration: 4_000,
       });
     } catch {
@@ -246,13 +255,13 @@ export function GenerateScreen({
   const handleRun = async () => {
     if (!provider || isSubmitting) return;
     if (parameterError) {
-      toast.error("参数无效", { description: parameterError });
+      toast.error(t("参数无效"), { description: parameterError });
       return;
     }
     const normalizedSize = sizeValidation.normalized ?? size;
     const plannedN = effectiveOutputCount(config, provider, safeN);
     const requestedN = requestOutputCount(config, provider, safeN);
-    const toastId = toast.loading("正在提交任务", {
+    const toastId = toast.loading(t("正在提交任务"), {
       description: `${provider} · ${normalizedSize} · ${quality}`,
     });
     setRunError(null);
@@ -274,8 +283,7 @@ export function GenerateScreen({
         },
       });
       const queued =
-        res.queued ||
-        Boolean(res.job && isActiveJobStatus(res.job.status));
+        res.queued || Boolean(res.job && isActiveJobStatus(res.job.status));
       const count = queued ? plannedN : responseOutputCount(res);
       setJobId(res.job_id);
       const mismatchNotice = queued
@@ -283,17 +291,22 @@ export function GenerateScreen({
         : outputCountMismatchMessage(count, plannedN);
       if (queued) {
         toast.success(
-          plannedN > 1 ? `已开始生成 ${plannedN} 张` : "已开始生成",
+          plannedN > 1
+            ? t("已开始生成 {p0} 张", { p0: plannedN })
+            : t("已开始生成"),
           {
             id: toastId,
-            description: `${provider} · ${normalizedSize} · 在「任务」里查看进度`,
+            description: t("{p0} · {p1} · 在「任务」里查看进度", {
+              p0: provider,
+              p1: normalizedSize,
+            }),
             duration: 4_000,
           },
         );
       } else {
-        toast.success("生成完成", {
+        toast.success(t("生成完成"), {
           id: toastId,
-          description: mismatchNotice ?? "在「任务」里查看",
+          description: mismatchNotice ?? t("在「任务」里查看"),
         });
       }
     } catch (error) {
@@ -312,15 +325,15 @@ export function GenerateScreen({
           message,
         ).catch(() => 0);
         if (count > 0) {
-          toast.message("已保存到离线队列", {
+          toast.message(t("已保存到离线队列"), {
             id: toastId,
-            description: `当前共有 ${count} 个待恢复草稿。`,
+            description: t("当前共有 {p0} 个待恢复草稿。", { p0: count }),
             duration: 6_000,
           });
           return;
         }
       }
-      toast.error("生成失败", { id: toastId, description: message });
+      toast.error(t("生成失败"), { id: toastId, description: message });
     } finally {
       setPendingOutputCount(null);
     }
@@ -408,7 +421,7 @@ export function GenerateScreen({
               aria-hidden
             />
             <ShinyText
-              text="将设计交给每一个人"
+              text={t("将设计交给每一个人")}
               speed={3}
               color="rgba(245,245,247,.55)"
               shineColor="rgba(245,245,247,1)"
@@ -491,7 +504,8 @@ export function GenerateScreen({
               }}
             >
               <ListChecks size={13} className="opacity-80" />
-              查看队列 ({queueCount})
+              {t("查看队列 (")}
+              {queueCount})
             </button>
           </div>
         )}

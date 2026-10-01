@@ -1,3 +1,4 @@
+import { t } from "@/lib/i18n";
 import type { CSSProperties } from "react";
 import { api } from "@/lib/api";
 import type { Job, OutputUploadRef } from "@/lib/types";
@@ -24,19 +25,19 @@ export function readPlannedCount(job: Job) {
 export function storageStatusLabel(status?: string) {
   switch (status) {
     case "completed":
-      return "已上传";
+      return t("已上传");
     case "partial_failed":
-      return "部分失败";
+      return t("部分失败");
     case "failed":
-      return "上传失败";
+      return t("上传失败");
     case "fallback_completed":
-      return "已回退";
+      return t("已回退");
     case "pending":
-      return "待上传";
+      return t("待上传");
     case "running":
-      return "上传中";
+      return t("上传中");
     default:
-      return "未配置";
+      return t("未配置");
   }
 }
 

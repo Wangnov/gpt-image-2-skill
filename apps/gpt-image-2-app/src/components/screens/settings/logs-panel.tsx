@@ -1,3 +1,4 @@
+import { t, getLocale } from "@/lib/i18n";
 import { useMemo, useState } from "react";
 import { Download, FolderOpen, RefreshCw } from "lucide-react";
 import { toast } from "sonner";
@@ -19,18 +20,51 @@ import { Row, Section } from "./layout";
 type LevelFilter = "all" | LogLevel;
 
 const LEVEL_FILTER_OPTIONS: { value: LevelFilter; label: string }[] = [
-  { value: "all", label: "全部" },
-  { value: "error", label: "错误" },
-  { value: "warn", label: "警告" },
-  { value: "info", label: "信息" },
-  { value: "debug", label: "调试" },
+  {
+    value: "all",
+    get label() {
+      return t("全部");
+    },
+  },
+  {
+    value: "error",
+    get label() {
+      return t("错误");
+    },
+  },
+  {
+    value: "warn",
+    get label() {
+      return t("警告");
+    },
+  },
+  {
+    value: "info",
+    get label() {
+      return t("信息");
+    },
+  },
+  {
+    value: "debug",
+    get label() {
+      return t("调试");
+    },
+  },
 ];
 
 const LEVEL_LABEL: Record<LogLevel, string> = {
-  error: "错误",
-  warn: "警告",
-  info: "信息",
-  debug: "调试",
+  get error() {
+    return t("错误");
+  },
+  get warn() {
+    return t("警告");
+  },
+  get info() {
+    return t("信息");
+  },
+  get debug() {
+    return t("调试");
+  },
 };
 
 function levelClasses(level: LogLevel): string {
@@ -50,7 +84,7 @@ function levelClasses(level: LogLevel): string {
 function formatTimestamp(ts: string): string {
   const parsed = new Date(ts);
   if (Number.isNaN(parsed.getTime())) return ts;
-  return parsed.toLocaleString();
+  return parsed.toLocaleString(getLocale());
 }
 
 /** Best-effort one-line message extracted from a log entry's payload. */
@@ -91,19 +125,23 @@ export function LogsPanel() {
   const logsDir = logsQuery.data?.logs_dir ?? "";
 
   // Render newest first in the UI even though the backend returns oldest-last.
-  const ordered = useMemo(() => [...entries].reverse(), [entries]);
+  const ordered = useMemo(() => [...entries].reverse(), [entries, getLocale()]);
 
   if (isBrowser) {
     return (
       <div className="flex-1 min-h-0 overflow-auto p-4 sm:p-5 space-y-4">
         <Section
-          title="日志"
-          description="运行诊断日志，便于排查生成失败的原因。"
+          title={t("日志")}
+          description={t("运行诊断日志，便于排查生成失败的原因。")}
         >
           <Row
-            title="此环境不支持日志"
-            description="静态 Web 版本没有本机日志文件，请使用桌面 App 或自托管的 Docker 后端查看诊断日志。"
-            control={<span className="text-[12px] text-muted">不可用</span>}
+            title={t("此环境不支持日志")}
+            description={t(
+              "静态 Web 版本没有本机日志文件，请使用桌面 App 或自托管的 Docker 后端查看诊断日志。",
+            )}
+            control={
+              <span className="text-[12px] text-muted">{t("不可用")}</span>
+            }
           />
         </Section>
       </div>
@@ -112,7 +150,7 @@ export function LogsPanel() {
 
   const handleExport = () => {
     if (ordered.length === 0) {
-      toast.warning("没有可导出的日志");
+      toast.warning(t("没有可导出的日志"));
       return;
     }
     // Export the currently loaded slice as JSONL (oldest-first to match the
@@ -136,12 +174,12 @@ export function LogsPanel() {
     try {
       const path = await openLogsDir.mutateAsync();
       if (copy.kind === "http") {
-        toast.info("日志目录", {
-          description: path || "服务器日志目录路径不可用。",
+        toast.info(t("日志目录"), {
+          description: path || t("服务器日志目录路径不可用。"),
         });
       }
     } catch (error) {
-      toast.error("无法打开日志文件夹", {
+      toast.error(t("无法打开日志文件夹"), {
         description: error instanceof Error ? error.message : String(error),
       });
     }
@@ -149,10 +187,15 @@ export function LogsPanel() {
 
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-4 p-4 sm:p-5">
-      <Section title="日志设置" description="控制诊断日志的详细程度。">
+      <Section
+        title={t("日志设置")}
+        description={t("控制诊断日志的详细程度。")}
+      >
         <Row
-          title="详细日志（调试）"
-          description="开启后会额外记录 debug 级别的事件，便于深入排查；默认仅记录信息及以上。"
+          title={t("详细日志（调试）")}
+          description={t(
+            "开启后会额外记录 debug 级别的事件，便于深入排查；默认仅记录信息及以上。",
+          )}
           control={
             <Toggle
               checked={logging?.debug ?? false}
@@ -162,7 +205,7 @@ export function LogsPanel() {
                   { debug },
                   {
                     onError: (error) =>
-                      toast.error("保存日志设置失败", {
+                      toast.error(t("保存日志设置失败"), {
                         description:
                           error instanceof Error
                             ? error.message
@@ -183,7 +226,7 @@ export function LogsPanel() {
             onChange={setFilter}
             options={LEVEL_FILTER_OPTIONS}
             size="sm"
-            ariaLabel="日志级别过滤"
+            ariaLabel={t("日志级别过滤")}
           />
           <div className="ml-auto flex items-center gap-2">
             <Button
@@ -196,7 +239,7 @@ export function LogsPanel() {
                 size={13}
                 className={cn(logsQuery.isFetching && "animate-spin")}
               />
-              刷新
+              {t("刷新")}
             </Button>
             <Button
               variant="secondary"
@@ -205,7 +248,7 @@ export function LogsPanel() {
               disabled={openLogsDir.isPending}
             >
               <FolderOpen size={13} />
-              {copy.kind === "http" ? "日志目录" : "打开文件夹"}
+              {copy.kind === "http" ? t("日志目录") : t("打开文件夹")}
             </Button>
             <Button
               variant="secondary"
@@ -214,7 +257,7 @@ export function LogsPanel() {
               disabled={ordered.length === 0}
             >
               <Download size={13} />
-              导出
+              {t("导出")}
             </Button>
           </div>
         </div>
@@ -222,21 +265,21 @@ export function LogsPanel() {
         <div className="min-h-0 flex-1 overflow-auto">
           {logsQuery.isLoading ? (
             <div className="px-4 py-8 text-center text-[12.5px] text-muted">
-              正在加载日志…
+              {t("正在加载日志…")}
             </div>
           ) : logsQuery.isError ? (
             <div className="px-4 py-8 text-center text-[12.5px] text-status-err">
-              加载日志失败：
+              {t("加载日志失败：")}
               {logsQuery.error instanceof Error
                 ? logsQuery.error.message
-                : "未知错误"}
+                : t("未知错误")}
             </div>
           ) : ordered.length === 0 ? (
             <div className="px-4 py-8 text-center text-[12.5px] text-muted">
-              暂无日志记录。
+              {t("暂无日志记录。")}
               {logging?.debug
                 ? ""
-                : "如需更详细的事件，可开启上方的「详细日志」。"}
+                : t("如需更详细的事件，可开启上方的「详细日志」。")}
             </div>
           ) : (
             <ul className="divide-y divide-border-faint">
@@ -277,7 +320,10 @@ export function LogsPanel() {
 
         {logsDir && (
           <div className="border-t border-border-faint px-4 py-2 sm:px-5">
-            <p className="truncate font-mono text-[11px] text-muted" title={logsDir}>
+            <p
+              className="truncate font-mono text-[11px] text-muted"
+              title={logsDir}
+            >
               {logsDir}
             </p>
           </div>

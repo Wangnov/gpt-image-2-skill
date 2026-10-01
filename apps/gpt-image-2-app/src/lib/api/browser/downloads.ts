@@ -1,3 +1,4 @@
+import { t } from "@/lib/i18n";
 import type { Job } from "../../types";
 import { jobOutputPaths } from "../shared";
 import { jobExportBaseName, outputFileName } from "@/lib/job-export";
@@ -5,7 +6,10 @@ import { createStoredZip } from "@/lib/zip";
 import { blobsByPath } from "./state";
 import { outputsForJob, rememberOutputBlob } from "./store";
 
-export async function downloadBlob(path: string, fileName: (blob: Blob) => string) {
+export async function downloadBlob(
+  path: string,
+  fileName: (blob: Blob) => string,
+) {
   const blob = await blobForPath(path);
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
@@ -29,13 +33,13 @@ export async function blobForPath(path: string) {
     blob = output?.blob;
     if (output) rememberOutputBlob(output);
   }
-  if (!blob) throw new Error("没有找到可下载的图片。");
+  if (!blob) throw new Error(t("没有找到可下载的图片。"));
   return blob;
 }
 
 export async function downloadJobZip(job: Job) {
   const paths = jobOutputPaths(job);
-  if (paths.length === 0) throw new Error("没有可下载的图片。");
+  if (paths.length === 0) throw new Error(t("没有可下载的图片。"));
   const baseName = jobExportBaseName(job);
   const entries = await Promise.all(
     paths.map(async (path, index) => ({

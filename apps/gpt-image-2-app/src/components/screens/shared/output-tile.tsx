@@ -1,3 +1,4 @@
+import { t } from "@/lib/i18n";
 import { useEffect, useState } from "react";
 import { AnimatePresence, motion } from "motion/react";
 import { Icon } from "@/components/icon";
@@ -26,7 +27,7 @@ export function OutputTile({
   onDownload,
   onOpen,
   onSendToEdit,
-  downloadLabel = "保存图片",
+  downloadLabel = t("保存图片"),
   asset,
 }: {
   output: OutputMeta;
@@ -85,7 +86,10 @@ export function OutputTile({
       onClick={onSelect}
       role="button"
       tabIndex={0}
-      aria-label={`候选 ${letter.toUpperCase()}${output.selected ? "，已选中" : ""}`}
+      aria-label={t("候选 {p0}{p1}", {
+        p0: letter.toUpperCase(),
+        p1: output.selected ? t("，已选中") : "",
+      })}
       aria-pressed={Boolean(output.selected)}
       animate={
         reducedMotion
@@ -134,7 +138,7 @@ export function OutputTile({
       {showImage ? (
         <RevealImage
           src={output.url}
-          alt={`候选 ${letter.toUpperCase()}`}
+          alt={t("候选 {p0}", { p0: letter.toUpperCase() })}
           loading="lazy"
           decoding="async"
           className="w-full h-full object-cover"
@@ -145,7 +149,7 @@ export function OutputTile({
         <PlaceholderImage
           seed={output.seed ?? output.index * 11 + 7}
           variant={letter}
-          label={output.url && imageFailed ? "远端不可用" : undefined}
+          label={output.url && imageFailed ? t("远端不可用") : undefined}
         />
       )}
       <div
@@ -202,8 +206,8 @@ export function OutputTile({
                     e.stopPropagation();
                     onOpen();
                   }}
-                  title="打开图片"
-                  aria-label="打开图片"
+                  title={t("打开图片")}
+                  aria-label={t("打开图片")}
                   className="touch-target image-overlay flex h-8 w-8 items-center justify-center rounded-[4px] border-none"
                 >
                   <Icon name="external" size={13} />
@@ -215,8 +219,8 @@ export function OutputTile({
                     e.stopPropagation();
                     onSendToEdit();
                   }}
-                  title="发送到编辑"
-                  aria-label="发送到编辑"
+                  title={t("发送到编辑")}
+                  aria-label={t("发送到编辑")}
                   className="touch-target image-overlay flex h-8 w-8 items-center justify-center rounded-[4px] border-none"
                 >
                   <Icon name="edit" size={13} />

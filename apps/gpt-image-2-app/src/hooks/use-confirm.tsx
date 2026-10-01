@@ -1,3 +1,4 @@
+import { t } from "@/lib/i18n";
 import {
   createContext,
   useCallback,
@@ -7,6 +8,7 @@ import {
 } from "react";
 import { Dialog } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
+import { useLanguage } from "@/hooks/use-language";
 
 type ConfirmVariant = "default" | "danger";
 
@@ -45,6 +47,7 @@ interface PendingState {
  *   if (ok) deleteJob(id);
  */
 export function ConfirmProvider({ children }: { children: ReactNode }) {
+  useLanguage();
   const [pending, setPending] = useState<PendingState | null>(null);
 
   const confirm = useCallback<ConfirmFn>((opts) => {
@@ -74,7 +77,7 @@ export function ConfirmProvider({ children }: { children: ReactNode }) {
         footer={
           <>
             <Button variant="ghost" size="sm" onClick={() => close(false)}>
-              {opts?.cancelText ?? "取消"}
+              {opts?.cancelText ?? t("取消")}
             </Button>
             <Button
               variant={variant === "danger" ? "danger" : "primary"}
@@ -82,7 +85,7 @@ export function ConfirmProvider({ children }: { children: ReactNode }) {
               onClick={() => close(true)}
               autoFocus
             >
-              {opts?.confirmText ?? "确认"}
+              {opts?.confirmText ?? t("确认")}
             </Button>
           </>
         }

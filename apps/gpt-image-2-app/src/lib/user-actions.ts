@@ -1,3 +1,4 @@
+import { t } from "@/lib/i18n";
 import { toast } from "sonner";
 import { api } from "@/lib/api";
 import { runtimeCopy } from "@/lib/runtime-copy";
@@ -5,32 +6,34 @@ import { runtimeCopy } from "@/lib/runtime-copy";
 function messageFromError(error: unknown) {
   if (error instanceof Error && error.message) return error.message;
   if (typeof error === "string" && error) return error;
-  return "操作失败，请稍后重试。";
+  return t("操作失败，请稍后重试。");
 }
 
-export async function copyText(text?: string | null, label = "内容") {
+export async function copyText(text?: string | null, label = t("内容")) {
   if (!text) {
-    toast.error("没有可复制的内容");
+    toast.error(t("没有可复制的内容"));
     return false;
   }
   try {
     await navigator.clipboard.writeText(text);
-    toast.success("已复制", { description: `${label}已复制到剪贴板。` });
+    toast.success(t("已复制"), {
+      description: t("{p0}已复制到剪贴板。", { p0: label }),
+    });
     return true;
   } catch (error) {
-    toast.error("复制失败", { description: messageFromError(error) });
+    toast.error(t("复制失败"), { description: messageFromError(error) });
     return false;
   }
 }
 
 export async function saveImages(
   paths: Array<string | undefined | null>,
-  label = "图片",
+  label = t("图片"),
 ) {
   const validPaths = paths.filter((path): path is string => Boolean(path));
   const copy = runtimeCopy();
   if (validPaths.length === 0) {
-    toast.error(`没有可${copy.actionVerb}的图片`);
+    toast.error(t("没有可{p0}的图片", { p0: copy.actionVerb }));
     return [];
   }
 
@@ -43,7 +46,7 @@ export async function saveImages(
     });
     return saved;
   } catch (error) {
-    toast.error(`${label}${copy.actionVerb}失败`, {
+    toast.error(t("{p0}{p1}失败", { p0: label, p1: copy.actionVerb }), {
       id: toastId,
       description: messageFromError(error),
     });
@@ -51,10 +54,10 @@ export async function saveImages(
   }
 }
 
-export async function saveJobImages(jobId: string, label = "任务图片") {
+export async function saveJobImages(jobId: string, label = t("任务图片")) {
   const copy = runtimeCopy();
   if (!jobId) {
-    toast.error(`没有可${copy.actionVerb}的任务`);
+    toast.error(t("没有可{p0}的任务", { p0: copy.actionVerb }));
     return [];
   }
 
@@ -67,7 +70,7 @@ export async function saveJobImages(jobId: string, label = "任务图片") {
     });
     return saved;
   } catch (error) {
-    toast.error(`${label}${copy.actionVerb}失败`, {
+    toast.error(t("{p0}{p1}失败", { p0: label, p1: copy.actionVerb }), {
       id: toastId,
       description: messageFromError(error),
     });
@@ -78,11 +81,11 @@ export async function saveJobImages(jobId: string, label = "任务图片") {
 export async function saveJobOutputImage(
   jobId: string,
   outputIndex: number,
-  label = "图片",
+  label = t("图片"),
 ) {
   const copy = runtimeCopy();
   if (!jobId) {
-    toast.error(`没有可${copy.actionVerb}的图片`);
+    toast.error(t("没有可{p0}的图片", { p0: copy.actionVerb }));
     return [];
   }
 
@@ -98,7 +101,7 @@ export async function saveJobOutputImage(
     });
     return saved;
   } catch (error) {
-    toast.error(`${label}${copy.actionVerb}失败`, {
+    toast.error(t("{p0}{p1}失败", { p0: label, p1: copy.actionVerb }), {
       id: toastId,
       description: messageFromError(error),
     });
@@ -108,14 +111,14 @@ export async function saveJobOutputImage(
 
 export async function openPath(path?: string | null) {
   if (!path) {
-    toast.error("没有可打开的文件");
+    toast.error(t("没有可打开的文件"));
     return false;
   }
   try {
     await api.openPath(path);
     return true;
   } catch (error) {
-    toast.error("打开失败", { description: messageFromError(error) });
+    toast.error(t("打开失败"), { description: messageFromError(error) });
     return false;
   }
 }
@@ -123,16 +126,19 @@ export async function openPath(path?: string | null) {
 export async function revealPath(path?: string | null) {
   const copy = runtimeCopy();
   if (!path) {
-    toast.error("没有可显示的位置");
+    toast.error(t("没有可显示的位置"));
     return false;
   }
   try {
     await api.revealPath(path);
     return true;
   } catch (error) {
-    toast.error(copy.kind === "tauri" ? "打开文件夹失败" : "打开位置失败", {
-      description: messageFromError(error),
-    });
+    toast.error(
+      copy.kind === "tauri" ? t("打开文件夹失败") : t("打开位置失败"),
+      {
+        description: messageFromError(error),
+      },
+    );
     return false;
   }
 }

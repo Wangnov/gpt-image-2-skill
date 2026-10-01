@@ -1,3 +1,4 @@
+import { t } from "@/lib/i18n";
 import { type RefObject } from "react";
 import { Image as ImageIcon, Sparkles, X } from "lucide-react";
 import { motion } from "motion/react";
@@ -10,11 +11,7 @@ import {
   type validateImageSize,
   type validateOutputCount,
 } from "@/lib/image-options";
-import {
-  COUNT_OPTIONS,
-  FORMAT_OPTIONS,
-  QUALITY_CHIP_OPTIONS,
-} from "./shared";
+import { COUNT_OPTIONS, FORMAT_OPTIONS, QUALITY_CHIP_OPTIONS } from "./shared";
 
 type SizeValidation = ReturnType<typeof validateImageSize>;
 type OutputCountValidation = ReturnType<typeof validateOutputCount>;
@@ -108,7 +105,7 @@ export function GenerateForm({
         // gap takes over), drop the centering max-width.
         hasSplit && "xl:col-start-1 xl:mt-0 xl:max-w-none",
       )}
-      aria-label="生成表单"
+      aria-label={t("生成表单")}
     >
       {/* tabs */}
       <div className="flex items-center gap-1 -mt-1 mb-3">
@@ -116,7 +113,7 @@ export function GenerateForm({
           type="button"
           className="relative px-3 py-1.5 text-[13px] font-semibold text-foreground"
         >
-          生成
+          {t("生成")}
           <span className="absolute -bottom-px left-2 right-2 h-px bg-foreground" />
         </button>
         {onOpenEdit && (
@@ -125,11 +122,14 @@ export function GenerateForm({
             onClick={onOpenEdit}
             className="px-3 py-1.5 text-[13px] text-muted hover:text-foreground transition-colors"
           >
-            编辑
+            {t("编辑")}
           </button>
         )}
         <div className="flex-1" />
-        <PromptTemplatePicker scope="generate" onInsert={insertPromptTemplate} />
+        <PromptTemplatePicker
+          scope="generate"
+          onInsert={insertPromptTemplate}
+        />
       </div>
 
       {/* error chip (in-form) */}
@@ -148,7 +148,7 @@ export function GenerateForm({
             type="button"
             onClick={() => setRunError(null)}
             className="opacity-60 hover:opacity-100 ml-2"
-            aria-label="关闭错误提示"
+            aria-label={t("关闭错误提示")}
           >
             <X size={11} />
           </button>
@@ -168,9 +168,9 @@ export function GenerateForm({
               size={12}
               className="opacity-70 transition-opacity group-hover:opacity-100"
             />
-            还没有凭证，
+            {t("还没有凭证，")}
             <span className="font-medium text-foreground underline decoration-dotted underline-offset-2">
-              去「设置 → 凭证」添加
+              {t("去「设置 → 凭证」添加")}
             </span>
             <Sparkles size={11} className="opacity-60" />
           </button>
@@ -184,21 +184,21 @@ export function GenerateForm({
             }}
           >
             <ImageIcon size={12} className="opacity-70" />
-            先在「设置 → 凭证」里添加一个 API Key，才能开始生成。
+            {t("先在「设置 → 凭证」里添加一个 API Key，才能开始生成。")}
           </div>
         ))}
 
       {/* textarea */}
       <div className="relative">
         <label htmlFor={promptId} className="sr-only">
-          生成提示词
+          {t("生成提示词")}
         </label>
         <textarea
           ref={promptTextareaRef}
           id={promptId}
           value={prompt}
           onChange={(e) => setPrompt(e.target.value)}
-          placeholder="描述你想要生成的图像…"
+          placeholder={t("描述你想要生成的图像…")}
           maxLength={4000}
           onKeyDown={(e) => {
             if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) handleRun();
@@ -288,13 +288,13 @@ export function GenerateForm({
                       borderTopColor: "var(--text)",
                     }}
                   />
-                  提交中…
+                  {t("提交中…")}
                 </>
               ) : isTracking && pendingOutputCount ? (
-                <>生成中…</>
+                <>{t("生成中…")}</>
               ) : (
                 <>
-                  生成
+                  {t("生成")}
                   <Sparkles size={15} />
                 </>
               )}

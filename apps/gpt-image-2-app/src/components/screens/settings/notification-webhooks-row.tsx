@@ -1,12 +1,10 @@
+import { t } from "@/lib/i18n";
 import { Webhook } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { GlassSelect } from "@/components/ui/select";
 import { Toggle } from "@/components/ui/toggle";
-import type {
-  CredentialRef,
-  WebhookNotificationConfig,
-} from "@/lib/types";
+import type { CredentialRef, WebhookNotificationConfig } from "@/lib/types";
 import { METHOD_OPTIONS } from "./constants";
 import { CredentialEditor } from "./credential-editor";
 import { Row } from "./layout";
@@ -39,12 +37,12 @@ export function NotificationWebhooksRow({
   return (
     <Row
       title="Webhook"
-      description="转发到你自己的服务地址，可加请求头鉴权。"
+      description={t("转发到你自己的服务地址，可加请求头鉴权。")}
       control={
         <div className="w-full space-y-3 sm:w-[600px]">
           {webhooks.length === 0 && (
             <div className="rounded-md border border-dashed border-border px-3 py-3 text-[12px] text-muted">
-              暂无 webhook。
+              {t("暂无 webhook。")}
             </div>
           )}
           {webhooks.map((webhook, index) => (
@@ -67,7 +65,7 @@ export function NotificationWebhooksRow({
                     size="iconSm"
                     icon="trash"
                     onClick={() => removeWebhook(index)}
-                    aria-label="删除 webhook"
+                    aria-label={t("删除 webhook")}
                   />
                 </div>
               </div>
@@ -77,9 +75,9 @@ export function NotificationWebhooksRow({
                   onChange={(event) =>
                     patchWebhook(index, { name: event.target.value })
                   }
-                  placeholder="名称"
+                  placeholder={t("名称")}
                   size="sm"
-                  aria-label="Webhook 名称"
+                  aria-label={t("Webhook 名称")}
                 />
                 <Input
                   value={webhook.url}
@@ -133,14 +131,16 @@ export function NotificationWebhooksRow({
                         updateHeaderCredential(index, header, nextCredential)
                       }
                       placeholder="Bearer ..."
-                      ariaLabel={`${header} 值`}
+                      ariaLabel={t("{p0} 值", { p0: header })}
                     />
                     <Button
                       variant="ghost"
                       size="iconSm"
                       icon="x"
-                      onClick={() => updateHeaderCredential(index, header, null)}
-                      aria-label="删除 header"
+                      onClick={() =>
+                        updateHeaderCredential(index, header, null)
+                      }
+                      aria-label={t("删除 header")}
                     />
                   </div>
                 ))}
@@ -150,13 +150,18 @@ export function NotificationWebhooksRow({
                   icon="plus"
                   onClick={() => addHeader(index)}
                 >
-                  添加 Header
+                  {t("添加 Header")}
                 </Button>
               </div>
             </div>
           ))}
-          <Button variant="secondary" size="sm" icon="plus" onClick={addWebhook}>
-            添加 Webhook
+          <Button
+            variant="secondary"
+            size="sm"
+            icon="plus"
+            onClick={addWebhook}
+          >
+            {t("添加 Webhook")}
           </Button>
         </div>
       }

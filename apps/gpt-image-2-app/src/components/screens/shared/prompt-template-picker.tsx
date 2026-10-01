@@ -1,3 +1,4 @@
+import { t, getLocale } from "@/lib/i18n";
 import { useMemo, useState } from "react";
 import { FileText, Search } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -36,7 +37,7 @@ export function PromptTemplatePicker({
         .toLowerCase()
         .includes(normalizedQuery);
     });
-  }, [normalizedQuery, scope, state]);
+  }, [normalizedQuery, scope, state, getLocale()]);
   const groups = state.groups
     .map((group) => ({
       group,
@@ -59,9 +60,9 @@ export function PromptTemplatePicker({
           size="sm"
           icon="wand"
           disabled={disabled}
-          title="插入提示词模板"
+          title={t("插入提示词模板")}
         >
-          模板
+          {t("模板")}
         </Button>
       </PopoverTrigger>
       <PopoverContent align="end" className="w-[320px] p-2">
@@ -73,7 +74,7 @@ export function PromptTemplatePicker({
           <input
             value={query}
             onChange={(event) => setQuery(event.target.value)}
-            placeholder="搜索模板"
+            placeholder={t("搜索模板")}
             className="h-8 w-full rounded-md border border-border bg-[color:var(--w-04)] pl-8 pr-3 text-[12.5px] text-foreground outline-none placeholder:text-faint focus:border-[color:var(--accent-55)]"
           />
         </div>
@@ -82,7 +83,7 @@ export function PromptTemplatePicker({
             <div className="flex min-h-[120px] flex-col items-center justify-center gap-2 rounded-lg border border-dashed border-border-faint bg-[color:var(--w-02)] px-4 text-center">
               <FileText size={18} className="text-faint" />
               <div className="text-[12px] text-muted">
-                没有匹配的模板，可在设置里添加。
+                {t("没有匹配的模板，可在设置里添加。")}
               </div>
             </div>
           ) : (
@@ -116,7 +117,7 @@ export function PromptTemplatePicker({
                       </span>
                     </div>
                     <div className="mt-1 line-clamp-2 text-[11.5px] leading-relaxed text-muted">
-                      {template.prompt || "（空模板）"}
+                      {template.prompt || t("（空模板）")}
                     </div>
                   </button>
                 ))}

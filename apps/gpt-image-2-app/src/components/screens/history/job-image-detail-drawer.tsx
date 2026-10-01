@@ -1,3 +1,4 @@
+import { t } from "@/lib/i18n";
 import { useEffect, useState } from "react";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { Drawer } from "@/components/ui/drawer";
@@ -77,21 +78,21 @@ function Detail({ label, value }: { label: string; value: string }) {
 }
 
 function slotStatusLabel(status: string) {
-  if (status === "completed") return "已生成";
-  if (status === "failed") return "失败";
-  return "缺失";
+  if (status === "completed") return t("已生成");
+  if (status === "failed") return t("失败");
+  return t("缺失");
 }
 
 function eventTypeLabel(type: string) {
-  if (type === "job.queued") return "已排队";
-  if (type === "job.running") return "开始执行";
-  if (type === "job.output_ready") return "输出完成";
-  if (type === "job.storage") return "上传结果";
-  if (type === "job.partial_failed") return "部分失败";
-  if (type === "job.failed") return "失败";
-  if (type === "job.cancelled") return "已取消";
-  if (type === "job.notifications") return "通知已发送";
-  if (type === "job.completed") return "已完成";
+  if (type === "job.queued") return t("已排队");
+  if (type === "job.running") return t("开始执行");
+  if (type === "job.output_ready") return t("输出完成");
+  if (type === "job.storage") return t("上传结果");
+  if (type === "job.partial_failed") return t("部分失败");
+  if (type === "job.failed") return t("失败");
+  if (type === "job.cancelled") return t("已取消");
+  if (type === "job.notifications") return t("通知已发送");
+  if (type === "job.completed") return t("已完成");
   return type;
 }
 
@@ -287,33 +288,37 @@ export function JobImageDetailDrawer({
         }}
         title={
           outputCount > 1
-            ? `作品 ${letter} · ${activePosition + 1} / ${outputCount}`
-            : "作品详情"
+            ? t("作品 {p0} · {p1} / {p2}", {
+                p0: letter,
+                p1: activePosition + 1,
+                p2: outputCount,
+              })
+            : t("作品详情")
         }
-        description={prompt ? prompt.slice(0, 80) : "（无提示词）"}
+        description={prompt ? prompt.slice(0, 80) : t("（无提示词）")}
         width={520}
         footer={
           <div className="flex w-full min-w-0 items-center gap-1.5">
             {canShowFileLocation && (
               <>
-                <Tooltip text="复制路径">
+                <Tooltip text={t("复制路径")}>
                   <Button
                     variant="ghost"
                     size="iconSm"
                     icon="copy"
-                    aria-label="复制路径"
+                    aria-label={t("复制路径")}
                     disabled={!path}
                     onClick={() => {
-                      if (path) void copyText(path, "图片路径");
+                      if (path) void copyText(path, t("图片路径"));
                     }}
                   />
                 </Tooltip>
-                <Tooltip text="在 Finder 中显示">
+                <Tooltip text={t("在 Finder 中显示")}>
                   <Button
                     variant="ghost"
                     size="iconSm"
                     icon="folder"
-                    aria-label="在 Finder 中显示"
+                    aria-label={t("在 Finder 中显示")}
                     disabled={!path}
                     onClick={() => {
                       if (path) void revealPath(path);
@@ -323,12 +328,12 @@ export function JobImageDetailDrawer({
               </>
             )}
             {onRerun && job && (
-              <Tooltip text="再来一次（用相同参数预填生成屏）">
+              <Tooltip text={t("再来一次（用相同参数预填生成屏）")}>
                 <Button
                   variant="ghost"
                   size="iconSm"
                   icon="reload"
-                  aria-label="再来一次"
+                  aria-label={t("再来一次")}
                   onClick={handleRerun}
                 />
               </Tooltip>
@@ -348,12 +353,12 @@ export function JobImageDetailDrawer({
                 </Tooltip>
               )}
             {onSendToEdit && job && (
-              <Tooltip text="发送到编辑（作为参考图）">
+              <Tooltip text={t("发送到编辑（作为参考图）")}>
                 <Button
                   variant="secondary"
                   size="iconSm"
                   icon="edit"
-                  aria-label="发送到编辑"
+                  aria-label={t("发送到编辑")}
                   disabled={!path && !url}
                   onClick={() => onSendToEdit(job, activeOutputIndex)}
                 />
@@ -361,22 +366,27 @@ export function JobImageDetailDrawer({
             )}
             <div className="min-w-2 flex-1" />
             {onDelete && job && (
-              <Tooltip text="删除任务">
+              <Tooltip text={t("删除任务")}>
                 <Button
                   variant="ghost"
                   size="iconSm"
                   icon="trash"
-                  aria-label="删除任务"
+                  aria-label={t("删除任务")}
                   onClick={async () => {
                     const outputCount = job.outputs?.length ?? 1;
                     const description =
                       outputCount > 1
-                        ? `这是包含 ${outputCount} 张图的任务，删除会移除本地任务记录和全部 ${outputCount} 张图；远端 Origin/Archive 不会被删除，且无法分别删除单张。`
-                        : "这会删除本地任务记录和这张图；远端 Origin/Archive 不会被删除。桌面端本地文件会先移到回收站。";
+                        ? t(
+                            "这是包含 {p0} 张图的任务，删除会移除本地任务记录和全部 {p1} 张图；远端 Origin/Archive 不会被删除，且无法分别删除单张。",
+                            { p0: outputCount, p1: outputCount },
+                          )
+                        : t(
+                            "这会删除本地任务记录和这张图；远端 Origin/Archive 不会被删除。桌面端本地文件会先移到回收站。",
+                          );
                     const ok = await confirm({
-                      title: "删除任务？",
+                      title: t("删除任务？"),
                       description,
-                      confirmText: "删除任务",
+                      confirmText: t("删除任务"),
                       variant: "danger",
                     });
                     if (!ok) return;
@@ -411,11 +421,11 @@ export function JobImageDetailDrawer({
                   type="button"
                   onClick={openZoom}
                   className="mx-auto block w-full max-w-[340px] cursor-zoom-in rounded-[15px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--accent-55)] focus-visible:ring-offset-2 focus-visible:ring-offset-[color:var(--bg)]"
-                  aria-label={`查看第 ${letter} 张大图`}
+                  aria-label={t("查看第 {p0} 张大图", { p0: letter })}
                 >
                   <TiltedCard
                     imageSrc={displayUrl}
-                    altText={`第 ${letter} 张`}
+                    altText={t("第 {p0} 张", { p0: letter })}
                     containerWidth="100%"
                     containerHeight={DETAIL_IMAGE_SIZE}
                     imageWidth={DETAIL_IMAGE_SIZE}
@@ -433,7 +443,9 @@ export function JobImageDetailDrawer({
                 <PlaceholderImage
                   seed={activeOutputIndex + 23}
                   variant={`detail-${job?.id ?? "empty"}`}
-                  label={displayUrl && imageFailed ? "远端不可用" : undefined}
+                  label={
+                    displayUrl && imageFailed ? t("远端不可用") : undefined
+                  }
                 />
               </div>
             )}
@@ -443,7 +455,7 @@ export function JobImageDetailDrawer({
                 <button
                   type="button"
                   onClick={goPrev}
-                  aria-label="上一张"
+                  aria-label={t("上一张")}
                   className="absolute left-2 top-1/2 -translate-y-1/2 h-9 w-9 rounded-full inline-flex items-center justify-center bg-[color:var(--k-45)] backdrop-blur border border-[color:var(--w-10)] text-foreground/85 hover:text-foreground hover:bg-[color:var(--k-65)] transition-colors"
                 >
                   <ChevronLeft size={16} />
@@ -451,7 +463,7 @@ export function JobImageDetailDrawer({
                 <button
                   type="button"
                   onClick={goNext}
-                  aria-label="下一张"
+                  aria-label={t("下一张")}
                   className="absolute right-2 top-1/2 -translate-y-1/2 h-9 w-9 rounded-full inline-flex items-center justify-center bg-[color:var(--k-45)] backdrop-blur border border-[color:var(--w-10)] text-foreground/85 hover:text-foreground hover:bg-[color:var(--k-65)] transition-colors"
                 >
                   <ChevronRight size={16} />
@@ -479,8 +491,8 @@ export function JobImageDetailDrawer({
                         ? "ring-[color:var(--accent-55)] scale-[1.04]"
                         : "ring-[color:var(--w-10)] opacity-65 hover:opacity-100",
                     )}
-                    aria-label={`第 ${label} 张`}
-                    title={`第 ${label} 张`}
+                    aria-label={t("第 {p0} 张", { p0: label })}
+                    title={t("第 {p0} 张", { p0: label })}
                   >
                     {tUrl && !thumbFailed.has(outputIndex) ? (
                       <img
@@ -498,7 +510,7 @@ export function JobImageDetailDrawer({
                         variant={`detail-thumb-${job.id}`}
                         label={
                           tUrl && thumbFailed.has(outputIndex)
-                            ? "远端不可用"
+                            ? t("远端不可用")
                             : undefined
                         }
                       />
@@ -530,23 +542,23 @@ export function JobImageDetailDrawer({
           {/* Metadata panel */}
           <section className="surface-panel p-4 space-y-3.5">
             <div>
-              <div className="t-caps mb-1.5">提示词</div>
+              <div className="t-caps mb-1.5">{t("提示词")}</div>
               <div className="break-anywhere whitespace-pre-wrap text-[12.5px] leading-relaxed text-foreground">
-                {prompt || "（无提示词）"}
+                {prompt || t("（无提示词）")}
               </div>
             </div>
 
             <div className="border-t border-[color:var(--w-06)]" />
 
             <div className="grid min-w-0 grid-cols-1 gap-3 sm:grid-cols-2">
-              <Detail label="尺寸" value={size} />
-              <Detail label="质量" value={quality} />
-              <Detail label="格式" value={format} />
-              <Detail label="文件大小" value={fmtBytes(bytes)} />
-              <Detail label="凭证" value={provider} />
-              <Detail label="任务命令" value={job?.command ?? "—"} />
-              <Detail label="创建时间" value={created} />
-              <Detail label="更新时间" value={updated} />
+              <Detail label={t("尺寸")} value={size} />
+              <Detail label={t("质量")} value={quality} />
+              <Detail label={t("格式")} value={format} />
+              <Detail label={t("文件大小")} value={fmtBytes(bytes)} />
+              <Detail label={t("凭证")} value={provider} />
+              <Detail label={t("任务命令")} value={job?.command ?? "—"} />
+              <Detail label={t("创建时间")} value={created} />
+              <Detail label={t("更新时间")} value={updated} />
             </div>
 
             <div className="border-t border-[color:var(--w-06)]" />
@@ -554,7 +566,7 @@ export function JobImageDetailDrawer({
             <div className="flex min-w-0 items-center justify-between gap-2">
               <div className="min-w-0 flex-1">
                 <div className="t-caps">
-                  {canShowFileLocation ? "文件路径" : "存储位置"}
+                  {canShowFileLocation ? t("文件路径") : t("存储位置")}
                 </div>
                 {canShowFileLocation ? (
                   <div
@@ -579,8 +591,8 @@ export function JobImageDetailDrawer({
                   onClick={() => {
                     if (path) void openPath(path);
                   }}
-                  title="用默认应用打开"
-                  aria-label="用默认应用打开"
+                  title={t("用默认应用打开")}
+                  aria-label={t("用默认应用打开")}
                 />
               )}
             </div>
@@ -590,9 +602,10 @@ export function JobImageDetailDrawer({
             <section className="surface-panel p-4 space-y-3.5">
               <div className="flex items-center justify-between gap-3">
                 <div>
-                  <div className="t-caps">恢复状态</div>
+                  <div className="t-caps">{t("恢复状态")}</div>
                   <div className="mt-1 text-[12px] text-muted">
-                    响应完整接收：{receivedResponse ? "是" : "否 / 不确定"}
+                    {t("响应完整接收：")}
+                    {receivedResponse ? t("是") : t("否 / 不确定")}
                   </div>
                 </div>
                 {recovery &&
@@ -642,7 +655,7 @@ export function JobImageDetailDrawer({
 
               {timeline.length > 0 && (
                 <div className="space-y-1.5">
-                  <div className="t-caps">时间线</div>
+                  <div className="t-caps">{t("时间线")}</div>
                   <div className="space-y-1.5">
                     {timeline.map((event) => (
                       <div

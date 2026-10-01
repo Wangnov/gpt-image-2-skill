@@ -1,3 +1,4 @@
+import { t } from "@/lib/i18n";
 import type { TauriJobResponse } from "@/lib/api";
 import type { Job } from "@/lib/types";
 import {
@@ -9,10 +10,30 @@ import {
 export type FilterValue = "all" | "running" | "completed" | "failed";
 
 export const FILTERS: { value: FilterValue; label: string }[] = [
-  { value: "all", label: "全部" },
-  { value: "running", label: "进行中" },
-  { value: "completed", label: "已完成" },
-  { value: "failed", label: "失败/部分失败" },
+  {
+    value: "all",
+    get label() {
+      return t("全部");
+    },
+  },
+  {
+    value: "running",
+    get label() {
+      return t("进行中");
+    },
+  },
+  {
+    value: "completed",
+    get label() {
+      return t("已完成");
+    },
+  },
+  {
+    value: "failed",
+    get label() {
+      return t("失败/部分失败");
+    },
+  },
 ];
 
 export function outputLabel(outputIndex: number): string {
@@ -60,7 +81,7 @@ export function jobRatio(job: Job): string {
 export function jobPrompt(job: Job): string {
   const md = (job.metadata ?? {}) as Record<string, unknown>;
   const p = md.prompt as string | undefined;
-  return p?.trim() || "（无提示词）";
+  return p?.trim() || t("（无提示词）");
 }
 
 export function jobMatchesSearch(job: Job, query: string) {
@@ -152,12 +173,14 @@ export type RecoveryToastNotice = {
 function resubmitAction(): RecoveryActionCopy {
   return {
     action: "resubmit",
-    label: "重新生成",
-    title: "重新生成 · 将再次调用 API",
-    loading: "正在重新生成任务",
-    success: "已重新生成",
+    label: t("重新生成"),
+    title: t("重新生成 · 将再次调用 API"),
+    loading: t("正在重新生成任务"),
+    success: t("已重新生成"),
     description: (resultJobId, originalJobId) =>
-      `任务 ${resultJobId || originalJobId} 已进入队列，将再次调用 API。`,
+      t("任务 {p0} 已进入队列，将再次调用 API。", {
+        p0: resultJobId || originalJobId,
+      }),
   };
 }
 
@@ -231,7 +254,7 @@ export function jobOutputErrors(job: Job): JobOutputError[] {
     .filter((slot) => slot.status !== "completed")
     .map((slot) => ({
       index: slot.index,
-      message: slot.error || "未生成",
+      message: slot.error || t("未生成"),
       code: slot.status,
     }));
   const candidates = [
@@ -282,11 +305,11 @@ export function jobRecoveryAction(
   if (recoverability === "recoverable.local_response_cached") {
     return {
       action: "continue_save",
-      label: "继续完成",
-      title: "使用已收到的响应继续完成，不再次调用 API",
-      loading: "正在继续完成任务",
-      success: "已继续完成",
-      description: () => "已使用本地缓存响应完成保存，未再次调用 API。",
+      label: t("继续完成"),
+      title: t("使用已收到的响应继续完成，不再次调用 API"),
+      loading: t("正在继续完成任务"),
+      success: t("已继续完成"),
+      description: () => t("已使用本地缓存响应完成保存，未再次调用 API。"),
     };
   }
   if (recoverability === "recoverable.partial_outputs") {
@@ -295,21 +318,21 @@ export function jobRecoveryAction(
     ).length;
     return {
       action: "fill_missing",
-      label: `生成缺失的 ${Math.max(1, missing)} 张`,
-      title: "只为缺失图片再次调用 API",
-      loading: "正在生成缺失图片",
-      success: "缺失图片已补齐",
-      description: () => "已有图片保持不变，只为缺失槽位发起新请求。",
+      label: t("生成缺失的 {p0} 张", { p0: Math.max(1, missing) }),
+      title: t("只为缺失图片再次调用 API"),
+      loading: t("正在生成缺失图片"),
+      success: t("缺失图片已补齐"),
+      description: () => t("已有图片保持不变，只为缺失槽位发起新请求。"),
     };
   }
   if (recoverability === "recoverable.upload_failed") {
     return {
       action: "reupload",
-      label: "重新上传",
-      title: "不重新生成，只重传本地已有图片",
-      loading: "正在重新上传",
-      success: "已重新上传",
-      description: () => "图片已在本地生成，本次未再次调用 API。",
+      label: t("重新上传"),
+      title: t("不重新生成，只重传本地已有图片"),
+      loading: t("正在重新上传"),
+      success: t("已重新上传"),
+      description: () => t("图片已在本地生成，本次未再次调用 API。"),
     };
   }
   return resubmitAction();
@@ -326,14 +349,18 @@ export function recoveryToastNotice(
     if (status === "partial_failed") {
       return {
         kind: "warning",
-        title: "仍有图片未补齐",
-        description: `任务 ${jobId} 已保存本次成功补齐的图片，但仍有槽位失败。`,
+        title: t("仍有图片未补齐"),
+        description: t("任务 {p0} 已保存本次成功补齐的图片，但仍有槽位失败。", {
+          p0: jobId,
+        }),
       };
     }
     return {
       kind: "error",
-      title: "补齐未完成",
-      description: `任务 ${jobId} 本次补齐失败，请查看错误详情后重试。`,
+      title: t("补齐未完成"),
+      description: t("任务 {p0} 本次补齐失败，请查看错误详情后重试。", {
+        p0: jobId,
+      }),
     };
   }
 
@@ -362,13 +389,18 @@ export function jobCanShowRecoveryAction(
 
 export function jobStatusLabel(job: Job): string {
   if (job.status === "partial_failed") {
-    return `部分成功 ${jobOutputIndexes(job).length}/${plannedOutputCount(job)}`;
+    return t("部分成功 {p0}/{p1}", {
+      p0: jobOutputIndexes(job).length,
+      p1: plannedOutputCount(job),
+    });
   }
-  if (job.status === "completed") return "已完成";
-  if (job.status === "failed") return "失败";
-  if (job.status === "cancelled" || job.status === "canceled") return "已取消";
-  if (job.status === "uploading" || job.status === "running") return "进行中";
-  return "等待中";
+  if (job.status === "completed") return t("已完成");
+  if (job.status === "failed") return t("失败");
+  if (job.status === "cancelled" || job.status === "canceled")
+    return t("已取消");
+  if (job.status === "uploading" || job.status === "running")
+    return t("进行中");
+  return t("等待中");
 }
 
 export function jobErrorMessage(job: Job): string {
@@ -418,9 +450,9 @@ export function jobMetaItems(job: Job): string[] {
   const planned = plannedOutputCount(job);
   const produced = jobOutputIndexes(job).length;
   if (job.status === "partial_failed") {
-    items.push(`${produced}/${planned} 张`);
+    items.push(t("{p0}/{p1} 张", { p0: produced, p1: planned }));
   } else if (planned > 1 || produced > 0) {
-    items.push(`${produced || planned} 张`);
+    items.push(t("{p0} 张", { p0: produced || planned }));
   }
   return items;
 }

@@ -1,3 +1,4 @@
+import { t } from "@/lib/i18n";
 import { Icon, type IconName } from "@/components/icon";
 import { ClassicEditScreen } from "@/components/legacy/classic-edit";
 import { ClassicGenerateScreen } from "@/components/legacy/classic-generate";
@@ -15,17 +16,73 @@ import type { ServerConfig } from "@/lib/types";
 import logoUrl from "@/assets/logo.png";
 
 const NAV: { id: ScreenId; label: string; icon: IconName; kbd: string }[] = [
-  { id: "generate", label: "生成", icon: "generate", kbd: "1" },
-  { id: "edit", label: "编辑", icon: "edit", kbd: "2" },
-  { id: "history", label: "任务", icon: "history", kbd: "3" },
-  { id: "settings", label: "设置", icon: "gear", kbd: "4" },
+  {
+    id: "generate",
+    get label() {
+      return t("生成");
+    },
+    icon: "generate",
+    kbd: "1",
+  },
+  {
+    id: "edit",
+    get label() {
+      return t("编辑");
+    },
+    icon: "edit",
+    kbd: "2",
+  },
+  {
+    id: "history",
+    get label() {
+      return t("任务");
+    },
+    icon: "history",
+    kbd: "3",
+  },
+  {
+    id: "settings",
+    get label() {
+      return t("设置");
+    },
+    icon: "gear",
+    kbd: "4",
+  },
 ];
 
 const TITLES: Record<ScreenId, { title: string; subtitle: string }> = {
-  generate: { title: "图像生成", subtitle: "写提示词，生成候选并保存图片" },
-  edit: { title: "图像编辑", subtitle: "上传参考图、粘贴图片、局部涂抹并提交编辑" },
-  history: { title: "任务", subtitle: "查看正在运行、已完成和失败的生成记录" },
-  settings: { title: "设置", subtitle: "凭证、外观、任务与通知偏好" },
+  generate: {
+    get title() {
+      return t("图像生成");
+    },
+    get subtitle() {
+      return t("写提示词，生成候选并保存图片");
+    },
+  },
+  edit: {
+    get title() {
+      return t("图像编辑");
+    },
+    get subtitle() {
+      return t("上传参考图、粘贴图片、局部涂抹并提交编辑");
+    },
+  },
+  history: {
+    get title() {
+      return t("任务");
+    },
+    get subtitle() {
+      return t("查看正在运行、已完成和失败的生成记录");
+    },
+  },
+  settings: {
+    get title() {
+      return t("设置");
+    },
+    get subtitle() {
+      return t("凭证、外观、任务与通知偏好");
+    },
+  },
 };
 
 function SidebarItem({
@@ -102,18 +159,24 @@ function ClassicSidebar({
             draggable={false}
           />
           <div data-tauri-drag-region className="min-w-0 leading-tight">
-            <div data-tauri-drag-region className="truncate text-[13px] font-semibold tracking-tight">
+            <div
+              data-tauri-drag-region
+              className="truncate text-[13px] font-semibold tracking-tight"
+            >
               GPT Image 2
             </div>
             <div data-tauri-drag-region className="text-[10.5px] text-faint">
-              经典工作台
+              {t("经典工作台")}
             </div>
           </div>
         </div>
       </div>
 
-      <nav className="flex flex-col gap-0.5 px-2 pt-3" aria-label="经典导航">
-        <div className="t-caps px-2.5 py-1.5">工作台</div>
+      <nav
+        className="flex flex-col gap-0.5 px-2 pt-3"
+        aria-label={t("经典导航")}
+      >
+        <div className="t-caps px-2.5 py-1.5">{t("工作台")}</div>
         {NAV.map((item) => (
           <SidebarItem
             key={item.id}
@@ -136,7 +199,7 @@ function ClassicSidebar({
       <div className="flex-1" />
 
       <div className="border-t border-border-faint p-3">
-        <div className="t-caps mb-1.5">默认凭证</div>
+        <div className="t-caps mb-1.5">{t("默认凭证")}</div>
         <div className="flex items-center gap-2 rounded-lg border border-border bg-[color:var(--w-04)] px-2.5 py-2">
           <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md border border-[color:var(--accent-30)] bg-[color:var(--accent-10)]">
             <Icon name="cpu" size={12} style={{ color: "var(--accent)" }} />
@@ -180,10 +243,16 @@ function ClassicToolbar({
         }}
       />
       <div data-tauri-drag-region className="min-w-0 flex-1">
-        <div data-tauri-drag-region className="t-h2 truncate text-foreground tracking-tight">
+        <div
+          data-tauri-drag-region
+          className="t-h2 truncate text-foreground tracking-tight"
+        >
           {meta.title}
         </div>
-        <div data-tauri-drag-region className="t-small mt-px hidden truncate lg:block">
+        <div
+          data-tauri-drag-region
+          className="t-small mt-px hidden truncate lg:block"
+        >
           {meta.subtitle}
         </div>
       </div>
@@ -192,7 +261,7 @@ function ClassicToolbar({
         size="icon"
         icon={light ? "moon" : "sun"}
         onClick={() => setTweaks({ theme: light ? "dark" : "light" })}
-        aria-label={light ? "切换到暗色主题" : "切换到亮色主题"}
+        aria-label={light ? t("切换到暗色主题") : t("切换到亮色主题")}
       />
       <Button
         variant="solidDark"
@@ -200,7 +269,7 @@ function ClassicToolbar({
         icon="sparkle"
         onClick={() => setScreen("generate")}
       >
-        新建生成
+        {t("新建生成")}
       </Button>
     </header>
   );

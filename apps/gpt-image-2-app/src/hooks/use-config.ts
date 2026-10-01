@@ -1,3 +1,4 @@
+import { t } from "@/lib/i18n";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/lib/api";
 import type {
@@ -77,7 +78,7 @@ export function useUpdatePaths() {
   return useMutation({
     mutationFn: (config: PathConfig) => {
       if (!api.updatePaths) {
-        throw new Error("当前运行环境不支持修改本机路径。");
+        throw new Error(t("当前运行环境不支持修改本机路径。"));
       }
       return api.updatePaths(config);
     },
@@ -93,7 +94,7 @@ export function useUpdateStorage() {
   return useMutation({
     mutationFn: (config: StorageConfig) => {
       if (!api.updateStorage) {
-        throw new Error("当前运行环境不支持修改存储配置。");
+        throw new Error(t("当前运行环境不支持修改存储配置。"));
       }
       return api.updateStorage(config);
     },
@@ -119,7 +120,7 @@ export function useTestStorageTarget() {
       target?: StorageTargetConfig;
     }) => {
       if (!api.testStorageTarget) {
-        throw new Error("当前运行环境不支持测试存储目标。");
+        throw new Error(t("当前运行环境不支持测试存储目标。"));
       }
       return api.testStorageTarget(name, target);
     },
@@ -162,7 +163,7 @@ export function useOpenLogsDir() {
   return useMutation({
     mutationFn: () => {
       if (!api.openLogsDir) {
-        throw new Error("当前运行环境不支持打开日志文件夹。");
+        throw new Error(t("当前运行环境不支持打开日志文件夹。"));
       }
       return api.openLogsDir();
     },

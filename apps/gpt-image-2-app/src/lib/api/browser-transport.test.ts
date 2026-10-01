@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { browserApi, __resetBrowserApiForTests } from "./browser-transport";
 import type { ProviderConfig, StorageConfig } from "../types";
 import { configuredRelayBase } from "./browser/relay-client";
+import { setLanguagePreference } from "../i18n";
 
 type CapturedRequest = {
   url: string;
@@ -83,6 +84,7 @@ function installBrowserGlobals(overrides: Record<string, unknown> = {}) {
 
 describe("browserApi", () => {
   beforeEach(async () => {
+    setLanguagePreference("zh-CN");
     installBrowserGlobals();
     await __resetBrowserApiForTests();
   });

@@ -1,3 +1,4 @@
+import { t, getLocale } from "@/lib/i18n";
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { Icon } from "@/components/icon";
@@ -58,7 +59,10 @@ export function ClassicGenerateScreen({
   onOpenEdit?: () => void;
   onOpenHistory?: () => void;
 }) {
-  const providerNames = useMemo(() => readProviderNames(config), [config]);
+  const providerNames = useMemo(
+    () => readProviderNames(config),
+    [config, getLocale()],
+  );
   const [prompt, setPrompt] = useState("");
   const [provider, setProvider] = useState("");
   const [userSelectedProvider, setUserSelectedProvider] = useState(false);
@@ -109,18 +113,18 @@ export function ClassicGenerateScreen({
   const handleRun = async () => {
     if (!provider || isSubmitting) return;
     if (!prompt.trim()) {
-      toast.error("请输入提示词");
+      toast.error(t("请输入提示词"));
       return;
     }
     if (parameterError) {
-      toast.error("参数无效", { description: parameterError });
+      toast.error(t("参数无效"), { description: parameterError });
       return;
     }
 
     const normalizedSize = sizeValidation.normalized ?? size;
     const plannedN = effectiveOutputCount(config, provider, safeN);
     const requestedN = requestOutputCount(config, provider, safeN);
-    const toastId = toast.loading("正在提交任务", {
+    const toastId = toast.loading(t("正在提交任务"), {
       description: `${provider} · ${normalizedSize} · ${quality}`,
     });
 
@@ -145,29 +149,35 @@ export function ClassicGenerateScreen({
         },
       });
       const queued =
-        res.queued ||
-        Boolean(res.job && isActiveJobStatus(res.job.status));
+        res.queued || Boolean(res.job && isActiveJobStatus(res.job.status));
       const actualCount = queued ? plannedN : responseOutputCount(res);
       setJobId(res.job_id);
       setOutputCount(Math.max(1, actualCount));
       if (queued) {
-        toast.success(plannedN > 1 ? `已开始生成 ${plannedN} 张` : "已开始生成", {
-          id: toastId,
-          description: "旧工作台里会继续显示占位图，完成后可在任务里查看。",
-          duration: 4_000,
-        });
+        toast.success(
+          plannedN > 1
+            ? t("已开始生成 {p0} 张", { p0: plannedN })
+            : t("已开始生成"),
+          {
+            id: toastId,
+            description: t(
+              "旧工作台里会继续显示占位图，完成后可在任务里查看。",
+            ),
+            duration: 4_000,
+          },
+        );
       } else {
-        toast.success("生成完成", {
+        toast.success(t("生成完成"), {
           id: toastId,
           description:
             outputCountMismatchMessage(actualCount, plannedN) ??
-            "图片已生成并保存。",
+            t("图片已生成并保存。"),
         });
       }
     } catch (error) {
       const message = errorMessage(error);
       setRunError(message);
-      toast.error("生成失败", { id: toastId, description: message });
+      toast.error(t("生成失败"), { id: toastId, description: message });
     } finally {
       setPlannedOutputCount(null);
     }
@@ -182,13 +192,13 @@ export function ClassicGenerateScreen({
       selected: index === selectedOutput,
       seed: index * 31 + outputRefreshKey,
     }));
-  }, [jobId, outputCount, selectedOutput, outputRefreshKey]);
+  }, [jobId, outputCount, selectedOutput, outputRefreshKey, getLocale()]);
   const outputPaths = useMemo(() => {
     if (!jobId || outputCount < 1) return [];
     return Array.from({ length: outputCount })
       .map((_, index) => api.outputPath(jobId, index))
       .filter((path): path is string => Boolean(path));
-  }, [jobId, outputCount, outputRefreshKey]);
+  }, [jobId, outputCount, outputRefreshKey, getLocale()]);
   const selectedPath = jobId
     ? (api.outputPath(jobId, selectedOutput) ?? outputPaths[0])
     : undefined;
@@ -203,12 +213,15 @@ export function ClassicGenerateScreen({
         <section className="surface-panel min-h-0 overflow-hidden p-3">
           <div className="mb-3 flex items-center justify-between gap-3">
             <div>
-              <div className="t-h3">输出预览</div>
-              <div className="t-small">生成结果会按候选顺序保留在这里。</div>
+              <div className="t-h3">{t("输出预览")}</div>
+              <div className="t-small">
+                {t("生成结果会按候选顺序保留在这里。")}
+              </div>
             </div>
             {displayCount > 0 && (
               <Badge tone={isWorking ? "running" : "accent"} size="sm">
-                {isWorking ? "进行中" : "本次输出"} · {displayCount} 张
+                {isWorking ? t("进行中") : t("本次输出")} · {displayCount}{" "}
+                {t("张")}
               </Badge>
             )}
           </div>
@@ -221,9 +234,11 @@ export function ClassicGenerateScreen({
                     key={output.index}
                     output={output}
                     onSelect={() => setSelectedOutput(output.index)}
-                    onDownload={() => saveImages([selectedPath], "图片")}
+                    onDownload={() => saveImages([selectedPath], t("图片"))}
                     onOpen={
-                      selectedPath ? () => void openPath(selectedPath) : undefined
+                      selectedPath
+                        ? () => void openPath(selectedPath)
+                        : undefined
                     }
                   />
                 ))}
@@ -232,8 +247,10 @@ export function ClassicGenerateScreen({
               <div className="flex h-full items-center justify-center">
                 <Empty
                   icon="generate"
-                  title="还没有输出"
-                  subtitle="右侧写提示词并提交，经典工作台会把本次结果展示在这里。"
+                  title={t("还没有输出")}
+                  subtitle={t(
+                    "右侧写提示词并提交，经典工作台会把本次结果展示在这里。",
+                  )}
                 />
               </div>
             )}
@@ -243,16 +260,16 @@ export function ClassicGenerateScreen({
         <aside className="parameter-shelf surface-panel min-h-0 overflow-hidden">
           <div className="parameter-scroll p-3">
             <div className="mb-3 flex items-center gap-2">
+              <Button variant="ghost" size="sm" active icon="generate">
+                {t("生成")}
+              </Button>
               <Button
                 variant="ghost"
                 size="sm"
-                active
-                icon="generate"
+                icon="edit"
+                onClick={onOpenEdit}
               >
-                生成
-              </Button>
-              <Button variant="ghost" size="sm" icon="edit" onClick={onOpenEdit}>
-                编辑
+                {t("编辑")}
               </Button>
             </div>
 
@@ -272,15 +289,15 @@ export function ClassicGenerateScreen({
 
             {noProviders && (
               <div className="mb-3 rounded-md border border-border bg-sunken px-3 py-2 text-[12px] text-muted">
-                先在「设置 → 凭证」里添加一个 API Key，才能开始生成。
+                {t("先在「设置 → 凭证」里添加一个 API Key，才能开始生成。")}
               </div>
             )}
 
-            <Field label="提示词">
+            <Field label={t("提示词")}>
               <Textarea
                 value={prompt}
                 onChange={(event) => setPrompt(event.target.value)}
-                placeholder="描述你想生成的图像..."
+                placeholder={t("描述你想生成的图像...")}
                 minHeight={132}
               />
               <div className="mt-1.5 text-right font-mono text-[11px] text-faint">
@@ -288,7 +305,7 @@ export function ClassicGenerateScreen({
               </div>
             </Field>
 
-            <Field label="凭证">
+            <Field label={t("凭证")}>
               <GlassSelect
                 value={provider}
                 onValueChange={(value) => {
@@ -300,11 +317,14 @@ export function ClassicGenerateScreen({
                   label: name,
                 }))}
                 disabled={providerNames.length === 0}
-                placeholder="（无可用凭证）"
+                placeholder={t("（无可用凭证）")}
               />
             </Field>
 
-            <Field label="尺寸" error={!sizeValidation.ok ? sizeValidation.message : undefined}>
+            <Field
+              label={t("尺寸")}
+              error={!sizeValidation.ok ? sizeValidation.message : undefined}
+            >
               <GlassCombobox
                 value={size}
                 onValueChange={setSize}
@@ -315,14 +335,14 @@ export function ClassicGenerateScreen({
             </Field>
 
             <div className="grid grid-cols-2 gap-2">
-              <Field label="质量">
+              <Field label={t("质量")}>
                 <GlassSelect
                   value={quality}
                   onValueChange={setQuality}
                   options={QUALITY_OPTIONS}
                 />
               </Field>
-              <Field label="格式">
+              <Field label={t("格式")}>
                 <GlassSelect
                   value={format}
                   onValueChange={setFormat}
@@ -330,7 +350,7 @@ export function ClassicGenerateScreen({
                 />
               </Field>
               <Field
-                label="数量"
+                label={t("数量")}
                 error={
                   supportsMultipleOutputs || outputCountValidation.ok
                     ? undefined
@@ -358,17 +378,21 @@ export function ClassicGenerateScreen({
               onClick={handleRun}
               className="w-full justify-center"
             >
-              {isSubmitting ? "提交中" : "生成"}
+              {isSubmitting ? t("提交中") : t("生成")}
             </Button>
             <div className="mt-2 flex items-center justify-between text-[11px] text-faint">
-              <span>{supportsMultipleOutputs ? `计划输出 ${safeN} 张` : "当前凭证只输出 1 张"}</span>
+              <span>
+                {supportsMultipleOutputs
+                  ? t("计划输出 {p0} 张", { p0: safeN })
+                  : t("当前凭证只输出 1 张")}
+              </span>
               <button
                 type="button"
                 onClick={onOpenHistory}
                 className="inline-flex items-center gap-1 hover:text-foreground"
               >
                 <Icon name="history" size={12} />
-                任务
+                {t("任务")}
               </button>
             </div>
           </div>

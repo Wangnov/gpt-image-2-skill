@@ -1,3 +1,4 @@
+import { t } from "@/lib/i18n";
 import { api } from "@/lib/api";
 import { inferImageMime } from "./mime";
 import type { ImageAsset } from "./types";
@@ -25,7 +26,7 @@ export async function copyImageToClipboard(
 
   if (api.kind === "tauri") {
     if (!asset.path) {
-      throw new Error("Tauri 模式需要本地文件路径来复制图片。");
+      throw new Error(t("Tauri 模式需要本地文件路径来复制图片。"));
     }
     await api.copyImageToClipboard(
       asset.path,
@@ -42,7 +43,7 @@ export async function copyImageToClipboard(
   // declare the right ClipboardItem key (PNG / JPEG / WEBP / GIF) — a
   // mismatched declaration silently breaks paste targets on some browsers.
   if (typeof ClipboardItem === "undefined") {
-    throw new Error("浏览器不支持 ClipboardItem，无法复制图片。");
+    throw new Error(t("浏览器不支持 ClipboardItem，无法复制图片。"));
   }
   const mime = inferImageMime(asset);
   const items: Record<string, Blob | Promise<Blob>> = {
@@ -57,7 +58,7 @@ export async function copyImageToClipboard(
 async function fetchAsBlob(src: string, expectedMime: string): Promise<Blob> {
   const response = await fetch(src);
   if (!response.ok) {
-    throw new Error(`无法读取图片：HTTP ${response.status}`);
+    throw new Error(t("无法读取图片：HTTP {p0}", { p0: response.status }));
   }
   const raw = await response.blob();
   // If the server / blob URL returned a mime that doesn't match what the

@@ -1,3 +1,4 @@
+import { t } from "@/lib/i18n";
 import { type RefObject } from "react";
 import { Icon } from "@/components/icon";
 import { Button } from "@/components/ui/button";
@@ -33,9 +34,9 @@ export function ClassicEditReferencePanel({
     <section className="edit-refs surface-panel flex min-h-0 flex-col overflow-hidden">
       <header className="flex items-center justify-between border-b border-border-faint px-3 py-2.5">
         <div>
-          <div className="t-h3">参考图</div>
+          <div className="t-h3">{t("参考图")}</div>
           <div className="t-small">
-            {refs.length}/{maxReferenceImages} · 可拖拽或粘贴
+            {refs.length}/{maxReferenceImages} {t("· 可拖拽或粘贴")}
           </div>
         </div>
         <Button
@@ -44,7 +45,7 @@ export function ClassicEditReferencePanel({
           icon="plus"
           onClick={() => fileInputRef.current?.click()}
           disabled={refs.length >= maxReferenceImages}
-          aria-label="添加参考图"
+          aria-label={t("添加参考图")}
         />
         <input
           ref={fileInputRef}
@@ -67,9 +68,9 @@ export function ClassicEditReferencePanel({
             className="flex min-h-[132px] w-full flex-col items-center justify-center gap-2 rounded-lg border border-dashed border-border-strong bg-[color:var(--w-02)] p-4 text-center text-muted hover:border-foreground/30 hover:text-foreground"
           >
             <Icon name="upload" size={22} />
-            <span className="text-[13px] font-semibold">添加参考图</span>
+            <span className="text-[13px] font-semibold">{t("添加参考图")}</span>
             <span className="max-w-[220px] text-[11.5px]">
-              拖进这里，或直接粘贴剪贴板图片。
+              {t("拖进这里，或直接粘贴剪贴板图片。")}
             </span>
           </button>
         ) : (

@@ -1,3 +1,4 @@
+import { t } from "@/lib/i18n";
 import {
   useEffect,
   useRef,
@@ -430,7 +431,10 @@ export function MaskCanvas({
         height={H}
         tabIndex={0}
         role="application"
-        aria-label={`选区绘制画布（${activeTool === "erase" ? "擦除模式" : "绘制模式"}）。拖动指针涂抹；键盘可用方向键移动，空格绘制，Delete 清除。`}
+        aria-label={t(
+          "选区绘制画布（{p0}）。拖动指针涂抹；键盘可用方向键移动，空格绘制，Delete 清除。",
+          { p0: activeTool === "erase" ? t("擦除模式") : t("绘制模式") },
+        )}
         onKeyDown={handleKey}
         onPointerDown={(e) => {
           if (interactionMode === "pan" || e.button === 1) {

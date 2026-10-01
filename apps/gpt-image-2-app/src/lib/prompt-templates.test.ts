@@ -1,4 +1,5 @@
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { setLanguagePreference } from "./i18n";
 import {
   defaultPromptTemplateState,
   importPromptTemplates,
@@ -26,6 +27,7 @@ function installStorage() {
 }
 
 describe("prompt templates", () => {
+  beforeEach(() => setLanguagePreference("zh-CN"));
   afterEach(() => {
     vi.unstubAllGlobals();
   });
