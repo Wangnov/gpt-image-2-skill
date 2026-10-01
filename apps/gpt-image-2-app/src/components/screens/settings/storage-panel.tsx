@@ -1,3 +1,4 @@
+import { t, getLocale } from "@/lib/i18n";
 import {
   useEffect,
   useMemo,
@@ -117,7 +118,7 @@ export function StoragePanel({
   // mode/origin/archives picks haven't been persisted yet.
   const isDirty = useMemo(
     () => JSON.stringify(draft) !== JSON.stringify(cloneStorageConfig(storage)),
-    [draft, storage],
+    [draft, storage, getLocale()],
   );
   const { data: configPaths } = useQuery<ConfigPaths>({
     queryKey: ["config-paths"],
@@ -312,7 +313,7 @@ export function StoragePanel({
     setSaveAttempted(true);
     const issue = storageConfigIssue(draft, { requireLocalDirectory });
     if (issue) {
-      toast.warning("存储配置未完成", { description: issue });
+      toast.warning(t("存储配置未完成"), { description: issue });
       return;
     }
     try {
@@ -322,9 +323,9 @@ export function StoragePanel({
       setDraft(cloneStorageConfig(saved.storage));
       setSaveAttempted(false);
       setTestedTargets(new Set());
-      toast.success("结果存储已保存");
+      toast.success(t("结果存储已保存"));
     } catch (error) {
-      toast.error("保存结果存储失败", {
+      toast.error(t("保存结果存储失败"), {
         description: error instanceof Error ? error.message : String(error),
       });
     }
@@ -341,7 +342,7 @@ export function StoragePanel({
       requireLocalDirectory,
     });
     if (issue) {
-      toast.warning("测试失败", { description: issue });
+      toast.warning(t("测试失败"), { description: issue });
       return;
     }
     try {
@@ -350,12 +351,12 @@ export function StoragePanel({
         target: normalizeStorageTargetForSave(draft.targets[name]),
       });
       if (result.ok) {
-        toast.success("存储目标可用", { description: result.message });
+        toast.success(t("存储目标可用"), { description: result.message });
       } else {
-        toast.warning("存储目标不可用", { description: result.message });
+        toast.warning(t("存储目标不可用"), { description: result.message });
       }
     } catch (error) {
-      toast.error("测试存储目标失败", {
+      toast.error(t("测试存储目标失败"), {
         description: error instanceof Error ? error.message : String(error),
       });
     }
@@ -374,8 +375,8 @@ export function StoragePanel({
     policy?.message ||
     (policyManaged
       ? policy.allow_user_overrides
-        ? "管理员提供了默认存储策略，你可以按需要调整。"
-        : "存储策略由管理员管理，当前配置会按策略锁定 Origin、归档和模式。"
+        ? t("管理员提供了默认存储策略，你可以按需要调整。")
+        : t("存储策略由管理员管理，当前配置会按策略锁定 Origin、归档和模式。")
       : "");
   const originEligibleEntries = strategyTargetEntries.filter(([, target]) =>
     canActAsOrigin(target),
@@ -393,7 +394,7 @@ export function StoragePanel({
   // "本地" semantics flips between Tauri (= the user's laptop) and HTTP (=
   // the server the docker container runs on); the rest of this panel needs
   // the same disambiguation everywhere it says 本地原图 / 本机原图.
-  const localOriginTerm = copy.kind === "http" ? "服务器" : "本机";
+  const localOriginTerm = copy.kind === "http" ? t("服务器") : t("本机");
 
   return (
     <div className="flex-1 min-h-0 overflow-auto p-4 sm:p-5 space-y-4">
@@ -402,33 +403,35 @@ export function StoragePanel({
       )}
 
       <Section
-        title="结果归档策略"
+        title={t("结果归档策略")}
         description={
           copy.kind === "browser"
-            ? "网页版只存在浏览器本地，要上传云端请用桌面 App 或自建后端。"
-            : "选择原图存放在哪儿，以及要不要复制到其他位置。"
+            ? t("网页版只存在浏览器本地，要上传云端请用桌面 App 或自建后端。")
+            : t("选择原图存放在哪儿，以及要不要复制到其他位置。")
         }
       >
         {policyManaged && (
           <Row
             title={
-              policy.allow_user_overrides ? "管理员默认值" : "由管理员管理"
+              policy.allow_user_overrides
+                ? t("管理员默认值")
+                : t("由管理员管理")
             }
             description={policyMessage}
             control={
               <ControlRail>
                 <div className="rounded-md border border-[color:var(--accent-25)] bg-[color:var(--accent-08)] px-3 py-2 text-[12px] leading-snug text-muted">
                   {policy.allow_user_overrides
-                    ? "管理员提供了默认策略，你仍可按当前工作流调整。"
-                    : "管理员策略会在保存和任务执行时保持生效。"}
+                    ? t("管理员提供了默认策略，你仍可按当前工作流调整。")
+                    : t("管理员策略会在保存和任务执行时保持生效。")}
                 </div>
               </ControlRail>
             }
           />
         )}
         <Row
-          title="模式"
-          description="决定原图位置和归档行为。"
+          title={t("模式")}
+          description={t("决定原图位置和归档行为。")}
           control={
             <div className="w-full sm:w-[520px] space-y-2">
               <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
@@ -437,7 +440,8 @@ export function StoragePanel({
                   const active = pipeline.mode === option.value;
                   const disabled =
                     policyLocksMode ||
-                    option.value === "cloud_primary" && !cloudPrimaryAvailable;
+                    (option.value === "cloud_primary" &&
+                      !cloudPrimaryAvailable);
                   return (
                     <button
                       key={option.value}
@@ -446,7 +450,9 @@ export function StoragePanel({
                       onClick={() => setPipelineMode(option.value)}
                       title={
                         disabled
-                          ? "需要先在下方添加一个支持回读的存储位置（local / S3 / WebDAV / SFTP）。"
+                          ? t(
+                              "需要先在下方添加一个支持回读的存储位置（local / S3 / WebDAV / SFTP）。",
+                            )
                           : undefined
                       }
                       className={cn(
@@ -472,9 +478,9 @@ export function StoragePanel({
               </div>
               {!cloudPrimaryAvailable && (
                 <p className="text-[11.5px] text-faint leading-snug">
-                  「云端为主」需要先在下方「位置列表」添加一个支持回读的存储（local
-                  / S3 / WebDAV / SFTP），仅推送的目标（如
-                  HTTP/Webhook）不能作为原图。
+                  {t(
+                    "「云端为主」需要先在下方「位置列表」添加一个支持回读的存储（local / S3 / WebDAV / SFTP），仅推送的目标（如 HTTP/Webhook）不能作为原图。",
+                  )}
                 </p>
               )}
             </div>
@@ -482,23 +488,26 @@ export function StoragePanel({
         />
         {pipeline.mode === "cloud_primary" && (
           <Row
-            title="云端原图位置"
-            description="必须是支持回读的存储类型；HTTP/Webhook 等仅推送的目标不可作为原图。"
+            title={t("云端原图位置")}
+            description={t(
+              "必须是支持回读的存储类型；HTTP/Webhook 等仅推送的目标不可作为原图。",
+            )}
             control={
               <ControlRail>
                 {originOptions.length === 0 ? (
                   <span className="text-[12px] text-muted">
-                    没有可用的原图位置；请先在下方添加一个支持回读的存储（local
-                    / S3 / WebDAV / SFTP）。
+                    {t(
+                      "没有可用的原图位置；请先在下方添加一个支持回读的存储（local / S3 / WebDAV / SFTP）。",
+                    )}
                   </span>
                 ) : (
                   <GlassSelect
                     value={pipeline.origin ?? ""}
                     onValueChange={(value) => setPipelineOrigin(value || null)}
                     options={originOptions}
-                    placeholder="请选择原图位置"
+                    placeholder={t("请选择原图位置")}
                     size="sm"
-                    ariaLabel="云端原图位置"
+                    ariaLabel={t("云端原图位置")}
                     disabled={policyLocksOrigin}
                     className="w-full sm:w-[280px]"
                   />
@@ -511,17 +520,17 @@ export function StoragePanel({
           <Row
             title={
               pipeline.mode === "mirror"
-                ? "归档目标"
+                ? t("归档目标")
                 : pipeline.mode === "cloud_primary"
-                  ? "额外归档"
-                  : "推送目标"
+                  ? t("额外归档")
+                  : t("推送目标")
             }
             description={
               pipeline.mode === "mirror"
-                ? "任务完成后，会复制到这里。"
+                ? t("任务完成后，会复制到这里。")
                 : pipeline.mode === "cloud_primary"
-                  ? "除原图外，还要异步复制到这些位置（可选）。"
-                  : "任务完成后推送到这些位置。"
+                  ? t("除原图外，还要异步复制到这些位置（可选）。")
+                  : t("任务完成后推送到这些位置。")
             }
             control={
               <ControlRail className="flex flex-wrap items-center gap-2">
@@ -536,12 +545,12 @@ export function StoragePanel({
                 ))}
                 {archiveEntries.length === 0 && (
                   <span className="text-[12px] text-muted">
-                    暂无可选归档位置。
+                    {t("暂无可选归档位置。")}
                   </span>
                 )}
                 {remoteDraftCount > 0 && (
                   <span className="text-[12px] text-faint">
-                    {remoteDraftCount} 个云端位置已配置但不启用。
+                    {remoteDraftCount} {t("个云端位置已配置但不启用。")}
                   </span>
                 )}
               </ControlRail>
@@ -549,11 +558,13 @@ export function StoragePanel({
           />
         )}
         <Row
-          title="清理策略"
+          title={t("清理策略")}
           description={
             pipeline.mode === "cloud_primary"
-              ? `${localOriginTerm}缓存会在远端 Origin 与归档均完成后才清理。`
-              : "只有云端为主模式会自动清理本地缓存。"
+              ? t("{p0}缓存会在远端 Origin 与归档均完成后才清理。", {
+                  p0: localOriginTerm,
+                })
+              : t("只有云端为主模式会自动清理本地缓存。")
           }
           control={
             <ControlRail>
@@ -575,7 +586,7 @@ export function StoragePanel({
                   disabled: option.disabled,
                 }))}
                 size="sm"
-                ariaLabel="清理策略"
+                ariaLabel={t("清理策略")}
                 disabled={policyLocked}
                 className="w-full sm:w-[240px]"
               />
@@ -592,7 +603,7 @@ export function StoragePanel({
                   }
                   inputMode="numeric"
                   size="sm"
-                  aria-label="保留天数"
+                  aria-label={t("保留天数")}
                   disabled={policyLocked}
                   wrapperClassName="w-full sm:w-[120px]"
                 />
@@ -610,7 +621,7 @@ export function StoragePanel({
                   }
                   inputMode="numeric"
                   size="sm"
-                  aria-label="本地缓存上限 GB"
+                  aria-label={t("本地缓存上限 GB")}
                   disabled={policyLocked}
                   wrapperClassName="w-full sm:w-[140px]"
                 />
@@ -619,8 +630,8 @@ export function StoragePanel({
           }
         />
         <Row
-          title="并行上传图片数"
-          description="一次最多同时上传几张图。"
+          title={t("并行上传图片数")}
+          description={t("一次最多同时上传几张图。")}
           control={
             <ControlRail>
               <Input
@@ -632,7 +643,7 @@ export function StoragePanel({
                 }
                 inputMode="numeric"
                 size="sm"
-                aria-label="并行上传图片数"
+                aria-label={t("并行上传图片数")}
                 disabled={policyLocked}
                 wrapperClassName="w-full sm:w-[120px]"
               />
@@ -640,8 +651,8 @@ export function StoragePanel({
           }
         />
         <Row
-          title="同图并行位置数"
-          description="同一张图最多同时传到几个位置。"
+          title={t("同图并行位置数")}
+          description={t("同一张图最多同时传到几个位置。")}
           control={
             <ControlRail>
               <Input
@@ -653,7 +664,7 @@ export function StoragePanel({
                 }
                 inputMode="numeric"
                 size="sm"
-                aria-label="同图并行位置数"
+                aria-label={t("同图并行位置数")}
                 disabled={policyLocked}
                 wrapperClassName="w-full sm:w-[120px]"
               />
@@ -662,7 +673,7 @@ export function StoragePanel({
         />
       </Section>
 
-      <Section title="位置列表">
+      <Section title={t("位置列表")}>
         <div className="space-y-3 px-4 py-3.5 sm:px-5">
           {targetEntries.map(([name, target]) => {
             const targetIssues = visibleStorageTargetIssues(
@@ -696,12 +707,12 @@ export function StoragePanel({
               disabled={policyLocked}
               onClick={addTarget}
             >
-              添加上传位置
+              {t("添加上传位置")}
             </Button>
           </div>
           {targetOptions.length > 0 && (
             <div className="text-[11px] text-faint">
-              当前上传位置：
+              {t("当前上传位置：")}
               {targetOptions.map((item) => item.label).join(" / ")}
             </div>
           )}

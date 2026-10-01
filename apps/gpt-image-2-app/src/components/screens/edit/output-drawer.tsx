@@ -1,3 +1,4 @@
+import { t } from "@/lib/i18n";
 import * as RadixDialog from "@radix-ui/react-dialog";
 import { Image as ImageIcon, Loader2, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -50,7 +51,7 @@ export function OutputDrawer({
             background:
               "linear-gradient(135deg, rgba(var(--accent-rgb), 0.2), rgba(var(--accent-2-rgb), 0.14)), var(--bg-raised)",
           }}
-          aria-label="打开输出抽屉"
+          aria-label={t("打开输出抽屉")}
         >
           {isWorking ? (
             <Loader2 size={13} className="animate-spin" />
@@ -58,7 +59,9 @@ export function OutputDrawer({
             <ImageIcon size={13} />
           )}
           <span>
-            {isWorking ? `生成中 · ${displayN} 张` : `输出 · ${outputs.length} 张`}
+            {isWorking
+              ? t("生成中 · {p0} 张", { p0: displayN })
+              : t("输出 · {p0} 张", { p0: outputs.length })}
           </span>
         </button>
       </RadixDialog.Trigger>
@@ -77,7 +80,9 @@ export function OutputDrawer({
         >
           <div className="flex min-w-0 items-center gap-2 border-b border-[color:var(--w-06)] px-4 py-3">
             <RadixDialog.Title className="shrink-0 text-[13px] font-semibold text-foreground">
-              {isWorking ? `生成中 · ${displayN} 张` : `输出 · ${outputs.length} 张`}
+              {isWorking
+                ? t("生成中 · {p0} 张", { p0: displayN })
+                : t("输出 · {p0} 张", { p0: outputs.length })}
             </RadixDialog.Title>
             <div className="min-w-0 flex-1" />
             {hasOutputs && (
@@ -107,7 +112,7 @@ export function OutputDrawer({
                     icon="folder"
                     onClick={() => revealPath(selectedPath)}
                   >
-                    位置
+                    {t("位置")}
                   </Button>
                 )}
               </>
@@ -116,7 +121,7 @@ export function OutputDrawer({
               <button
                 type="button"
                 className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-muted transition-colors hover:bg-[color:var(--w-06)] hover:text-foreground"
-                aria-label="关闭输出抽屉"
+                aria-label={t("关闭输出抽屉")}
               >
                 <X size={14} />
               </button>
@@ -167,10 +172,12 @@ export function OutputDrawer({
                         onDownload={() =>
                           saveImages(
                             [api.outputPath(jobId, output.index)],
-                            "图片",
+                            t("图片"),
                           )
                         }
-                        onOpen={() => openPath(api.outputPath(jobId, output.index))}
+                        onOpen={() =>
+                          openPath(api.outputPath(jobId, output.index))
+                        }
                         onSendToEdit={() =>
                           sendImageToEdit({
                             jobId,

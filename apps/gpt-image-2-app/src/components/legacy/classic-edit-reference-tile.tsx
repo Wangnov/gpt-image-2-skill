@@ -1,3 +1,4 @@
+import { t } from "@/lib/i18n";
 import { Icon } from "@/components/icon";
 import { cn } from "@/lib/cn";
 import type { RefWithFile } from "@/components/screens/edit/shared";
@@ -69,7 +70,7 @@ export function ClassicEditReferenceTile({
               : undefined
           }
         >
-          {role === "target" ? "目标" : "参考"}
+          {role === "target" ? t("目标") : t("参考")}
         </span>
       )}
       {hasMask && (
@@ -78,7 +79,7 @@ export function ClassicEditReferenceTile({
           style={{ background: "var(--accent)", color: "var(--accent-on)" }}
         >
           <Icon name="mask" size={10} />
-          遮罩
+          {t("遮罩")}
         </span>
       )}
       {onSetTarget && role !== "target" && (
@@ -90,7 +91,7 @@ export function ClassicEditReferenceTile({
           }}
           className="image-overlay absolute bottom-1.5 left-1.5 rounded px-2 py-1 text-[11px] font-semibold opacity-0 transition-opacity group-hover:opacity-100"
         >
-          设为目标
+          {t("设为目标")}
         </button>
       )}
       <button
@@ -100,7 +101,7 @@ export function ClassicEditReferenceTile({
           onRemove();
         }}
         className="image-overlay absolute bottom-1.5 right-1.5 flex h-7 w-7 items-center justify-center rounded opacity-0 transition-opacity group-hover:opacity-100"
-        aria-label={`删除 ${ref_.name}`}
+        aria-label={t("删除 {p0}", { p0: ref_.name })}
       >
         <Icon name="x" size={12} />
       </button>

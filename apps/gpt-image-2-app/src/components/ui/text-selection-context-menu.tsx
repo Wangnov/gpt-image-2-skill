@@ -1,3 +1,4 @@
+import { t } from "@/lib/i18n";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { toast } from "sonner";
@@ -117,7 +118,7 @@ export function TextSelectionContextMenu() {
     try {
       await navigator.clipboard.writeText(capture.selectedText);
     } catch (error) {
-      toast.error("复制失败", {
+      toast.error(t("复制失败"), {
         description: error instanceof Error ? error.message : String(error),
       });
     }
@@ -130,7 +131,7 @@ export function TextSelectionContextMenu() {
     try {
       await navigator.clipboard.writeText(selectedText);
     } catch (error) {
-      toast.error("剪切失败", {
+      toast.error(t("剪切失败"), {
         description: error instanceof Error ? error.message : String(error),
       });
       return close();
@@ -196,26 +197,26 @@ export function TextSelectionContextMenu() {
     >
       {isEditable ? (
         <MenuButton
-          label="剪切"
+          label={t("剪切")}
           shortcut="⌘X"
           disabled={!hasSelection}
           onSelect={onCut}
         />
       ) : null}
       <MenuButton
-        label="复制"
+        label={t("复制")}
         shortcut="⌘C"
         disabled={!hasSelection}
         onSelect={onCopy}
       />
       {isEditable ? (
-        <MenuButton label="粘贴" shortcut="⌘V" onSelect={onPaste} />
+        <MenuButton label={t("粘贴")} shortcut="⌘V" onSelect={onPaste} />
       ) : null}
       <div
         className="my-1 h-px"
         style={{ background: "var(--border-faint)" }}
       />
-      <MenuButton label="全选" shortcut="⌘A" onSelect={onSelectAll} />
+      <MenuButton label={t("全选")} shortcut="⌘A" onSelect={onSelectAll} />
     </div>,
     document.body,
   );
@@ -253,7 +254,8 @@ function replaceInputRange(
   // Fallback for environments where execCommand is gone — synthetic value
   // mutation. This bypasses the undo stack but at least leaves the input
   // and React state consistent.
-  const next = element.value.slice(0, start) + insert + element.value.slice(end);
+  const next =
+    element.value.slice(0, start) + insert + element.value.slice(end);
   const proto = Object.getPrototypeOf(element);
   const setter = Object.getOwnPropertyDescriptor(proto, "value")?.set;
   if (setter) {

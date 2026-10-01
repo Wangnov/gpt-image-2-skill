@@ -1,3 +1,4 @@
+import { t } from "@/lib/i18n";
 import { type KeyboardEvent } from "react";
 import { motion } from "motion/react";
 import { Icon } from "@/components/icon";
@@ -28,8 +29,12 @@ export function ReferenceImageCard({
 }) {
   const reducedMotion = useReducedMotion();
   const roleLabel =
-    role === "target" ? "目标图" : role === "reference" ? "参考图" : "参考图";
-  const ariaLabel = `${roleLabel}：${ref_.name}${ref_.hasMask ? "，已绘制遮罩" : ""}`;
+    role === "target"
+      ? t("目标图")
+      : role === "reference"
+        ? t("参考图")
+        : t("参考图");
+  const ariaLabel = `${roleLabel}：${ref_.name}${ref_.hasMask ? t("，已绘制遮罩") : ""}`;
 
   const handleKey = (event: KeyboardEvent<HTMLDivElement>) => {
     if (event.target !== event.currentTarget) return;
@@ -56,9 +61,7 @@ export function ReferenceImageCard({
       aria-pressed={Boolean(active)}
       onClick={onSelect}
       onKeyDown={handleKey}
-      initial={
-        reducedMotion ? false : { opacity: 0, scale: 0.96, y: 3 }
-      }
+      initial={reducedMotion ? false : { opacity: 0, scale: 0.96, y: 3 }}
       animate={{ opacity: 1, scale: 1, y: 0 }}
       whileTap={reducedMotion ? undefined : { scale: 0.985 }}
       transition={{ duration: 0.18, ease: [0.22, 1, 0.36, 1] }}
@@ -90,12 +93,12 @@ export function ReferenceImageCard({
           className="absolute top-1.5 right-1.5 px-1.5 py-0.5 rounded text-[10px] font-semibold"
           style={{ background: "var(--accent)", color: "var(--accent-on)" }}
         >
-          目标
+          {t("目标")}
         </div>
       )}
       {role === "reference" && (
         <div className="image-overlay-soft absolute top-1.5 right-1.5 rounded px-1.5 py-0.5 text-[10px] font-semibold">
-          参考
+          {t("参考")}
         </div>
       )}
       {ref_.hasMask && (
@@ -104,7 +107,7 @@ export function ReferenceImageCard({
           style={{ background: "var(--accent)", color: "var(--accent-on)" }}
         >
           <Icon name="mask" size={10} aria-hidden="true" />
-          遮罩
+          {t("遮罩")}
         </div>
       )}
       {onSetTarget && role !== "target" && (
@@ -114,10 +117,10 @@ export function ReferenceImageCard({
             e.stopPropagation();
             onSetTarget();
           }}
-          aria-label={`把「${ref_.name}」设为目标图`}
+          aria-label={t("把「{p0}」设为目标图", { p0: ref_.name })}
           className="touch-target image-overlay absolute bottom-1.5 left-1.5 min-h-8 rounded border-none px-2 text-[11px] font-semibold focus-visible:outline focus-visible:outline-2 focus-visible:outline-[color:var(--accent)]"
         >
-          设为目标
+          {t("设为目标")}
         </button>
       )}
       <button
@@ -126,7 +129,7 @@ export function ReferenceImageCard({
           e.stopPropagation();
           onRemove?.();
         }}
-        aria-label={`删除「${ref_.name}」`}
+        aria-label={t("删除「{p0}」", { p0: ref_.name })}
         className="touch-target image-overlay absolute bottom-1.5 right-1.5 flex h-8 w-8 items-center justify-center rounded border-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-[color:var(--accent)]"
       >
         <Icon name="x" size={12} aria-hidden="true" />

@@ -1,3 +1,4 @@
+import { t } from "@/lib/i18n";
 import type {
   GenerateRequest,
   Job,
@@ -155,25 +156,25 @@ export const browserApi: ApiClient = {
   async upsertProvider(name: string, cfg: ProviderConfig) {
     await browser.prepareBrowserRuntime();
     const trimmed = name.trim();
-    if (!trimmed) throw new Error("凭证名称不能为空。");
+    if (!trimmed) throw new Error(t("凭证名称不能为空。"));
     if (trimmed === "codex" || cfg.type === "codex") {
       throw new Error(
-        "静态 Web 不能添加 Codex 凭证，请使用桌面 App 或 Docker。",
+        t("静态 Web 不能添加 Codex 凭证，请使用桌面 App 或 Docker。"),
       );
     }
     if (cfg.type !== "openai-compatible") {
-      throw new Error("静态 Web 只支持 OpenAI-compatible API Key 凭证。");
+      throw new Error(t("静态 Web 只支持 OpenAI-compatible API Key 凭证。"));
     }
     const apiKey = cfg.credentials.api_key;
     if (!apiKey || apiKey.source !== "file") {
       throw new Error(
-        "静态 Web 只支持直接填写并保留在当前浏览器数据中的 API Key。",
+        t("静态 Web 只支持直接填写并保留在当前浏览器数据中的 API Key。"),
       );
     }
     const config = await browser.readConfigRecord();
     const existing = config.providers[trimmed];
     if (!cfg.allow_overwrite && existing) {
-      throw new Error(`凭证「${trimmed}」已存在。`);
+      throw new Error(t("凭证「{p0}」已存在。", { p0: trimmed }));
     }
     const preserved =
       typeof existing?.credentials.api_key?.value === "string"
@@ -183,7 +184,7 @@ export const browserApi: ApiClient = {
       typeof apiKey.value === "string" && apiKey.value
         ? apiKey.value
         : preserved;
-    if (!value) throw new Error("API Key 不能为空。");
+    if (!value) throw new Error(t("API Key 不能为空。"));
     config.providers[trimmed] = {
       type: "openai-compatible",
       api_base: cfg.api_base || undefined,
@@ -203,13 +204,13 @@ export const browserApi: ApiClient = {
     const provider = await browser.getStoredProvider(name);
     const ref = provider.credentials[credential];
     if (ref?.source !== "file" || typeof ref.value !== "string" || !ref.value) {
-      throw new Error(`凭证「${name}」还没有保存可查看的密钥。`);
+      throw new Error(t("凭证「{p0}」还没有保存可查看的密钥。", { p0: name }));
     }
     return { value: ref.value };
   },
   async deleteProvider(name: string) {
     await browser.prepareBrowserRuntime();
-    if (name === "codex") throw new Error("内置 Codex 提示不能删除。");
+    if (name === "codex") throw new Error(t("内置 Codex 提示不能删除。"));
     const config = await browser.readConfigRecord();
     delete config.providers[name];
     if (config.default_provider === name) {
@@ -242,7 +243,7 @@ export const browserApi: ApiClient = {
           )}`,
         };
       }
-      return { ok: true, latency_ms, message: "连接正常" };
+      return { ok: true, latency_ms, message: t("连接正常") };
     } catch (error) {
       return {
         ok: false,
@@ -297,13 +298,13 @@ export const browserApi: ApiClient = {
     await this.deleteJob(id);
   },
   async restoreDeletedJob(_id: string) {
-    throw new Error("浏览器模式不支持恢复，请重新生成。");
+    throw new Error(t("浏览器模式不支持恢复，请重新生成。"));
   },
   async hardDeleteJob(id: string) {
     await this.deleteJob(id);
   },
   async copyImageToClipboard(_path: string, _prompt?: string | null) {
-    throw new Error("浏览器模式请使用 ClipboardItem。");
+    throw new Error(t("浏览器模式请使用 ClipboardItem。"));
   },
   async cancelJob(id: string) {
     await browser.prepareBrowserRuntime();
@@ -317,7 +318,7 @@ export const browserApi: ApiClient = {
     task.cancelled = true;
     task.abort.abort();
     if (queuedIndex >= 0)
-      await browser.failTask(task, new Error("任务已取消。"));
+      await browser.failTask(task, new Error(t("任务已取消。")));
     const job = (await browser.readStoredJob(id)) ?? task.job;
     return normalizeJobResponse({
       job_id: id,
@@ -340,11 +341,11 @@ export const browserApi: ApiClient = {
   },
   async openPath(path: string) {
     const url = browserApi.fileUrl(path);
-    if (!url) throw new Error("没有可打开的文件。");
+    if (!url) throw new Error(t("没有可打开的文件。"));
     window.open(url, "_blank", "noopener,noreferrer");
   },
   async revealPath() {
-    throw new Error("Web 不能打开文件夹，请使用桌面 App 查看文件位置。");
+    throw new Error(t("Web 不能打开文件夹，请使用桌面 App 查看文件位置。"));
   },
   async exportFilesToDownloads(paths: string[]) {
     return browserApi.exportFilesToConfiguredFolder(paths);
@@ -371,7 +372,7 @@ export const browserApi: ApiClient = {
   },
   async exportJobOutputToConfiguredFolder(jobId: string, outputIndex: number) {
     const path = outputPath(jobId, outputIndex);
-    if (!path) throw new Error("没有可下载的图片。");
+    if (!path) throw new Error(t("没有可下载的图片。"));
     return browserApi.exportFilesToConfiguredFolder([path]);
   },
   async ensureJobOutputCached(_jobId: string, _outputIndex: number) {
@@ -441,17 +442,17 @@ export const browserApi: ApiClient = {
           ? input.request
           : browser.generateRequestFromJob(job);
       if (!request.prompt.trim()) {
-        throw new Error("这个生成任务缺少 prompt，无法原样重试。");
+        throw new Error(t("这个生成任务缺少 prompt，无法原样重试。"));
       }
       return browserApi.createGenerate(request);
     }
     if (job.command === "images edit") {
       if (input?.kind !== "edit" || input.files.length === 0) {
-        throw new Error("这个编辑任务缺少原始参考图，无法原样重试。");
+        throw new Error(t("这个编辑任务缺少原始参考图，无法原样重试。"));
       }
       return browserApi.createEdit(browser.formFromStoredEdit(input));
     }
-    throw new Error("这个任务类型暂不支持重试。");
+    throw new Error(t("这个任务类型暂不支持重试。"));
   },
   async resumeJob(
     jobId: string,
@@ -464,8 +465,8 @@ export const browserApi: ApiClient = {
   ) {
     if (action === "resubmit") return browserApi.retryJob(jobId);
     if (action === "discard")
-      throw new Error("浏览器模式暂不支持丢弃恢复任务。");
-    throw new Error("浏览器模式不支持继续完成，请改用 Docker/App。");
+      throw new Error(t("浏览器模式暂不支持丢弃恢复任务。"));
+    throw new Error(t("浏览器模式不支持继续完成，请改用 Docker/App。"));
   },
   outputUrl(jobId: string, index = 0) {
     const path = outputPath(jobId, index);

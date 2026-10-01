@@ -1,4 +1,5 @@
-import { describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it } from "vitest";
+import { setLanguagePreference } from "./i18n";
 import { defaultStorageConfig } from "./api/shared";
 import type { StorageConfig } from "./types";
 import {
@@ -14,6 +15,7 @@ const baseStorageConfig: StorageConfig = {
 };
 
 describe("storage validation", () => {
+  beforeEach(() => setLanguagePreference("zh-CN"));
   it("requires a directory before testing a local storage target", () => {
     expect(
       storageTargetConfigIssue("local-default", {

@@ -1,3 +1,4 @@
+import { t, getLocale } from "@/lib/i18n";
 import { useEffect, useMemo, useState } from "react";
 import { AnimatePresence, motion } from "motion/react";
 import { toast } from "sonner";
@@ -87,11 +88,11 @@ export function HistoryScreen({
 
   const pageJobs = useMemo(
     () => jobPages.data?.pages.flatMap((page) => page.jobs) ?? [],
-    [jobPages.data],
+    [jobPages.data, getLocale()],
   );
   const matchingActiveJobs = useMemo(
     () => activeJobs.filter((job) => jobMatchesSearch(job, searchQuery)),
-    [activeJobs, searchQuery],
+    [activeJobs, searchQuery, getLocale()],
   );
   const jobs = useMemo(() => {
     const source =
@@ -105,7 +106,7 @@ export function HistoryScreen({
     return Array.from(byId.values()).sort(
       (a, b) => jobTimestamp(b) - jobTimestamp(a),
     );
-  }, [filter, matchingActiveJobs, pageJobs]);
+  }, [filter, matchingActiveJobs, pageJobs, getLocale()]);
   const firstPage = jobPages.data?.pages[0];
   const total =
     filter === "running" ? matchingActiveJobs.length : (firstPage?.total ?? 0);
@@ -122,18 +123,19 @@ export function HistoryScreen({
     if (!clearable) return;
     const finished = jobs.filter(isClearableTerminalJob);
     const ok = await confirm({
-      title: "清理任务记录",
+      title: t("清理任务记录"),
       description: (
         <>
-          将清除{" "}
+          {t("将清除")}{" "}
           <span className="text-foreground font-medium">
-            {finished.length} 条
+            {finished.length} {t("条")}
           </span>{" "}
-          当前已加载的已完成 / 已失败任务。远端 Origin/Archive
-          不会被删除，此操作不可撤销。
+          {t(
+            "当前已加载的已完成 / 已失败任务。远端 Origin/Archive 不会被删除，此操作不可撤销。",
+          )}
         </>
       ),
-      confirmText: "清理",
+      confirmText: t("清理"),
       variant: "danger",
     });
     if (!ok) return;
@@ -173,7 +175,7 @@ export function HistoryScreen({
         return next;
       });
     } catch (error) {
-      toast.error(`${recovery.label}失败`, {
+      toast.error(t("{p0}失败", { p0: recovery.label }), {
         id: toastId,
         description: error instanceof Error ? error.message : String(error),
       });
@@ -189,14 +191,14 @@ export function HistoryScreen({
       {/* header */}
       <header className="mb-4 flex items-end justify-between gap-3 sm:mb-5">
         <div className="flex items-baseline gap-3">
-          <h1 className="t-screen-title text-foreground">生成队列</h1>
+          <h1 className="t-screen-title text-foreground">{t("生成队列")}</h1>
           <span
             className="inline-flex items-center justify-center min-w-[26px] h-[22px] px-2 rounded-full text-[12px] font-medium text-foreground"
             style={{
               background: "var(--w-08)",
               border: "1px solid var(--w-10)",
             }}
-            aria-label="任务总数"
+            aria-label={t("任务总数")}
           >
             {total}
           </span>
@@ -212,7 +214,7 @@ export function HistoryScreen({
           }}
         >
           <Trash2 size={13} />
-          清理
+          {t("清理")}
         </button>
       </header>
 
@@ -262,8 +264,8 @@ export function HistoryScreen({
             type="search"
             value={searchText}
             onChange={(event) => setSearchText(event.currentTarget.value)}
-            placeholder="搜索提示词 / Job ID / Provider"
-            aria-label="搜索任务"
+            placeholder={t("搜索提示词 / Job ID / Provider")}
+            aria-label={t("搜索任务")}
             className="h-9 w-full rounded-full border border-[color:var(--w-10)] bg-[color:var(--w-05)] pl-9 pr-9 text-[13px] text-foreground outline-none transition-colors placeholder:text-faint hover:bg-[color:var(--w-07)] focus:border-[color:var(--accent-45)] focus:bg-[color:var(--w-08)]"
           />
           {searchText.trim() && (
@@ -274,8 +276,8 @@ export function HistoryScreen({
                 setSearchQuery("");
               }}
               className="absolute right-1.5 top-1/2 inline-flex h-6 w-6 -translate-y-1/2 items-center justify-center rounded-full text-faint transition-colors hover:bg-[color:var(--w-08)] hover:text-foreground"
-              aria-label="清空搜索"
-              title="清空搜索"
+              aria-label={t("清空搜索")}
+              title={t("清空搜索")}
             >
               <X size={13} />
             </button>
@@ -293,21 +295,21 @@ export function HistoryScreen({
             <div className="p-12 flex justify-center">
               <Empty
                 icon="history"
-                title="加载中"
-                subtitle="正在获取任务列表"
+                title={t("加载中")}
+                subtitle={t("正在获取任务列表")}
               />
             </div>
           ) : jobs.length === 0 ? (
             <div className="p-12 flex justify-center">
               <Empty
                 icon="search"
-                title={total === 0 ? "还没有任务" : "无匹配结果"}
+                title={total === 0 ? t("还没有任务") : t("无匹配结果")}
                 subtitle={
                   total === 0
                     ? searchQuery
-                      ? "没有找到匹配的任务。"
-                      : "在「生成」里写一句提示词，任务会出现在这里。"
-                    : "切换筛选标签或清除条件再试。"
+                      ? t("没有找到匹配的任务。")
+                      : t("在「生成」里写一句提示词，任务会出现在这里。")
+                    : t("切换筛选标签或清除条件再试。")
                 }
                 action={
                   total === 0 && onSwitchToGenerate ? (
@@ -317,7 +319,7 @@ export function HistoryScreen({
                       icon="generate"
                       onClick={onSwitchToGenerate}
                     >
-                      去写第一句
+                      {t("去写第一句")}
                     </Button>
                   ) : null
                 }
@@ -375,7 +377,7 @@ export function HistoryScreen({
                     disabled={jobPages.isFetchingNextPage}
                     onClick={() => void jobPages.fetchNextPage()}
                   >
-                    {jobPages.isFetchingNextPage ? "加载中" : "加载更多"}
+                    {jobPages.isFetchingNextPage ? t("加载中") : t("加载更多")}
                   </Button>
                 </div>
               )}
@@ -386,7 +388,9 @@ export function HistoryScreen({
         <footer className="hidden items-center gap-2 border-t border-border-faint px-4 py-2.5 text-[11.5px] text-faint sm:flex">
           <Folder size={11} className="opacity-70" />
           <span>
-            点击行展开查看作品组；点单张图打开右侧详情。任务在后台依次处理。
+            {t(
+              "点击行展开查看作品组；点单张图打开右侧详情。任务在后台依次处理。",
+            )}
           </span>
         </footer>
       </section>

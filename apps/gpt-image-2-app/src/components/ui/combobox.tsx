@@ -1,3 +1,4 @@
+import { t } from "@/lib/i18n";
 import {
   useRef,
   useState,
@@ -87,9 +88,7 @@ export function GlassCombobox(props: GlassComboboxProps) {
   const isChip = props.variant === "chip";
   const chipLabel = isChip ? (props as ChipVariantProps).label : undefined;
   const trimmed = value.trim().toLowerCase();
-  const matchedOption = options.find(
-    (o) => o.value.toLowerCase() === trimmed,
-  );
+  const matchedOption = options.find((o) => o.value.toLowerCase() === trimmed);
 
   const handlePick = (next: string) => {
     onValueChange(next);
@@ -121,12 +120,9 @@ export function GlassCombobox(props: GlassComboboxProps) {
           "group relative inline-flex items-center gap-2 rounded-md border bg-[color:var(--w-04)] transition-colors",
           "hover:bg-[color:var(--w-07)]",
           "focus-within:border-[color:var(--accent-55)] focus-within:bg-[color:var(--accent-06)] focus-within:shadow-[0_0_0_3px_var(--accent-18)]",
-          open &&
-            "border-[color:var(--accent-55)] bg-[color:var(--accent-06)]",
+          open && "border-[color:var(--accent-55)] bg-[color:var(--accent-06)]",
           isChip ? "px-3" : "px-2.5",
-          invalid
-            ? "border-[color:var(--status-err)]"
-            : "border-border",
+          invalid ? "border-[color:var(--status-err)]" : "border-border",
           disabled && "opacity-55 cursor-not-allowed",
           triggerHeights[size],
           className,
@@ -160,7 +156,7 @@ export function GlassCombobox(props: GlassComboboxProps) {
         <RadixPopover.Trigger asChild>
           <button
             type="button"
-            aria-label="展开选项"
+            aria-label={t("展开选项")}
             disabled={disabled}
             tabIndex={-1}
             className="shrink-0 inline-flex items-center justify-center text-muted hover:text-foreground transition-colors"
@@ -212,7 +208,7 @@ export function GlassCombobox(props: GlassComboboxProps) {
                 />
                 <span className="text-foreground font-mono">{value}</span>
                 <span className="text-[11px] text-faint ml-auto">
-                  自定义
+                  {t("自定义")}
                 </span>
               </div>
               <div className="my-1 mx-2 border-t border-[color:var(--w-06)]" />

@@ -1,8 +1,11 @@
+import { t } from "@/lib/i18n";
 import { useEffect, useState } from "react";
 import { Check } from "lucide-react";
 import ElasticSlider from "@/components/reactbits/components/ElasticSlider";
 import { Segmented } from "@/components/ui/segmented";
 import { useTweaks } from "@/hooks/use-tweaks";
+import { useLanguage } from "@/hooks/use-language";
+import { setLanguagePreference } from "@/lib/i18n";
 import { cn } from "@/lib/cn";
 import {
   HIDDEN_PRESETS,
@@ -92,7 +95,7 @@ function ThemePreviewCard({
         <span
           className="absolute top-1.5 right-1.5 inline-flex h-4 w-4 items-center justify-center rounded-full"
           style={{ background: "var(--accent)" }}
-          aria-label="当前主题"
+          aria-label={t("当前主题")}
         >
           <Check size={10} className="text-[color:var(--accent-on)]" />
         </span>
@@ -102,6 +105,7 @@ function ThemePreviewCard({
 }
 
 export function AppearancePanel() {
+  const language = useLanguage();
   const { tweaks, setTweaks } = useTweaks();
   const [unlocked, setUnlocked] = useState<Set<ThemePresetId>>(() =>
     readUnlockedPresets(),
@@ -125,30 +129,51 @@ export function AppearancePanel() {
 
   const opacityHint =
     activePreset.surfaceStyle === "paper"
-      ? "纸感主题下用作描边强度。值越高边线越清晰。"
+      ? t("纸感主题下用作描边强度。值越高边线越清晰。")
       : activePreset.surfaceStyle === "neon"
-        ? "霓虹主题下用作发光强度。值越高边光越明显。"
-        : "玻璃面板的不透明度。值越低背景越能透出，值越高内容越易读。";
+        ? t("霓虹主题下用作发光强度。值越高边光越明显。")
+        : t("玻璃面板的不透明度。值越低背景越能透出，值越高内容越易读。");
 
   return (
     <div className="flex-1 min-h-0 overflow-auto p-4 sm:p-5 space-y-4">
-      <Section title="主题">
+      <Section title={t("语言")}>
         <Row
-          title="界面版本"
+          title={t("界面语言")}
+          description={t("跟随系统会在中文环境显示中文，其他环境显示英文。")}
+          control={
+            <Segmented
+              value={language.preference}
+              onChange={setLanguagePreference}
+              size="sm"
+              ariaLabel={t("界面语言")}
+              options={[
+                { value: "auto", label: t("跟随系统") },
+                { value: "zh-CN", label: t("简体中文") },
+                { value: "en", label: "English" },
+              ]}
+            />
+          }
+        />
+      </Section>
+      <Section title={t("主题")}>
+        <Row
+          title={t("界面版本")}
           description={
             tweaks.interfaceMode === "legacy"
-              ? "经典三栏会复用旧工作台外观，并禁用常驻动态背景以降低资源占用。"
-              : "现代界面使用主题背景、玻璃胶囊和作品墙；适合视觉调试。"
+              ? t(
+                  "经典三栏会复用旧工作台外观，并禁用常驻动态背景以降低资源占用。",
+                )
+              : t("现代界面使用主题背景、玻璃胶囊和作品墙；适合视觉调试。")
           }
           control={
             <Segmented
               value={tweaks.interfaceMode}
               onChange={(interfaceMode) => setTweaks({ interfaceMode })}
               size="sm"
-              ariaLabel="界面版本"
+              ariaLabel={t("界面版本")}
               options={[
-                { value: "modern", label: "现代" },
-                { value: "legacy", label: "经典" },
+                { value: "modern", label: t("现代") },
+                { value: "legacy", label: t("经典") },
               ]}
             />
           }
@@ -158,11 +183,12 @@ export function AppearancePanel() {
             <div className="space-y-2.5 px-4 py-3.5 sm:px-5">
               <div>
                 <div className="text-[13px] font-semibold text-foreground">
-                  主题预设
+                  {t("主题预设")}
                 </div>
                 <div className="mt-0.5 text-[11.5px] text-muted">
-                  一键切换背景动效、配色、面板风格；字体和密度也会跟着调到主题推荐值。想禁用所有动效，切到「网格灰」或在
-                  macOS 辅助功能里开启「减弱动态效果」。
+                  {t(
+                    "一键切换背景动效、配色、面板风格；字体和密度也会跟着调到主题推荐值。想禁用所有动效，切到「网格灰」或在 macOS 辅助功能里开启「减弱动态效果」。",
+                  )}
                 </div>
               </div>
               <div
@@ -184,7 +210,7 @@ export function AppearancePanel() {
               </div>
             </div>
             <Row
-              title="面板透明度"
+              title={t("面板透明度")}
               description={opacityHint}
               control={
                 <div className="w-[252px]">
@@ -195,7 +221,7 @@ export function AppearancePanel() {
                     step={1}
                     onChange={(glassOpacity) => setTweaks({ glassOpacity })}
                     valueSuffix="%"
-                    ariaLabel="面板透明度"
+                    ariaLabel={t("面板透明度")}
                   />
                 </div>
               }
@@ -203,17 +229,19 @@ export function AppearancePanel() {
           </>
         ) : (
           <Row
-            title="亮暗主题"
-            description="只影响经典工作台；现代界面的主题仍由主题预设控制。"
+            title={t("亮暗主题")}
+            description={t(
+              "只影响经典工作台；现代界面的主题仍由主题预设控制。",
+            )}
             control={
               <Segmented
                 value={tweaks.theme}
                 onChange={(theme) => setTweaks({ theme })}
                 size="sm"
-                ariaLabel="经典亮暗主题"
+                ariaLabel={t("经典亮暗主题")}
                 options={[
-                  { value: "dark", label: "暗色" },
-                  { value: "light", label: "亮色" },
+                  { value: "dark", label: t("暗色") },
+                  { value: "light", label: t("亮色") },
                 ]}
               />
             }
@@ -222,38 +250,44 @@ export function AppearancePanel() {
       </Section>
 
       <Section
-        title="排版"
-        description="主题切换会把字体和密度调到推荐值；下面的设置会覆盖推荐。"
+        title={t("排版")}
+        description={t(
+          "主题切换会把字体和密度调到推荐值；下面的设置会覆盖推荐。",
+        )}
       >
         <Row
-          title="字体"
-          description={`主题推荐：${FONT_LABEL[activePreset.suggestedFont]}。`}
+          title={t("字体")}
+          description={t("主题推荐：{p0}。", {
+            p0: FONT_LABEL[activePreset.suggestedFont],
+          })}
           control={
             <Segmented
               value={tweaks.font}
               onChange={(v) => setTweaks({ font: v })}
               size="sm"
-              ariaLabel="字体"
+              ariaLabel={t("字体")}
               options={[
-                { value: "system", label: "系统" },
-                { value: "mono", label: "等宽" },
-                { value: "serif", label: "衬线" },
+                { value: "system", label: t("系统") },
+                { value: "mono", label: t("等宽") },
+                { value: "serif", label: t("衬线") },
               ]}
             />
           }
         />
         <Row
-          title="界面密度"
-          description={`主题推荐：${DENSITY_LABEL[activePreset.suggestedDensity]}。`}
+          title={t("界面密度")}
+          description={t("主题推荐：{p0}。", {
+            p0: DENSITY_LABEL[activePreset.suggestedDensity],
+          })}
           control={
             <Segmented
               value={tweaks.density}
               onChange={(v) => setTweaks({ density: v })}
               size="sm"
-              ariaLabel="界面密度"
+              ariaLabel={t("界面密度")}
               options={[
-                { value: "compact", label: "紧凑" },
-                { value: "comfortable", label: "舒适" },
+                { value: "compact", label: t("紧凑") },
+                { value: "comfortable", label: t("舒适") },
               ]}
             />
           }

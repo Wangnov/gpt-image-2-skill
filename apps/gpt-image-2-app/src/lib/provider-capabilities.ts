@@ -1,3 +1,4 @@
+import { t } from "@/lib/i18n";
 import type { ProviderConfig, ServerConfig } from "./types";
 
 export function providerNativeSupportsMultipleOutputs(
@@ -11,19 +12,33 @@ export function providerNativeSupportsMultipleOutputs(
   return cfg.supports_n ?? cfg.type === "openai";
 }
 
-export function providerSupportsMultipleOutputs(_config: ServerConfig | undefined, _provider: string) {
+export function providerSupportsMultipleOutputs(
+  _config: ServerConfig | undefined,
+  _provider: string,
+) {
   return true;
 }
 
-export function effectiveOutputCount(_config: ServerConfig | undefined, _provider: string, requested: number) {
+export function effectiveOutputCount(
+  _config: ServerConfig | undefined,
+  _provider: string,
+  requested: number,
+) {
   return requested;
 }
 
-export function requestOutputCount(_config: ServerConfig | undefined, _provider: string, requested: number) {
+export function requestOutputCount(
+  _config: ServerConfig | undefined,
+  _provider: string,
+  requested: number,
+) {
   return requested;
 }
 
-export function providerEditRegionMode(config: ServerConfig | undefined, provider: string): NonNullable<ProviderConfig["edit_region_mode"]> {
+export function providerEditRegionMode(
+  config: ServerConfig | undefined,
+  provider: string,
+): NonNullable<ProviderConfig["edit_region_mode"]> {
   if (provider === "openai") return "native-mask";
   if (provider === "codex") return "reference-hint";
   const cfg = provider ? config?.providers[provider] : undefined;
@@ -40,12 +55,12 @@ export function providerCapabilityBadges(
   const nativeN = providerNativeSupportsMultipleOutputs(config, provider);
   const editMode = providerEditRegionMode(config, provider);
   return [
-    nativeN ? "接口多图" : "App 并发多图",
+    nativeN ? t("接口多图") : t("App 并发多图"),
     editMode === "native-mask"
-      ? "原生遮罩"
+      ? t("原生遮罩")
       : editMode === "reference-hint"
-        ? "参考图局部编辑"
-        : "不支持局部编辑",
-    "失败可分类",
+        ? t("参考图局部编辑")
+        : t("不支持局部编辑"),
+    t("失败可分类"),
   ];
 }

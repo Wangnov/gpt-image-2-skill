@@ -1,3 +1,4 @@
+import { t } from "@/lib/i18n";
 import { type DragEvent, type RefObject } from "react";
 import { motion } from "motion/react";
 import { Image as ImageIcon } from "lucide-react";
@@ -137,10 +138,10 @@ export function EditCanvasStage({
           >
             <ImageIcon size={20} style={{ color: "var(--accent)" }} />
             <div className="text-[13px] font-semibold text-foreground">
-              松开添加参考图
+              {t("松开添加参考图")}
             </div>
             <div className="text-[11px] text-muted">
-              支持拖拽图片，也支持直接粘贴剪贴板图片
+              {t("支持拖拽图片，也支持直接粘贴剪贴板图片")}
             </div>
           </motion.div>
         </motion.div>
@@ -161,9 +162,7 @@ export function EditCanvasStage({
                 clearMask={() => setClearKey((key) => key + 1)}
                 fitCanvasToViewport={fitCanvasToViewport}
                 zoom={zoom}
-                zoomOut={() =>
-                  setZoom((current) => clampZoom(current * 0.88))
-                }
+                zoomOut={() => setZoom((current) => clampZoom(current * 0.88))}
                 zoomIn={() => setZoom((current) => clampZoom(current * 1.14))}
                 panPinned={panPinned}
                 setPanPinned={setPanPinned}
@@ -212,8 +211,8 @@ export function EditCanvasStage({
           ) : (
             <Empty
               icon="mask"
-              title="请上传并设定目标图"
-              subtitle="或拖入图片、粘贴剪贴板图片。"
+              title={t("请上传并设定目标图")}
+              subtitle={t("或拖入图片、粘贴剪贴板图片。")}
               action={
                 <Button
                   variant="primary"
@@ -221,7 +220,7 @@ export function EditCanvasStage({
                   icon="plus"
                   onClick={() => fileInputRef.current?.click()}
                 >
-                  选择图片
+                  {t("选择图片")}
                 </Button>
               }
             />
@@ -235,8 +234,8 @@ export function EditCanvasStage({
         ) : (
           <Empty
             icon="image"
-            title="请上传至少一张参考图"
-            subtitle="或拖入图片、粘贴剪贴板图片。"
+            title={t("请上传至少一张参考图")}
+            subtitle={t("或拖入图片、粘贴剪贴板图片。")}
             action={
               <Button
                 variant="primary"
@@ -244,7 +243,7 @@ export function EditCanvasStage({
                 icon="plus"
                 onClick={() => fileInputRef.current?.click()}
               >
-                选择图片
+                {t("选择图片")}
               </Button>
             }
           />

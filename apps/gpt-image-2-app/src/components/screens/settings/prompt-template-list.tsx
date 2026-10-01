@@ -1,3 +1,4 @@
+import { t } from "@/lib/i18n";
 import { Pencil, Plus, Trash2 } from "lucide-react";
 import { PromptTemplateMark } from "@/components/screens/shared/prompt-template-mark";
 import { Empty } from "@/components/ui/empty";
@@ -23,15 +24,17 @@ export function PromptTemplateList({
 }) {
   return (
     <TemplateSection
-      title={selectedGroup ? `模板 · ${selectedGroup.name}` : "模板"}
-      description="默认模板和默认分组与普通数据一样，可编辑、复制或删除。"
+      title={
+        selectedGroup ? t("模板 · {p0}", { p0: selectedGroup.name }) : t("模板")
+      }
+      description={t("默认模板和默认分组与普通数据一样，可编辑、复制或删除。")}
     >
       {selectedGroup ? (
         templates.length === 0 ? (
           <Empty
             icon="filedot"
-            title="这个分组还没有模板"
-            subtitle="在上方新建模板并保存到当前分组。"
+            title={t("这个分组还没有模板")}
+            subtitle={t("在上方新建模板并保存到当前分组。")}
           />
         ) : (
           <div className="grid gap-2">
@@ -57,8 +60,8 @@ export function PromptTemplateList({
                     type="button"
                     onClick={() => editTemplate(template)}
                     className="inline-flex h-8 w-8 items-center justify-center rounded-md text-muted transition-colors hover:bg-[color:var(--w-06)] hover:text-foreground"
-                    title="编辑"
-                    aria-label="编辑模板"
+                    title={t("编辑")}
+                    aria-label={t("编辑模板")}
                   >
                     <Pencil size={13} />
                   </button>
@@ -66,8 +69,8 @@ export function PromptTemplateList({
                     type="button"
                     onClick={() => duplicateTemplate(template)}
                     className="inline-flex h-8 w-8 items-center justify-center rounded-md text-muted transition-colors hover:bg-[color:var(--w-06)] hover:text-foreground"
-                    title="复制"
-                    aria-label="复制模板"
+                    title={t("复制")}
+                    aria-label={t("复制模板")}
                   >
                     <Plus size={13} />
                   </button>
@@ -75,8 +78,8 @@ export function PromptTemplateList({
                     type="button"
                     onClick={() => removeTemplate(template)}
                     className="inline-flex h-8 w-8 items-center justify-center rounded-md text-muted transition-colors hover:bg-[color:var(--status-err-10)] hover:text-[color:var(--status-err)]"
-                    title="删除"
-                    aria-label="删除模板"
+                    title={t("删除")}
+                    aria-label={t("删除模板")}
                   >
                     <Trash2 size={13} />
                   </button>
@@ -91,8 +94,8 @@ export function PromptTemplateList({
       ) : (
         <Empty
           icon="filedot"
-          title="还没有分组"
-          subtitle="先添加分组，再创建提示词模板。"
+          title={t("还没有分组")}
+          subtitle={t("先添加分组，再创建提示词模板。")}
         />
       )}
     </TemplateSection>

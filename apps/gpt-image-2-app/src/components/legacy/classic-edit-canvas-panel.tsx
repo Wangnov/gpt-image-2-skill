@@ -1,3 +1,4 @@
+import { t } from "@/lib/i18n";
 import { Empty } from "@/components/ui/empty";
 import { Icon } from "@/components/icon";
 import { OutputTile } from "@/components/screens/shared/output-tile";
@@ -47,7 +48,7 @@ export function ClassicEditCanvasPanel({
     <section className="edit-canvas surface-panel relative flex min-h-0 flex-col overflow-hidden">
       {isDraggingImages && (
         <div className="pointer-events-none absolute inset-3 z-20 flex items-center justify-center rounded-lg border border-dashed border-[color:var(--accent)] bg-[color:var(--accent-10)] text-[13px] font-semibold text-foreground">
-          松开即可添加参考图
+          {t("松开即可添加参考图")}
         </div>
       )}
       <div className="flex min-h-0 flex-1 items-center justify-center overflow-auto p-4">
@@ -85,8 +86,8 @@ export function ClassicEditCanvasPanel({
         ) : (
           <Empty
             icon="image"
-            title="等待参考图"
-            subtitle="拖拽、粘贴或点击左侧按钮添加图片。"
+            title={t("等待参考图")}
+            subtitle={t("拖拽、粘贴或点击左侧按钮添加图片。")}
           />
         )}
       </div>
@@ -99,15 +100,17 @@ export function ClassicEditCanvasPanel({
                 key={output.index}
                 output={output}
                 onSelect={() => setSelectedOutput(output.index)}
-                onDownload={() => saveImages([selectedPath], "图片")}
-                onOpen={selectedPath ? () => void openPath(selectedPath) : undefined}
+                onDownload={() => saveImages([selectedPath], t("图片"))}
+                onOpen={
+                  selectedPath ? () => void openPath(selectedPath) : undefined
+                }
               />
             ))}
           </div>
         ) : (
           <div className="flex items-center gap-2 text-[12px] text-faint">
             <Icon name="history" size={13} />
-            输出会显示在这里，任务也会同步进入任务页。
+            {t("输出会显示在这里，任务也会同步进入任务页。")}
           </div>
         )}
       </div>

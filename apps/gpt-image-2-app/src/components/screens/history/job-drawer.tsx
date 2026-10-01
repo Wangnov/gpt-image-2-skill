@@ -1,3 +1,4 @@
+import { t } from "@/lib/i18n";
 import { useCallback, useEffect, useState } from "react";
 import { Empty } from "@/components/ui/empty";
 import { promptLength, promptSummary, promptText } from "@/lib/prompt-display";
@@ -53,11 +54,11 @@ export function JobMetadataDrawer({
 
   const meta = (job?.metadata ?? {}) as Record<string, unknown>;
   const seed = job ? jobSeed(job) : 0;
-  const prompt = promptText(meta.prompt, job?.command ?? "未命名图片");
+  const prompt = promptText(meta.prompt, job?.command ?? t("未命名图片"));
   const promptTitle = promptSummary(
     meta.prompt,
     72,
-    job?.command ?? "未命名图片",
+    job?.command ?? t("未命名图片"),
   );
   const promptCount = promptLength(meta.prompt);
   const outputPaths = job ? api.jobOutputPaths(job) : [];
@@ -80,8 +81,8 @@ export function JobMetadataDrawer({
     return (
       <Empty
         icon="history"
-        title="选择一条记录"
-        subtitle="点击左侧任意作品，查看图片和保存操作。"
+        title={t("选择一条记录")}
+        subtitle={t("点击左侧任意作品，查看图片和保存操作。")}
       />
     );
 

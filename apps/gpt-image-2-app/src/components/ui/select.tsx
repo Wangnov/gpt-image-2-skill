@@ -1,3 +1,4 @@
+import { t } from "@/lib/i18n";
 import {
   forwardRef,
   type ComponentPropsWithoutRef,
@@ -70,39 +71,44 @@ function normalize(options: readonly SelectOption[]) {
 const SelectContent = forwardRef<
   ElementRef<typeof RadixSelect.Content>,
   ComponentPropsWithoutRef<typeof RadixSelect.Content>
->(({ className, children, position = "popper", sideOffset = 6, ...rest }, ref) => (
-  <RadixSelect.Portal>
-    <RadixSelect.Content
-      ref={ref}
-      position={position}
-      sideOffset={sideOffset}
-      className={cn(
-        "z-50 min-w-[var(--radix-select-trigger-width)] overflow-hidden rounded-xl border",
-        "data-[state=open]:animate-in data-[state=closed]:animate-out",
-        "data-[state=open]:fade-in-0 data-[state=closed]:fade-out-0",
-        "data-[state=open]:zoom-in-95 data-[state=closed]:zoom-out-95",
-        "data-[side=bottom]:slide-in-from-top-1 data-[side=top]:slide-in-from-bottom-1",
-        className,
-      )}
-      style={{
-        background: "var(--surface-floating-soft)",
-        borderColor: "var(--surface-floating-border)",
-        backdropFilter: "blur(28px) saturate(150%)",
-        WebkitBackdropFilter: "blur(28px) saturate(150%)",
-        boxShadow: "var(--shadow-floating)",
-      }}
-      {...rest}
-    >
-      {/* Height cap + scroll live on the Viewport: Radix gives it
+>(
+  (
+    { className, children, position = "popper", sideOffset = 6, ...rest },
+    ref,
+  ) => (
+    <RadixSelect.Portal>
+      <RadixSelect.Content
+        ref={ref}
+        position={position}
+        sideOffset={sideOffset}
+        className={cn(
+          "z-50 min-w-[var(--radix-select-trigger-width)] overflow-hidden rounded-xl border",
+          "data-[state=open]:animate-in data-[state=closed]:animate-out",
+          "data-[state=open]:fade-in-0 data-[state=closed]:fade-out-0",
+          "data-[state=open]:zoom-in-95 data-[state=closed]:zoom-out-95",
+          "data-[side=bottom]:slide-in-from-top-1 data-[side=top]:slide-in-from-bottom-1",
+          className,
+        )}
+        style={{
+          background: "var(--surface-floating-soft)",
+          borderColor: "var(--surface-floating-border)",
+          backdropFilter: "blur(28px) saturate(150%)",
+          WebkitBackdropFilter: "blur(28px) saturate(150%)",
+          boxShadow: "var(--shadow-floating)",
+        }}
+        {...rest}
+      >
+        {/* Height cap + scroll live on the Viewport: Radix gives it
           `overflow: hidden auto`, but its `flex: 1` only resolves against a
           flex parent — the Content wrapper isn't one, so capping Content
           would clip the list instead of scrolling it. */}
-      <RadixSelect.Viewport className="max-h-[min(280px,var(--radix-select-content-available-height))] scrollbar-none p-1">
-        {children}
-      </RadixSelect.Viewport>
-    </RadixSelect.Content>
-  </RadixSelect.Portal>
-));
+        <RadixSelect.Viewport className="max-h-[min(280px,var(--radix-select-content-available-height))] scrollbar-none p-1">
+          {children}
+        </RadixSelect.Viewport>
+      </RadixSelect.Content>
+    </RadixSelect.Portal>
+  ),
+);
 SelectContent.displayName = "SelectContent";
 
 const SelectItem = forwardRef<
@@ -174,7 +180,7 @@ function DefaultTrigger({
         className,
       )}
     >
-      <RadixSelect.Value placeholder={placeholder ?? "请选择"} />
+      <RadixSelect.Value placeholder={placeholder ?? t("请选择")} />
       <RadixSelect.Icon asChild>
         <ChevronDown
           size={14}
@@ -215,7 +221,9 @@ function ChipTrigger({
         className,
       )}
     >
-      {label && <span className="t-caps shrink-0 whitespace-nowrap">{label}</span>}
+      {label && (
+        <span className="t-caps shrink-0 whitespace-nowrap">{label}</span>
+      )}
       <RadixSelect.Value className="min-w-0 truncate whitespace-nowrap" />
       <RadixSelect.Icon asChild>
         <ChevronDown

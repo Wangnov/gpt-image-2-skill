@@ -1,3 +1,4 @@
+import { getLocale, t } from "@/lib/i18n";
 function parseTime(value: string): Date | null {
   const trimmed = value.trim();
   const numeric = Number(trimmed);
@@ -22,10 +23,11 @@ export function formatTime(iso: string): string {
 
   const now = new Date();
   const diffSec = (now.getTime() - d.getTime()) / 1000;
-  if (diffSec < 60) return "刚刚";
-  if (diffSec < 3600) return `${Math.floor(diffSec / 60)} 分钟前`;
-  if (diffSec < 86400) return `${Math.floor(diffSec / 3600)} 小时前`;
-  return `${d.toLocaleDateString("zh-CN")} ${d.toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" })}`;
+  if (diffSec < 60) return t("刚刚");
+  if (diffSec < 3600) return t("{p0} 分钟前", { p0: Math.floor(diffSec / 60) });
+  if (diffSec < 86400)
+    return t("{p0} 小时前", { p0: Math.floor(diffSec / 3600) });
+  return `${d.toLocaleDateString(getLocale())} ${d.toLocaleTimeString(getLocale(), { hour: "2-digit", minute: "2-digit" })}`;
 }
 
 export function formatDuration(ms?: number): string {
@@ -36,21 +38,21 @@ export function formatDuration(ms?: number): string {
 
 export function statusLabel(status: string): string {
   const map: Record<string, string> = {
-    running: "运行中",
-    uploading: "上传中",
-    completed: "已完成",
-    failed: "失败",
-    queued: "排队中",
-    cancelled: "已取消",
-    canceled: "已取消",
+    running: t("运行中"),
+    uploading: t("上传中"),
+    completed: t("已完成"),
+    failed: t("失败"),
+    queued: t("排队中"),
+    cancelled: t("已取消"),
+    canceled: t("已取消"),
   };
   return map[status] ?? status;
 }
 
 export function providerKindLabel(kind?: string): string {
   const map: Record<string, string> = {
-    "openai-compatible": "OpenAI 兼容",
-    openai: "OpenAI 官方",
+    "openai-compatible": t("OpenAI 兼容"),
+    openai: t("OpenAI 官方"),
     codex: "Codex",
   };
   return kind ? (map[kind] ?? kind) : "—";

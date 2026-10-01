@@ -1,3 +1,4 @@
+import { t } from "@/lib/i18n";
 import { Braces, CornerDownRight, Crop, Images, Sparkles } from "lucide-react";
 import { cn } from "@/lib/cn";
 import type { Job } from "@/lib/types";
@@ -22,7 +23,7 @@ export function JobKindIcon({
 
   if (kind === "edit") {
     const region = jobHasRegionEdit(job);
-    const label = region ? "图生图 · 局部编辑" : "图生图";
+    const label = region ? t("图生图 · 局部编辑") : t("图生图");
     const Icon = region ? Crop : Images;
     return (
       <span
@@ -41,8 +42,8 @@ export function JobKindIcon({
   if (kind === "request") {
     return (
       <span
-        title="原始请求"
-        aria-label="原始请求"
+        title={t("原始请求")}
+        aria-label={t("原始请求")}
         className={cn("inline-flex shrink-0 text-faint", className)}
       >
         <Braces size={size} aria-hidden />
@@ -52,8 +53,8 @@ export function JobKindIcon({
 
   return (
     <span
-      title="文生图"
-      aria-label="文生图"
+      title={t("文生图")}
+      aria-label={t("文生图")}
       className={cn("inline-flex shrink-0 text-muted", className)}
     >
       <Sparkles size={size} aria-hidden />
@@ -87,8 +88,8 @@ export function JobReferenceBadge({
         WebkitBackdropFilter: "blur(4px)",
         border: "1px solid var(--w-12)",
       }}
-      aria-label={`${count} 张输入参考图`}
-      title={`${count} 张参考图`}
+      aria-label={t("{p0} 张输入参考图", { p0: count })}
+      title={t("{p0} 张参考图", { p0: count })}
     >
       <CornerDownRight size={9} aria-hidden />
       {count}

@@ -1,3 +1,4 @@
+import { t } from "@/lib/i18n";
 import { useEffect, useState } from "react";
 import { api } from "@/lib/api";
 import { cn } from "@/lib/cn";
@@ -80,11 +81,11 @@ export function JobReferenceStrip({
   return (
     <div className="mb-3">
       <div className="mb-1.5 flex items-center gap-1.5 text-[11px] text-faint">
-        <span className="t-caps">输入参考图</span>
+        <span className="t-caps">{t("输入参考图")}</span>
         <span className="font-mono">{count}</span>
         {region && (
           <span className="rounded px-1 py-px text-[10px] text-[color:var(--accent)] bg-[color:var(--accent-10)]">
-            局部编辑
+            {t("局部编辑")}
           </span>
         )}
       </div>
@@ -120,12 +121,12 @@ export function JobReferenceStrip({
                     ? "transition-transform hover:scale-[1.03] hover:ring-[color:var(--accent-45)]"
                     : "cursor-default",
                 )}
-                title={`参考图 ${i + 1}`}
-                aria-label={`参考图 ${i + 1}`}
+                title={t("参考图 {p0}", { p0: i + 1 })}
+                aria-label={t("参考图 {p0}", { p0: i + 1 })}
               >
                 <img
                   src={url}
-                  alt={`参考图 ${i + 1}`}
+                  alt={t("参考图 {p0}", { p0: i + 1 })}
                   className="h-full w-full object-cover bg-[color:var(--k-18)]"
                   loading="lazy"
                 />

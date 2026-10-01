@@ -1,3 +1,4 @@
+import { t } from "@/lib/i18n";
 import type { Job } from "../../types";
 import { jobOutputPath } from "../shared";
 import { jobExportBaseName, outputFileName } from "@/lib/job-export";
@@ -23,10 +24,15 @@ async function fetchOutputBlob(
   preferredUrl?: string,
 ) {
   const url = preferredUrl || fileUrl(path);
-  if (!url) throw new Error("没有可下载的图片。");
+  if (!url) throw new Error(t("没有可下载的图片。"));
   const response = await fetch(url);
   if (!response.ok) {
-    throw new Error(`下载图片失败：${response.status} ${response.statusText}`);
+    throw new Error(
+      t("下载图片失败：{p0} {p1}", {
+        p0: response.status,
+        p1: response.statusText,
+      }),
+    );
   }
   return response.blob();
 }
@@ -51,7 +57,7 @@ export async function downloadJobZip(
   jobOutputUrl?: (job: Job, index?: number) => string,
 ) {
   const outputs = jobDownloadEntries(job);
-  if (outputs.length === 0) throw new Error("没有可下载的图片。");
+  if (outputs.length === 0) throw new Error(t("没有可下载的图片。"));
   const baseName = jobExportBaseName(job);
   const entries = await Promise.all(
     outputs.map(async ({ path, outputIndex }) => ({

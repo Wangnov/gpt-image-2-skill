@@ -1,3 +1,4 @@
+import { t } from "@/lib/i18n";
 import { useEffect, useState } from "react";
 import { motion } from "motion/react";
 import { Loader2 } from "lucide-react";
@@ -92,7 +93,10 @@ export function RecentWorkTile({
       transition={{ duration: 0.16, ease: [0.22, 1, 0.36, 1] }}
       className="relative h-full w-full cursor-pointer rounded-md overflow-hidden ring-1 ring-[color:var(--w-10)] hover:ring-[color:var(--accent-45)] hover:scale-[1.025] transition-[box-shadow,transform] bg-[color:var(--bg-sunken)] focus-visible:outline-none focus-visible:ring-[color:var(--accent-55)]"
       title={promptText.slice(0, 80)}
-      aria-label={`打开作品 ${outputIndex + 1}:${promptText.slice(0, 40)}`}
+      aria-label={t("打开作品 {p0}:{p1}", {
+        p0: outputIndex + 1,
+        p1: promptText.slice(0, 40),
+      })}
     >
       {displayUrl && !imageFailed ? (
         <img
@@ -108,7 +112,7 @@ export function RecentWorkTile({
         <PlaceholderImage
           seed={jobPlaceholderSeed(job)}
           variant="recent"
-          label={displayUrl && imageFailed ? "远端不可用" : undefined}
+          label={displayUrl && imageFailed ? t("远端不可用") : undefined}
         />
       )}
       {canSendToEdit && (hover || focusWithin) && (
@@ -119,8 +123,8 @@ export function RecentWorkTile({
             onSendToEdit?.();
           }}
           className="absolute right-2 top-2 inline-flex h-8 w-8 items-center justify-center rounded-[5px] border border-[color:var(--surface-floating-border)] bg-[color:var(--surface-floating)] text-foreground shadow-[var(--shadow-floating)] backdrop-blur transition-colors hover:bg-[color:var(--surface-floating-strong)]"
-          title="发送到编辑"
-          aria-label="发送到编辑"
+          title={t("发送到编辑")}
+          aria-label={t("发送到编辑")}
         >
           <Icon name="edit" size={13} />
         </button>
@@ -139,7 +143,7 @@ export function PendingWorkTile({
   return (
     <div
       className="relative h-full w-full overflow-hidden rounded-md border border-[color:var(--w-12)] bg-[color:var(--bg-sunken)] shadow-sm"
-      aria-label="生成中"
+      aria-label={t("生成中")}
     >
       <PlaceholderImage
         seed={seed}
@@ -161,7 +165,7 @@ export function PendingWorkTile({
           size={11}
           className="animate-spin text-[color:var(--accent)]"
         />
-        生成中
+        {t("生成中")}
       </div>
     </div>
   );

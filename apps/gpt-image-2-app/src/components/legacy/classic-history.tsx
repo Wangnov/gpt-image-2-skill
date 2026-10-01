@@ -1,3 +1,4 @@
+import { t, getLocale } from "@/lib/i18n";
 import { useEffect, useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Empty } from "@/components/ui/empty";
@@ -15,10 +16,30 @@ import { isClearableTerminalJob } from "@/components/screens/history/shared";
 type FilterValue = "all" | "running" | "completed" | "failed";
 
 const FILTERS = [
-  { value: "all", label: "全部" },
-  { value: "running", label: "进行中" },
-  { value: "completed", label: "已完成" },
-  { value: "failed", label: "失败/部分失败" },
+  {
+    value: "all",
+    get label() {
+      return t("全部");
+    },
+  },
+  {
+    value: "running",
+    get label() {
+      return t("进行中");
+    },
+  },
+  {
+    value: "completed",
+    get label() {
+      return t("已完成");
+    },
+  },
+  {
+    value: "failed",
+    get label() {
+      return t("失败/部分失败");
+    },
+  },
 ] as const;
 
 function matchesFilter(job: Job, filter: FilterValue) {
@@ -53,7 +74,7 @@ export function ClassicHistoryScreen({
 
   const filtered = useMemo(
     () => jobs.filter((job) => matchesFilter(job, filter)),
-    [jobs, filter],
+    [jobs, filter, getLocale()],
   );
   const selected = selectedId
     ? (jobs.find((job) => job.id === selectedId) ?? null)
@@ -87,9 +108,9 @@ export function ClassicHistoryScreen({
 
   const handleDelete = async (job: Job) => {
     const ok = await confirm({
-    title: "删除任务记录",
-    description: "只会删除历史记录，远端 Origin/Archive 不会被删除。",
-      confirmText: "删除",
+      title: t("删除任务记录"),
+      description: t("只会删除历史记录，远端 Origin/Archive 不会被删除。"),
+      confirmText: t("删除"),
       variant: "danger",
     });
     if (!ok) return;
@@ -99,9 +120,9 @@ export function ClassicHistoryScreen({
 
   const handleCancel = async (id: string) => {
     const ok = await confirm({
-      title: "取消任务",
-      description: "队列中的任务会停止继续处理。",
-      confirmText: "取消任务",
+      title: t("取消任务"),
+      description: t("队列中的任务会停止继续处理。"),
+      confirmText: t("取消任务"),
       variant: "danger",
     });
     if (!ok) return;
@@ -114,9 +135,12 @@ export function ClassicHistoryScreen({
     if (!clearable) return;
     const finished = jobs.filter(isClearableTerminalJob);
     const ok = await confirm({
-      title: "清理任务记录",
-    description: `将清理 ${finished.length} 条已结束任务。远端 Origin/Archive 不会被删除。`,
-      confirmText: "清理",
+      title: t("清理任务记录"),
+      description: t(
+        "将清理 {p0} 条已结束任务。远端 Origin/Archive 不会被删除。",
+        { p0: finished.length },
+      ),
+      confirmText: t("清理"),
       variant: "danger",
     });
     if (!ok) return;
@@ -128,16 +152,21 @@ export function ClassicHistoryScreen({
       <section className="surface-panel flex min-h-0 flex-col overflow-hidden">
         <header className="flex shrink-0 items-center gap-3 border-b border-border-faint px-3.5 py-3">
           <div className="min-w-0 flex-1">
-            <div className="t-h3">任务历史</div>
+            <div className="t-h3">{t("任务历史")}</div>
             <div className="t-small">
-              {isLoading ? "正在读取任务..." : `${filtered.length} / ${jobs.length} 条记录`}
+              {isLoading
+                ? t("正在读取任务...")
+                : t("{p0} / {p1} 条记录", {
+                    p0: filtered.length,
+                    p1: jobs.length,
+                  })}
             </div>
           </div>
           <Segmented
             value={filter}
             onChange={setFilter}
             size="sm"
-            ariaLabel="任务过滤"
+            ariaLabel={t("任务过滤")}
             options={FILTERS}
           />
           <Button
@@ -147,7 +176,7 @@ export function ClassicHistoryScreen({
             disabled={!clearable}
             onClick={handleClearFinished}
           >
-            清理
+            {t("清理")}
           </Button>
         </header>
 
@@ -155,8 +184,8 @@ export function ClassicHistoryScreen({
           {filtered.length === 0 ? (
             <Empty
               icon="history"
-              title="没有任务"
-              subtitle="生成或编辑图片后，记录会出现在这里。"
+              title={t("没有任务")}
+              subtitle={t("生成或编辑图片后，记录会出现在这里。")}
               action={
                 onSwitchToGenerate ? (
                   <Button
@@ -165,7 +194,7 @@ export function ClassicHistoryScreen({
                     icon="generate"
                     onClick={onSwitchToGenerate}
                   >
-                    新建生成
+                    {t("新建生成")}
                   </Button>
                 ) : undefined
               }

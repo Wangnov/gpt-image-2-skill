@@ -1,3 +1,4 @@
+import { t } from "@/lib/i18n";
 import { useEffect, useState } from "react";
 import { RevealImage } from "@/components/ui/reveal-image";
 import { PlaceholderImage } from "@/components/screens/shared/placeholder-image";
@@ -67,7 +68,7 @@ export function JobPreviewImage({
       <PlaceholderImage
         seed={seed}
         variant={variant}
-        label={displayUrl && failed ? "远端不可用" : undefined}
+        label={displayUrl && failed ? t("远端不可用") : undefined}
       />
     </div>
   );

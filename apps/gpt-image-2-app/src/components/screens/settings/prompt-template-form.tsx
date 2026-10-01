@@ -1,3 +1,4 @@
+import { t } from "@/lib/i18n";
 import { Button } from "@/components/ui/button";
 import { GlassSelect } from "@/components/ui/select";
 import { Segmented } from "@/components/ui/segmented";
@@ -57,8 +58,10 @@ export function PromptTemplateForm({
 }) {
   return (
     <TemplateSection
-      title={editingId ? "编辑模板" : "新建模板"}
-      description="作用域控制模板出现在哪些创作页面；通用模板会出现在所有页面。"
+      title={editingId ? t("编辑模板") : t("新建模板")}
+      description={t(
+        "作用域控制模板出现在哪些创作页面；通用模板会出现在所有页面。",
+      )}
     >
       <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_180px]">
         <div className="flex h-9 w-full items-center gap-1.5 rounded-md border border-border bg-[color:var(--w-04)] px-1.5 transition-colors focus-within:border-[color:var(--accent-55)] focus-within:bg-[color:var(--accent-06)]">
@@ -71,8 +74,8 @@ export function PromptTemplateForm({
           <input
             value={templateTitle}
             onChange={(event) => setTemplateTitle(event.target.value)}
-            placeholder="模板名称"
-            aria-label="模板名称"
+            placeholder={t("模板名称")}
+            aria-label={t("模板名称")}
             className="min-w-0 flex-1 border-none bg-transparent px-1 text-[13px] text-foreground outline-none placeholder:text-faint"
           />
         </div>
@@ -84,7 +87,7 @@ export function PromptTemplateForm({
             label: group.name,
           }))}
           disabled={groups.length === 0}
-          placeholder="选择分组"
+          placeholder={t("选择分组")}
         />
       </div>
       <div className="mt-3">
@@ -92,7 +95,7 @@ export function PromptTemplateForm({
           value={templateScope}
           onChange={(scope) => setTemplateScope(scope as PromptTemplateScope)}
           size="sm"
-          ariaLabel="模板作用域"
+          ariaLabel={t("模板作用域")}
           options={SCOPE_OPTIONS}
         />
       </div>
@@ -101,13 +104,13 @@ export function PromptTemplateForm({
           value={templatePrompt}
           onChange={(event) => setTemplatePrompt(event.target.value)}
           minHeight={112}
-          placeholder="写入要复用的提示词..."
+          placeholder={t("写入要复用的提示词...")}
         />
       </div>
       <div className="mt-3 flex justify-end gap-2">
         {editingId && (
           <Button variant="ghost" size="sm" onClick={resetForm}>
-            取消
+            {t("取消")}
           </Button>
         )}
         <Button
@@ -116,7 +119,7 @@ export function PromptTemplateForm({
           icon={editingId ? "check" : "plus"}
           onClick={saveTemplate}
         >
-          {editingId ? "保存模板" : "添加模板"}
+          {editingId ? t("保存模板") : t("添加模板")}
         </Button>
       </div>
     </TemplateSection>

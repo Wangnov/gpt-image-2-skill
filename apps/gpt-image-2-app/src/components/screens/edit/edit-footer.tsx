@@ -1,3 +1,4 @@
+import { t } from "@/lib/i18n";
 import { type RefObject } from "react";
 import { Loader2, Sparkles } from "lucide-react";
 import { Icon } from "@/components/icon";
@@ -107,14 +108,15 @@ export function EditFooter({
             {runError}
           </span>
           <Button variant="ghost" size="sm" icon="reload" onClick={handleRun}>
-            重试
+            {t("重试")}
           </Button>
         </div>
       )}
 
       {runNotice && !isWorking && (
         <div className="surface-panel px-3 py-1.5 text-[11.5px] leading-relaxed text-muted animate-fade-up">
-          {runNotice} 已保留收到的图片；如果需要补齐，可以点「应用」重试。
+          {runNotice}{" "}
+          {t("已保留收到的图片；如果需要补齐，可以点「应用」重试。")}
         </div>
       )}
 
@@ -139,7 +141,7 @@ export function EditFooter({
       <div className="surface-panel p-2.5">
         <div className="flex items-center gap-2 mb-1.5">
           <FieldLabel htmlFor={promptId}>
-            {usesRegion ? "目标图选区里要变成什么" : "提示词"}
+            {usesRegion ? t("目标图选区里要变成什么") : t("提示词")}
           </FieldLabel>
           <div className="flex-1" />
           <PromptTemplatePicker
@@ -159,8 +161,8 @@ export function EditFooter({
           maxLength={4000}
           placeholder={
             usesRegion
-              ? "描述目标图选区里要变成什么..."
-              : "描述如何参考这些图片进行编辑..."
+              ? t("描述目标图选区里要变成什么...")
+              : t("描述如何参考这些图片进行编辑...")
           }
           onKeyDown={(event) => {
             if (event.key === "Enter" && (event.metaKey || event.ctrlKey)) {
@@ -201,7 +203,11 @@ export function EditFooter({
               ) : (
                 <Sparkles size={13} />
               )}
-              {isSubmitting ? "提交中…" : isTracking ? "再提交" : "应用"}
+              {isSubmitting
+                ? t("提交中…")
+                : isTracking
+                  ? t("再提交")
+                  : t("应用")}
             </button>
           }
         />

@@ -1,3 +1,4 @@
+import { t, getLocale } from "@/lib/i18n";
 import { useCallback, useMemo } from "react";
 import { toast } from "sonner";
 import { api } from "@/lib/api";
@@ -26,11 +27,11 @@ export type UseImageActionsOptions = {
 export function useImageActions({ asset, surface }: UseImageActionsOptions) {
   const ctx: ImageActionContext = useMemo(
     () => ({ asset, runtime: api.kind, surface }),
-    [asset, surface],
+    [asset, surface, getLocale()],
   );
 
-  const available = useMemo(() => actionsFor(ctx), [ctx]);
-  const groups = useMemo(() => groupedActions(ctx), [ctx]);
+  const available = useMemo(() => actionsFor(ctx), [ctx, getLocale()]);
+  const groups = useMemo(() => groupedActions(ctx), [ctx, getLocale()]);
 
   const run = useCallback(
     async (id: ImageActionId) => {
@@ -47,7 +48,7 @@ export function useImageActions({ asset, surface }: UseImageActionsOptions) {
         return true;
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
-        toast.error("操作失败", { description: message });
+        toast.error(t("操作失败"), { description: message });
         return false;
       }
     },

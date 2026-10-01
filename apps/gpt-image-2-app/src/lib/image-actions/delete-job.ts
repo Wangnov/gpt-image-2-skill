@@ -1,3 +1,4 @@
+import { t } from "@/lib/i18n";
 import { toast } from "sonner";
 import { api } from "@/lib/api";
 import type { RuntimeKind } from "@/lib/api/types";
@@ -40,7 +41,7 @@ export async function softDeleteJobWithUndo(
   if (runtime !== "tauri") {
     // Backend already hard-deleted (HTTP/Browser fallback). Show a one-shot
     // success toast without the undo button.
-    toast.success("任务已删除", { duration: 2_500 });
+    toast.success(t("任务已删除"), { duration: 2_500 });
     return;
   }
 
@@ -58,10 +59,10 @@ export async function softDeleteJobWithUndo(
   }, HARD_DELETE_DELAY_MS);
   pendingHardDeletes.set(jobId, timeoutId);
 
-  toast("任务已删除", {
+  toast(t("任务已删除"), {
     duration: UNDO_WINDOW_MS,
     action: {
-      label: "撤回",
+      label: t("撤回"),
       onClick: () => {
         cancelled = true;
         const id = pendingHardDeletes.get(jobId);
@@ -71,12 +72,12 @@ export async function softDeleteJobWithUndo(
           .restoreDeletedJob(jobId)
           .then(() => {
             invalidateJobsQueries();
-            toast.success("已恢复", { duration: 1_500 });
+            toast.success(t("已恢复"), { duration: 1_500 });
           })
           .catch((error: unknown) => {
             const message =
               error instanceof Error ? error.message : String(error);
-            toast.error("恢复失败", { description: message });
+            toast.error(t("恢复失败"), { description: message });
           });
       },
     },

@@ -1,3 +1,4 @@
+import { t } from "@/lib/i18n";
 import { useEffect, useState } from "react";
 import { cn } from "@/lib/cn";
 import type { Job } from "@/lib/types";
@@ -35,13 +36,13 @@ function BeforeAfterSlider({
     >
       <img
         src={after}
-        alt="生成结果"
+        alt={t("生成结果")}
         draggable={false}
         className="absolute inset-0 h-full w-full object-contain"
       />
       <img
         src={before}
-        alt="输入参考图"
+        alt={t("输入参考图")}
         draggable={false}
         className="absolute inset-0 h-full w-full object-contain"
         style={{ clipPath: `inset(0 ${100 - pos}% 0 0)` }}
@@ -70,13 +71,13 @@ function BeforeAfterSlider({
         className="pointer-events-none absolute left-2 top-2 rounded px-1.5 py-0.5 text-[10px] font-mono text-foreground"
         style={{ background: "var(--k-55)" }}
       >
-        输入
+        {t("输入")}
       </span>
       <span
         className="pointer-events-none absolute right-2 top-2 rounded px-1.5 py-0.5 text-[10px] font-mono text-foreground"
         style={{ background: "var(--k-55)" }}
       >
-        输出
+        {t("输出")}
       </span>
       <input
         type="range"
@@ -84,7 +85,7 @@ function BeforeAfterSlider({
         max={100}
         value={pos}
         onChange={(event) => setPos(Number(event.currentTarget.value))}
-        aria-label="对比输入与输出"
+        aria-label={t("对比输入与输出")}
         className="absolute inset-0 h-full w-full cursor-ew-resize opacity-0"
       />
     </div>
@@ -113,11 +114,11 @@ export function JobReferenceCompare({
   return (
     <section className="surface-panel space-y-3 p-4">
       <div className="flex items-center gap-1.5">
-        <span className="t-caps">输入参考图</span>
+        <span className="t-caps">{t("输入参考图")}</span>
         <span className="font-mono text-[11px] text-faint">{count}</span>
         {region && (
           <span className="rounded bg-[color:var(--accent-10)] px-1 py-px text-[10px] text-[color:var(--accent)]">
-            局部编辑
+            {t("局部编辑")}
           </span>
         )}
       </div>
@@ -143,9 +144,9 @@ export function JobReferenceCompare({
                     ? "scale-[1.04] ring-[color:var(--accent-55)]"
                     : "opacity-70 ring-[color:var(--w-10)] hover:opacity-100",
                 )}
-                aria-label={`参考图 ${i + 1}`}
+                aria-label={t("参考图 {p0}", { p0: i + 1 })}
                 aria-pressed={i === selected}
-                title={`参考图 ${i + 1}`}
+                title={t("参考图 {p0}", { p0: i + 1 })}
               >
                 <img
                   src={url}
@@ -161,14 +162,14 @@ export function JobReferenceCompare({
         <>
           <BeforeAfterSlider before={activeRef} after={outputUrl} />
           <p className="text-[10.5px] text-faint">
-            拖动滑块对比输入参考图与生成结果。
+            {t("拖动滑块对比输入参考图与生成结果。")}
           </p>
         </>
       ) : activeRef ? (
         <div className="overflow-hidden rounded-lg ring-1 ring-[color:var(--w-08)]">
           <img
             src={activeRef}
-            alt="输入参考图"
+            alt={t("输入参考图")}
             className="block max-h-[280px] w-full bg-[color:var(--k-18)] object-contain"
           />
         </div>

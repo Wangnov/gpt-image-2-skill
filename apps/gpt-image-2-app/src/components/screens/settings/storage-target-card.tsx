@@ -1,3 +1,4 @@
+import { t } from "@/lib/i18n";
 import type { ReactNode } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -20,18 +21,18 @@ import type {
 } from "@/lib/types";
 import {
   BAIDU_AUTH_MODE_OPTIONS,
-  BAIDU_NETDISK_HINT,
-  LOCAL_PUBLIC_BASE_URL_HINT,
+  baiduNetdiskHint,
+  localPublicBaseUrlHint,
   METHOD_OPTIONS,
   PAN123_AUTH_MODE_OPTIONS,
-  PAN123_OPEN_HINT,
+  pan123OpenHint,
   getStorageTargetTypeOptions,
 } from "./constants";
 import { CredentialEditor } from "./credential-editor";
 
 function HintButton({
   text,
-  ariaLabel = "查看对接条件",
+  ariaLabel = t("查看对接条件"),
 }: {
   text: string;
   ariaLabel?: string;
@@ -82,7 +83,7 @@ function StorageField({
           {required && (
             <span
               className="text-[color:var(--accent-70)]"
-              aria-label="必填"
+              aria-label={t("必填")}
             >
               *
             </span>
@@ -135,7 +136,8 @@ export function StorageTargetCard({
   ) => void;
 }) {
   const type = storageTargetType(target);
-  const localDirectoryLabel = api.kind === "http" ? "服务器目录" : "本地目录";
+  const localDirectoryLabel =
+    api.kind === "http" ? t("服务器目录") : t("本地目录");
   const webdavTarget =
     type === "webdav" ? (target as WebDavStorageTargetConfig) : undefined;
   const httpTarget =
@@ -150,7 +152,8 @@ export function StorageTargetCard({
     type === "pan123_open"
       ? (target as Pan123OpenStorageTargetConfig)
       : undefined;
-  const baiduAuthMode = baiduTarget?.auth_mode === "oauth" ? "oauth" : "personal";
+  const baiduAuthMode =
+    baiduTarget?.auth_mode === "oauth" ? "oauth" : "personal";
   const pan123AuthMode =
     pan123Target?.auth_mode === "access_token" ? "access_token" : "client";
   const fieldError = (field: string) => issueForField(issues, field);
@@ -161,20 +164,22 @@ export function StorageTargetCard({
         <input
           defaultValue={name}
           onBlur={(event) => onRename(name, event.target.value)}
-          aria-label="上传位置名称"
+          aria-label={t("上传位置名称")}
           className="h-7 w-full rounded-md border border-border bg-[color:var(--w-04)] px-2.5 font-mono text-[13px] outline-none transition-colors placeholder:text-faint focus:border-[color:var(--accent-55)] focus:bg-[color:var(--accent-06)] focus:shadow-[0_0_0_3px_var(--accent-14)]"
         />
         <div className="flex min-w-0 items-center gap-2">
           <GlassSelect
             value={type}
-            onValueChange={(value) => onSetType(name, value as StorageTargetKind)}
+            onValueChange={(value) =>
+              onSetType(name, value as StorageTargetKind)
+            }
             options={getStorageTargetTypeOptions(api.kind)}
             size="sm"
-            ariaLabel="上传位置类型"
+            ariaLabel={t("上传位置类型")}
             className="w-full"
           />
-          {type === "baidu_netdisk" && <HintButton text={BAIDU_NETDISK_HINT} />}
-          {type === "pan123_open" && <HintButton text={PAN123_OPEN_HINT} />}
+          {type === "baidu_netdisk" && <HintButton text={baiduNetdiskHint()} />}
+          {type === "pan123_open" && <HintButton text={pan123OpenHint()} />}
         </div>
         <div className="flex justify-end gap-1">
           <Button
@@ -184,14 +189,14 @@ export function StorageTargetCard({
             disabled={testPending}
             onClick={() => onRunTest(name)}
           >
-            测试
+            {t("测试")}
           </Button>
           <Button
             variant="ghost"
             size="iconSm"
             icon="trash"
             onClick={() => onRemove(name)}
-            aria-label="删除上传位置"
+            aria-label={t("删除上传位置")}
           />
         </div>
       </div>
@@ -202,7 +207,7 @@ export function StorageTargetCard({
             error={fieldError("directory")}
             description={
               api.kind === "http"
-                ? "服务器上的路径；docker 部署需挂载为 volume。"
+                ? t("服务器上的路径；docker 部署需挂载为 volume。")
                 : undefined
             }
             required
@@ -227,8 +232,8 @@ export function StorageTargetCard({
                     size="iconSm"
                     icon="folder"
                     className="h-6 w-6 shrink-0 text-foreground"
-                    title="浏览文件夹"
-                    aria-label={`浏览${localDirectoryLabel}`}
+                    title={t("浏览文件夹")}
+                    aria-label={t("浏览{p0}", { p0: localDirectoryLabel })}
                     onClick={async () => {
                       const picked = await api.chooseFolder?.(
                         "directory" in target ? target.directory : undefined,
@@ -236,21 +241,23 @@ export function StorageTargetCard({
                       if (picked) onPatch(name, { directory: picked });
                     }}
                   >
-                    <span className="sr-only">{`浏览${localDirectoryLabel}`}</span>
+                    <span className="sr-only">
+                      {t("浏览{p0}", { p0: localDirectoryLabel })}
+                    </span>
                   </Button>
                 ) : undefined
               }
             />
           </StorageField>
           <StorageField
-            label="公开访问前缀"
+            label={t("公开访问前缀")}
             hint={
               <HintButton
-                text={LOCAL_PUBLIC_BASE_URL_HINT}
-                ariaLabel="查看公开访问前缀说明"
+                text={localPublicBaseUrlHint()}
+                ariaLabel={t("查看公开访问前缀说明")}
               />
             }
-            description="用于生成可访问图片 URL；没有静态访问服务时留空。"
+            description={t("用于生成可访问图片 URL；没有静态访问服务时留空。")}
           >
             <Input
               value={target.public_base_url ?? ""}
@@ -259,7 +266,7 @@ export function StorageTargetCard({
               }
               placeholder="https://cdn.example.com/images"
               size="sm"
-              aria-label="公开访问前缀"
+              aria-label={t("公开访问前缀")}
             />
           </StorageField>
         </div>
@@ -270,7 +277,9 @@ export function StorageTargetCard({
             <StorageField error={fieldError("bucket")} required>
               <Input
                 value={target.bucket}
-                onChange={(event) => onPatch(name, { bucket: event.target.value })}
+                onChange={(event) =>
+                  onPatch(name, { bucket: event.target.value })
+                }
                 placeholder="bucket"
                 size="sm"
                 aria-label="S3 bucket"
@@ -279,14 +288,18 @@ export function StorageTargetCard({
             </StorageField>
             <Input
               value={target.region ?? ""}
-              onChange={(event) => onPatch(name, { region: event.target.value })}
+              onChange={(event) =>
+                onPatch(name, { region: event.target.value })
+              }
               placeholder="region"
               size="sm"
               aria-label="S3 region"
             />
             <Input
               value={target.prefix ?? ""}
-              onChange={(event) => onPatch(name, { prefix: event.target.value })}
+              onChange={(event) =>
+                onPatch(name, { prefix: event.target.value })
+              }
               placeholder="prefix/"
               size="sm"
               aria-label="S3 prefix"
@@ -307,9 +320,9 @@ export function StorageTargetCard({
               onChange={(event) =>
                 onPatch(name, { public_base_url: event.target.value })
               }
-              placeholder="对外访问前缀（可选）"
+              placeholder={t("对外访问前缀（可选）")}
               size="sm"
-              aria-label="S3 对外访问前缀"
+              aria-label={t("S3 对外访问前缀")}
             />
           </div>
           <StorageField error={fieldError("access_key_id")} required>
@@ -352,14 +365,16 @@ export function StorageTargetCard({
               onChange={(event) =>
                 onPatch(name, { public_base_url: event.target.value })
               }
-              placeholder="对外访问前缀（可选）"
+              placeholder={t("对外访问前缀（可选）")}
               size="sm"
-              aria-label="WebDAV 对外访问前缀"
+              aria-label={t("WebDAV 对外访问前缀")}
             />
           </div>
           <Input
             value={webdavTarget.username ?? ""}
-            onChange={(event) => onPatch(name, { username: event.target.value })}
+            onChange={(event) =>
+              onPatch(name, { username: event.target.value })
+            }
             placeholder="username"
             size="sm"
             aria-label="WebDAV username"
@@ -401,7 +416,7 @@ export function StorageTargetCard({
               }
               placeholder="/data/url"
               size="sm"
-              aria-label="JSON 中公开 URL 的字段路径"
+              aria-label={t("JSON 中公开 URL 的字段路径")}
             />
           </div>
           {Object.entries(httpTarget.headers ?? {}).map(
@@ -431,14 +446,14 @@ export function StorageTargetCard({
                     onUpdateHttpHeader(name, header, header, nextCredential)
                   }
                   placeholder="Bearer ..."
-                  ariaLabel={`${header} 值`}
+                  ariaLabel={t("{p0} 值", { p0: header })}
                 />
                 <Button
                   variant="ghost"
                   size="iconSm"
                   icon="x"
                   onClick={() => onUpdateHttpHeader(name, header, "", null)}
-                  aria-label="删除 HTTP header"
+                  aria-label={t("删除 HTTP header")}
                 />
               </div>
             ),
@@ -449,7 +464,7 @@ export function StorageTargetCard({
             icon="plus"
             onClick={() => onAddHttpHeader(name)}
           >
-            添加 Header
+            {t("添加 Header")}
           </Button>
         </div>
       )}
@@ -459,7 +474,9 @@ export function StorageTargetCard({
             <StorageField error={fieldError("host")} required>
               <Input
                 value={sftpTarget.host}
-                onChange={(event) => onPatch(name, { host: event.target.value })}
+                onChange={(event) =>
+                  onPatch(name, { host: event.target.value })
+                }
                 placeholder="host"
                 size="sm"
                 aria-label="SFTP host"
@@ -506,9 +523,9 @@ export function StorageTargetCard({
               onChange={(event) =>
                 onPatch(name, { public_base_url: event.target.value })
               }
-              placeholder="对外访问前缀（可选）"
+              placeholder={t("对外访问前缀（可选）")}
               size="sm"
-              aria-label="SFTP 对外访问前缀"
+              aria-label={t("SFTP 对外访问前缀")}
             />
           </div>
           <StorageField error={fieldError("host_key_sha256")} required>
@@ -517,9 +534,9 @@ export function StorageTargetCard({
               onChange={(event) =>
                 onPatch(name, { host_key_sha256: event.target.value })
               }
-              placeholder="SHA256 指纹"
+              placeholder={t("SHA256 指纹")}
               size="sm"
-              aria-label="SFTP 服务器 SHA256 指纹"
+              aria-label={t("SFTP 服务器 SHA256 指纹")}
               aria-invalid={Boolean(fieldError("host_key_sha256"))}
             />
           </StorageField>
@@ -549,12 +566,12 @@ export function StorageTargetCard({
               onChange={(auth_mode) => onPatch(name, { auth_mode })}
               options={BAIDU_AUTH_MODE_OPTIONS}
               size="sm"
-              ariaLabel="百度网盘对接方式"
+              ariaLabel={t("百度网盘对接方式")}
             />
             <span className="text-[11px] text-faint">
               {baiduAuthMode === "personal"
-                ? "个人对接只需要长期 Access Token。"
-                : "OAuth 对接使用应用凭证换取访问令牌。"}
+                ? t("个人对接只需要长期 Access Token。")
+                : t("OAuth 对接使用应用凭证换取访问令牌。")}
             </span>
           </div>
           <div className="grid gap-2 sm:grid-cols-2">
@@ -564,9 +581,9 @@ export function StorageTargetCard({
                 onChange={(event) =>
                   onPatch(name, { app_name: event.target.value })
                 }
-                placeholder="应用目录名"
+                placeholder={t("应用目录名")}
                 size="sm"
-                aria-label="百度网盘应用目录名"
+                aria-label={t("百度网盘应用目录名")}
                 aria-invalid={Boolean(fieldError("app_name"))}
               />
             </StorageField>
@@ -577,7 +594,7 @@ export function StorageTargetCard({
               }
               placeholder="outputs"
               size="sm"
-              aria-label="百度网盘远端目录"
+              aria-label={t("百度网盘远端目录")}
             />
           </div>
           <Input
@@ -585,9 +602,9 @@ export function StorageTargetCard({
             onChange={(event) =>
               onPatch(name, { public_base_url: event.target.value })
             }
-            placeholder="公开基础 URL（可选）"
+            placeholder={t("公开基础 URL（可选）")}
             size="sm"
-            aria-label="百度网盘公开基础 URL"
+            aria-label={t("百度网盘公开基础 URL")}
           />
           {baiduAuthMode === "personal" && (
             <StorageField error={fieldError("access_token")} required>
@@ -595,7 +612,7 @@ export function StorageTargetCard({
                 credential={baiduTarget.access_token}
                 onChange={(access_token) => onPatch(name, { access_token })}
                 placeholder="Access Token"
-                ariaLabel="百度网盘 Access Token"
+                ariaLabel={t("百度网盘 Access Token")}
                 invalid={Boolean(fieldError("access_token"))}
               />
             </StorageField>
@@ -610,9 +627,9 @@ export function StorageTargetCard({
                   }
                   placeholder="App Key"
                   size="sm"
-                  aria-label="百度网盘 App Key"
+                  aria-label={t("百度网盘 App Key")}
                   aria-invalid={Boolean(fieldError("app_key"))}
-                  suffix={<HintButton text={BAIDU_NETDISK_HINT} />}
+                  suffix={<HintButton text={baiduNetdiskHint()} />}
                 />
               </StorageField>
               <StorageField error={fieldError("secret_key")} required>
@@ -620,18 +637,16 @@ export function StorageTargetCard({
                   credential={baiduTarget.secret_key}
                   onChange={(secret_key) => onPatch(name, { secret_key })}
                   placeholder="Secret Key"
-                  ariaLabel="百度网盘 Secret Key"
+                  ariaLabel={t("百度网盘 Secret Key")}
                   invalid={Boolean(fieldError("secret_key"))}
                 />
               </StorageField>
               <StorageField error={fieldError("refresh_token")} required>
                 <CredentialEditor
                   credential={baiduTarget.refresh_token}
-                  onChange={(refresh_token) =>
-                    onPatch(name, { refresh_token })
-                  }
+                  onChange={(refresh_token) => onPatch(name, { refresh_token })}
                   placeholder="Refresh Token"
-                  ariaLabel="百度网盘 Refresh Token"
+                  ariaLabel={t("百度网盘 Refresh Token")}
                   invalid={Boolean(fieldError("refresh_token"))}
                 />
               </StorageField>
@@ -647,12 +662,12 @@ export function StorageTargetCard({
               onChange={(auth_mode) => onPatch(name, { auth_mode })}
               options={PAN123_AUTH_MODE_OPTIONS}
               size="sm"
-              ariaLabel="123 网盘对接方式"
+              ariaLabel={t("123 网盘对接方式")}
             />
             <span className="text-[11px] text-faint">
               {pan123AuthMode === "client"
-                ? "client 对接使用 clientID + clientSecret。"
-                : "accessToken 对接只需要长期 accessToken。"}
+                ? t("client 对接使用 clientID + clientSecret。")
+                : t("accessToken 对接只需要长期 accessToken。")}
             </span>
           </div>
           <Input
@@ -662,17 +677,15 @@ export function StorageTargetCard({
             }
             inputMode="numeric"
             size="sm"
-            aria-label="123 网盘父目录 ID"
+            aria-label={t("123 网盘父目录 ID")}
           />
           <div className="flex items-center gap-2 rounded-md border border-border bg-[color:var(--w-04)] px-3 py-2 text-[12px] text-muted">
             <Toggle
               checked={pan123Target.use_direct_link}
-              onChange={(use_direct_link) =>
-                onPatch(name, { use_direct_link })
-              }
-              label="上传后尝试获取直链"
+              onChange={(use_direct_link) => onPatch(name, { use_direct_link })}
+              label={t("上传后尝试获取直链")}
             />
-            <HintButton text={PAN123_OPEN_HINT} />
+            <HintButton text={pan123OpenHint()} />
           </div>
           {pan123AuthMode === "client" && (
             <div className="space-y-2">
@@ -684,19 +697,17 @@ export function StorageTargetCard({
                   }
                   placeholder="clientID"
                   size="sm"
-                  aria-label="123 网盘 clientID"
+                  aria-label={t("123 网盘 clientID")}
                   aria-invalid={Boolean(fieldError("client_id"))}
-                  suffix={<HintButton text={PAN123_OPEN_HINT} />}
+                  suffix={<HintButton text={pan123OpenHint()} />}
                 />
               </StorageField>
               <StorageField error={fieldError("client_secret")} required>
                 <CredentialEditor
                   credential={pan123Target.client_secret}
-                  onChange={(client_secret) =>
-                    onPatch(name, { client_secret })
-                  }
+                  onChange={(client_secret) => onPatch(name, { client_secret })}
                   placeholder="clientSecret"
-                  ariaLabel="123 网盘 clientSecret"
+                  ariaLabel={t("123 网盘 clientSecret")}
                   invalid={Boolean(fieldError("client_secret"))}
                 />
               </StorageField>
@@ -708,7 +719,7 @@ export function StorageTargetCard({
                 credential={pan123Target.access_token}
                 onChange={(access_token) => onPatch(name, { access_token })}
                 placeholder="accessToken"
-                ariaLabel="123 网盘 accessToken"
+                ariaLabel={t("123 网盘 accessToken")}
                 invalid={Boolean(fieldError("access_token"))}
               />
             </StorageField>

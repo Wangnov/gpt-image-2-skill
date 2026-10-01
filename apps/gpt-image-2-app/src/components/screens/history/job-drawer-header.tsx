@@ -1,3 +1,4 @@
+import { t } from "@/lib/i18n";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { StatusDot } from "@/components/ui/status-dot";
@@ -33,13 +34,14 @@ export function JobDrawerHeader({
           {planned > 1 && (
             <span className="t-small">
               {job.status === "completed" || doneCount >= planned
-                ? `${planned} 张图片`
-                : `已完成 ${doneCount}/${planned}`}
+                ? t("{p0} 张图片", { p0: planned })
+                : t("已完成 {p0}/{p1}", { p0: doneCount, p1: planned })}
             </span>
           )}
           {planned > 1 && (
             <Badge tone="accent" size="sm">
-              候选 {selectedLabel}
+              {t("候选 ")}
+              {selectedLabel}
             </Badge>
           )}
         </div>

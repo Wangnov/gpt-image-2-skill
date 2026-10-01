@@ -1,3 +1,4 @@
+import { t } from "@/lib/i18n";
 import { type ReactNode } from "react";
 import {
   PromptTemplateMark,
@@ -90,8 +91,8 @@ export function TemplateIconPicker({
         <button
           type="button"
           className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md transition-colors hover:bg-[color:var(--w-06)]"
-          title="选择模板图标和颜色"
-          aria-label="选择模板图标和颜色"
+          title={t("选择模板图标和颜色")}
+          aria-label={t("选择模板图标和颜色")}
         >
           <PromptTemplateMark icon={icon} color={color} size="sm" />
         </button>
@@ -104,7 +105,7 @@ export function TemplateIconPicker({
               type="button"
               onClick={() => onIconChange(item.value)}
               title={item.label}
-              aria-label={`选择图标：${item.label}`}
+              aria-label={t("选择图标：{p0}", { p0: item.label })}
               aria-pressed={icon === item.value}
               className={cn(
                 "flex h-10 items-center justify-center rounded-lg border transition-[background-color,border-color,transform]",
@@ -132,7 +133,7 @@ export function TemplateIconPicker({
                   type="button"
                   onClick={() => onColorChange(item.value)}
                   title={item.label}
-                  aria-label={`选择颜色：${item.label}`}
+                  aria-label={t("选择颜色：{p0}", { p0: item.label })}
                   aria-pressed={color === item.value}
                   className={cn(
                     "inline-flex h-7 w-7 items-center justify-center rounded-full border transition-transform",

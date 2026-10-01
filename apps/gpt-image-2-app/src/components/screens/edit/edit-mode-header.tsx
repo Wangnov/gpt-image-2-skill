@@ -1,3 +1,4 @@
+import { t } from "@/lib/i18n";
 import { Segmented } from "@/components/ui/segmented";
 import type { EditMode } from "./shared";
 
@@ -13,11 +14,11 @@ export function EditModeHeader({
       <Segmented
         value={editMode}
         onChange={onChange}
-        ariaLabel="编辑模式"
+        ariaLabel={t("编辑模式")}
         size="sm"
         options={[
-          { value: "reference", label: "多图参考", icon: "image" },
-          { value: "region", label: "局部编辑", icon: "mask" },
+          { value: "reference", label: t("多图参考"), icon: "image" },
+          { value: "region", label: t("局部编辑"), icon: "mask" },
         ]}
       />
 

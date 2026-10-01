@@ -1,3 +1,4 @@
+import { t } from "@/lib/i18n";
 import { type ReactNode, useState } from "react";
 import { motion } from "motion/react";
 import ScrambleText from "@/components/reactbits/text/ScrambleText";
@@ -123,8 +124,8 @@ export function PathRow({
             if (isFolder) void openPath(path);
             else void revealPath(path);
           }}
-          title={isFolder ? "打开目录" : "在访达中显示"}
-          aria-label={isFolder ? "打开目录" : "在访达中显示"}
+          title={isFolder ? t("打开目录") : t("在访达中显示")}
+          aria-label={isFolder ? t("打开目录") : t("在访达中显示")}
         />
         <Button
           variant="ghost"
@@ -133,11 +134,11 @@ export function PathRow({
           disabled={!path}
           onClick={() => {
             if (!path) return;
-            void copyText(path, "路径");
+            void copyText(path, t("路径"));
             setCopyTrigger((n) => n + 1);
           }}
-          title="复制路径"
-          aria-label="复制路径"
+          title={t("复制路径")}
+          aria-label={t("复制路径")}
         />
       </div>
     </div>
@@ -162,7 +163,7 @@ export function SettingsNav({
   return (
     <aside className="flex min-w-0 shrink-0 flex-col gap-2">
       <div className="px-2 pt-1 pb-1 sm:pb-2">
-        <div className="t-title text-foreground">设置</div>
+        <div className="t-title text-foreground">{t("设置")}</div>
       </div>
       <div className="surface-panel flex gap-1.5 overflow-x-auto p-1.5 scrollbar-none [mask-image:linear-gradient(to_right,black_calc(100%-32px),transparent_100%)] md:flex-col md:gap-0.5 md:overflow-visible md:[mask-image:none]">
         {visibleNav.map((n) => {
@@ -221,10 +222,10 @@ export function PanelHeader({
           title: TAB_TITLES.about.title,
           subtitle:
             copy.kind === "tauri"
-              ? "桌面端更新、本地配置和数据路径"
+              ? t("桌面端更新、本地配置和数据路径")
               : copy.kind === "http"
-                ? "Web 版本、部署更新和服务端数据"
-                : "静态 Web 版本和浏览器数据",
+                ? t("Web 版本、部署更新和服务端数据")
+                : t("静态 Web 版本和浏览器数据"),
         }
       : TAB_TITLES[tab];
   return (

@@ -1,4 +1,6 @@
+import { t, getLocale } from "@/lib/i18n";
 import { type CSSProperties, memo, useMemo, useState } from "react";
+import { useLanguage } from "@/hooks/use-language";
 import { AnimatePresence, motion } from "motion/react";
 import { AlertTriangle, ChevronDown, Clock, Loader2, X } from "lucide-react";
 import SpotlightCard from "@/components/reactbits/components/SpotlightCard";
@@ -69,6 +71,7 @@ function JobRowExpandableComponent({
 }) {
   const confirm = useConfirm();
   const reducedMotion = useReducedMotion();
+  useLanguage();
   const [promptExpanded, setPromptExpanded] = useState(false);
   const thumbUrl = jobThumbUrl(job);
   const thumbPath = jobThumbPath(job);
@@ -91,7 +94,7 @@ function JobRowExpandableComponent({
   const outputErrors = jobOutputErrors(job);
   const errorsByIndex = useMemo(
     () => new Map(outputErrors.map((error) => [error.index, error])),
-    [outputErrors],
+    [outputErrors, getLocale()],
   );
   const slots = useMemo(() => {
     const indexes = new Set<number>(outputIndexes);
@@ -100,7 +103,7 @@ function JobRowExpandableComponent({
       for (let i = 0; i < planned; i += 1) indexes.add(i);
     }
     return Array.from(indexes).sort((a, b) => a - b);
-  }, [outputIndexes, outputErrors, planned]);
+  }, [outputIndexes, outputErrors, planned, getLocale()]);
   const metaItems = jobMetaItems(job);
   const refCount = jobReferenceCount(job);
   const errorMessage = jobErrorMessage(job);
@@ -117,7 +120,7 @@ function JobRowExpandableComponent({
 
   const saveResult = () => {
     if (outputCount > 1) {
-      void saveJobImages(job.id, "任务图片");
+      void saveJobImages(job.id, t("任务图片"));
       return;
     }
     void saveJobOutputImage(job.id, primaryOutputIndex);
@@ -197,8 +200,8 @@ function JobRowExpandableComponent({
                 WebkitBackdropFilter: "blur(4px)",
                 border: "1px solid var(--w-12)",
               }}
-              aria-label={`这个任务共有 ${outputCount} 张图`}
-              title={`共 ${outputCount} 张`}
+              aria-label={t("这个任务共有 {p0} 张图", { p0: outputCount })}
+              title={t("共 {p0} 张", { p0: outputCount })}
             >
               +{extraCount}
             </span>
@@ -261,8 +264,8 @@ function JobRowExpandableComponent({
                 onCancel();
               }}
               className="h-7 w-7 inline-flex items-center justify-center rounded-md text-muted hover:text-foreground hover:bg-[color:var(--w-06)] transition-colors cursor-pointer"
-              aria-label="取消任务"
-              title="取消任务"
+              aria-label={t("取消任务")}
+              title={t("取消任务")}
             >
               <X size={14} />
             </button>
@@ -328,18 +331,18 @@ function JobRowExpandableComponent({
                         }}
                         className="text-[11.5px] text-muted hover:text-foreground"
                       >
-                        {promptExpanded ? "收起提示词" : "展开提示词"}
+                        {promptExpanded ? t("收起提示词") : t("展开提示词")}
                       </button>
                     )}
                     <button
                       type="button"
                       onClick={(e) => {
                         e.stopPropagation();
-                        void copyText(prompt, "提示词");
+                        void copyText(prompt, t("提示词"));
                       }}
                       className="text-[11.5px] text-muted hover:text-foreground"
                     >
-                      复制提示词
+                      {t("复制提示词")}
                     </button>
                   </div>
                 </div>
@@ -355,8 +358,8 @@ function JobRowExpandableComponent({
                           <div className="flex items-center gap-2">
                             <span className="font-medium">
                               {status === "partial_failed"
-                                ? "部分图片生成失败"
-                                : "任务失败"}
+                                ? t("部分图片生成失败")
+                                : t("任务失败")}
                             </span>
                             {errorCode && (
                               <span className="t-mono rounded bg-status-err/10 px-1.5 py-0.5 text-[10px]">
@@ -379,11 +382,11 @@ function JobRowExpandableComponent({
                           type="button"
                           onClick={(e) => {
                             e.stopPropagation();
-                            void copyText(errorDetail, "错误详情");
+                            void copyText(errorDetail, t("错误详情"));
                           }}
                           className="mt-2 text-[11.5px] text-muted hover:text-foreground"
                         >
-                          复制完整错误
+                          {t("复制完整错误")}
                         </button>
                       )}
                     </div>
@@ -417,7 +420,8 @@ function JobRowExpandableComponent({
                           >
                             <div className="flex items-center gap-1.5 text-[12px] font-medium text-status-err">
                               <AlertTriangle size={14} />
-                              候选 {letter} 失败
+                              {t("候选 ")}
+                              {letter} {t("失败")}
                             </div>
                             <div className="mt-2 line-clamp-4 whitespace-pre-wrap break-words text-[12px] leading-relaxed text-muted">
                               {slotError.message}
@@ -448,8 +452,8 @@ function JobRowExpandableComponent({
                                 ? "h-[min(42vh,420px)] min-h-[220px]"
                                 : "h-[168px]",
                             )}
-                            title={`查看第 ${letter} 张`}
-                            aria-label={`查看第 ${letter} 张`}
+                            title={t("查看第 {p0} 张", { p0: letter })}
+                            aria-label={t("查看第 {p0} 张", { p0: letter })}
                           >
                             <SpotlightCard
                               spotlightColor="rgba(var(--accent-rgb), 0.30)"
@@ -482,8 +486,8 @@ function JobRowExpandableComponent({
                 ) : (
                   <div className="text-[12px] text-faint">
                     {isRunning || isQueueing
-                      ? "图片生成完成后会显示在这里。"
-                      : "这个任务没有输出。"}
+                      ? t("图片生成完成后会显示在这里。")
+                      : t("这个任务没有输出。")}
                   </div>
                 )}
 
@@ -512,7 +516,7 @@ function JobRowExpandableComponent({
                             void revealPath(thumbPath);
                           }}
                         >
-                          打开文件夹
+                          {t("打开文件夹")}
                         </Button>
                       )}
                     </>
@@ -541,23 +545,23 @@ function JobRowExpandableComponent({
                       const summary =
                         prompt.length > 60 ? `${prompt.slice(0, 60)}…` : prompt;
                       const ok = await confirm({
-                        title: "删除任务记录",
+                        title: t("删除任务记录"),
                         description: (
                           <>
-                            将删除任务{" "}
+                            {t("将删除任务")}{" "}
                             <span className="text-foreground font-medium">
                               「{summary}」
                             </span>
-                            。远端 Origin/Archive 不会被删除。
+                            {t("。远端 Origin/Archive 不会被删除。")}
                           </>
                         ),
-                        confirmText: "删除",
+                        confirmText: t("删除"),
                         variant: "danger",
                       });
                       if (ok) onDelete();
                     }}
                   >
-                    删除
+                    {t("删除")}
                   </Button>
                 </div>
               </div>
