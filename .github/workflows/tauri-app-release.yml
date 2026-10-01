@@ -92,7 +92,7 @@ jobs:
         if: matrix.platform == 'ubuntu-22.04'
         run: |
           sudo apt-get update
-          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf xvfb dbus-x11 squashfs-tools
 
       - name: Set up Node.js
         uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
@@ -163,6 +163,13 @@ jobs:
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         run: npm --prefix apps/gpt-image-2-app run tauri -- build ${{ matrix.args }} --ci
+
+      - name: Verify Linux AppImage permissions and startup
+        if: matrix.platform == 'ubuntu-22.04'
+        shell: bash
+        run: |
+          images=(target/release/bundle/appimage/*.AppImage)
+          bash scripts/release/verify-appimage.sh "${images[0]}"
 
       - name: Create macOS DMG
         if: startsWith(matrix.platform, 'macos')
