@@ -74,8 +74,10 @@ jobs:
         shell: bash
         run: |
           version="${VERSION#v}"
-          for attempt in $(seq 1 20); do
-            if npm view "gpt-image-2-skill@${version}" version >/tmp/gpt-image-2-skill-npm-version.txt 2>/dev/null; then
+          # npm 元数据可能先于压缩包可见。先实际下载并校验入口包，再安装。
+          for attempt in $(seq 1 40); do
+            if npm view "gpt-image-2-skill@${version}" version >/tmp/gpt-image-2-skill-npm-version.txt 2>/dev/null \
+              && npm cache add "gpt-image-2-skill@${version}" >/tmp/gpt-image-2-skill-npm-cache.txt 2>/dev/null; then
               cat /tmp/gpt-image-2-skill-npm-version.txt
               exit 0
             fi
