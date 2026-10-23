@@ -10,7 +10,7 @@ Use this reference when the user asks for a final transparent-background PNG. Th
 | `transparent extract` | Local alpha extraction from controlled source images. Use this for difficult assets, custom source prompts, or multi-background flows. It is not a general-purpose remover for arbitrary photos. |
 | `transparent verify` | Final acceptance gate. Use `--strict` with the right `--profile` before delivery. |
 
-Do not treat provider-native `--background transparent` as the reliable path, especially with Codex. Controlled backgrounds plus local extraction are the reliable path.
+Codex 显式透明背景参数在本地对照中被拒绝，但 `background=auto` 加透明提示词曾生成真实 RGBA；样本因全透明区域残留 RGB 未通过严格验收。该路径可作为实验性候选，必须验证，不承诺稳定性。若需要本地处理，使用下述受控背景与提取方案；详见 `codex-local-verification.md`。OpenAI 2.5 公共 API 支持原生透明 PNG/WebP，可以先生成并验证 alpha；原生透明文件通过验收后无需再次抠图。
 
 A transparent deliverable is valid only if the final file has a real PNG alpha channel and passes quality verification. Visual transparency, white backgrounds, and checkerboard patterns are not sufficient.
 

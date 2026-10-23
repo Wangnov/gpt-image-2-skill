@@ -1,3 +1,4 @@
+import { t } from "@/lib/i18n";
 import type {
   GenerateRequest,
   Job,
@@ -19,6 +20,7 @@ import {
   runGenerationRequest,
 } from "./openai";
 import type { AsyncImageTask } from "./state";
+import { resetRelayClientForTests } from "./relay-client";
 import { deleteDatabase, readStoredJobs, storeOutput, writeJob } from "./store";
 import {
   dbPromise,
@@ -49,7 +51,10 @@ function errorText(error: unknown) {
 function batchErrorMessage(errors: BrowserBatchError[]) {
   if (errors.length === 0) return "";
   if (errors.length === 1) return errors[0].message;
-  return `${errors.length} 个子任务失败：${errors[0].message}`;
+  return t("{p0} 个子任务失败：{p1}", {
+    p0: errors.length,
+    p1: errors[0].message,
+  });
 }
 
 async function updateAsyncTask(
@@ -102,7 +107,7 @@ export async function storagePressureWarning() {
   return {
     usage: estimate.usage,
     quota: estimate.quota,
-    message: "当前浏览器数据空间接近上限，请清理历史或导出图片。",
+    message: t("当前浏览器数据空间接近上限，请清理历史或导出图片。"),
   };
 }
 
@@ -214,8 +219,10 @@ export async function failTask(task: BrowserQueuedTask, error: unknown) {
   const remoteTask = aborted ? activeRemoteTask(task.job) : undefined;
   const message = aborted
     ? remoteTask
-      ? `已停止本地轮询；远端任务可能仍在运行。任务 ID：${remoteTask.task_id}`
-      : "任务已取消。"
+      ? t("已停止本地轮询；远端任务可能仍在运行。任务 ID：{p0}", {
+          p0: remoteTask.task_id,
+        })
+      : t("任务已取消。")
     : error instanceof Error
       ? error.message
       : String(error);
@@ -450,8 +457,11 @@ export async function markInterruptedJobs() {
       updated_at: nowIso(),
       error: {
         message: remoteTask
-          ? `页面刷新或关闭后，本地轮询已中断；远端任务可能仍在运行。任务 ID：${remoteTask.task_id}`
-          : "页面刷新或关闭，浏览器任务已中断。",
+          ? t(
+              "页面刷新或关闭后，本地轮询已中断；远端任务可能仍在运行。任务 ID：{p0}",
+              { p0: remoteTask.task_id },
+            )
+          : t("页面刷新或关闭，浏览器任务已中断。"),
       },
     });
   }
@@ -473,6 +483,7 @@ export function prepareBrowserRuntime() {
 }
 
 export async function __resetBrowserApiForTests() {
+  resetRelayClientForTests();
   queue.splice(0, queue.length);
   for (const task of running.values()) {
     task.cancelled = true;

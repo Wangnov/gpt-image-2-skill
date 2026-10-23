@@ -1,3 +1,4 @@
+import { t } from "@/lib/i18n";
 import { useEffect } from "react";
 import { toast } from "sonner";
 import { openQuickLook } from "@/components/ui/quick-look";
@@ -62,17 +63,12 @@ export function useImageShortcuts() {
         // Don't fight a real text-selection copy.
         if (hasNonEmptySelection()) return;
         event.preventDefault();
-        const id: ImageActionId = event.shiftKey
-          ? "copy-prompt"
-          : "copy-image";
+        const id: ImageActionId = event.shiftKey ? "copy-prompt" : "copy-image";
         runActionById(id, ctx);
         return;
       }
 
-      if (
-        meta &&
-        (event.key === "Backspace" || event.key === "Delete")
-      ) {
+      if (meta && (event.key === "Backspace" || event.key === "Delete")) {
         event.preventDefault();
         runActionById("delete", ctx);
         return;
@@ -94,6 +90,6 @@ function runActionById(id: ImageActionId, ctx: ImageActionContext) {
   // about why nothing happened.
   void Promise.resolve(action.execute(ctx)).catch((error: unknown) => {
     const message = error instanceof Error ? error.message : String(error);
-    toast.error("操作失败", { description: message });
+    toast.error(t("操作失败"), { description: message });
   });
 }

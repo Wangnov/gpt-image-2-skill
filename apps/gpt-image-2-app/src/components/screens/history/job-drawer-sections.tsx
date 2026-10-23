@@ -1,3 +1,4 @@
+import { t } from "@/lib/i18n";
 import { Icon } from "@/components/icon";
 import { Button } from "@/components/ui/button";
 import { api } from "@/lib/api";
@@ -36,16 +37,18 @@ export function JobDrawerMetadata({
       className="grid mb-4 gap-y-2"
       style={{ gridTemplateColumns: "100px 1fr" }}
     >
-      <span className="t-tiny pt-0.5">凭证</span>
+      <span className="t-tiny pt-0.5">{t("凭证")}</span>
       <span className="text-[12px]">{job.provider}</span>
       {asyncTasks.length > 0 && (
         <>
-          <span className="t-tiny pt-0.5">请求模式</span>
+          <span className="t-tiny pt-0.5">{t("请求模式")}</span>
           <span className="text-[12px]">
-            sub2api 异步任务
-            {asyncTasks.length > 1 ? ` · ${asyncTasks.length} 个` : ""}
+            {t("sub2api 异步任务")}
+            {asyncTasks.length > 1
+              ? t(" · {p0} 个", { p0: asyncTasks.length })
+              : ""}
           </span>
-          <span className="t-tiny pt-0.5">远端任务 ID</span>
+          <span className="t-tiny pt-0.5">{t("远端任务 ID")}</span>
           <span
             className="t-mono truncate text-[11px]"
             title={asyncTasks
@@ -54,7 +57,7 @@ export function JobDrawerMetadata({
           >
             {asyncTasks.map((task) => String(task.task_id ?? "—")).join(", ")}
           </span>
-          <span className="t-tiny pt-0.5">远端状态</span>
+          <span className="t-tiny pt-0.5">{t("远端状态")}</span>
           <span className="text-[12px]">
             {asyncTasks
               .map((task) => String(task.status ?? "processing"))
@@ -64,31 +67,31 @@ export function JobDrawerMetadata({
       )}
       {typeof meta.size === "string" && (
         <>
-          <span className="t-tiny pt-0.5">尺寸</span>
+          <span className="t-tiny pt-0.5">{t("尺寸")}</span>
           <span className="t-mono text-[12px]">{meta.size}</span>
         </>
       )}
       {typeof meta.format === "string" && (
         <>
-          <span className="t-tiny pt-0.5">格式</span>
+          <span className="t-tiny pt-0.5">{t("格式")}</span>
           <span className="t-mono text-[12px]">{meta.format}</span>
         </>
       )}
       {typeof meta.quality === "string" && (
         <>
-          <span className="t-tiny pt-0.5">质量</span>
+          <span className="t-tiny pt-0.5">{t("质量")}</span>
           <span className="text-[12px]">{meta.quality as string}</span>
         </>
       )}
       {typeof meta.duration_ms === "number" && (
         <>
-          <span className="t-tiny pt-0.5">耗时</span>
+          <span className="t-tiny pt-0.5">{t("耗时")}</span>
           <span className="t-mono text-[12px]">
             {formatDuration(meta.duration_ms as number)}
           </span>
         </>
       )}
-      <span className="t-tiny pt-0.5">创建时间</span>
+      <span className="t-tiny pt-0.5">{t("创建时间")}</span>
       <span className="text-[12px]">{formatTime(job.created_at)}</span>
     </div>
   );
@@ -116,14 +119,14 @@ export function JobDrawerLocation({
             icon="folder"
             onClick={() => revealPath(previewPath)}
           >
-            打开
+            {t("打开")}
           </Button>
           <Button
             variant="ghost"
             size="iconSm"
             icon="copy"
-            onClick={() => copyText(previewPath, "图片位置")}
-            title="复制图片位置"
+            onClick={() => copyText(previewPath, t("图片位置"))}
+            title={t("复制图片位置")}
           />
         </>
       )}
@@ -141,7 +144,7 @@ export function JobDrawerStorage({
   return (
     <section className="mb-3.5 rounded-md border border-border bg-sunken px-3 py-2.5">
       <div className="mb-2 flex items-center gap-2">
-        <div className="text-[12px] font-semibold">存储投递</div>
+        <div className="text-[12px] font-semibold">{t("存储投递")}</div>
         <span className="t-tiny ml-auto">
           {storageStatusLabel(job.storage_status)}
         </span>
@@ -180,9 +183,9 @@ export function JobDrawerStorage({
                     variant="ghost"
                     size="iconSm"
                     icon="copy"
-                    onClick={() => copyText(upload.url ?? "", "上传 URL")}
-                    title="复制上传 URL"
-                    aria-label="复制上传 URL"
+                    onClick={() => copyText(upload.url ?? "", t("上传 URL"))}
+                    title={t("复制上传 URL")}
+                    aria-label={t("复制上传 URL")}
                   />
                 </div>
               )}
@@ -195,7 +198,9 @@ export function JobDrawerStorage({
           ))}
         </div>
       ) : (
-        <div className="text-[11.5px] text-muted">当前候选还没有上传记录。</div>
+        <div className="text-[11.5px] text-muted">
+          {t("当前候选还没有上传记录。")}
+        </div>
       )}
     </section>
   );
@@ -236,7 +241,7 @@ export function JobDrawerError({ job }: { job: Job }) {
         <Icon name="warn" size={13} style={{ marginTop: 1 }} />
         <div className="min-w-0 flex-1">
           <div className="mb-0.5 flex items-center gap-2">
-            <span className="font-semibold">错误</span>
+            <span className="font-semibold">{t("错误")}</span>
             {error.code && (
               <span className="t-mono rounded bg-status-err/10 px-1.5 py-0.5 text-[10.5px]">
                 {error.code}
@@ -247,9 +252,9 @@ export function JobDrawerError({ job }: { job: Job }) {
               size="iconSm"
               icon="copy"
               className="ml-auto"
-              onClick={() => copyText(copyPayload, "错误详情")}
-              title="复制错误详情"
-              aria-label="复制错误详情"
+              onClick={() => copyText(copyPayload, t("错误详情"))}
+              title={t("复制错误详情")}
+              aria-label={t("复制错误详情")}
             />
           </div>
           <div className="break-anywhere">{error.message}</div>
@@ -258,7 +263,7 @@ export function JobDrawerError({ job }: { job: Job }) {
       {(detailText || items.length > 0) && (
         <details className="mt-2">
           <summary className="cursor-pointer select-none text-[11px] font-semibold opacity-90">
-            显示详情
+            {t("显示详情")}
           </summary>
           {detailText && (
             <pre className="mt-1.5 mb-0 max-h-52 overflow-auto whitespace-pre-wrap break-anywhere rounded bg-status-err/5 p-2 font-mono text-[10.5px] leading-[1.45]">
@@ -274,7 +279,8 @@ export function JobDrawerError({ job }: { job: Job }) {
                 >
                   <div className="flex items-center gap-2">
                     <span className="font-semibold">
-                      候选 {(item.index ?? position) + 1}
+                      {t("候选 ")}
+                      {(item.index ?? position) + 1}
                     </span>
                     {item.code && (
                       <span className="t-mono text-[10px] opacity-80">
@@ -308,17 +314,19 @@ export function JobDrawerPrompt({
   return (
     <section className="mb-3.5 rounded-md border border-border bg-sunken px-3 py-2.5">
       <div className="mb-2 flex items-center gap-2">
-        <div className="text-[12px] font-semibold">提示词</div>
+        <div className="text-[12px] font-semibold">{t("提示词")}</div>
         {promptCount > 0 && (
-          <span className="t-tiny ml-auto">{promptCount} 字</span>
+          <span className="t-tiny ml-auto">
+            {promptCount} {t("字")}
+          </span>
         )}
         <Button
           variant="ghost"
           size="iconSm"
           icon="copy"
-          onClick={() => copyText(prompt, "提示词")}
-          title="复制提示词"
-          aria-label="复制提示词"
+          onClick={() => copyText(prompt, t("提示词"))}
+          title={t("复制提示词")}
+          aria-label={t("复制提示词")}
         />
       </div>
       <div className="max-h-44 overflow-auto whitespace-pre-wrap break-anywhere rounded bg-raised px-2.5 py-2 text-[12px] leading-[1.55] text-muted">
@@ -332,15 +340,15 @@ export function JobDrawerAdvanced({ job }: { job: Job }) {
   return (
     <details className="rounded-md border border-border bg-sunken px-3 py-2 text-[12px]">
       <summary className="cursor-pointer select-none font-semibold">
-        高级信息
+        {t("高级信息")}
       </summary>
       <div
         className="mt-2 grid gap-y-1.5"
         style={{ gridTemplateColumns: "86px 1fr" }}
       >
-        <span className="t-tiny">任务 ID</span>
+        <span className="t-tiny">{t("任务 ID")}</span>
         <span className="t-mono text-[11px] truncate">{job.id}</span>
-        <span className="t-tiny">命令</span>
+        <span className="t-tiny">{t("命令")}</span>
         <span className="t-mono text-[11px]">{job.command}</span>
       </div>
       <pre className="mt-2 mb-0 max-h-52 overflow-auto rounded bg-raised p-2 font-mono text-[10.5px] leading-[1.45] text-muted">

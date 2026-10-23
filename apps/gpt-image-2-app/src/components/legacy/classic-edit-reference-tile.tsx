@@ -1,3 +1,4 @@
+import { t } from "@/lib/i18n";
 import { Icon } from "@/components/icon";
 import { cn } from "@/lib/cn";
 import type { RefWithFile } from "@/components/screens/edit/shared";
@@ -37,7 +38,7 @@ export function ClassicEditReferenceTile({
         }
       }}
       className={cn(
-        "group relative aspect-square cursor-pointer overflow-hidden rounded-lg border-[1.5px] bg-sunken focus-visible:outline-none",
+        "group relative aspect-square cursor-pointer overflow-hidden rounded-lg border-[1.5px] bg-sunken focus-visible:outline-hidden",
         active
           ? "border-accent shadow-[0_0_0_3px_var(--accent-faint)]"
           : "border-border hover:border-border-strong",
@@ -69,7 +70,7 @@ export function ClassicEditReferenceTile({
               : undefined
           }
         >
-          {role === "target" ? "目标" : "参考"}
+          {role === "target" ? t("目标") : t("参考")}
         </span>
       )}
       {hasMask && (
@@ -78,7 +79,7 @@ export function ClassicEditReferenceTile({
           style={{ background: "var(--accent)", color: "var(--accent-on)" }}
         >
           <Icon name="mask" size={10} />
-          遮罩
+          {t("遮罩")}
         </span>
       )}
       {onSetTarget && role !== "target" && (
@@ -88,9 +89,9 @@ export function ClassicEditReferenceTile({
             event.stopPropagation();
             onSetTarget();
           }}
-          className="image-overlay absolute bottom-1.5 left-1.5 rounded px-2 py-1 text-[11px] font-semibold opacity-0 transition-opacity group-hover:opacity-100"
+          className="image-overlay absolute bottom-1.5 left-1.5 rounded px-2 py-1 text-[11px] font-semibold opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100 [@media(hover:none)]:opacity-100"
         >
-          设为目标
+          {t("设为目标")}
         </button>
       )}
       <button
@@ -99,8 +100,8 @@ export function ClassicEditReferenceTile({
           event.stopPropagation();
           onRemove();
         }}
-        className="image-overlay absolute bottom-1.5 right-1.5 flex h-7 w-7 items-center justify-center rounded opacity-0 transition-opacity group-hover:opacity-100"
-        aria-label={`删除 ${ref_.name}`}
+        className="image-overlay absolute bottom-1.5 right-1.5 flex h-7 w-7 items-center justify-center rounded opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100 [@media(hover:none)]:opacity-100"
+        aria-label={t("删除 {p0}", { p0: ref_.name })}
       >
         <Icon name="x" size={12} />
       </button>

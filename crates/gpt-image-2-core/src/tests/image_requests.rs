@@ -94,3 +94,28 @@ fn sub2api_poll_url_rejects_cross_origin_credentials_redirect() {
 
     assert_eq!(error.code, "async_poll_url_untrusted");
 }
+
+#[test]
+fn image_25_quality_round_trips_to_provider_body() {
+    for (name, expected) in [("xhigh", Quality::Xhigh), ("max", Quality::Max)] {
+        let quality = <Quality as clap::ValueEnum>::from_str(name, false).unwrap();
+        assert_eq!(quality, expected);
+        let body = build_openai_image_body(
+            "generate",
+            "test",
+            "gpt-image-2.5-flare",
+            &[],
+            None,
+            None,
+            Background::Opaque,
+            Some("1024x1024"),
+            Some(quality),
+            Some(OutputFormat::Png),
+            None,
+            Some(1),
+            None,
+        );
+        assert_eq!(body["quality"], name);
+        assert_eq!(body["model"], "gpt-image-2.5-flare");
+    }
+}

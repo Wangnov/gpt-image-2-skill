@@ -1,3 +1,4 @@
+import { t } from "@/lib/i18n";
 import { useEffect, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
@@ -32,8 +33,8 @@ export function useJobEvents(jobId: string | null) {
           const message =
             typeof ev.data.message === "string"
               ? ev.data.message
-              : "当前浏览器数据空间接近上限。";
-          toast.warning("浏览器数据空间不足", { description: message });
+              : t("当前浏览器数据空间接近上限。");
+          toast.warning(t("浏览器数据空间不足"), { description: message });
         }
         if (
           ev.kind === "local" &&

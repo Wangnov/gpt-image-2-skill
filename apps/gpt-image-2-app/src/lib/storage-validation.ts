@@ -1,3 +1,4 @@
+import { t } from "@/lib/i18n";
 import { api } from "./api";
 import { canActAsOrigin, storageTargetType } from "./api/shared";
 import type {
@@ -8,7 +9,7 @@ import type {
 } from "./types";
 
 function localDirectoryTerm() {
-  return api.kind === "http" ? "服务器目录" : "本地目录";
+  return api.kind === "http" ? t("服务器目录") : t("本地目录");
 }
 
 type StorageValidationOptions = {
@@ -33,7 +34,8 @@ function credentialHasReference(credential?: CredentialRef | null) {
   if (!credential) return false;
   if (credential.source === "file") {
     return (
-      (typeof credential.value === "string" && credential.value.trim() !== "") ||
+      (typeof credential.value === "string" &&
+        credential.value.trim() !== "") ||
       Boolean(credential.present)
     );
   }
@@ -54,7 +56,12 @@ export function storageTargetConfigIssues(
   options: StorageValidationOptions = {},
 ) {
   if (!target) {
-    return [required("target", `存储目标「${name.trim() || "未命名"}」不存在。`)];
+    return [
+      required(
+        "target",
+        t("存储目标「{p0}」不存在。", { p0: name.trim() || t("未命名") }),
+      ),
+    ];
   }
   const type = storageTargetType(target);
   const issues: StorageFieldIssue[] = [];
@@ -62,64 +69,78 @@ export function storageTargetConfigIssues(
     if (options.requireLocalDirectory === false) return issues;
     const directory = "directory" in target ? target.directory : "";
     if (!hasText(directory))
-      issues.push(required("directory", `请填写${localDirectoryTerm()}。`));
+      issues.push(
+        required("directory", t("请填写{p0}。", { p0: localDirectoryTerm() })),
+      );
     return issues;
   }
   if (type === "s3" && "bucket" in target) {
-    if (!hasText(target.bucket)) issues.push(required("bucket", "请填写 S3 bucket。"));
+    if (!hasText(target.bucket))
+      issues.push(required("bucket", t("请填写 S3 bucket。")));
     if (!credentialHasReference(target.access_key_id)) {
-      issues.push(required("access_key_id", "请填写 S3 Access Key ID。"));
+      issues.push(required("access_key_id", t("请填写 S3 Access Key ID。")));
     }
     if (!credentialHasReference(target.secret_access_key)) {
-      issues.push(required("secret_access_key", "请填写 S3 Secret Access Key。"));
+      issues.push(
+        required("secret_access_key", t("请填写 S3 Secret Access Key。")),
+      );
     }
     return issues;
   }
   if (type === "webdav" && "url" in target) {
-    if (!hasText(target.url)) issues.push(required("url", "请填写 WebDAV URL。"));
+    if (!hasText(target.url))
+      issues.push(required("url", t("请填写 WebDAV URL。")));
     return issues;
   }
   if (type === "http" && "url" in target) {
-    if (!hasText(target.url)) issues.push(required("url", "请填写 HTTP 上传 URL。"));
+    if (!hasText(target.url))
+      issues.push(required("url", t("请填写 HTTP 上传 URL。")));
     return issues;
   }
   if (type === "sftp" && "host" in target) {
-    if (!hasText(target.host)) issues.push(required("host", "请填写 SFTP host。"));
+    if (!hasText(target.host))
+      issues.push(required("host", t("请填写 SFTP host。")));
     if (!hasText(target.host_key_sha256)) {
-      issues.push(required("host_key_sha256", "请填写 SFTP host key 指纹。"));
+      issues.push(
+        required("host_key_sha256", t("请填写 SFTP host key 指纹。")),
+      );
     }
     if (!hasText(target.username)) {
-      issues.push(required("username", "请填写 SFTP username。"));
+      issues.push(required("username", t("请填写 SFTP username。")));
     }
     if (!hasText(target.remote_dir)) {
-      issues.push(required("remote_dir", "请填写 SFTP 远端目录。"));
+      issues.push(required("remote_dir", t("请填写 SFTP 远端目录。")));
     }
     if (
       !credentialHasReference(target.password) &&
       !credentialHasReference(target.private_key)
     ) {
-      issues.push(required("sftp_auth", "请填写 SFTP 密码或私钥。"));
+      issues.push(required("sftp_auth", t("请填写 SFTP 密码或私钥。")));
     }
     return issues;
   }
   if (type === "baidu_netdisk" && "app_key" in target) {
     if (!hasText(target.app_name)) {
-      issues.push(required("app_name", "请填写百度网盘应用目录名。"));
+      issues.push(required("app_name", t("请填写百度网盘应用目录名。")));
     }
     const authMode = target.auth_mode === "oauth" ? "oauth" : "personal";
     if (authMode === "personal") {
       if (!credentialHasReference(target.access_token)) {
-        issues.push(required("access_token", "请填写百度网盘 Access Token。"));
+        issues.push(
+          required("access_token", t("请填写百度网盘 Access Token。")),
+        );
       }
     } else {
       if (!hasText(target.app_key)) {
-        issues.push(required("app_key", "请填写百度网盘 App Key。"));
+        issues.push(required("app_key", t("请填写百度网盘 App Key。")));
       }
       if (!credentialHasReference(target.secret_key)) {
-        issues.push(required("secret_key", "请填写百度网盘 Secret Key。"));
+        issues.push(required("secret_key", t("请填写百度网盘 Secret Key。")));
       }
       if (!credentialHasReference(target.refresh_token)) {
-        issues.push(required("refresh_token", "请填写百度网盘 Refresh Token。"));
+        issues.push(
+          required("refresh_token", t("请填写百度网盘 Refresh Token。")),
+        );
       }
     }
     return issues;
@@ -129,14 +150,18 @@ export function storageTargetConfigIssues(
       target.auth_mode === "access_token" ? "access_token" : "client";
     if (authMode === "access_token") {
       if (!credentialHasReference(target.access_token)) {
-        issues.push(required("access_token", "请填写 123 网盘 accessToken。"));
+        issues.push(
+          required("access_token", t("请填写 123 网盘 accessToken。")),
+        );
       }
     } else {
       if (!hasText(target.client_id)) {
-        issues.push(required("client_id", "请填写 123 网盘 clientID。"));
+        issues.push(required("client_id", t("请填写 123 网盘 clientID。")));
       }
       if (!credentialHasReference(target.client_secret)) {
-        issues.push(required("client_secret", "请填写 123 网盘 clientSecret。"));
+        issues.push(
+          required("client_secret", t("请填写 123 网盘 clientSecret。")),
+        );
       }
     }
     return issues;
@@ -149,12 +174,17 @@ export function storageTargetConfigIssue(
   target?: StorageTargetConfig,
   options: StorageValidationOptions = {},
 ) {
-  const displayName = name.trim() || "未命名";
+  const displayName = name.trim() || t("未命名");
   const issue = storageTargetConfigIssues(name, target, options)[0];
   if (issue?.field === "directory") {
-    return `存储目标「${displayName}」需要填写${localDirectoryTerm()}。`;
+    return t("存储目标「{p0}」需要填写{p1}。", {
+      p0: displayName,
+      p1: localDirectoryTerm(),
+    });
   }
-  return issue ? `存储目标「${displayName}」${issue.message}` : null;
+  return issue
+    ? t("存储目标「{p0}」{p1}", { p0: displayName, p1: issue.message })
+    : null;
 }
 
 export function pipelineConfigIssue(
@@ -166,14 +196,14 @@ export function pipelineConfigIssue(
   if (pipeline.mode === "cloud_primary") {
     const origin = pipeline.origin?.trim();
     if (!origin) {
-      return "云端为主模式需要选择一个原图位置。";
+      return t("云端为主模式需要选择一个原图位置。");
     }
     const target = targets[origin];
     if (!target) {
-      return `所选原图位置「${origin}」不存在。`;
+      return t("所选原图位置「{p0}」不存在。", { p0: origin });
     }
     if (!canActAsOrigin(target)) {
-      return "所选位置不支持回读，无法作为原图位置。";
+      return t("所选位置不支持回读，无法作为原图位置。");
     }
   }
   if (
@@ -184,7 +214,7 @@ export function pipelineConfigIssue(
     pipeline.mode !== "cloud_primary"
   ) {
     // cloud_primary 允许空 archives(只用 origin 也算 OK);其他模式必须有归档
-    return "请至少选择一个归档目标。";
+    return t("请至少选择一个归档目标。");
   }
   return null;
 }

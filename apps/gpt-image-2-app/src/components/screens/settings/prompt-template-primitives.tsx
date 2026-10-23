@@ -1,3 +1,4 @@
+import { t } from "@/lib/i18n";
 import { type ReactNode } from "react";
 import {
   PromptTemplateMark,
@@ -58,7 +59,7 @@ export function TextInput({
       onChange={(event) => onChange(event.target.value)}
       placeholder={placeholder}
       aria-label={ariaLabel ?? placeholder}
-      className="h-9 w-full rounded-md border border-border bg-[color:var(--w-04)] px-3 text-[13px] text-foreground outline-none placeholder:text-faint focus:border-[color:var(--accent-55)] focus:bg-[color:var(--accent-06)]"
+      className="h-9 w-full rounded-md border border-border bg-(--w-04) px-3 text-[13px] text-foreground outline-hidden placeholder:text-faint focus:border-(--accent-55) focus:bg-(--accent-06)"
     />
   );
 }
@@ -89,9 +90,9 @@ export function TemplateIconPicker({
       <PopoverTrigger asChild>
         <button
           type="button"
-          className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md transition-colors hover:bg-[color:var(--w-06)]"
-          title="选择模板图标和颜色"
-          aria-label="选择模板图标和颜色"
+          className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md transition-colors hover:bg-(--w-06)"
+          title={t("选择模板图标和颜色")}
+          aria-label={t("选择模板图标和颜色")}
         >
           <PromptTemplateMark icon={icon} color={color} size="sm" />
         </button>
@@ -104,13 +105,13 @@ export function TemplateIconPicker({
               type="button"
               onClick={() => onIconChange(item.value)}
               title={item.label}
-              aria-label={`选择图标：${item.label}`}
+              aria-label={t("选择图标：{p0}", { p0: item.label })}
               aria-pressed={icon === item.value}
               className={cn(
                 "flex h-10 items-center justify-center rounded-lg border transition-[background-color,border-color,transform]",
                 icon === item.value
-                  ? "scale-[1.03] border-[color:var(--accent-45)] bg-[color:var(--accent-14)]"
-                  : "border-transparent hover:border-border-faint hover:bg-[color:var(--w-06)] hover:scale-[1.02]",
+                  ? "scale-[1.03] border-(--accent-45) bg-(--accent-14)"
+                  : "border-transparent hover:border-border-faint hover:bg-(--w-06) hover:scale-[1.02]",
               )}
             >
               <PromptTemplateMark
@@ -132,12 +133,12 @@ export function TemplateIconPicker({
                   type="button"
                   onClick={() => onColorChange(item.value)}
                   title={item.label}
-                  aria-label={`选择颜色：${item.label}`}
+                  aria-label={t("选择颜色：{p0}", { p0: item.label })}
                   aria-pressed={color === item.value}
                   className={cn(
                     "inline-flex h-7 w-7 items-center justify-center rounded-full border transition-transform",
                     color === item.value
-                      ? "border-[color:var(--accent-65)] bg-[color:var(--w-06)]"
+                      ? "border-(--accent-65) bg-(--w-06)"
                       : "border-transparent hover:scale-105 hover:border-border-faint",
                   )}
                 >

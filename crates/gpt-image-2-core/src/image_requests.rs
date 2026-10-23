@@ -3,6 +3,7 @@
 use super::*;
 
 mod async_tasks;
+mod atlas;
 mod codex;
 mod image_sources;
 mod openai;
@@ -15,6 +16,7 @@ pub(crate) use async_tasks::{
     OpenAiRequestResult, build_sub2api_async_endpoint, request_openai_with_transport,
     resolve_sub2api_poll_url,
 };
+pub(crate) use atlas::*;
 pub(crate) use codex::*;
 pub(crate) use image_sources::*;
 pub(crate) use openai::*;

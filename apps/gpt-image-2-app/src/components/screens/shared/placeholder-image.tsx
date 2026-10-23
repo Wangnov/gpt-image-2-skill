@@ -58,7 +58,7 @@ export function PlaceholderImage({
       />
       <div
         aria-hidden="true"
-        className="relative flex aspect-square w-[46%] min-w-6 max-w-[72px] items-center justify-center rounded-[var(--r-lg)] border border-[color:var(--w-16)] bg-[color:var(--w-08)]"
+        className="relative flex aspect-square w-[46%] min-w-6 max-w-[72px] items-center justify-center rounded-(--r-lg) border border-(--w-16) bg-(--w-08)"
         style={{
           transform: `rotate(${tilt}deg)`,
           backdropFilter: "blur(12px) saturate(145%)",
@@ -75,7 +75,7 @@ export function PlaceholderImage({
       </div>
       {label && (
         <span
-          className="absolute bottom-2 left-2 z-10 max-w-[calc(100%-var(--d-pad))] truncate rounded-[var(--r-sm)] border border-[color:var(--w-10)] px-1.5 py-0.5 font-mono text-[10px] text-faint"
+          className="absolute bottom-2 left-2 z-10 max-w-[calc(100%-var(--d-pad))] truncate rounded-(--r-sm) border border-(--w-10) px-1.5 py-0.5 font-mono text-[10px] text-faint"
           style={{
             background: "var(--k-45)",
             backdropFilter: "blur(8px)",

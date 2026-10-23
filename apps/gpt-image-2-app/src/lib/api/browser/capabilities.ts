@@ -1,3 +1,4 @@
+import { t } from "@/lib/i18n";
 import type {
   JobStatus,
   NotificationCapabilities,
@@ -18,12 +19,12 @@ export async function browserConfigPaths(): Promise<ConfigPaths> {
     jobs_dir: "IndexedDB: outputs",
     app_data_dir: "IndexedDB: gpt-image-2-web",
     result_library_dir: "IndexedDB: outputs",
-    default_export_dir: "浏览器默认下载位置",
+    default_export_dir: t("浏览器默认下载位置"),
     default_export_dirs: {
-      browser_default: "浏览器默认下载位置",
-      downloads: "浏览器默认下载位置",
-      documents: "浏览器默认下载位置",
-      pictures: "浏览器默认下载位置",
+      browser_default: t("浏览器默认下载位置"),
+      downloads: t("浏览器默认下载位置"),
+      documents: t("浏览器默认下载位置"),
+      pictures: t("浏览器默认下载位置"),
       result_library: "IndexedDB: outputs",
     },
     storage_fallback_dir: "IndexedDB: outputs",
@@ -59,8 +60,9 @@ export async function testBrowserNotifications(
         channel: "browser",
         name: "Browser runtime",
         ok: true,
-        message:
+        message: t(
           "已校验本地 toast / 系统通知配置；邮件和 webhook 需要桌面 App 或服务端 Web。",
+        ),
       },
     ],
   };
@@ -86,8 +88,9 @@ export async function testBrowserStorageTarget(
       ok: true,
       target: name,
       target_type: targetType,
-      message:
+      message: t(
         "静态 Web 仅会把结果保存在当前浏览器数据中，不会写入服务器或本机目录。",
+      ),
       local_only: true,
     };
   }
@@ -95,8 +98,9 @@ export async function testBrowserStorageTarget(
     ok: false,
     target: name,
     target_type: targetType,
-    message:
+    message: t(
       "远端存储上传需要桌面 App 或服务端 Web；静态 Web 不会保存远端密钥。",
+    ),
     unsupported: true,
   };
 }

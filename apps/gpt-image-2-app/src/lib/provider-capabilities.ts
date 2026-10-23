@@ -1,3 +1,4 @@
+import { t } from "@/lib/i18n";
 import type { ProviderConfig, ServerConfig } from "./types";
 import { imageTransportLabel } from "./provider-protocol";
 
@@ -56,13 +57,13 @@ export function providerCapabilityBadges(
   const nativeN = providerNativeSupportsMultipleOutputs(config, provider);
   const editMode = providerEditRegionMode(config, provider);
   return [
-    cfg ? imageTransportLabel(cfg) : "同步 Images",
-    nativeN ? "接口多图" : "App 并发多图",
+    cfg ? imageTransportLabel(cfg) : t("同步 Images"),
+    nativeN ? t("接口多图") : t("App 并发多图"),
     editMode === "native-mask"
-      ? "原生遮罩"
+      ? t("原生遮罩")
       : editMode === "reference-hint"
-        ? "参考图局部编辑"
-        : "不支持局部编辑",
-    "失败可分类",
+        ? t("参考图局部编辑")
+        : t("不支持局部编辑"),
+    t("失败可分类"),
   ];
 }

@@ -1,3 +1,4 @@
+import { t } from "@/lib/i18n";
 import { useQuery } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { Toggle } from "@/components/ui/toggle";
@@ -23,16 +24,16 @@ export function RuntimePanel() {
   const queued = queue?.queued ?? 0;
   const queueSummary =
     running + queued === 0
-      ? "目前没有任务在队列里"
-      : `当前 ${running} 个在跑，${queued} 个排队`;
+      ? t("目前没有任务在队列里")
+      : t("当前 {p0} 个在跑，{p1} 个排队", { p0: running, p1: queued });
   const setDraftPersistence = async (enabled: boolean) => {
     setTweaks({ persistCreativeDrafts: enabled });
     if (enabled) return;
     try {
       await clearCreativeDrafts();
-      toast.success("创作草稿已清除");
+      toast.success(t("创作草稿已清除"));
     } catch (error) {
-      toast.error("清除草稿失败", {
+      toast.error(t("清除草稿失败"), {
         description: error instanceof Error ? error.message : String(error),
       });
     }
@@ -41,18 +42,18 @@ export function RuntimePanel() {
   return (
     <div className="flex-1 min-h-0 overflow-auto p-4 sm:p-5 space-y-4">
       <Section
-        title="队列"
-        description="一次最多并行几个，避免占满网络或 CPU。"
+        title={t("队列")}
+        description={t("一次最多并行几个，避免占满网络或 CPU。")}
       >
         <Row
-          title="同时执行数"
+          title={t("同时执行数")}
           description={`${queueSummary}。`}
           control={
             <Segmented
               value={String(tweaks.maxParallel)}
               onChange={(v) => setTweaks({ maxParallel: Number(v) })}
               size="sm"
-              ariaLabel="同时执行数"
+              ariaLabel={t("同时执行数")}
               options={PARALLEL_OPTIONS}
             />
           }
@@ -60,12 +61,12 @@ export function RuntimePanel() {
       </Section>
 
       <Section
-        title="草稿"
-        description="保留生成 / 编辑页未提交的内容（参数、参考图、遮罩）。"
+        title={t("草稿")}
+        description={t("保留生成 / 编辑页未提交的内容（参数、参考图、遮罩）。")}
       >
         <Row
-          title="保留创作草稿"
-          description="刷新或重启后仍能恢复未提交的内容；关闭会清空。"
+          title={t("保留创作草稿")}
+          description={t("刷新或重启后仍能恢复未提交的内容；关闭会清空。")}
           control={
             <Toggle
               checked={tweaks.persistCreativeDrafts}

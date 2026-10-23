@@ -1,3 +1,4 @@
+import { t } from "@/lib/i18n";
 import {
   normalizeOutputCount,
   validateImageSize,
@@ -40,7 +41,7 @@ export function useEditCapabilities({
   const maxReferenceImages = MAX_INPUT_IMAGES - (usesSoftRegion ? 1 : 0);
   const referenceCountError =
     refsLength > maxReferenceImages
-      ? `最多上传 ${maxReferenceImages} 张参考图。`
+      ? t("最多上传 {p0} 张参考图。", { p0: maxReferenceImages })
       : undefined;
   const sizeValidation = validateImageSize(size);
   const outputCountValidation = validateOutputCount(n);

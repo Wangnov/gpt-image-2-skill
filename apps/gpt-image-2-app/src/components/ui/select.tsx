@@ -1,3 +1,4 @@
+import { t } from "@/lib/i18n";
 import {
   forwardRef,
   type ComponentPropsWithoutRef,
@@ -70,39 +71,44 @@ function normalize(options: readonly SelectOption[]) {
 const SelectContent = forwardRef<
   ElementRef<typeof RadixSelect.Content>,
   ComponentPropsWithoutRef<typeof RadixSelect.Content>
->(({ className, children, position = "popper", sideOffset = 6, ...rest }, ref) => (
-  <RadixSelect.Portal>
-    <RadixSelect.Content
-      ref={ref}
-      position={position}
-      sideOffset={sideOffset}
-      className={cn(
-        "z-50 min-w-[var(--radix-select-trigger-width)] overflow-hidden rounded-xl border",
-        "data-[state=open]:animate-in data-[state=closed]:animate-out",
-        "data-[state=open]:fade-in-0 data-[state=closed]:fade-out-0",
-        "data-[state=open]:zoom-in-95 data-[state=closed]:zoom-out-95",
-        "data-[side=bottom]:slide-in-from-top-1 data-[side=top]:slide-in-from-bottom-1",
-        className,
-      )}
-      style={{
-        background: "var(--surface-floating-soft)",
-        borderColor: "var(--surface-floating-border)",
-        backdropFilter: "blur(28px) saturate(150%)",
-        WebkitBackdropFilter: "blur(28px) saturate(150%)",
-        boxShadow: "var(--shadow-floating)",
-      }}
-      {...rest}
-    >
-      {/* Height cap + scroll live on the Viewport: Radix gives it
+>(
+  (
+    { className, children, position = "popper", sideOffset = 6, ...rest },
+    ref,
+  ) => (
+    <RadixSelect.Portal>
+      <RadixSelect.Content
+        ref={ref}
+        position={position}
+        sideOffset={sideOffset}
+        className={cn(
+          "z-50 min-w-(--radix-select-trigger-width) overflow-hidden rounded-xl border",
+          "data-[state=open]:animate-in data-[state=closed]:animate-out",
+          "data-[state=open]:fade-in-0 data-[state=closed]:fade-out-0",
+          "data-[state=open]:zoom-in-95 data-[state=closed]:zoom-out-95",
+          "data-[side=bottom]:slide-in-from-top-1 data-[side=top]:slide-in-from-bottom-1",
+          className,
+        )}
+        style={{
+          background: "var(--surface-floating-soft)",
+          borderColor: "var(--surface-floating-border)",
+          backdropFilter: "blur(28px) saturate(150%)",
+          WebkitBackdropFilter: "blur(28px) saturate(150%)",
+          boxShadow: "var(--shadow-floating)",
+        }}
+        {...rest}
+      >
+        {/* Height cap + scroll live on the Viewport: Radix gives it
           `overflow: hidden auto`, but its `flex: 1` only resolves against a
           flex parent — the Content wrapper isn't one, so capping Content
           would clip the list instead of scrolling it. */}
-      <RadixSelect.Viewport className="max-h-[min(280px,var(--radix-select-content-available-height))] scrollbar-none p-1">
-        {children}
-      </RadixSelect.Viewport>
-    </RadixSelect.Content>
-  </RadixSelect.Portal>
-));
+        <RadixSelect.Viewport className="max-h-[min(280px,var(--radix-select-content-available-height))] scrollbar-none p-1">
+          {children}
+        </RadixSelect.Viewport>
+      </RadixSelect.Content>
+    </RadixSelect.Portal>
+  ),
+);
 SelectContent.displayName = "SelectContent";
 
 const SelectItem = forwardRef<
@@ -114,10 +120,10 @@ const SelectItem = forwardRef<
   <RadixSelect.Item
     ref={ref}
     className={cn(
-      "relative flex cursor-pointer select-none items-center gap-2 rounded-md px-2.5 py-2 pr-8 text-[13px] text-foreground outline-none transition-colors",
-      "data-[highlighted]:bg-[color:var(--accent-14)] data-[highlighted]:text-foreground",
-      "data-[state=checked]:bg-[color:var(--accent-10)]",
-      "data-[disabled]:pointer-events-none data-[disabled]:opacity-50",
+      "relative flex cursor-pointer select-none items-center gap-2 rounded-md px-2.5 py-2 pr-8 text-[13px] text-foreground outline-hidden transition-colors",
+      "data-highlighted:bg-(--accent-14) data-highlighted:text-foreground",
+      "data-[state=checked]:bg-(--accent-10)",
+      "data-disabled:pointer-events-none data-disabled:opacity-50",
       className,
     )}
     {...rest}
@@ -130,7 +136,7 @@ const SelectItem = forwardRef<
         <span className="text-[11px] text-faint truncate">{description}</span>
       )}
     </div>
-    <RadixSelect.ItemIndicator className="absolute right-2 top-1/2 -translate-y-1/2 text-[color:var(--accent)]">
+    <RadixSelect.ItemIndicator className="absolute right-2 top-1/2 -translate-y-1/2 text-(--accent)">
       <Check size={13} strokeWidth={2.4} />
     </RadixSelect.ItemIndicator>
   </RadixSelect.Item>
@@ -164,17 +170,17 @@ function DefaultTrigger({
       aria-invalid={invalid || undefined}
       disabled={disabled}
       className={cn(
-        "group inline-flex w-full items-center justify-between gap-2 rounded-md border border-border bg-[color:var(--w-04)] pl-2.5 pr-2 text-[13px] text-foreground outline-none transition-colors",
-        "hover:bg-[color:var(--w-07)]",
-        "focus-visible:border-[color:var(--accent-55)] focus-visible:bg-[color:var(--accent-06)] focus-visible:shadow-[0_0_0_3px_var(--accent-18)]",
-        "data-[state=open]:border-[color:var(--accent-55)] data-[state=open]:bg-[color:var(--accent-06)]",
+        "group inline-flex w-full items-center justify-between gap-2 rounded-md border border-border bg-(--w-04) pl-2.5 pr-2 text-[13px] text-foreground outline-hidden transition-colors",
+        "hover:bg-(--w-07)",
+        "focus-visible:border-(--accent-55) focus-visible:bg-(--accent-06) focus-visible:shadow-[0_0_0_3px_var(--accent-18)]",
+        "data-[state=open]:border-(--accent-55) data-[state=open]:bg-(--accent-06)",
         "disabled:cursor-not-allowed disabled:opacity-55",
-        invalid && "border-[color:var(--status-err)]",
+        invalid && "border-(--status-err)",
         triggerHeights[size],
         className,
       )}
     >
-      <RadixSelect.Value placeholder={placeholder ?? "请选择"} />
+      <RadixSelect.Value placeholder={placeholder ?? t("请选择")} />
       <RadixSelect.Icon asChild>
         <ChevronDown
           size={14}
@@ -206,16 +212,18 @@ function ChipTrigger({
       aria-label={ariaLabel ?? label}
       disabled={disabled}
       className={cn(
-        "group inline-flex items-center gap-2 rounded-md border border-border bg-[color:var(--w-04)] px-3 text-[12.5px] text-foreground outline-none transition-colors",
-        "hover:bg-[color:var(--w-07)]",
-        "focus-visible:border-[color:var(--accent-55)] focus-visible:bg-[color:var(--accent-06)] focus-visible:shadow-[0_0_0_3px_var(--accent-18)]",
-        "data-[state=open]:border-[color:var(--accent-55)] data-[state=open]:bg-[color:var(--accent-06)]",
+        "group inline-flex items-center gap-2 rounded-md border border-border bg-(--w-04) px-3 text-[12.5px] text-foreground outline-hidden transition-colors",
+        "hover:bg-(--w-07)",
+        "focus-visible:border-(--accent-55) focus-visible:bg-(--accent-06) focus-visible:shadow-[0_0_0_3px_var(--accent-18)]",
+        "data-[state=open]:border-(--accent-55) data-[state=open]:bg-(--accent-06)",
         "disabled:cursor-not-allowed disabled:opacity-55",
         triggerHeights[size],
         className,
       )}
     >
-      {label && <span className="t-caps shrink-0 whitespace-nowrap">{label}</span>}
+      {label && (
+        <span className="t-caps shrink-0 whitespace-nowrap">{label}</span>
+      )}
       <RadixSelect.Value className="min-w-0 truncate whitespace-nowrap" />
       <RadixSelect.Icon asChild>
         <ChevronDown

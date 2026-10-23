@@ -1,3 +1,4 @@
+import { t } from "@/lib/i18n";
 import type { MouseEvent } from "react";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { AnimatePresence, motion } from "motion/react";
@@ -7,6 +8,7 @@ import logoUrl from "@/assets/logo.png";
 import { useReducedMotion } from "@/hooks/use-reduced-motion";
 import { cn } from "@/lib/cn";
 import { SCREENS, type ScreenId } from "./screens";
+import { useLanguage } from "@/hooks/use-language";
 
 function isTauriRuntime() {
   return Boolean(
@@ -52,6 +54,7 @@ export function TopNav({
   running?: { generate: number; edit: number; total: number };
 }) {
   const tauriRuntime = isTauriRuntime();
+  const { locale } = useLanguage();
   const reducedMotion = useReducedMotion();
 
   return (
@@ -85,7 +88,7 @@ export function TopNav({
         >
           <img
             src={logoUrl}
-            className="h-5 w-5 object-contain [filter:drop-shadow(var(--logo-halo-sm))]"
+            className="h-5 w-5 object-contain filter-[drop-shadow(var(--logo-halo-sm))]"
             alt=""
             aria-hidden
           />
@@ -98,7 +101,11 @@ export function TopNav({
       {/* Center — screen tabs */}
       <GlassSurface
         data-no-window-drag
-        width="min(288px, calc(100vw - 32px))"
+        width={
+          locale === "en"
+            ? "min(336px, calc(100vw - 32px))"
+            : "min(288px, calc(100vw - 32px))"
+        }
         height={44}
         borderRadius={50}
         borderWidth={0.07}
@@ -138,7 +145,7 @@ export function TopNav({
                   "relative isolate inline-flex items-center gap-1.5 h-8 min-h-8 px-4 rounded-full text-[12.5px] font-medium whitespace-nowrap transition-colors",
                   isActive
                     ? "text-foreground"
-                    : "text-muted hover:text-foreground hover:bg-[color:var(--w-05)]",
+                    : "text-muted hover:text-foreground hover:bg-(--w-05)",
                 )}
                 style={{ minHeight: 32 }}
               >
@@ -163,9 +170,7 @@ export function TopNav({
                     <motion.span
                       key="badge"
                       initial={
-                        reducedMotion
-                          ? false
-                          : { opacity: 0, scale: 0.6 }
+                        reducedMotion ? false : { opacity: 0, scale: 0.6 }
                       }
                       animate={{ opacity: 1, scale: 1 }}
                       exit={
@@ -180,7 +185,7 @@ export function TopNav({
                         color: "var(--status-running)",
                         boxShadow: "0 0 8px var(--status-running-60)",
                       }}
-                      aria-label={`${tabCount} 个任务进行中`}
+                      aria-label={t("{p0} 个任务进行中", { p0: tabCount })}
                     >
                       <CountUp
                         to={tabCount}

@@ -1,3 +1,4 @@
+import { t } from "@/lib/i18n";
 import { Button } from "@/components/ui/button";
 import { api } from "@/lib/api";
 import {
@@ -56,7 +57,9 @@ export function JobDrawerFooter({
           className="w-full justify-center"
           onClick={() => onCancel?.(job.id)}
         >
-          {asyncTaskActive && api.kind === "browser" ? "停止等待" : "取消任务"}
+          {asyncTaskActive && api.kind === "browser"
+            ? t("停止等待")
+            : t("取消任务")}
         </Button>
       ) : (
         <Button
@@ -67,7 +70,7 @@ export function JobDrawerFooter({
           disabled={!canSave}
         >
           {planned > 1
-            ? `${copy.actionVerb}候选 ${selectedLabel}`
+            ? t("{p0}候选 {p1}", { p0: copy.actionVerb, p1: selectedLabel })
             : copy.saveImageLabel}
         </Button>
       )}
@@ -78,7 +81,7 @@ export function JobDrawerFooter({
             size="sm"
             icon="download"
             className="flex-1 justify-center"
-            onClick={() => saveJobImages(job.id, "任务图片")}
+            onClick={() => saveJobImages(job.id, t("任务图片"))}
           >
             {copy.saveJobLabel}
           </Button>
@@ -88,9 +91,9 @@ export function JobDrawerFooter({
           size="sm"
           icon="copy"
           className="flex-1 justify-center"
-          onClick={() => copyText(prompt, "提示词")}
+          onClick={() => copyText(prompt, t("提示词"))}
         >
-          复制提示词
+          {t("复制提示词")}
         </Button>
         {job.status === "completed" && previewPath && (
           <Button
@@ -98,9 +101,11 @@ export function JobDrawerFooter({
             size="iconSm"
             icon="external"
             onClick={() => openPath(previewPath)}
-            title={api.canUseLocalFiles ? "在系统查看器中打开" : "打开图片"}
+            title={
+              api.canUseLocalFiles ? t("在系统查看器中打开") : t("打开图片")
+            }
             aria-label={
-              api.canUseLocalFiles ? "在系统查看器中打开" : "打开图片"
+              api.canUseLocalFiles ? t("在系统查看器中打开") : t("打开图片")
             }
           />
         )}
@@ -110,8 +115,8 @@ export function JobDrawerFooter({
             size="iconSm"
             icon="trash"
             onClick={() => onDelete(job.id)}
-            title="删除任务"
-            aria-label="删除任务"
+            title={t("删除任务")}
+            aria-label={t("删除任务")}
           />
         )}
       </div>

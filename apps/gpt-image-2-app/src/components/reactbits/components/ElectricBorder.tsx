@@ -303,7 +303,7 @@ const ElectricBorder: React.FC<ElectricBorderProps> = ({
       className={`relative overflow-visible isolate ${className ?? ''}`}
       style={{ '--electric-border-color': color, borderRadius, ...style } as CSSProperties}
     >
-      <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 pointer-events-none z-[2]">
+      <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 pointer-events-none z-2">
         <canvas ref={canvasRef} className="block" />
       </div>
       <div className="absolute inset-0 rounded-[inherit] pointer-events-none z-0">
@@ -316,14 +316,14 @@ const ElectricBorder: React.FC<ElectricBorderProps> = ({
           style={{ border: `2px solid ${color}`, filter: 'blur(4px)' }}
         />
         <div
-          className="absolute inset-0 rounded-[inherit] pointer-events-none -z-[1] scale-110 opacity-30"
+          className="absolute inset-0 rounded-[inherit] pointer-events-none z-[-1] scale-110 opacity-30"
           style={{
             filter: 'blur(32px)',
             background: `linear-gradient(-30deg, ${color}, transparent, ${color})`
           }}
         />
       </div>
-      <div className="relative rounded-[inherit] z-[1]">{children}</div>
+      <div className="relative rounded-[inherit] z-1">{children}</div>
     </div>
   );
 };

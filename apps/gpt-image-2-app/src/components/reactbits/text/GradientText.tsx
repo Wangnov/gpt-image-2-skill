@@ -96,7 +96,7 @@ export default function GradientText({
 
   return (
     <motion.span
-      className={`relative inline-flex max-w-fit items-baseline ${showBorder ? 'rounded-[1.25rem] px-2 py-1 backdrop-blur transition-shadow duration-500 overflow-hidden cursor-pointer' : ''} ${className}`}
+      className={`relative inline-flex max-w-fit items-baseline ${showBorder ? 'rounded-[1.25rem] px-2 py-1 backdrop-blur-sm transition-shadow duration-500 overflow-hidden cursor-pointer' : ''} ${className}`}
       onMouseEnter={handleMouseEnter}
       onMouseLeave={handleMouseLeave}
     >
@@ -120,7 +120,7 @@ export default function GradientText({
       {/* descender-safe inner span: leading-[1.2] + small bottom padding so
           characters like "g" / "y" / "j" never get clipped by bg-clip-text. */}
       <motion.span
-        className="inline-block relative z-[2] text-transparent bg-clip-text leading-[1.15] pb-[0.08em]"
+        className="inline-block relative z-2 text-transparent bg-clip-text leading-[1.15] pb-[0.08em]"
         style={{ ...gradientStyle, backgroundPosition, WebkitBackgroundClip: 'text' }}
       >
         {children}

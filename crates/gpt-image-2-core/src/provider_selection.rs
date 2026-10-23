@@ -102,6 +102,35 @@ pub(crate) fn configured_provider_selection(
                 poll_timeout_seconds: DEFAULT_IMAGE_POLL_TIMEOUT_SECONDS,
             })
         }
+        "atlas" => {
+            if api_key_override
+                .map(|value| value.trim().is_empty())
+                .unwrap_or(true)
+            {
+                let _ = get_provider_credential(requested, provider, "api_key")?;
+            }
+            Ok(ProviderSelection {
+                requested: requested.to_string(),
+                resolved: requested.to_string(),
+                reason: reason.to_string(),
+                kind: ProviderKind::Atlas,
+                api_base: provider
+                    .api_base
+                    .clone()
+                    .unwrap_or_else(|| DEFAULT_ATLAS_API_BASE.to_string()),
+                codex_endpoint: DEFAULT_CODEX_ENDPOINT.to_string(),
+                default_model: provider
+                    .model
+                    .clone()
+                    .unwrap_or_else(|| DEFAULT_ATLAS_MODEL.to_string()),
+                supports_n: false,
+                edit_region_mode: EDIT_REGION_NONE.to_string(),
+                preset: effective_provider_preset(provider).to_string(),
+                image_transport: IMAGE_TRANSPORT_OPENAI_SYNC.to_string(),
+                poll_interval_seconds: DEFAULT_IMAGE_POLL_INTERVAL_SECONDS,
+                poll_timeout_seconds: DEFAULT_IMAGE_POLL_TIMEOUT_SECONDS,
+            })
+        }
         other => Err(AppError::new(
             "provider_kind_unsupported",
             format!("Unsupported provider type: {other}"),
@@ -213,6 +242,7 @@ pub(crate) fn default_edit_region_mode(provider_type: &str) -> &'static str {
     match provider_type {
         "openai" => EDIT_REGION_NATIVE_MASK,
         "codex" => EDIT_REGION_REFERENCE_HINT,
+        "atlas" => EDIT_REGION_NONE,
         _ => EDIT_REGION_REFERENCE_HINT,
     }
 }
@@ -467,6 +497,9 @@ pub(crate) fn validate_provider_specific_image_args(
     mask: Option<&str>,
     input_fidelity: Option<InputFidelity>,
 ) -> Result<(), AppError> {
+    if matches!(selection.kind, ProviderKind::Atlas) {
+        validate_atlas_image_args(shared)?;
+    }
     if matches!(selection.kind, ProviderKind::Codex) {
         if shared.n.unwrap_or(1) != 1 {
             return Err(AppError::new(

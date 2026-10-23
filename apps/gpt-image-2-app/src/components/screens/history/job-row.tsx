@@ -1,3 +1,4 @@
+import { t, getLocale } from "@/lib/i18n";
 import { Fragment, useMemo, useState } from "react";
 import { AnimatePresence, motion } from "motion/react";
 import { useReducedMotion } from "@/hooks/use-reduced-motion";
@@ -39,12 +40,12 @@ function plannedCount(job: Job) {
 }
 
 function storageStatusLabel(status?: string) {
-  if (status === "completed") return "已上传";
-  if (status === "fallback_completed") return "已回退";
-  if (status === "partial_failed") return "部分失败";
-  if (status === "failed") return "上传失败";
-  if (status === "running") return "上传中";
-  if (status === "pending") return "待上传";
+  if (status === "completed") return t("已上传");
+  if (status === "fallback_completed") return t("已回退");
+  if (status === "partial_failed") return t("部分失败");
+  if (status === "failed") return t("上传失败");
+  if (status === "running") return t("上传中");
+  if (status === "pending") return t("待上传");
   return "";
 }
 
@@ -115,10 +116,10 @@ function JobAvatar({ job }: { job: Job }) {
         <span
           aria-hidden="true"
           className={cn(
-            "pointer-events-none absolute -bottom-1 -right-1 flex h-4 min-w-[16px] items-center justify-center rounded-[4px] border border-[color:var(--bg-raised)] px-1 text-[10px] font-semibold leading-none text-foreground",
+            "pointer-events-none absolute -bottom-1 -right-1 flex h-4 min-w-[16px] items-center justify-center rounded-[4px] border border-(--bg-raised) px-1 text-[10px] font-semibold leading-none text-foreground",
             isRunning
               ? "bg-status-running text-foreground"
-              : "bg-[color:var(--n-900)]",
+              : "bg-(--n-900)",
           )}
         >
           {badgeText}
@@ -148,7 +149,7 @@ function ExpandedOutputs({
       map.set(0, job.output_path);
     }
     return map;
-  }, [job.outputs, job.output_path]);
+  }, [job.outputs, job.output_path, getLocale()]);
 
   if (planned <= 1) return null;
 
@@ -162,7 +163,7 @@ function ExpandedOutputs({
         {Array.from({ length: planned }).map((_, index) => {
           const path = byIndex.get(index);
           const url = path ? api.fileUrl(path) : "";
-          const label = `候选 ${outputLabel(index)}`;
+          const label = t("候选 {p0}", { p0: outputLabel(index) });
           const disabled = !path;
           return (
             <button
@@ -173,13 +174,13 @@ function ExpandedOutputs({
               }}
               disabled={disabled}
               className={cn(
-                "h-11 w-11 shrink-0 overflow-hidden rounded-md border bg-raised transition-colors focus-visible:border-accent focus-visible:outline-none",
+                "h-11 w-11 shrink-0 overflow-hidden rounded-md border bg-raised transition-colors focus-visible:border-accent focus-visible:outline-hidden",
                 disabled
                   ? "cursor-default border-border-faint"
                   : "cursor-pointer border-border hover:border-border-strong",
               )}
-              aria-label={`查看${label}`}
-              title={disabled ? `${label} · 等待生成` : label}
+              aria-label={t("查看{p0}", { p0: label })}
+              title={disabled ? t("{p0} · 等待生成", { p0: label }) : label}
             >
               {url ? (
                 <JobPreviewImage
@@ -282,7 +283,7 @@ export function JobRow({
           }
         }}
         className={cn(
-          "grid min-w-[560px] cursor-pointer items-center gap-3 px-3.5 py-2.5 focus-visible:bg-hover focus-visible:outline-none",
+          "grid min-w-[560px] cursor-pointer items-center gap-3 px-3.5 py-2.5 focus-visible:bg-hover focus-visible:outline-hidden",
           expanded ? "border-b-0" : "border-b border-border-faint",
           selected ? "bg-pressed" : hover ? "bg-hover" : "bg-transparent",
         )}
@@ -339,8 +340,8 @@ export function JobRow({
                 "transition-transform",
                 expanded ? "rotate-180" : "rotate-0",
               )}
-              title={expanded ? "收起本批次" : "展开本批次"}
-              aria-label={expanded ? "收起本批次" : "展开本批次"}
+              title={expanded ? t("收起本批次") : t("展开本批次")}
+              aria-label={expanded ? t("收起本批次") : t("展开本批次")}
             />
           )}
           {(hover || focusWithin) && onDelete && (
@@ -352,8 +353,8 @@ export function JobRow({
                 e.stopPropagation();
                 onDelete();
               }}
-              title="删除"
-              aria-label="删除任务"
+              title={t("删除")}
+              aria-label={t("删除任务")}
             />
           )}
         </div>

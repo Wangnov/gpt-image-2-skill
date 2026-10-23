@@ -1,3 +1,4 @@
+import { t } from "@/lib/i18n";
 import { motion } from "motion/react";
 import Masonry, {
   type MasonryItem,
@@ -37,7 +38,7 @@ export function RecentGallery({
         delay: reducedMotion ? 0 : 0.14,
         ease: [0.22, 1, 0.36, 1],
       }}
-      aria-label="最近的作品"
+      aria-label={t("最近的作品")}
       className={cn(
         "mt-6 w-full max-w-[640px]",
         // Split mode: right column, top-aligned with the form,
@@ -47,14 +48,14 @@ export function RecentGallery({
       )}
     >
       <div className="flex items-center justify-between mb-2 px-1">
-        <span className="t-caps">最近的作品</span>
+        <span className="t-caps">{t("最近的作品")}</span>
         {onOpenHistory && (
           <button
             type="button"
             onClick={() => onOpenHistory()}
             className="text-[11px] text-muted hover:text-foreground transition-colors"
           >
-            查看全部 ›
+            {t("查看全部 ›")}
           </button>
         )}
       </div>

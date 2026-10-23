@@ -1,3 +1,4 @@
+import { t } from "@/lib/i18n";
 import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { Download, Upload } from "lucide-react";
@@ -114,12 +115,12 @@ export function PromptTemplatesPanel() {
       (template) => template.groupId === groupId,
     ).length;
     const ok = await confirm({
-      title: `删除分组「${group.name}」`,
+      title: t("删除分组「{p0}」", { p0: group.name }),
       description:
         templateCount > 0
-          ? `会同时删除这个分组里的 ${templateCount} 个模板。`
-          : "此操作无法撤销。",
-      confirmText: "删除",
+          ? t("会同时删除这个分组里的 {p0} 个模板。", { p0: templateCount })
+          : t("此操作无法撤销。"),
+      confirmText: t("删除"),
       variant: "danger",
     });
     if (!ok) return;
@@ -141,19 +142,19 @@ export function PromptTemplatesPanel() {
     const copy = newPromptTemplate(template.groupId, template.scope);
     upsertTemplate({
       ...copy,
-      title: `${template.title} 副本`,
+      title: t("{p0} 副本", { p0: template.title }),
       prompt: template.prompt,
       icon: template.icon,
       color: template.color,
     });
-    toast.success("模板已复制");
+    toast.success(t("模板已复制"));
   };
 
   const removeTemplate = async (template: PromptTemplate) => {
     const ok = await confirm({
-      title: `删除模板「${template.title}」`,
-      description: "此操作无法撤销。",
-      confirmText: "删除",
+      title: t("删除模板「{p0}」", { p0: template.title }),
+      description: t("此操作无法撤销。"),
+      confirmText: t("删除"),
       variant: "danger",
     });
     if (!ok) return;
@@ -166,15 +167,15 @@ export function PromptTemplatesPanel() {
     const prompt = templatePrompt.trim();
     const groupId = templateGroupId || selectedGroupId || state.groups[0]?.id;
     if (!groupId) {
-      toast.error("请先创建一个分组");
+      toast.error(t("请先创建一个分组"));
       return;
     }
     if (!title) {
-      toast.error("请填写模板名称");
+      toast.error(t("请填写模板名称"));
       return;
     }
     if (!prompt) {
-      toast.error("请填写提示词内容");
+      toast.error(t("请填写提示词内容"));
       return;
     }
     const existing = editingId
@@ -191,7 +192,7 @@ export function PromptTemplatesPanel() {
       color: templateColor,
       updatedAt: Date.now(),
     });
-    toast.success(existing ? "模板已更新" : "模板已添加");
+    toast.success(existing ? t("模板已更新") : t("模板已添加"));
     resetForm();
   };
 
@@ -207,19 +208,22 @@ export function PromptTemplatesPanel() {
     try {
       const imported = importPromptTemplates(await file.text());
       const ok = await confirm({
-        title: "导入提示词模板",
-        description: "导入会替换当前所有分组和模板。",
-        confirmText: "导入",
+        title: t("导入提示词模板"),
+        description: t("导入会替换当前所有分组和模板。"),
+        confirmText: t("导入"),
       });
       if (!ok) return;
       update(imported);
       setSelectedGroupId(imported.groups[0]?.id ?? null);
       resetForm();
-      toast.success("提示词模板已导入", {
-        description: `${imported.groups.length} 个分组，${imported.templates.length} 个模板。`,
+      toast.success(t("提示词模板已导入"), {
+        description: t("{p0} 个分组，{p1} 个模板。", {
+          p0: imported.groups.length,
+          p1: imported.templates.length,
+        }),
       });
     } catch (error) {
-      toast.error("导入失败", {
+      toast.error(t("导入失败"), {
         description: error instanceof Error ? error.message : String(error),
       });
     } finally {
@@ -231,7 +235,9 @@ export function PromptTemplatesPanel() {
     <div className="flex-1 min-h-0 overflow-auto p-4 sm:p-5 space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="text-[12px] text-muted">
-          模板会插入到生成 / 编辑提示词的光标位置；新模板默认作用域为通用。
+          {t(
+            "模板会插入到生成 / 编辑提示词的光标位置；新模板默认作用域为通用。",
+          )}
         </div>
         <div className="flex gap-1.5">
           <input
@@ -247,11 +253,11 @@ export function PromptTemplatesPanel() {
             onClick={() => fileInputRef.current?.click()}
           >
             <Upload size={13} />
-            导入 JSON
+            {t("导入 JSON")}
           </Button>
           <Button variant="ghost" size="sm" onClick={handleExport}>
             <Download size={13} />
-            导出 JSON
+            {t("导出 JSON")}
           </Button>
         </div>
       </div>

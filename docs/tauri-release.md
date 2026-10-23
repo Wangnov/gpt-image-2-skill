@@ -59,6 +59,24 @@ The workflow builds and uploads:
 - Windows: NSIS `.exe`.
 - Linux: AppImage, `.deb`, and `.rpm`.
 
+### macOS 13.3 migration and update channels
+
+The next desktop release requires macOS 13.3 or newer for Tailwind CSS 4's
+Safari 16.4 baseline. Both the app bundle and the Homebrew cask enforce 13.3.
+The release workflow publishes two signed updater manifests:
+
+- `latest.json` preserves Windows NSIS and Linux AppImage updates for existing
+  clients. It deliberately omits macOS: the old updater cannot check a new
+  bundle's minimum OS version before replacing the installed app.
+- `latest-modern.json` includes all four platform/architecture entries. New
+  clients use only this endpoint, with no fallback to the legacy channel.
+
+Existing macOS clients must install the new release manually once on macOS
+13.3 or newer. Older systems should retain the previous release. An old Mac
+client's manual update check may report that its platform is unavailable;
+it must not receive an incompatible bundle. Do not backfill Darwin entries
+into `latest.json` when publishing or repairing release assets.
+
 For non-draft, non-prerelease runs, the workflow also updates `Casks/gpt-image-2.rb` in `Wangnov/homebrew-tap`. The cask points at the GitHub Release DMGs and uses GitHub's release asset SHA-256 digests, so macOS users can install with:
 
 ```bash

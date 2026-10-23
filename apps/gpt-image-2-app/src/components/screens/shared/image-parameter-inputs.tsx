@@ -1,3 +1,4 @@
+import { t } from "@/lib/i18n";
 import { Input } from "@/components/ui/input";
 import {
   OUTPUT_COUNT_OPTIONS,
@@ -19,7 +20,7 @@ export function ImageSizeInput({
       <Input
         value={value}
         onChange={(event) => onChange(event.target.value)}
-        placeholder="auto 或 1536x1024"
+        placeholder={t("auto 或 1536x1024")}
         monospace
       />
       <div className="flex flex-wrap gap-1">
@@ -31,7 +32,7 @@ export function ImageSizeInput({
             className={[
               "touch-target min-h-8 rounded border px-2 text-[10.5px] transition-colors",
               value.trim().toLowerCase() === option.value
-                ? "border-accent bg-[color:var(--accent-faint)] text-foreground"
+                ? "border-accent bg-(--accent-faint) text-foreground"
                 : "border-border bg-sunken text-muted hover:text-foreground",
             ].join(" ")}
           >
@@ -68,7 +69,7 @@ export function OutputCountInput({
           onChange(event.target.value === "" ? 0 : Number(event.target.value))
         }
         monospace
-        suffix={<span className="text-[11px] text-faint">张</span>}
+        suffix={<span className="text-[11px] text-faint">{t("张")}</span>}
       />
       <div className="flex flex-wrap gap-1">
         {OUTPUT_COUNT_OPTIONS.map((option) => (
@@ -79,7 +80,7 @@ export function OutputCountInput({
             className={[
               "touch-target min-h-8 min-w-8 rounded border px-2 text-[10.5px] font-medium transition-colors",
               value === option
-                ? "border-accent bg-[color:var(--accent-faint)] text-foreground"
+                ? "border-accent bg-(--accent-faint) text-foreground"
                 : "border-border bg-sunken text-muted hover:text-foreground",
             ].join(" ")}
           >

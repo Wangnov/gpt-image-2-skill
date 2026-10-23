@@ -3,6 +3,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { browserApi, __resetBrowserApiForTests } from "./browser-transport";
 import { retryAfterSeconds } from "./browser/openai";
 import type { ProviderConfig, StorageConfig } from "../types";
+import { configuredRelayBase } from "./browser/relay-client";
+import { setLanguagePreference } from "../i18n";
 
 type CapturedRequest = {
   url: string;
@@ -83,6 +85,7 @@ function installBrowserGlobals(overrides: Record<string, unknown> = {}) {
 
 describe("browserApi", () => {
   beforeEach(async () => {
+    setLanguagePreference("zh-CN");
     installBrowserGlobals();
     await __resetBrowserApiForTests();
   });
@@ -426,7 +429,7 @@ describe("browserApi", () => {
     );
   });
 
-  it("routes an async submission through the relay without a direct POST first", async () => {
+  it("keeps async tasks direct without restoring the removed arbitrary-path relay", async () => {
     installBrowserGlobals({ __GPT_IMAGE_2_RELAY_BASE__: "/api/relay" });
     await __resetBrowserApiForTests();
     const requests: CapturedRequest[] = [];
@@ -434,15 +437,12 @@ describe("browserApi", () => {
       "fetch",
       vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
         requests.push({ url: String(input), init });
-        if (String(input) !== "/api/relay") {
-          throw new Error(`unexpected direct submission: ${String(input)}`);
-        }
-        const headers = new Headers(init?.headers);
-        expect(headers.get("X-GPT-Image-2-Upstream")).toBe(
+        expect(String(input)).toBe(
           "https://mock.example/v1/images/generations/async",
         );
-        expect(headers.get("X-GPT-Image-2-Method")).toBe("POST");
-        expect(headers.get("Authorization")).toBe("Bearer sk-test");
+        expect(init?.method).toBe("POST");
+        expect(init?.redirect).toBe("error");
+        expect(init?.credentials).toBe("omit");
         return new Response(
           JSON.stringify({
             task_id: "task-relay",
@@ -470,7 +470,33 @@ describe("browserApi", () => {
     const job = await waitForJob(result.job_id);
 
     expect(job.status).toBe("completed");
-    expect(requests.map((request) => request.url)).toEqual(["/api/relay"]);
+    expect(requests.map((request) => request.url)).toEqual([
+      "https://mock.example/v1/images/generations/async",
+    ]);
+  });
+
+  it("never replays an ambiguous async POST through the configured relay", async () => {
+    installBrowserGlobals({ __GPT_IMAGE_2_RELAY_BASE__: "/api/relay" });
+    await __resetBrowserApiForTests();
+    const urls: string[] = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL) => {
+        urls.push(String(input));
+        throw new TypeError("Failed to fetch");
+      }),
+    );
+    await addProvider({ preset: "sub2api", image_transport: "sub2api-async" });
+    const result = await browserApi.createGenerate({
+      prompt: "one submission only",
+      provider: "mock",
+      format: "png",
+      n: 1,
+    });
+    const job = await waitForJob(result.job_id);
+    expect(job.status).toBe("failed");
+    expect(urls).toEqual(["https://mock.example/v1/images/generations/async"]);
+    expect(job.error?.message).toContain("CORS");
   });
 
   it("submits sub2api async edits as multipart data", async () => {
@@ -815,17 +841,43 @@ describe("browserApi", () => {
       "fetch",
       vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
         requests.push({ url: String(input), init });
-        if (String(input) === "https://mock.example/v1/images/generations") {
+        if (String(input) === "https://mock.example/v1/models") {
           throw new TypeError("Failed to fetch");
         }
-        if (String(input) === "/api/relay") {
+        if (String(input) === "/api/relay/v2/session") {
+          return okJson({ active: true });
+        }
+        if (String(input) === "/api/relay/v2/models") {
           const headers = new Headers(init?.headers);
-          expect(headers.get("X-GPT-Image-2-Upstream")).toBe(
-            "https://mock.example/v1/images/generations",
+          expect(headers.get("X-GPT-Image-2-Api-Base")).toBe(
+            "https://mock.example/v1",
           );
-          expect(headers.get("X-GPT-Image-2-Method")).toBe("POST");
+          expect(headers.get("X-GPT-Image-2-Relay-Version")).toBe("2");
           expect(headers.get("Authorization")).toBe("Bearer sk-test");
-          return okJson({ data: [{ b64_json: tinyPng }] });
+          return new Response(JSON.stringify({ data: [] }), {
+            headers: {
+              "Content-Type": "application/json",
+              "X-GPT-Image-2-Relay": "1",
+            },
+          });
+        }
+        if (String(input) === "/api/relay/v2/generations") {
+          const headers = new Headers(init?.headers);
+          expect(headers.get("X-GPT-Image-2-Api-Base")).toBe(
+            "https://mock.example/v1",
+          );
+          expect(headers.get("X-GPT-Image-2-Relay-Version")).toBe("2");
+          expect(headers.get("X-GPT-Image-2-Upstream")).toBeNull();
+          expect(headers.get("Authorization")).toBe("Bearer sk-test");
+          return new Response(
+            JSON.stringify({ data: [{ b64_json: tinyPng }] }),
+            {
+              headers: {
+                "Content-Type": "application/json",
+                "X-GPT-Image-2-Relay": "1",
+              },
+            },
+          );
         }
         throw new Error(`unexpected fetch: ${String(input)}`);
       }),
@@ -842,8 +894,195 @@ describe("browserApi", () => {
 
     expect(job.status).toBe("completed");
     expect(requests.map((request) => request.url)).toEqual([
+      "https://mock.example/v1/models",
+      "/api/relay/v2/session",
+      "/api/relay/v2/models",
+      "/api/relay/v2/generations",
+    ]);
+  });
+
+  it("establishes an inactive relay session through Turnstile", async () => {
+    const host = {
+      dataset: {},
+      style: {},
+      setAttribute: vi.fn(),
+      remove: vi.fn(),
+    } as unknown as HTMLElement;
+    const turnstile: TurnstileApi = {
+      render: vi.fn((_container, options) => {
+        options.callback("verified-turnstile-token");
+        return "widget-1";
+      }),
+      remove: vi.fn(),
+    };
+    vi.stubGlobal("document", {
+      body: { appendChild: vi.fn() },
+      head: { appendChild: vi.fn() },
+      createElement: vi.fn(() => host),
+      getElementById: vi.fn(() => null),
+      querySelectorAll: vi.fn(() => []),
+    });
+    installBrowserGlobals({
+      __GPT_IMAGE_2_RELAY_BASE__: "/api/relay",
+      turnstile,
+    });
+    await __resetBrowserApiForTests();
+    const requests: CapturedRequest[] = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+        requests.push({ url: String(input), init });
+        if (String(input) === "https://mock.example/v1/models") {
+          throw new TypeError("Failed to fetch");
+        }
+        if (
+          String(input) === "/api/relay/v2/session" &&
+          init?.method === "GET"
+        ) {
+          return okJson({ active: false });
+        }
+        if (String(input) === "/api/relay/v2/config") {
+          return okJson({
+            version: 2,
+            enabled: true,
+            auth_mode: "turnstile",
+            turnstile_site_key: "site-key",
+          });
+        }
+        if (
+          String(input) === "/api/relay/v2/session" &&
+          init?.method === "POST"
+        ) {
+          expect(JSON.parse(String(init.body))).toEqual({
+            token: "verified-turnstile-token",
+          });
+          expect(
+            new Headers(init.headers).get("X-GPT-Image-2-Relay-Version"),
+          ).toBe("2");
+          return okJson({ active: true });
+        }
+        if (String(input) === "/api/relay/v2/models") {
+          return new Response(JSON.stringify({ data: [] }), {
+            headers: {
+              "Content-Type": "application/json",
+              "X-GPT-Image-2-Relay": "1",
+            },
+          });
+        }
+        throw new Error(`unexpected fetch: ${String(input)}`);
+      }),
+    );
+    await addProvider();
+
+    const result = await browserApi.testProvider("mock");
+
+    expect(result.ok).toBe(true);
+    expect(turnstile.render).toHaveBeenCalledOnce();
+    expect(requests.map((request) => request.url)).toEqual([
+      "https://mock.example/v1/models",
+      "/api/relay/v2/session",
+      "/api/relay/v2/config",
+      "/api/relay/v2/session",
+      "/api/relay/v2/models",
+    ]);
+  });
+
+  it("sends signed asset URLs in the relay body and never in a header", async () => {
+    installBrowserGlobals({ __GPT_IMAGE_2_RELAY_BASE__: "/api/relay" });
+    await __resetBrowserApiForTests();
+    const signedUrl = "https://cdn.example.com/image.png?signature=secret";
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+        const url = String(input);
+        if (url === "https://mock.example/v1/models") {
+          return okJson({ data: [] });
+        }
+        if (url === "https://mock.example/v1/images/generations") {
+          return okJson({ data: [{ url: signedUrl }] });
+        }
+        if (url === signedUrl) throw new TypeError("Failed to fetch");
+        if (url === "/api/relay/v2/session") return okJson({ active: true });
+        if (url === "/api/relay/v2/asset") {
+          const headers = new Headers(init?.headers);
+          expect(headers.get("X-GPT-Image-2-Upstream")).toBeNull();
+          expect([...headers.values()].join(" ")).not.toContain(signedUrl);
+          expect(JSON.parse(String(init?.body))).toEqual({ url: signedUrl });
+          return new Response(new Uint8Array([1, 2, 3]), {
+            headers: {
+              "Content-Type": "image/png",
+              "X-GPT-Image-2-Relay": "1",
+            },
+          });
+        }
+        throw new Error(`unexpected fetch: ${url}`);
+      }),
+    );
+    await addProvider();
+
+    const result = await browserApi.createGenerate({
+      prompt: "signed asset",
+      provider: "mock",
+      format: "png",
+      n: 1,
+    });
+    const job = await waitForJob(result.job_id);
+
+    expect(job.status).toBe("completed");
+  });
+
+  it("rejects a runtime relay URL that is not same-origin", () => {
+    installBrowserGlobals({
+      __GPT_IMAGE_2_RELAY_BASE__: "https://attacker.example.com/api/relay",
+      location: {
+        origin: "https://image.codex-pool.com",
+        hostname: "image.codex-pool.com",
+      },
+    });
+
+    expect(configuredRelayBase()).toBeUndefined();
+
+    installBrowserGlobals({
+      location: {
+        origin: "https://gpt-image-2-dpm.pages.dev",
+        hostname: "gpt-image-2-dpm.pages.dev",
+      },
+    });
+    expect(configuredRelayBase()).toBeUndefined();
+  });
+
+  it("does not replay a generation POST after an ambiguous network failure", async () => {
+    installBrowserGlobals({ __GPT_IMAGE_2_RELAY_BASE__: "/api/relay" });
+    await __resetBrowserApiForTests();
+    const requests: CapturedRequest[] = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+        requests.push({ url: String(input), init });
+        if (String(input) === "https://mock.example/v1/models") {
+          return okJson({ data: [] });
+        }
+        if (String(input) === "https://mock.example/v1/images/generations") {
+          throw new TypeError("Failed to fetch after send");
+        }
+        throw new Error(`unsafe automatic replay: ${String(input)}`);
+      }),
+    );
+    await addProvider();
+
+    const result = await browserApi.createGenerate({
+      prompt: "ambiguous response",
+      provider: "mock",
+      format: "png",
+      n: 1,
+    });
+    const job = await waitForJob(result.job_id);
+
+    expect(job.status).toBe("failed");
+    expect(job.error?.message).toContain("不会自动切换中转站重试");
+    expect(requests.map((request) => request.url)).toEqual([
+      "https://mock.example/v1/models",
       "https://mock.example/v1/images/generations",
-      "/api/relay",
     ]);
   });
 
@@ -856,7 +1095,16 @@ describe("browserApi", () => {
         if (String(input) === "https://api.duckcoding.com/v1/models") {
           throw new TypeError("Failed to fetch");
         }
-        return new Response("error code: 1016", { status: 530 });
+        if (String(input) === "/api/relay/v2/session") {
+          return okJson({ active: true });
+        }
+        if (String(input) === "/api/relay/v2/models") {
+          return new Response("error code: 1016", {
+            status: 530,
+            headers: { "X-GPT-Image-2-Relay": "1" },
+          });
+        }
+        throw new Error(`unexpected fetch: ${String(input)}`);
       }),
     );
     await addProvider({ api_base: "https://api.duckcoding.com/v1" });

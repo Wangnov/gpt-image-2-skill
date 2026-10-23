@@ -1,3 +1,4 @@
+import { t } from "@/lib/i18n";
 import { useEffect, useState } from "react";
 import { cn } from "@/lib/cn";
 import type { Job } from "@/lib/types";
@@ -30,28 +31,28 @@ function BeforeAfterSlider({
   const [pos, setPos] = useState(50);
   return (
     <div
-      className="relative w-full select-none overflow-hidden rounded-lg bg-[color:var(--k-18)] ring-1 ring-[color:var(--w-08)]"
+      className="relative w-full select-none overflow-hidden rounded-lg bg-(--k-18) ring-1 ring-(--w-08)"
       style={{ height: 280 }}
     >
       <img
         src={after}
-        alt="生成结果"
+        alt={t("生成结果")}
         draggable={false}
         className="absolute inset-0 h-full w-full object-contain"
       />
       <img
         src={before}
-        alt="输入参考图"
+        alt={t("输入参考图")}
         draggable={false}
         className="absolute inset-0 h-full w-full object-contain"
         style={{ clipPath: `inset(0 ${100 - pos}% 0 0)` }}
       />
       <div
         aria-hidden
-        className="pointer-events-none absolute top-0 bottom-0 w-px bg-[color:var(--accent)]"
+        className="pointer-events-none absolute top-0 bottom-0 w-px bg-(--accent)"
         style={{ left: `${pos}%` }}
       >
-        <span className="absolute left-1/2 top-1/2 flex h-6 w-6 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full bg-[color:var(--accent)] text-[color:var(--bg)]">
+        <span className="absolute left-1/2 top-1/2 flex h-6 w-6 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full bg-(--accent) text-(--bg)">
           <svg
             width="12"
             height="12"
@@ -70,13 +71,13 @@ function BeforeAfterSlider({
         className="pointer-events-none absolute left-2 top-2 rounded px-1.5 py-0.5 text-[10px] font-mono text-foreground"
         style={{ background: "var(--k-55)" }}
       >
-        输入
+        {t("输入")}
       </span>
       <span
         className="pointer-events-none absolute right-2 top-2 rounded px-1.5 py-0.5 text-[10px] font-mono text-foreground"
         style={{ background: "var(--k-55)" }}
       >
-        输出
+        {t("输出")}
       </span>
       <input
         type="range"
@@ -84,7 +85,7 @@ function BeforeAfterSlider({
         max={100}
         value={pos}
         onChange={(event) => setPos(Number(event.currentTarget.value))}
-        aria-label="对比输入与输出"
+        aria-label={t("对比输入与输出")}
         className="absolute inset-0 h-full w-full cursor-ew-resize opacity-0"
       />
     </div>
@@ -113,11 +114,11 @@ export function JobReferenceCompare({
   return (
     <section className="surface-panel space-y-3 p-4">
       <div className="flex items-center gap-1.5">
-        <span className="t-caps">输入参考图</span>
+        <span className="t-caps">{t("输入参考图")}</span>
         <span className="font-mono text-[11px] text-faint">{count}</span>
         {region && (
-          <span className="rounded bg-[color:var(--accent-10)] px-1 py-px text-[10px] text-[color:var(--accent)]">
-            局部编辑
+          <span className="rounded bg-(--accent-10) px-1 py-px text-[10px] text-(--accent)">
+            {t("局部编辑")}
           </span>
         )}
       </div>
@@ -140,12 +141,12 @@ export function JobReferenceCompare({
                 className={cn(
                   "relative h-14 w-14 shrink-0 overflow-hidden rounded-md ring-1 transition-all",
                   i === selected
-                    ? "scale-[1.04] ring-[color:var(--accent-55)]"
-                    : "opacity-70 ring-[color:var(--w-10)] hover:opacity-100",
+                    ? "scale-[1.04] ring-(--accent-55)"
+                    : "opacity-70 ring-(--w-10) hover:opacity-100",
                 )}
-                aria-label={`参考图 ${i + 1}`}
+                aria-label={t("参考图 {p0}", { p0: i + 1 })}
                 aria-pressed={i === selected}
-                title={`参考图 ${i + 1}`}
+                title={t("参考图 {p0}", { p0: i + 1 })}
               >
                 <img
                   src={url}
@@ -161,15 +162,15 @@ export function JobReferenceCompare({
         <>
           <BeforeAfterSlider before={activeRef} after={outputUrl} />
           <p className="text-[10.5px] text-faint">
-            拖动滑块对比输入参考图与生成结果。
+            {t("拖动滑块对比输入参考图与生成结果。")}
           </p>
         </>
       ) : activeRef ? (
-        <div className="overflow-hidden rounded-lg ring-1 ring-[color:var(--w-08)]">
+        <div className="overflow-hidden rounded-lg ring-1 ring-(--w-08)">
           <img
             src={activeRef}
-            alt="输入参考图"
-            className="block max-h-[280px] w-full bg-[color:var(--k-18)] object-contain"
+            alt={t("输入参考图")}
+            className="block max-h-[280px] w-full bg-(--k-18) object-contain"
           />
         </div>
       ) : null}

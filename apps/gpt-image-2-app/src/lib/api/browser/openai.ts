@@ -1,5 +1,12 @@
 import type { GenerateRequest, Job, ProviderConfig } from "../../types";
+import {
+  configuredRelayBase,
+  fetchWithSafeTransport,
+  isLikelyCorsError,
+  trimTrailingSlash,
+} from "./relay-client";
 import { CORS_MESSAGE } from "./state";
+import { t } from "../../i18n";
 import type {
   AsyncImageTask,
   OpenAiImageItem,
@@ -16,56 +23,12 @@ export type BrowserImageRequestResult = {
 
 export type AsyncTaskUpdate = (task: AsyncImageTask) => Promise<void> | void;
 
+export { configuredRelayBase, isLikelyCorsError, trimTrailingSlash };
+
 export function endpointFor(provider: ProviderConfig, path: string) {
   const base = provider.api_base?.trim().replace(/\/+$/, "");
-  if (!base) throw new Error("服务地址不能为空。");
+  if (!base) throw new Error(t("服务地址不能为空。"));
   return `${base}${path}`;
-}
-
-export function trimTrailingSlash(value: string) {
-  return value.endsWith("/") ? value.slice(0, -1) : value;
-}
-
-export function configuredRelayBase() {
-  if (typeof window === "undefined") return undefined;
-  const configured =
-    window.__GPT_IMAGE_2_RELAY_BASE__ ||
-    import.meta.env.VITE_GPT_IMAGE_2_RELAY_BASE;
-  const value = configured?.trim();
-  if (value) return trimTrailingSlash(value);
-  const host = window.location?.hostname;
-  if (
-    host === "image.codex-pool.com" ||
-    host === "gpt-image-2-dpm.pages.dev" ||
-    host?.endsWith(".gpt-image-2-dpm.pages.dev")
-  ) {
-    return "/api/relay";
-  }
-  return undefined;
-}
-
-export function relayRequest(endpoint: string, init: RequestInit) {
-  const relayBase = configuredRelayBase();
-  if (!relayBase) return undefined;
-  try {
-    const upstream = new URL(endpoint);
-    if (window.location?.origin && upstream.origin === window.location.origin) {
-      return undefined;
-    }
-  } catch {
-    return undefined;
-  }
-  const headers = new Headers(init.headers);
-  headers.set("X-GPT-Image-2-Upstream", endpoint);
-  headers.set("X-GPT-Image-2-Method", init.method || "GET");
-  return {
-    url: relayBase,
-    init: {
-      ...init,
-      method: "POST",
-      headers,
-    } satisfies RequestInit,
-  };
 }
 
 export function imageMime(format?: string) {
@@ -95,31 +58,27 @@ export function base64ToBlob(value: string, type: string) {
   return new Blob([bytes], { type });
 }
 
-export function isLikelyCorsError(error: unknown) {
-  return (
-    error instanceof TypeError || String(error).includes("Failed to fetch")
-  );
+function endpointForMessage(endpoint: string) {
+  try {
+    const parsed = new URL(endpoint);
+    return `${parsed.origin}${parsed.pathname}`;
+  } catch {
+    return t("服务地址已省略");
+  }
 }
 
 export function networkError(error: unknown, endpoint: string) {
   if (isLikelyCorsError(error)) {
-    return new Error(`${CORS_MESSAGE}\n${endpoint}`);
+    return new Error(`${t(CORS_MESSAGE)}\n${endpointForMessage(endpoint)}`);
   }
   return error instanceof Error ? error : new Error(String(error));
 }
 
 export async function fetchProvider(endpoint: string, init: RequestInit) {
   try {
-    return await fetch(endpoint, init);
+    return await fetchWithSafeTransport(endpoint, init);
   } catch (error) {
-    if (!isLikelyCorsError(error)) throw networkError(error, endpoint);
-    const relay = relayRequest(endpoint, init);
-    if (!relay) throw networkError(error, endpoint);
-    try {
-      return await fetch(relay.url, relay.init);
-    } catch (relayError) {
-      throw networkError(relayError, endpoint);
-    }
+    throw networkError(error, endpoint);
   }
 }
 
@@ -128,12 +87,15 @@ export function explainOriginDnsError(endpoint?: string) {
   try {
     const host = endpoint ? new URL(endpoint).hostname : "";
     if (host) {
-      hostHint = ` 当前 Base URL 域名：${host}。`;
+      hostHint = t(" 当前 Base URL 域名：{p0}。", { p0: host });
     }
   } catch {
     /* ignore */
   }
-  return `上游服务域名无法解析或回源失败（Cloudflare 1016/530）。请检查 Base URL 是否写错，或换一个当前可公网访问的服务地址。${hostHint}`;
+  return t(
+    "上游服务域名无法解析或回源失败（Cloudflare 1016/530）。请检查 Base URL 是否写错，或换一个当前可公网访问的服务地址。{p0}",
+    { p0: hostHint },
+  );
 }
 
 export async function parseErrorResponse(
@@ -240,7 +202,7 @@ async function readSub2ApiTaskResponse(
   }
   const payload = (await response.json()) as Sub2ApiTaskPayload;
   if (!payload || typeof payload !== "object" || Array.isArray(payload)) {
-    throw new Error("sub2api 异步任务接口返回了无效 JSON。");
+    throw new Error(t("sub2api 异步任务接口返回了无效 JSON。"));
   }
   return payload;
 }
@@ -264,16 +226,23 @@ async function submitSub2ApiTask(
     signal,
   };
   // A failed CORS read does not prove that the upstream rejected the POST.
-  // Choose the configured relay before submitting so this non-idempotent,
-  // billable request is never repeated as a fallback.
-  const relay = relayRequest(endpoint, init);
+  // The v2 relay only permits synchronous Images operations. Async tasks
+  // require direct CORS access; never restore the old arbitrary-path relay.
   let response: Response;
   try {
-    response = relay
-      ? await fetch(relay.url, relay.init)
-      : await fetch(endpoint, init);
+    response = await fetch(endpoint, {
+      ...init,
+      credentials: "omit",
+      redirect: "error",
+      referrerPolicy: "no-referrer",
+    });
   } catch (error) {
-    throw networkError(error, endpoint);
+    throw new Error(
+      t(
+        "异步请求未收到响应，远端可能已创建任务。本次不会重试提交；请先到服务端确认结果。浏览器异步模式要求服务端开启 CORS。",
+      ),
+      { cause: error },
+    );
   }
   return {
     payload: await readSub2ApiTaskResponse(response, endpoint),
@@ -287,7 +256,7 @@ export function resolveSub2ApiPollUrl(
   taskId: string,
 ) {
   const baseText = provider.api_base?.trim().replace(/\/+$/, "");
-  if (!baseText) throw new Error("服务地址不能为空。");
+  if (!baseText) throw new Error(t("服务地址不能为空。"));
   let base: URL;
   let resolved: URL;
   try {
@@ -299,11 +268,13 @@ export function resolveSub2ApiPollUrl(
           base,
         );
   } catch {
-    throw new Error("sub2api 返回了无效的任务轮询地址。");
+    throw new Error(t("sub2api 返回了无效的任务轮询地址。"));
   }
   if (base.origin !== resolved.origin) {
     throw new Error(
-      "sub2api 返回的任务轮询地址与 Base URL 不同源，已拒绝携带 API Key 请求。",
+      t(
+        "sub2api 返回的任务轮询地址与 Base URL 不同源，已拒绝携带 API Key 请求。",
+      ),
     );
   }
   return resolved.toString();
@@ -342,7 +313,7 @@ function waitForPoll(delaySeconds: number, signal: AbortSignal) {
 function taskIdFromPayload(payload: Sub2ApiTaskPayload) {
   const value = payload.task_id || payload.id;
   if (!value?.trim()) {
-    throw new Error("sub2api 异步提交成功，但响应中没有 task_id。");
+    throw new Error(t("sub2api 异步提交成功，但响应中没有 task_id。"));
   }
   return value;
 }
@@ -353,11 +324,11 @@ function completedTaskPayload(payload: Sub2ApiTaskPayload): OpenAiImagePayload {
     try {
       result = JSON.parse(result) as OpenAiImagePayload;
     } catch {
-      throw new Error("sub2api 任务已完成，但 result 不是有效 JSON。");
+      throw new Error(t("sub2api 任务已完成，但 result 不是有效 JSON。"));
     }
   }
   if (!result || typeof result !== "object" || Array.isArray(result)) {
-    throw new Error("sub2api 任务已完成，但没有返回 OpenAI Images 结果。");
+    throw new Error(t("sub2api 任务已完成，但没有返回 OpenAI Images 结果。"));
   }
   return result;
 }
@@ -402,11 +373,11 @@ async function pollSub2ApiTask(
   }
   if (isFailedTaskStatus(status)) {
     throw new Error(
-      `sub2api 图片任务 ${taskId} 已${status === "failed" ? "失败" : `结束（${status}）`}。`,
+      t("sub2api 图片任务 {p0} 已结束（{p1}）。", { p0: taskId, p1: status }),
     );
   }
   if (!isPendingTaskStatus(status)) {
-    throw new Error(`sub2api 返回了未知任务状态：${status}`);
+    throw new Error(t("sub2api 返回了未知任务状态：{p0}", { p0: status }));
   }
 
   while (true) {
@@ -417,12 +388,15 @@ async function pollSub2ApiTask(
     pollAttempts += 1;
     let response: Response;
     try {
-      response = await fetchProvider(pollUrl, {
+      response = await fetch(pollUrl, {
         headers: {
           Authorization: `Bearer ${apiKey}`,
           Accept: "application/json",
         },
         signal,
+        credentials: "omit",
+        redirect: "error",
+        referrerPolicy: "no-referrer",
       });
     } catch (error) {
       if (signal.aborted) throw error;
@@ -472,11 +446,14 @@ async function pollSub2ApiTask(
           ? payload.error
           : JSON.stringify(payload.error ?? "");
       throw new Error(
-        `sub2api 图片任务 ${taskId} 已失败${detail ? `：${detail}` : "。"}`,
+        t("sub2api 图片任务 {p0} 已失败：{p1}", {
+          p0: taskId,
+          p1: detail || status,
+        }),
       );
     }
     if (!isPendingTaskStatus(status)) {
-      throw new Error(`sub2api 返回了未知任务状态：${status}`);
+      throw new Error(t("sub2api 返回了未知任务状态：{p0}", { p0: status }));
     }
     delay = nextDelay;
   }
@@ -486,7 +463,10 @@ async function pollSub2ApiTask(
   };
   await onTaskUpdate?.(task);
   throw new Error(
-    `等待 sub2api 图片任务超时（${timeout} 秒）；远端任务可能仍在运行。任务 ID：${taskId}`,
+    t(
+      "等待 sub2api 图片任务超时（{p0} 秒）；远端任务可能仍在运行。任务 ID：{p1}",
+      { p0: timeout, p1: taskId },
+    ),
   );
 }
 
@@ -497,7 +477,7 @@ export async function blobFromImageItem(
 ) {
   if (item.b64_json) return base64ToBlob(item.b64_json, imageMime(format));
   if (!item.url) {
-    throw new Error("图片接口没有返回 b64_json 或 url。");
+    throw new Error(t("图片接口没有返回 b64_json 或 url。"));
   }
   try {
     const response = await fetchProvider(item.url, { signal });
@@ -517,7 +497,7 @@ export async function decodeImagePayload(
 ) {
   const items = payload.data ?? [];
   if (items.length === 0) {
-    throw new Error("接口响应里没有生成图片。");
+    throw new Error(t("接口响应里没有生成图片。"));
   }
   return Promise.all(
     items.map((item) => blobFromImageItem(item, format, signal)),

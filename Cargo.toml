@@ -7,6 +7,7 @@ members = [
   "apps/gpt-image-2-app/src-tauri",
 ]
 resolver = "2"
+exclude = ["vendor/glib"]
 
 [workspace.package]
 edition = "2024"
@@ -27,3 +28,7 @@ tag-message = "release: {{version}}"
 [profile.dist]
 inherits = "release"
 lto = "thin"
+
+# Backport GHSA-wrw7-89jp-8q8g while Tauri uses GTK3/glib 0.18.
+[patch.crates-io]
+glib = { path = "vendor/glib" }

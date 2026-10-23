@@ -1,7 +1,7 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
   "productName": "GPT Image 2",
-  "version": "0.7.3",
+  "version": "0.7.6",
   "identifier": "com.wangnov.gpt-image-2",
   "build": {
     "beforeDevCommand": "npm run prepare:sidecar -- --if-missing && npm run dev",
@@ -27,7 +27,19 @@
       }
     ],
     "security": {
-      "csp": null,
+      "csp": {
+        "default-src": "'self' customprotocol: asset:",
+        "script-src": "'self'",
+        "style-src": "'self' 'unsafe-inline' https://api.fontshare.com",
+        "font-src": "'self' data: https://cdn.fontshare.com",
+        "img-src": "'self' asset: http://asset.localhost data: blob: https:",
+        "connect-src": "ipc: http://ipc.localhost asset: http://asset.localhost data: blob: https:",
+        "object-src": "'none'",
+        "base-uri": "'none'",
+        "frame-src": "'none'",
+        "frame-ancestors": "'none'",
+        "form-action": "'none'"
+      },
       "assetProtocol": {
         "enable": true,
         "scope": [
@@ -57,7 +69,7 @@
     "resources": ["bin/*"],
     "macOS": {
       "hardenedRuntime": true,
-      "minimumSystemVersion": "11.0",
+      "minimumSystemVersion": "13.3",
       "providerShortName": "3VT538F8B6",
       "dmg": {
         "appPosition": {
@@ -79,7 +91,7 @@
     "updater": {
       "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IEIyN0FEODE4QkFERDdCMTgKUldRWWU5MjZHTmg2c2h0UkdYQTU2MWRINTdGdVJhcEt6V1h1dllHZjNMcHRRT1orcEZ1clNwVzIK",
       "endpoints": [
-        "https://github.com/Wangnov/gpt-image-2-skill/releases/latest/download/latest.json"
+        "https://github.com/Wangnov/gpt-image-2-skill/releases/latest/download/latest-modern.json"
       ]
     }
   }

@@ -5,7 +5,7 @@ import { fileURLToPath } from "node:url";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const rootDir = path.resolve(__dirname, "../..");
-const workflowPath = path.join(rootDir, ".github", "workflows", "release.yml");
+const workflowPath = process.argv[2] ?? path.join(rootDir, ".github", "workflows", "release.yml");
 
 const insertAfter = `      - name: Install dependencies
         run: |
@@ -18,7 +18,21 @@ const muslStepPattern =
   /      - name: Configure musl toolchain\n        if: \$\{\{ runner\.os == 'Linux' && contains\(join\(matrix\.targets, ','\), 'unknown-linux-musl'\) \}\}\n        shell: bash\n        run: \|\n(?:.*\n)+?(?=      - name: (?:Refresh WiX path|Build artifacts))/;
 const wixStepName = "      - name: Refresh WiX path";
 const announceSectionMarker = "  announce:\n";
-const announceCheckoutMarker = `      - uses: actions/checkout@v6
+const actionPins = new Map([
+  [
+    "actions/checkout@v6",
+    "actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6",
+  ],
+  [
+    "actions/upload-artifact@v6",
+    "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1",
+  ],
+  [
+    "actions/download-artifact@v7",
+    "actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2",
+  ],
+]);
+const announceCheckoutMarker = `      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
           persist-credentials: false
           submodules: recursive
@@ -83,6 +97,78 @@ const legacyLinuxDepsStepPattern =
   /      - name: Install Linux keyring build dependencies\n        if: \$\{\{ runner\.os == 'Linux' \}\}\n        run: \|\n(?:          .+\n)+/;
 
 let source = fs.readFileSync(workflowPath, "utf8");
+
+// cargo-dist regenerates mutable major-version refs. Normalize them before
+// applying structural patches so a regenerated release workflow still obeys
+// the repository-wide full-SHA policy.
+for (const [mutableRef, pinnedRef] of actionPins) {
+  source = source.replaceAll(mutableRef, pinnedRef);
+}
+
+// Restore the reviewed security/dispatch patches after cargo-dist generation.
+// The generator otherwise reintroduces remote installers and interpolates tags
+// directly into shell source.
+if (!source.includes("  workflow_dispatch:\n")) {
+  source = source.replace("on:\n", `on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Release tag such as v0.2.5
+        required: true
+`);
+}
+source = source.replace(
+  "tag: ${{ !github.event.pull_request && github.ref_name || '' }}",
+  "tag: ${{ !github.event.pull_request && (inputs.tag || github.ref_name) || '' }}",
+).replace(
+  "tag-flag: ${{ !github.event.pull_request && format('--tag={0}', github.ref_name) || '' }}",
+  "tag-flag: ${{ !github.event.pull_request && format('--tag={0}', inputs.tag || github.ref_name) || '' }}",
+);
+source = source.replace(
+  /      - name: Install dist\n(?:        #.*\n)*        shell: bash\n        run: .*cargo-dist-installer\.sh.*\n/,
+  `      - name: Install dist
+        shell: bash
+        run: scripts/release/install-cargo-dist.sh
+`,
+);
+source = source.replace(
+  `            curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
+            echo "$HOME/.cargo/bin" >> $GITHUB_PATH
+`,
+  `            echo "The configured release container must include a trusted Rust toolchain." >&2
+            exit 1
+`,
+);
+source = source.replace(
+  `      - name: Install dist
+        run: \${{ matrix.install_dist.run }}
+`,
+  `      - name: Install dist on Unix
+        if: \${{ runner.os != 'Windows' }}
+        shell: bash
+        run: scripts/release/install-cargo-dist.sh
+      - name: Install dist on Windows
+        if: \${{ runner.os == 'Windows' }}
+        shell: pwsh
+        run: ./scripts/release/install-cargo-dist.ps1
+`,
+);
+source = source.replace(
+  `      - id: plan
+        run: |
+          dist \${{ (!github.event.pull_request && format('host --steps=create --tag={0}', github.ref_name)) || 'plan' }} --output-format=json > plan-dist-manifest.json
+`,
+  `      - id: plan
+        env:
+          RELEASE_TAG: \${{ inputs.tag || github.ref_name }}
+        run: |
+          if [[ "\${{ github.event_name }}" == "pull_request" ]]; then
+            dist plan --output-format=json > plan-dist-manifest.json
+          else
+            dist host --steps=create --tag="$RELEASE_TAG" --output-format=json > plan-dist-manifest.json
+          fi
+`,
+);
 
 source = source.replace(legacyLinuxDepsStepPattern, "");
 source = source.replace(

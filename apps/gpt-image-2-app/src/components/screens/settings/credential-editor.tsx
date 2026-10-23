@@ -1,3 +1,4 @@
+import { t } from "@/lib/i18n";
 import { Input } from "@/components/ui/input";
 import { GlassSelect } from "@/components/ui/select";
 import { api } from "@/lib/api";
@@ -46,7 +47,7 @@ export function CredentialEditor({
           }
           options={sourceOptions}
           size="sm"
-          ariaLabel={`${ariaLabel} 来源`}
+          ariaLabel={t("{p0} 来源", { p0: ariaLabel })}
         />
         {source === "file" && (
           <Input
@@ -55,7 +56,9 @@ export function CredentialEditor({
               onChange({ source: "file", value: event.target.value })
             }
             placeholder={
-              secretDisplay ? `${secretDisplay}，留空保留` : placeholder
+              secretDisplay
+                ? t("{p0}，留空保留", { p0: secretDisplay })
+                : placeholder
             }
             size="sm"
             monospace
@@ -69,7 +72,7 @@ export function CredentialEditor({
             onChange={(event) =>
               onChange({ source: "env", env: event.target.value })
             }
-            placeholder="如 OPENAI_API_KEY"
+            placeholder={t("如 OPENAI_API_KEY")}
             size="sm"
             monospace
             aria-label={ariaLabel}
@@ -99,7 +102,9 @@ export function CredentialEditor({
               aria-invalid={invalid}
             />
             <Input
-              value={credential?.source === "keychain" ? credential.account : ""}
+              value={
+                credential?.source === "keychain" ? credential.account : ""
+              }
               onChange={(event) =>
                 onChange({
                   source: "keychain",
@@ -121,7 +126,9 @@ export function CredentialEditor({
       </div>
       {source === "env" && isHttpRuntime && (
         <p className="text-[11px] leading-snug text-faint">
-          由部署者注入（docker compose env / systemd unit / 启动脚本等）；改完通常需重启服务才生效。
+          {t(
+            "由部署者注入（docker compose env / systemd unit / 启动脚本等）；改完通常需重启服务才生效。",
+          )}
         </p>
       )}
     </div>

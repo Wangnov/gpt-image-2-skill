@@ -1,3 +1,4 @@
+import { t } from "@/lib/i18n";
 import type { ImageTransport, ProviderConfig, ProviderPreset } from "./types";
 
 export function effectiveProviderPreset(
@@ -11,13 +12,13 @@ export function providerPresetLabel(provider: ProviderConfig) {
   if (provider.type === "codex") return "Codex";
   switch (effectiveProviderPreset(provider)) {
     case "openai":
-      return "OpenAI 官方";
+      return t("OpenAI 官方");
     case "new-api":
       return "New API";
     case "sub2api":
       return "sub2api";
     default:
-      return "自定义服务";
+      return t("自定义服务");
   }
 }
 
@@ -30,6 +31,6 @@ export function effectiveImageTransport(
 export function imageTransportLabel(provider: ProviderConfig) {
   if (provider.type === "codex") return "image_generation";
   return effectiveImageTransport(provider) === "sub2api-async"
-    ? "异步任务"
-    : "同步 Images";
+    ? t("异步任务")
+    : t("同步 Images");
 }

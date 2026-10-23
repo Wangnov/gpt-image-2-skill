@@ -1,4 +1,12 @@
-import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
+import { t, getLocale } from "@/lib/i18n";
+import {
+  useCallback,
+  useEffect,
+  useId,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { toast } from "sonner";
 import { type MaskExport } from "./mask-canvas";
 import { EditCanvasStage } from "./edit-canvas-stage";
@@ -35,7 +43,10 @@ import {
   outputCountMismatchMessage,
   responseOutputCount,
 } from "@/lib/job-feedback";
-import { effectiveOutputCount, requestOutputCount } from "@/lib/provider-capabilities";
+import {
+  effectiveOutputCount,
+  requestOutputCount,
+} from "@/lib/provider-capabilities";
 import {
   providerNames as readProviderNames,
   reconcileProviderSelection,
@@ -52,7 +63,10 @@ export function EditScreen({
 }) {
   const reducedMotion = useReducedMotion();
   const { tweaks } = useTweaks();
-  const providerNames = useMemo(() => readProviderNames(config), [config]);
+  const providerNames = useMemo(
+    () => readProviderNames(config),
+    [config, getLocale()],
+  );
   const fileInputRef = useRef<HTMLInputElement>(null);
   const promptTextareaRef = useRef<HTMLTextAreaElement>(null);
   const refsRef = useRef<RefWithFile[]>([]);
@@ -251,17 +265,19 @@ export function EditScreen({
   const handleRun = () => {
     if (!provider || refs.length === 0 || isSubmitting) return;
     if (parameterError) {
-      toast.error("参数无效", { description: parameterError });
+      toast.error(t("参数无效"), { description: parameterError });
       return;
     }
     if (regionUnavailable) {
-      toast.error("当前凭证不支持局部编辑", {
-        description: "请切换到「多图参考」，或换一个支持局部编辑的凭证。",
+      toast.error(t("当前凭证不支持局部编辑"), {
+        description: t("请切换到「多图参考」，或换一个支持局部编辑的凭证。"),
       });
       return;
     }
     if (usesRegion && !targetRef) {
-      toast.error("请先选择目标图", { description: "遮罩会作用在目标图上。" });
+      toast.error(t("请先选择目标图"), {
+        description: t("遮罩会作用在目标图上。"),
+      });
       return;
     }
 
@@ -284,15 +300,15 @@ export function EditScreen({
     if (usesRegion) {
       if (!maskPayload) {
         setExportKey(null);
-        setRunError("遮罩导出失败，请重新涂抹一次。");
-        toast.error("遮罩导出失败", { description: "请重新涂抹一次。" });
+        setRunError(t("遮罩导出失败，请重新涂抹一次。"));
+        toast.error(t("遮罩导出失败"), { description: t("请重新涂抹一次。") });
         return;
       }
       if (!maskPayload.hasSelection) {
         setExportKey(null);
-        setRunError("请先涂抹要修改的区域。");
-        toast.error("还没有选区", {
-          description: "请在目标图上涂抹要修改的区域。",
+        setRunError(t("请先涂抹要修改的区域。"));
+        toast.error(t("还没有选区"), {
+          description: t("请在目标图上涂抹要修改的区域。"),
         });
         return;
       }
@@ -323,31 +339,41 @@ export function EditScreen({
       targetRef,
       usesRegion,
     });
-    const modeText = usesRegion ? regionModeLabel(editRegionMode) : "多图参考";
-    const toastId = toast.loading("正在提交任务", {
-      description: `${modeText} · ${refs.length} 张图片 · ${provider}`,
+    const modeText = usesRegion
+      ? regionModeLabel(editRegionMode)
+      : t("多图参考");
+    const toastId = toast.loading(t("正在提交任务"), {
+      description: t("{p0} · {p1} 张图片 · {p2}", {
+        p0: modeText,
+        p1: refs.length,
+        p2: provider,
+      }),
     });
     setPendingOutputCount(plannedN);
     try {
       const res = await mutate.mutateAsync(form);
       const queued =
-        res.queued ||
-        Boolean(res.job && isActiveJobStatus(res.job.status));
+        res.queued || Boolean(res.job && isActiveJobStatus(res.job.status));
       const count = queued ? plannedN : responseOutputCount(res);
       setOutputCount(count);
       setJobId(res.job_id);
       setRunNotice(queued ? null : outputCountMismatchMessage(count, plannedN));
       if (queued) {
         toast.success(
-          plannedN > 1 ? `已开始编辑 ${plannedN} 张` : "已开始编辑",
+          plannedN > 1
+            ? t("已开始编辑 {p0} 张", { p0: plannedN })
+            : t("已开始编辑"),
           {
             id: toastId,
-            description: `${modeText} · ${provider} · 完成后通知你`,
+            description: t("{p0} · {p1} · 完成后通知你", {
+              p0: modeText,
+              p1: provider,
+            }),
             duration: 4_000,
           },
         );
       } else {
-        toast.success("编辑完成", {
+        toast.success(t("编辑完成"), {
           id: toastId,
           description: outputCountDescription(count, plannedN),
         });
@@ -355,7 +381,7 @@ export function EditScreen({
     } catch (error) {
       const message = errorMessage(error);
       setRunError(message);
-      toast.error("编辑失败", { id: toastId, description: message });
+      toast.error(t("编辑失败"), { id: toastId, description: message });
     } finally {
       setPendingOutputCount(null);
       setExportKey(null);
@@ -387,9 +413,9 @@ export function EditScreen({
       <EditModeHeader
         editMode={editMode}
         onChange={(mode) => {
-            setEditMode(mode);
-            setRunError(null);
-            setRunNotice(null);
+          setEditMode(mode);
+          setRunError(null);
+          setRunNotice(null);
         }}
       />
 

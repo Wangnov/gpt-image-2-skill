@@ -1,6 +1,6 @@
 [package]
 name = "gpt-image-2-app"
-version = "0.7.3"
+version = "0.7.6"
 edition.workspace = true
 license.workspace = true
 repository.workspace = true
@@ -18,8 +18,8 @@ crate-type = ["staticlib", "cdylib", "rlib"]
 tauri-build = { version = "2.0.0", features = [] }
 
 [dependencies]
-gpt-image-2-core = { path = "../../../crates/gpt-image-2-core", version = "0.7.3" }
-gpt-image-2-runtime = { path = "../../../crates/gpt-image-2-runtime", version = "0.7.3" }
+gpt-image-2-core = { path = "../../../crates/gpt-image-2-core", version = "0.7.6" }
+gpt-image-2-runtime = { path = "../../../crates/gpt-image-2-runtime", version = "0.7.6" }
 serde = { version = "1.0.228", features = ["derive"] }
 serde_json = "1.0.145"
 tauri = { version = "2.0.0", features = ["protocol-asset", "image-png"] }
@@ -32,13 +32,15 @@ tauri-plugin-drag = "2"
 tauri-plugin-notification = "2.0.0"
 tauri-plugin-process = "2.3.1"
 tauri-plugin-single-instance = "2.4.1"
-tauri-plugin-updater = "2.10.1"
+# Current Windows updater manifests contain signed NSIS executables, not ZIP
+# installers. macOS tar.gz and Linux AppImage support remain enabled.
+tauri-plugin-updater = { version = "2.10.1", default-features = false, features = ["rustls-tls", "system-proxy"] }
 # Native folder picker for the "browse" affordance in path inputs. We use
 # `rfd` directly rather than `tauri-plugin-dialog` to avoid a npm-side
 # dependency and the extra capability/permission wiring; the dialog runs
 # behind a Tauri command, so the existing Tauri runtime gating already
 # scopes its availability.
-rfd = { version = "0.15", default-features = false, features = ["xdg-portal", "tokio"] }
+rfd = { version = "0.17", default-features = false, features = ["xdg-portal"] }
 
 [features]
 recovery-fault-injection = ["gpt-image-2-core/recovery-fault-injection"]
