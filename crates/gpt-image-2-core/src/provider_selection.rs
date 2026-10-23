@@ -36,6 +36,7 @@ pub(crate) fn configured_provider_selection(
     reason: &str,
     api_key_override: Option<&str>,
 ) -> Result<ProviderSelection, AppError> {
+    validate_provider_config(provider)?;
     let edit_region_mode = provider
         .edit_region_mode
         .as_deref()
@@ -70,6 +71,10 @@ pub(crate) fn configured_provider_selection(
                 edit_region_mode: edit_region_mode.unwrap_or_else(|| {
                     default_edit_region_mode(&provider.provider_type).to_string()
                 }),
+                preset: effective_provider_preset(provider).to_string(),
+                image_transport: effective_image_transport(provider).to_string(),
+                poll_interval_seconds: effective_poll_interval_seconds(provider),
+                poll_timeout_seconds: effective_poll_timeout_seconds(provider),
             })
         }
         "codex" => {
@@ -91,6 +96,39 @@ pub(crate) fn configured_provider_selection(
                 supports_n: false,
                 edit_region_mode: edit_region_mode
                     .unwrap_or_else(|| EDIT_REGION_REFERENCE_HINT.to_string()),
+                preset: effective_provider_preset(provider).to_string(),
+                image_transport: IMAGE_TRANSPORT_OPENAI_SYNC.to_string(),
+                poll_interval_seconds: DEFAULT_IMAGE_POLL_INTERVAL_SECONDS,
+                poll_timeout_seconds: DEFAULT_IMAGE_POLL_TIMEOUT_SECONDS,
+            })
+        }
+        "atlas" => {
+            if api_key_override
+                .map(|value| value.trim().is_empty())
+                .unwrap_or(true)
+            {
+                let _ = get_provider_credential(requested, provider, "api_key")?;
+            }
+            Ok(ProviderSelection {
+                requested: requested.to_string(),
+                resolved: requested.to_string(),
+                reason: reason.to_string(),
+                kind: ProviderKind::Atlas,
+                api_base: provider
+                    .api_base
+                    .clone()
+                    .unwrap_or_else(|| DEFAULT_ATLAS_API_BASE.to_string()),
+                codex_endpoint: DEFAULT_CODEX_ENDPOINT.to_string(),
+                default_model: provider
+                    .model
+                    .clone()
+                    .unwrap_or_else(|| DEFAULT_ATLAS_MODEL.to_string()),
+                supports_n: false,
+                edit_region_mode: EDIT_REGION_NONE.to_string(),
+                preset: effective_provider_preset(provider).to_string(),
+                image_transport: IMAGE_TRANSPORT_OPENAI_SYNC.to_string(),
+                poll_interval_seconds: DEFAULT_IMAGE_POLL_INTERVAL_SECONDS,
+                poll_timeout_seconds: DEFAULT_IMAGE_POLL_TIMEOUT_SECONDS,
             })
         }
         other => Err(AppError::new(
@@ -107,10 +145,104 @@ pub(crate) const EDIT_REGION_REFERENCE_HINT: &str = "reference-hint";
 
 pub(crate) const EDIT_REGION_NONE: &str = "none";
 
+pub fn effective_provider_preset(provider: &ProviderConfig) -> &str {
+    provider.preset.as_deref().unwrap_or_else(|| {
+        if provider.provider_type == "openai" {
+            PROVIDER_PRESET_OPENAI
+        } else {
+            PROVIDER_PRESET_CUSTOM
+        }
+    })
+}
+
+pub fn effective_image_transport(provider: &ProviderConfig) -> &str {
+    provider
+        .image_transport
+        .as_deref()
+        .unwrap_or(IMAGE_TRANSPORT_OPENAI_SYNC)
+}
+
+pub fn effective_poll_interval_seconds(provider: &ProviderConfig) -> u64 {
+    provider
+        .poll_interval_seconds
+        .unwrap_or(DEFAULT_IMAGE_POLL_INTERVAL_SECONDS)
+}
+
+pub fn effective_poll_timeout_seconds(provider: &ProviderConfig) -> u64 {
+    provider
+        .poll_timeout_seconds
+        .unwrap_or(DEFAULT_IMAGE_POLL_TIMEOUT_SECONDS)
+}
+
+pub fn validate_provider_config(provider: &ProviderConfig) -> Result<(), AppError> {
+    if let Some(preset) = provider.preset.as_deref()
+        && !matches!(
+            preset,
+            PROVIDER_PRESET_OPENAI
+                | PROVIDER_PRESET_NEW_API
+                | PROVIDER_PRESET_SUB2API
+                | PROVIDER_PRESET_CUSTOM
+        )
+    {
+        return Err(AppError::new(
+            "invalid_provider_config",
+            format!("Unsupported preset: {preset}"),
+        )
+        .with_detail(json!({
+            "allowed": [
+                PROVIDER_PRESET_OPENAI,
+                PROVIDER_PRESET_NEW_API,
+                PROVIDER_PRESET_SUB2API,
+                PROVIDER_PRESET_CUSTOM
+            ]
+        })));
+    }
+    let transport = effective_image_transport(provider);
+    if !matches!(
+        transport,
+        IMAGE_TRANSPORT_OPENAI_SYNC | IMAGE_TRANSPORT_SUB2API_ASYNC
+    ) {
+        return Err(AppError::new(
+            "invalid_provider_config",
+            format!("Unsupported image_transport: {transport}"),
+        )
+        .with_detail(json!({
+            "allowed": [IMAGE_TRANSPORT_OPENAI_SYNC, IMAGE_TRANSPORT_SUB2API_ASYNC]
+        })));
+    }
+    if transport == IMAGE_TRANSPORT_SUB2API_ASYNC
+        && !matches!(
+            provider.provider_type.as_str(),
+            "openai" | "openai-compatible"
+        )
+    {
+        return Err(AppError::new(
+            "invalid_provider_config",
+            "sub2api async image tasks require an OpenAI-compatible provider.",
+        ));
+    }
+    let interval = effective_poll_interval_seconds(provider);
+    if !(1..=60).contains(&interval) {
+        return Err(AppError::new(
+            "invalid_provider_config",
+            "poll_interval_seconds must be between 1 and 60.",
+        ));
+    }
+    let timeout = effective_poll_timeout_seconds(provider);
+    if !(30..=3_600).contains(&timeout) || timeout < interval {
+        return Err(AppError::new(
+            "invalid_provider_config",
+            "poll_timeout_seconds must be between 30 and 3600 and not shorter than the poll interval.",
+        ));
+    }
+    Ok(())
+}
+
 pub(crate) fn default_edit_region_mode(provider_type: &str) -> &'static str {
     match provider_type {
         "openai" => EDIT_REGION_NATIVE_MASK,
         "codex" => EDIT_REGION_REFERENCE_HINT,
+        "atlas" => EDIT_REGION_NONE,
         _ => EDIT_REGION_REFERENCE_HINT,
     }
 }
@@ -188,6 +320,10 @@ pub(crate) fn select_builtin_provider(
                 default_model: DEFAULT_OPENAI_MODEL.to_string(),
                 supports_n: true,
                 edit_region_mode: EDIT_REGION_NATIVE_MASK.to_string(),
+                preset: PROVIDER_PRESET_OPENAI.to_string(),
+                image_transport: IMAGE_TRANSPORT_OPENAI_SYNC.to_string(),
+                poll_interval_seconds: DEFAULT_IMAGE_POLL_INTERVAL_SECONDS,
+                poll_timeout_seconds: DEFAULT_IMAGE_POLL_TIMEOUT_SECONDS,
             })
         }
         "codex" => {
@@ -207,6 +343,10 @@ pub(crate) fn select_builtin_provider(
                 default_model: DEFAULT_CODEX_MODEL.to_string(),
                 supports_n: false,
                 edit_region_mode: EDIT_REGION_REFERENCE_HINT.to_string(),
+                preset: PROVIDER_PRESET_CUSTOM.to_string(),
+                image_transport: IMAGE_TRANSPORT_OPENAI_SYNC.to_string(),
+                poll_interval_seconds: DEFAULT_IMAGE_POLL_INTERVAL_SECONDS,
+                poll_timeout_seconds: DEFAULT_IMAGE_POLL_TIMEOUT_SECONDS,
             })
         }
         "auto" => {
@@ -233,6 +373,10 @@ pub(crate) fn select_builtin_provider(
                     default_model: DEFAULT_OPENAI_MODEL.to_string(),
                     supports_n: true,
                     edit_region_mode: EDIT_REGION_NATIVE_MASK.to_string(),
+                    preset: PROVIDER_PRESET_OPENAI.to_string(),
+                    image_transport: IMAGE_TRANSPORT_OPENAI_SYNC.to_string(),
+                    poll_interval_seconds: DEFAULT_IMAGE_POLL_INTERVAL_SECONDS,
+                    poll_timeout_seconds: DEFAULT_IMAGE_POLL_TIMEOUT_SECONDS,
                 })
             } else if codex_ready {
                 Ok(ProviderSelection {
@@ -245,6 +389,10 @@ pub(crate) fn select_builtin_provider(
                     default_model: DEFAULT_CODEX_MODEL.to_string(),
                     supports_n: false,
                     edit_region_mode: EDIT_REGION_REFERENCE_HINT.to_string(),
+                    preset: PROVIDER_PRESET_CUSTOM.to_string(),
+                    image_transport: IMAGE_TRANSPORT_OPENAI_SYNC.to_string(),
+                    poll_interval_seconds: DEFAULT_IMAGE_POLL_INTERVAL_SECONDS,
+                    poll_timeout_seconds: DEFAULT_IMAGE_POLL_TIMEOUT_SECONDS,
                 })
             } else {
                 Err(
@@ -310,6 +458,10 @@ pub(crate) fn select_request_provider(
             default_model: DEFAULT_CODEX_MODEL.to_string(),
             supports_n: false,
             edit_region_mode: EDIT_REGION_REFERENCE_HINT.to_string(),
+            preset: PROVIDER_PRESET_CUSTOM.to_string(),
+            image_transport: IMAGE_TRANSPORT_OPENAI_SYNC.to_string(),
+            poll_interval_seconds: DEFAULT_IMAGE_POLL_INTERVAL_SECONDS,
+            poll_timeout_seconds: DEFAULT_IMAGE_POLL_TIMEOUT_SECONDS,
         });
     }
     if matches!(
@@ -330,6 +482,10 @@ pub(crate) fn select_request_provider(
             default_model: DEFAULT_OPENAI_MODEL.to_string(),
             supports_n: true,
             edit_region_mode: EDIT_REGION_NATIVE_MASK.to_string(),
+            preset: PROVIDER_PRESET_OPENAI.to_string(),
+            image_transport: IMAGE_TRANSPORT_OPENAI_SYNC.to_string(),
+            poll_interval_seconds: DEFAULT_IMAGE_POLL_INTERVAL_SECONDS,
+            poll_timeout_seconds: DEFAULT_IMAGE_POLL_TIMEOUT_SECONDS,
         });
     }
     select_image_provider(cli)
@@ -341,6 +497,9 @@ pub(crate) fn validate_provider_specific_image_args(
     mask: Option<&str>,
     input_fidelity: Option<InputFidelity>,
 ) -> Result<(), AppError> {
+    if matches!(selection.kind, ProviderKind::Atlas) {
+        validate_atlas_image_args(shared)?;
+    }
     if matches!(selection.kind, ProviderKind::Codex) {
         if shared.n.unwrap_or(1) != 1 {
             return Err(AppError::new(

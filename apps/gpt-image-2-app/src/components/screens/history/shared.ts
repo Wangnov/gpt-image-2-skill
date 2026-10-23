@@ -144,6 +144,7 @@ export type GenerationSlot = {
 
 export type RecoveryActionId =
   | "continue_save"
+  | "resume_remote"
   | "fill_missing"
   | "reupload"
   | "resubmit";
@@ -301,7 +302,26 @@ export function jobRecoveryAction(
   const recoverability = derivedRecoverability(job);
   const supportsLocalRecovery = options.supportsLocalRecovery ?? true;
   if (!supportsLocalRecovery) return resubmitAction();
+  const hasRemoteTask = Boolean(
+    job.metadata?.remote_task ||
+    (Array.isArray(job.metadata?.remote_tasks) &&
+      job.metadata.remote_tasks.some(Boolean)),
+  );
 
+  if (
+    hasRemoteTask &&
+    (recoverability === "recoverable.remote_in_progress" ||
+      recoverability === "terminal.local_recovery_unavailable")
+  ) {
+    return {
+      action: "resume_remote",
+      label: t("继续获取结果"),
+      title: t("继续轮询已创建的 sub2api 任务，不重新提交生成请求"),
+      loading: t("正在获取远端任务结果"),
+      success: t("已取回远端结果"),
+      description: () => t("已从原远端任务取回结果，未重新提交图片生成请求。"),
+    };
+  }
   if (recoverability === "recoverable.local_response_cached") {
     return {
       action: "continue_save",
@@ -343,24 +363,42 @@ export function recoveryToastNotice(
   result: TauriJobResponse,
   originalJobId: string,
 ): RecoveryToastNotice {
-  if (recovery.action === "fill_missing" && result.recovered === false) {
+  if (
+    (recovery.action === "fill_missing" ||
+      recovery.action === "resume_remote") &&
+    result.recovered === false
+  ) {
     const status = result.job?.status;
     const jobId = result.job_id || originalJobId;
     if (status === "partial_failed") {
       return {
         kind: "warning",
-        title: t("仍有图片未补齐"),
-        description: t("任务 {p0} 已保存本次成功补齐的图片，但仍有槽位失败。", {
-          p0: jobId,
-        }),
+        title:
+          recovery.action === "resume_remote"
+            ? t("已取回部分远端结果")
+            : t("仍有图片未补齐"),
+        description:
+          recovery.action === "resume_remote"
+            ? t("任务 {p0} 已保存可取回的图片；失败槽位没有重新提交。", {
+                p0: jobId,
+              })
+            : t("任务 {p0} 已保存本次成功补齐的图片，但仍有槽位失败。", {
+                p0: jobId,
+              }),
       };
     }
     return {
       kind: "error",
-      title: t("补齐未完成"),
-      description: t("任务 {p0} 本次补齐失败，请查看错误详情后重试。", {
-        p0: jobId,
-      }),
+      title:
+        recovery.action === "resume_remote"
+          ? t("远端结果未取回")
+          : t("补齐未完成"),
+      description:
+        recovery.action === "resume_remote"
+          ? t("任务 {p0} 没有可保存的远端结果，也没有重新提交生成请求。", {
+              p0: jobId,
+            })
+          : t("任务 {p0} 本次补齐失败，请查看错误详情后重试。", { p0: jobId }),
     };
   }
 

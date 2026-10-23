@@ -19,6 +19,7 @@ import {
   runEditRequest,
   runGenerationRequest,
 } from "./openai";
+import type { AsyncImageTask } from "./state";
 import { resetRelayClientForTests } from "./relay-client";
 import { deleteDatabase, readStoredJobs, storeOutput, writeJob } from "./store";
 import {
@@ -54,6 +55,48 @@ function batchErrorMessage(errors: BrowserBatchError[]) {
     p0: errors.length,
     p1: errors[0].message,
   });
+}
+
+async function updateAsyncTask(
+  task: BrowserQueuedTask,
+  asyncTask: AsyncImageTask,
+  index?: number,
+) {
+  const metadata = { ...task.job.metadata };
+  if (index === undefined) {
+    metadata.async_task = asyncTask;
+  } else {
+    const tasks = Array.isArray(metadata.async_tasks)
+      ? ([...metadata.async_tasks] as (AsyncImageTask | undefined)[])
+      : [];
+    tasks[index] = asyncTask;
+    metadata.async_tasks = tasks;
+  }
+  task.job = {
+    ...task.job,
+    metadata,
+    updated_at: nowIso(),
+  };
+  await writeJob(task.job);
+  appendEvent(task.job.id, "job.async_task", {
+    index: index ?? null,
+    async_task: asyncTask,
+    job: task.job,
+  });
+}
+
+function activeRemoteTask(job: Job) {
+  const tasks = [
+    job.metadata?.async_task,
+    ...(Array.isArray(job.metadata?.async_tasks)
+      ? job.metadata.async_tasks
+      : []),
+  ] as (AsyncImageTask | undefined)[];
+  return tasks.find(
+    (task) =>
+      task &&
+      !["completed", "failed", "cancelled", "expired"].includes(task.status),
+  );
 }
 
 export async function storagePressureWarning() {
@@ -173,8 +216,13 @@ export async function completePartialTask(
 
 export async function failTask(task: BrowserQueuedTask, error: unknown) {
   const aborted = task.cancelled || task.abort.signal.aborted;
+  const remoteTask = aborted ? activeRemoteTask(task.job) : undefined;
   const message = aborted
-    ? t("任务已取消。")
+    ? remoteTask
+      ? t("已停止本地轮询；远端任务可能仍在运行。任务 ID：{p0}", {
+          p0: remoteTask.task_id,
+        })
+      : t("任务已取消。")
     : error instanceof Error
       ? error.message
       : String(error);
@@ -222,27 +270,34 @@ export async function runGenerateTask(
   const planned = Math.max(1, Math.min(16, Math.floor(request.n ?? 1)));
   const partials: OutputRef[] = [];
   if (provider.supports_n || planned === 1) {
-    const blobs = await runGenerationRequest(
+    const result = await runGenerationRequest(
       request,
       provider,
       apiKey,
       provider.supports_n ? planned : undefined,
       task.abort.signal,
+      (asyncTask) => updateAsyncTask(task, asyncTask),
     );
-    await saveBlobOutputs(task, blobs, partials);
+    await saveBlobOutputs(task, result.blobs, partials);
   } else {
     const errors: BrowserBatchError[] = [];
     await Promise.all(
       Array.from({ length: planned }).map(async (_, index) => {
         try {
-          const blobs = await runGenerationRequest(
+          const result = await runGenerationRequest(
             request,
             provider,
             apiKey,
             undefined,
             task.abort.signal,
+            (asyncTask) => updateAsyncTask(task, asyncTask, index),
           );
-          await saveBlobOutputs(task, blobs.slice(0, 1), partials, index);
+          await saveBlobOutputs(
+            task,
+            result.blobs.slice(0, 1),
+            partials,
+            index,
+          );
         } catch (error) {
           errors.push({ index, message: errorText(error) });
         }
@@ -276,27 +331,34 @@ export async function runEditTask(task: BrowserQueuedTask, form: FormData) {
   const planned = Math.max(1, Math.min(16, Math.floor(Number(meta.n) || 1)));
   const partials: OutputRef[] = [];
   if (provider.supports_n || planned === 1) {
-    const blobs = await runEditRequest(
+    const result = await runEditRequest(
       form,
       provider,
       apiKey,
       provider.supports_n ? planned : undefined,
       task.abort.signal,
+      (asyncTask) => updateAsyncTask(task, asyncTask),
     );
-    await saveBlobOutputs(task, blobs, partials);
+    await saveBlobOutputs(task, result.blobs, partials);
   } else {
     const errors: BrowserBatchError[] = [];
     await Promise.all(
       Array.from({ length: planned }).map(async (_, index) => {
         try {
-          const blobs = await runEditRequest(
+          const result = await runEditRequest(
             form,
             provider,
             apiKey,
             undefined,
             task.abort.signal,
+            (asyncTask) => updateAsyncTask(task, asyncTask, index),
           );
-          await saveBlobOutputs(task, blobs.slice(0, 1), partials, index);
+          await saveBlobOutputs(
+            task,
+            result.blobs.slice(0, 1),
+            partials,
+            index,
+          );
         } catch (error) {
           errors.push({ index, message: errorText(error) });
         }
@@ -388,11 +450,19 @@ export async function markInterruptedJobs() {
   const jobs = await readStoredJobs();
   const interrupted = jobs.filter((job) => isActiveJobStatus(job.status));
   for (const job of interrupted) {
+    const remoteTask = activeRemoteTask(job);
     await writeJob({
       ...job,
       status: "failed",
       updated_at: nowIso(),
-      error: { message: t("页面刷新或关闭，浏览器任务已中断。") },
+      error: {
+        message: remoteTask
+          ? t(
+              "页面刷新或关闭后，本地轮询已中断；远端任务可能仍在运行。任务 ID：{p0}",
+              { p0: remoteTask.task_id },
+            )
+          : t("页面刷新或关闭，浏览器任务已中断。"),
+      },
     });
   }
 }

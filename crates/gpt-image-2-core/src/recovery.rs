@@ -118,6 +118,15 @@ pub struct RecoveryAttempt {
     pub error_code: Option<String>,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RemoteImageTask {
+    pub task_id: String,
+    pub poll_url: String,
+    pub status: String,
+    pub submitted_at: String,
+    pub updated_at: String,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct RecoveryState {
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -134,6 +143,10 @@ pub struct RecoveryState {
     pub attempts_truncated_count: usize,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub generation_slots: Vec<Value>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub remote_task: Option<RemoteImageTask>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub remote_tasks: Vec<Option<RemoteImageTask>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub interrupted_reason: Option<String>,
 }
@@ -266,8 +279,25 @@ pub fn annotate_recovery_job_dir(mut metadata: Value, job_dir: &Path) -> Value {
 pub fn merge_recovery_metadata(mut metadata: Value, job_dir: &Path) -> Value {
     metadata = annotate_recovery_job_dir(metadata, job_dir);
     let Some(mut state) = load_recovery_state(job_dir) else {
-        let recoverability =
-            classify_from_evidence(None, raw_response_path(job_dir).is_file(), None);
+        // Batch children persist their task IDs into the parent history row as
+        // soon as each submit succeeds. The parent state file is only written
+        // after the concurrent batch joins, so a process exit can legitimately
+        // leave metadata as the sole durable source of accepted remote tasks.
+        let raw_present = raw_response_path(job_dir).is_file();
+        let (remote_task, remote_tasks) = recovery_remote_task_entries(&metadata, None);
+        let recoverability = if raw_present {
+            Recoverability::LocalResponseCached
+        } else if let Some(task) = remote_task.as_ref() {
+            recoverability_for_remote_task(task)
+        } else if !remote_tasks.is_empty() {
+            recoverability_for_remote_tasks(remote_tasks.iter().map(|(_, task)| task))
+        } else {
+            metadata
+                .get("recoverability")
+                .and_then(Value::as_str)
+                .and_then(Recoverability::parse)
+                .unwrap_or_else(|| classify_from_evidence(None, false, None))
+        };
         if let Value::Object(map) = &mut metadata {
             map.insert("recoverability".to_string(), json!(recoverability.as_str()));
         }
@@ -298,6 +328,12 @@ pub fn merge_recovery_metadata(mut metadata: Value, job_dir: &Path) -> Value {
         if let Some(reason) = state.interrupted_reason {
             map.insert("interrupted_reason".to_string(), json!(reason));
         }
+        if let Some(remote_task) = state.remote_task {
+            map.insert("remote_task".to_string(), json!(remote_task));
+        }
+        if !state.remote_tasks.is_empty() {
+            map.insert("remote_tasks".to_string(), json!(state.remote_tasks));
+        }
     }
     metadata
 }
@@ -306,7 +342,40 @@ pub fn classify_from_state_and_evidence(
     state: &RecoveryState,
     raw_response_present: bool,
 ) -> Recoverability {
+    if raw_response_present {
+        return Recoverability::LocalResponseCached;
+    }
+    if let Some(task) = &state.remote_task {
+        return recoverability_for_remote_task(task);
+    }
+    if !state.remote_tasks.is_empty() {
+        return recoverability_for_remote_tasks(state.remote_tasks.iter().flatten());
+    }
     classify_from_evidence(state.attempts.last(), raw_response_present, None)
+}
+
+fn recoverability_for_remote_task(task: &RemoteImageTask) -> Recoverability {
+    match task.status.as_str() {
+        "failed" | "cancelled" | "expired" => Recoverability::ProviderRejected,
+        "completed" => Recoverability::LocalRecoveryUnavailable,
+        _ => Recoverability::RemoteInProgress,
+    }
+}
+
+fn recoverability_for_remote_tasks<'a>(
+    tasks: impl Iterator<Item = &'a RemoteImageTask>,
+) -> Recoverability {
+    let statuses = tasks.map(|task| task.status.as_str()).collect::<Vec<_>>();
+    if statuses
+        .iter()
+        .any(|status| !matches!(*status, "completed" | "failed" | "cancelled" | "expired"))
+    {
+        return Recoverability::RemoteInProgress;
+    }
+    if statuses.contains(&"completed") {
+        return Recoverability::LocalRecoveryUnavailable;
+    }
+    Recoverability::ProviderRejected
 }
 
 pub fn classify_from_evidence(
@@ -382,6 +451,39 @@ impl RecoveryContext {
         self.state.attempts.last_mut()
     }
 
+    fn sync_remote_task_to_history(&self) -> Result<(), AppError> {
+        let Some(remote_task) = &self.state.remote_task else {
+            return Ok(());
+        };
+        if merge_history_remote_task(
+            &self.job_id,
+            None,
+            remote_task,
+            self.state.stage.as_deref(),
+            self.state.recoverability.as_deref(),
+        )? {
+            return Ok(());
+        }
+        let Some((parent_id, suffix)) = self.job_id.rsplit_once("-part-") else {
+            return Ok(());
+        };
+        let Some(index) = suffix
+            .parse::<usize>()
+            .ok()
+            .and_then(|value| value.checked_sub(1))
+        else {
+            return Ok(());
+        };
+        let _ = merge_history_remote_task(
+            parent_id,
+            Some(index),
+            remote_task,
+            self.state.stage.as_deref(),
+            self.state.recoverability.as_deref(),
+        )?;
+        Ok(())
+    }
+
     pub fn begin_attempt(&mut self) -> Result<String, AppError> {
         let attempt = RecoveryAttempt {
             attempt_id: token("attempt"),
@@ -394,6 +496,7 @@ impl RecoveryContext {
         }
         let client_request_id = attempt.client_request_id.clone();
         self.state.attempts.push(attempt);
+        self.state.remote_task = None;
         self.state.stage = Some(RecoveryStage::Submitted.as_str().to_string());
         self.state.recoverability = Some(Recoverability::RemoteMaybeAccepted.as_str().to_string());
         self.mark_request_started()?;
@@ -415,6 +518,52 @@ impl RecoveryContext {
             attempt.provider_request_id = normalize_provider_request_id(headers);
         }
         self.persist_state()
+    }
+
+    pub fn mark_remote_task(
+        &mut self,
+        task_id: &str,
+        poll_url: &str,
+        status: &str,
+    ) -> Result<(), AppError> {
+        let now = now_iso();
+        self.restore_remote_task(RemoteImageTask {
+            task_id: task_id.to_string(),
+            poll_url: poll_url.to_string(),
+            status: status.to_string(),
+            submitted_at: now.clone(),
+            updated_at: now,
+        })
+    }
+
+    pub fn restore_remote_task(&mut self, remote_task: RemoteImageTask) -> Result<(), AppError> {
+        let recoverability = recoverability_for_remote_task(&remote_task);
+        self.state.remote_task = Some(remote_task);
+        self.state.stage = Some(
+            if matches!(recoverability, Recoverability::RemoteInProgress) {
+                RecoveryStage::Submitted
+            } else {
+                RecoveryStage::ResponseReceived
+            }
+            .as_str()
+            .to_string(),
+        );
+        self.state.recoverability = Some(recoverability.as_str().to_string());
+        self.persist_state()?;
+        self.sync_remote_task_to_history()
+    }
+
+    pub fn mark_remote_task_status(&mut self, status: &str) -> Result<(), AppError> {
+        if let Some(task) = self.state.remote_task.as_mut() {
+            task.status = status.to_string();
+            task.updated_at = now_iso();
+        }
+        if let Some(task) = &self.state.remote_task {
+            self.state.recoverability =
+                Some(recoverability_for_remote_task(task).as_str().to_string());
+        }
+        self.persist_state()?;
+        self.sync_remote_task_to_history()
     }
 
     pub fn mark_response_body_completed(&mut self) -> Result<(), AppError> {
@@ -484,7 +633,12 @@ impl RecoveryContext {
         }
         self.state.stage = Some(RecoveryStage::ResponseReceived.as_str().to_string());
         self.state.recoverability = Some(Recoverability::LocalResponseCached.as_str().to_string());
+        if let Some(task) = self.state.remote_task.as_mut() {
+            task.status = "completed".to_string();
+            task.updated_at = now_iso();
+        }
         self.persist_state()?;
+        self.sync_remote_task_to_history()?;
         test_fault::maybe_abort("response_received");
         Ok(())
     }
@@ -507,7 +661,22 @@ impl RecoveryContext {
             attempt.stage_at_failure = Some(stage.as_str().to_string());
             attempt.error_code = Some(error.code.clone());
         }
-        if error
+        let has_remote_task =
+            self.state.remote_task.is_some() || self.state.remote_tasks.iter().any(Option::is_some);
+        if has_remote_task {
+            // Once a task ID exists, a polling 401/403/404 describes this GET,
+            // not the already accepted generation. Preserve remote recovery so
+            // corrected credentials can query the same task. Explicit remote
+            // failed/cancelled/expired statuses still classify as rejected.
+            self.state.recoverability = Some(
+                classify_from_state_and_evidence(
+                    &self.state,
+                    raw_response_path(&self.job_dir).is_file(),
+                )
+                .as_str()
+                .to_string(),
+            );
+        } else if error
             .status_code
             .map(|status| (400..500).contains(&status))
             .unwrap_or(false)
@@ -700,9 +869,13 @@ pub fn write_batch_recovery_summary(
     let mut attempts_truncated_count = 0usize;
     let mut child_recoverabilities = Vec::new();
     let mut any_body_completed = false;
+    let mut remote_tasks = Vec::new();
 
     for child_dir in child_dirs {
         let Some(state) = load_recovery_state(child_dir) else {
+            // Keep this vector aligned with child_dirs so task metadata never
+            // moves to another generation slot when an earlier state is absent.
+            remote_tasks.push(None);
             continue;
         };
         any_body_completed |= state
@@ -717,6 +890,12 @@ pub fn write_batch_recovery_summary(
                 classify_from_state_and_evidence(&state, raw_response_path(child_dir).is_file())
             });
         child_recoverabilities.push(recoverability);
+        remote_tasks.push(
+            state
+                .remote_task
+                .clone()
+                .or_else(|| state.remote_tasks.iter().flatten().next().cloned()),
+        );
         attempts_truncated_count += state.attempts_truncated_count;
         for attempt in state.attempts {
             if attempts.len() >= RECOVERY_ATTEMPTS_LIMIT {
@@ -749,6 +928,8 @@ pub fn write_batch_recovery_summary(
         attempts,
         attempts_truncated_count,
         generation_slots,
+        remote_task: None,
+        remote_tasks,
         interrupted_reason: None,
     };
     atomic_write_json(
@@ -762,6 +943,18 @@ fn batch_recoverability(
     outputs_present: usize,
     failures: usize,
 ) -> Recoverability {
+    if child_recoverabilities
+        .iter()
+        .any(|recoverability| matches!(recoverability, Recoverability::RemoteInProgress))
+    {
+        return Recoverability::RemoteInProgress;
+    }
+    if child_recoverabilities
+        .iter()
+        .any(|recoverability| matches!(recoverability, Recoverability::LocalRecoveryUnavailable))
+    {
+        return Recoverability::LocalRecoveryUnavailable;
+    }
     if failures > 0 && outputs_present > 0 {
         return Recoverability::PartialOutputs;
     }
@@ -775,10 +968,7 @@ fn batch_recoverability(
     if child_recoverabilities.iter().any(|recoverability| {
         matches!(
             recoverability,
-            Recoverability::LocalResponseCached
-                | Recoverability::RemoteMaybeAccepted
-                | Recoverability::LocalRecoveryUnavailable
-                | Recoverability::RemoteInProgress
+            Recoverability::LocalResponseCached | Recoverability::RemoteMaybeAccepted
         )
     }) {
         return Recoverability::RemoteMaybeAccepted;
@@ -817,6 +1007,48 @@ pub fn recovery_attempts_from_metadata(metadata: &Value) -> (Vec<Value>, usize) 
     (attempts, truncated)
 }
 
+pub fn recovery_remote_task_entries(
+    metadata: &Value,
+    job_dir: Option<&Path>,
+) -> (Option<RemoteImageTask>, Vec<(usize, RemoteImageTask)>) {
+    let state = job_dir.and_then(load_recovery_state);
+    let remote_task = metadata
+        .get("remote_task")
+        .cloned()
+        .and_then(|value| serde_json::from_value(value).ok())
+        .or_else(|| state.as_ref().and_then(|state| state.remote_task.clone()));
+    let metadata_tasks = metadata
+        .get("remote_tasks")
+        .and_then(Value::as_array)
+        .map(|tasks| {
+            tasks
+                .iter()
+                .enumerate()
+                .filter_map(|(index, value)| {
+                    serde_json::from_value(value.clone())
+                        .ok()
+                        .map(|task| (index, task))
+                })
+                .collect::<Vec<_>>()
+        })
+        .unwrap_or_default();
+    let remote_tasks = if metadata_tasks.is_empty() {
+        state
+            .map(|state| {
+                state
+                    .remote_tasks
+                    .into_iter()
+                    .enumerate()
+                    .filter_map(|(index, task)| task.map(|task| (index, task)))
+                    .collect()
+            })
+            .unwrap_or_default()
+    } else {
+        metadata_tasks
+    };
+    (remote_task, remote_tasks)
+}
+
 pub fn build_recovery_descriptor(job: &Value) -> Value {
     let metadata = job.get("metadata").cloned().unwrap_or_else(|| json!({}));
     let job_dir = recovery_job_dir(&metadata);
@@ -831,11 +1063,21 @@ pub fn build_recovery_descriptor(job: &Value) -> Value {
         .and_then(|path| fs::metadata(path).ok())
         .map(|metadata| metadata.len())
         .unwrap_or(0);
+    let (remote_task, remote_task_entries) =
+        recovery_remote_task_entries(&metadata, job_dir.as_deref());
     let mut recoverability = metadata
         .get("recoverability")
         .and_then(Value::as_str)
         .and_then(Recoverability::parse)
         .unwrap_or_else(|| {
+            if let Some(task) = remote_task.as_ref() {
+                return recoverability_for_remote_task(task);
+            }
+            if !remote_task_entries.is_empty() {
+                return recoverability_for_remote_tasks(
+                    remote_task_entries.iter().map(|(_, task)| task),
+                );
+            }
             let state = job_dir.as_deref().and_then(load_recovery_state);
             if let Some(state) = state {
                 classify_from_state_and_evidence(&state, raw_present)
@@ -885,7 +1127,11 @@ pub fn build_recovery_descriptor(job: &Value) -> Value {
         if is_completed && !matches!(recoverability, Recoverability::UploadFailed) {
             (Value::Null, Vec::new())
         } else {
-            recovery_actions(job_id, &recoverability)
+            recovery_actions(
+                job_id,
+                &recoverability,
+                remote_task.is_some() || !remote_task_entries.is_empty(),
+            )
         };
     json!({
         "job_id": job_id,
@@ -897,12 +1143,21 @@ pub fn build_recovery_descriptor(job: &Value) -> Value {
             "raw_response_bytes": raw_bytes,
             "outputs_present": outputs_present,
             "outputs_expected": outputs_expected,
-            "generation_slots": generation_slots
+            "generation_slots": generation_slots,
+            "remote_task": remote_task,
+            "remote_tasks": remote_task_entries
+                .into_iter()
+                .map(|(index, task)| json!({"index": index, "task": task}))
+                .collect::<Vec<_>>()
         }
     })
 }
 
-fn recovery_actions(job_id: &str, recoverability: &Recoverability) -> (Value, Vec<Value>) {
+fn recovery_actions(
+    job_id: &str,
+    recoverability: &Recoverability,
+    has_remote_task: bool,
+) -> (Value, Vec<Value>) {
     let endpoint = format!("/jobs/{job_id}/resume");
     let continue_save = json!({
         "id": "continue_save",
@@ -953,6 +1208,26 @@ fn recovery_actions(job_id: &str, recoverability: &Recoverability) -> (Value, Ve
                 "warning": "上次请求可能已经被服务端接收；重新生成将再次调用 API"
             }),
             Vec::new(),
+        ),
+        Recoverability::RemoteInProgress => (
+            json!({
+                "id": "resume_remote",
+                "label": "继续获取结果",
+                "endpoint": endpoint,
+                "billable": false,
+                "explanation": "继续轮询已创建的 sub2api 任务，不会重新提交图片生成请求。"
+            }),
+            vec![resubmit],
+        ),
+        Recoverability::LocalRecoveryUnavailable if has_remote_task => (
+            json!({
+                "id": "resume_remote",
+                "label": "继续获取结果",
+                "endpoint": endpoint,
+                "billable": false,
+                "explanation": "继续读取已创建的 sub2api 任务，不会重新提交图片生成请求。"
+            }),
+            vec![resubmit],
         ),
         Recoverability::LocalRecoveryUnavailable => (
             Value::Null,
@@ -1201,6 +1476,117 @@ mod tests {
                 .get("warning")
                 .and_then(Value::as_str)
                 .is_some_and(|warning| warning.contains("上次请求可能已经被服务端接收"))
+        );
+    }
+
+    #[test]
+    fn batch_recovery_prioritizes_known_remote_tasks_over_partial_outputs() {
+        assert_eq!(
+            batch_recoverability(
+                &[
+                    Recoverability::LocalResponseCached,
+                    Recoverability::RemoteInProgress,
+                ],
+                1,
+                1,
+            ),
+            Recoverability::RemoteInProgress
+        );
+        assert_eq!(
+            batch_recoverability(
+                &[
+                    Recoverability::LocalResponseCached,
+                    Recoverability::LocalRecoveryUnavailable,
+                ],
+                1,
+                1,
+            ),
+            Recoverability::LocalRecoveryUnavailable
+        );
+    }
+
+    #[test]
+    fn batch_remote_tasks_remain_aligned_when_an_earlier_child_state_is_missing() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let parent_dir = temp_dir.path().join("parent");
+        let child_dirs = vec![parent_dir.join("part-1"), parent_dir.join("part-2")];
+        let second_state = RecoveryState {
+            recoverability: Some(Recoverability::RemoteInProgress.as_str().to_string()),
+            remote_task: Some(RemoteImageTask {
+                task_id: "task-2".to_string(),
+                poll_url: "https://example.com/v1/images/tasks/task-2".to_string(),
+                status: "processing".to_string(),
+                submitted_at: "1".to_string(),
+                updated_at: "1".to_string(),
+            }),
+            ..RecoveryState::default()
+        };
+        fs::create_dir_all(&child_dirs[1]).unwrap();
+        atomic_write_json(
+            &recovery_state_path(&child_dirs[1]),
+            &serde_json::to_value(second_state).unwrap(),
+        )
+        .unwrap();
+
+        write_batch_recovery_summary("job-parent", &parent_dir, &child_dirs, 0, 1, Vec::new())
+            .unwrap();
+
+        let state = load_recovery_state(&parent_dir).unwrap();
+        assert_eq!(state.remote_tasks.len(), 2);
+        assert!(state.remote_tasks[0].is_none());
+        assert_eq!(
+            state.remote_tasks[1]
+                .as_ref()
+                .map(|task| task.task_id.as_str()),
+            Some("task-2")
+        );
+    }
+
+    #[test]
+    fn polling_auth_error_keeps_an_accepted_remote_task_recoverable() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let mut recovery =
+            RecoveryContext::new("job-auth", temp_dir.path().join("job-auth")).unwrap();
+        recovery.state.remote_task = Some(RemoteImageTask {
+            task_id: "task-auth".to_string(),
+            poll_url: "https://example.com/v1/images/tasks/task-auth".to_string(),
+            status: "processing".to_string(),
+            submitted_at: "1".to_string(),
+            updated_at: "1".to_string(),
+        });
+        let auth_error = AppError::new("http_error", "HTTP 401").with_status_code(401);
+
+        recovery
+            .finish_error(RecoveryStage::Submitted, &auth_error)
+            .unwrap();
+
+        assert_eq!(
+            recovery.state.recoverability.as_deref(),
+            Some(Recoverability::RemoteInProgress.as_str())
+        );
+    }
+
+    #[test]
+    fn explicit_remote_failure_remains_terminal_after_a_poll_error() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let mut recovery =
+            RecoveryContext::new("job-failed", temp_dir.path().join("job-failed")).unwrap();
+        recovery.state.remote_task = Some(RemoteImageTask {
+            task_id: "task-failed".to_string(),
+            poll_url: "https://example.com/v1/images/tasks/task-failed".to_string(),
+            status: "failed".to_string(),
+            submitted_at: "1".to_string(),
+            updated_at: "1".to_string(),
+        });
+        let poll_error = AppError::new("async_task_failed", "remote failed");
+
+        recovery
+            .finish_error(RecoveryStage::Submitted, &poll_error)
+            .unwrap();
+
+        assert_eq!(
+            recovery.state.recoverability.as_deref(),
+            Some(Recoverability::ProviderRejected.as_str())
         );
     }
 }

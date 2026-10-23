@@ -50,30 +50,17 @@ pub(crate) fn run_openai_image_command(
         }
         _ => None,
     };
-    let endpoint = build_openai_operation_endpoint(&selection.api_base, operation)?;
     let mut logger = JsonEventLogger::new(cli.json_events);
-    let request_result = execute_openai_with_retry(&mut logger, &selection.resolved, |logger| {
-        if operation == "edit" {
-            request_openai_edit_once(
-                &endpoint,
-                &auth_state,
-                &body,
-                logger,
-                recovery.as_mut(),
-                &proxy,
-            )
-        } else {
-            request_openai_images_once(
-                &endpoint,
-                &auth_state,
-                &body,
-                logger,
-                recovery.as_mut(),
-                &proxy,
-            )
-        }
-    });
-    let (payload, retry_count) = match request_result {
+    let request_result = request_openai_with_transport(
+        selection,
+        operation,
+        &auth_state,
+        &body,
+        &mut logger,
+        recovery.as_mut(),
+        &proxy,
+    );
+    let request_outcome = match request_result {
         Ok(value) => value,
         Err(error) => {
             if let Some(ctx) = recovery.as_mut() {
@@ -82,6 +69,9 @@ pub(crate) fn run_openai_image_command(
             return Err(error);
         }
     };
+    let payload = request_outcome.payload;
+    let retry_count = request_outcome.retry_count;
+    let async_task = request_outcome.async_task;
     if let Some(ctx) = recovery.as_mut()
         && let Err(error) = ctx.maybe_fail_materialize_start()
     {
@@ -120,12 +110,16 @@ pub(crate) fn run_openai_image_command(
         let _ = ctx.mark_stage(RecoveryStage::Materialized);
     }
     let primary_output_path = primary_saved_output_path(&output_path, &saved_files);
+    let mut history_metadata = history_image_metadata(operation, selection, shared, &saved_files);
+    if let Some(task) = &async_task {
+        history_metadata["async_task"] = task.clone();
+    }
     let history_job_id = record_history_job(
         &format!("images {operation}"),
         &selection.resolved,
         "completed",
         Some(&primary_output_path),
-        history_image_metadata(operation, selection, shared, &saved_files),
+        history_metadata,
     )
     .ok();
     emit_progress_event(
@@ -146,6 +140,7 @@ pub(crate) fn run_openai_image_command(
             "command": format!("images {}", operation),
             "provider": selection.resolved,
             "provider_selection": selection.payload(),
+            "async_task": async_task,
             "auth": {
                 "source": auth_state.source,
                 "env_var": OPENAI_API_KEY_ENV,
@@ -377,20 +372,20 @@ pub(crate) fn run_batched_image_command(
         let handles = jobs
             .into_iter()
             .map(|next| {
-                scope.spawn(move || {
-                    if matches!(selection.kind, ProviderKind::OpenAi) {
-                        run_openai_image_command(
-                            cli,
-                            selection,
-                            &next,
-                            operation,
-                            ref_images,
-                            mask,
-                            input_fidelity,
-                        )
-                    } else {
+                scope.spawn(move || match selection.kind {
+                    ProviderKind::OpenAi => run_openai_image_command(
+                        cli,
+                        selection,
+                        &next,
+                        operation,
+                        ref_images,
+                        mask,
+                        input_fidelity,
+                    ),
+                    ProviderKind::Codex => {
                         run_codex_image_command(cli, selection, &next, operation, ref_images)
                     }
+                    ProviderKind::Atlas => run_atlas_image_command(cli, selection, &next),
                 })
             })
             .collect::<Vec<_>>();
@@ -461,6 +456,10 @@ pub(crate) fn run_images_command(
     let selection = select_image_provider(cli)?;
     match subcommand {
         ImagesSubcommand::Generate(args) => {
+            if matches!(selection.kind, ProviderKind::Atlas) {
+                validate_provider_specific_image_args(&selection, &args.shared, None, None)?;
+                return run_atlas_image_command(cli, &selection, &args.shared);
+            }
             let use_batch = args.shared.n.unwrap_or(1) > 1 && !selection.supports_n;
             let mut validation_shared = args.shared.clone();
             if use_batch {
@@ -485,6 +484,12 @@ pub(crate) fn run_images_command(
             }
         }
         ImagesSubcommand::Edit(args) => {
+            if matches!(selection.kind, ProviderKind::Atlas) {
+                return Err(AppError::new(
+                    "unsupported_operation",
+                    "The Atlas provider currently supports text-to-image generation only.",
+                ));
+            }
             validate_reference_image_count(args.ref_image.len())?;
             let use_batch = args.shared.n.unwrap_or(1) > 1 && !selection.supports_n;
             let mut validation_shared = args.shared.clone();

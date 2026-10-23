@@ -24,10 +24,11 @@ use gpt_image_2_core::{
     preserve_notification_secrets, preserve_storage_secrets, product_app_data_dir,
     product_default_export_dir, product_default_export_dirs, product_result_library_dir,
     product_storage_fallback_dir, raw_response_path, read_job_output_from_storage_with_options,
-    read_keychain_secret, read_recent_logs, recovery_job_dir, redact_app_config, requested_n,
-    restore_deleted_history_job, run_json, save_app_config, shared_config_dir, show_history_job,
-    soft_delete_history_job, test_fault, upload_job_outputs_to_storage, upsert_history_job,
-    write_batch_recovery_summary, write_keychain_secret,
+    read_keychain_secret, read_recent_logs, recovery_job_dir, recovery_remote_task_entries,
+    redact_app_config, requested_n, restore_deleted_history_job, resume_sub2api_remote_task,
+    run_json, save_app_config, shared_config_dir, show_history_job, soft_delete_history_job,
+    test_fault, upload_job_outputs_to_storage, upsert_history_job, write_batch_recovery_summary,
+    write_keychain_secret,
 };
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};

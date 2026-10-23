@@ -1,5 +1,6 @@
 import { t } from "@/lib/i18n";
 import type { ProviderConfig, ServerConfig } from "./types";
+import { imageTransportLabel } from "./provider-protocol";
 
 export function providerNativeSupportsMultipleOutputs(
   config: ServerConfig | undefined,
@@ -52,9 +53,11 @@ export function providerCapabilityBadges(
   config: ServerConfig | undefined,
   provider: string,
 ) {
+  const cfg = provider ? config?.providers[provider] : undefined;
   const nativeN = providerNativeSupportsMultipleOutputs(config, provider);
   const editMode = providerEditRegionMode(config, provider);
   return [
+    cfg ? imageTransportLabel(cfg) : t("同步 Images"),
     nativeN ? t("接口多图") : t("App 并发多图"),
     editMode === "native-mask"
       ? t("原生遮罩")

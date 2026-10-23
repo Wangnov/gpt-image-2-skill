@@ -4,11 +4,12 @@ use std::path::{Path, PathBuf};
 use std::sync::{Mutex, OnceLock};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
-use rusqlite::{Connection, params};
+use rusqlite::{Connection, OptionalExtension, TransactionBehavior, params};
 use serde_json::{Value, json};
 
 use crate::errors::AppError;
 use crate::paths::history_db_path;
+use crate::recovery::{Recoverability, RemoteImageTask};
 use crate::util::now_iso;
 
 pub(crate) fn open_history_db() -> Result<Connection, AppError> {
@@ -238,14 +239,42 @@ pub fn upsert_history_job(
     status: &str,
     output_path: Option<&Path>,
     created_at: Option<&str>,
-    metadata: Value,
+    mut metadata: Value,
 ) -> Result<(), AppError> {
-    let conn = open_history_db()?;
+    let mut conn = open_history_db()?;
+    let tx = conn
+        .transaction_with_behavior(TransactionBehavior::Immediate)
+        .map_err(|error| {
+            AppError::new(
+                "history_write_failed",
+                "Unable to begin history job update.",
+            )
+            .with_detail(json!({"job_id": job_id, "error": error.to_string()}))
+        })?;
+    let existing_metadata = tx
+        .query_row(
+            "SELECT metadata FROM jobs WHERE id = ?1",
+            params![job_id],
+            |row| row.get::<_, String>(0),
+        )
+        .optional()
+        .map_err(|error| {
+            AppError::new(
+                "history_write_failed",
+                "Unable to read existing history metadata.",
+            )
+            .with_detail(json!({"job_id": job_id, "error": error.to_string()}))
+        })?;
+    if let Some(existing_metadata) = existing_metadata
+        && let Ok(existing_metadata) = serde_json::from_str::<Value>(&existing_metadata)
+    {
+        preserve_remote_task_metadata(&mut metadata, &existing_metadata);
+    }
     let timestamp = created_at
         .filter(|value| !value.is_empty())
         .map(ToString::to_string)
         .unwrap_or_else(now_iso);
-    conn.execute(
+    tx.execute(
         "INSERT INTO jobs (id, command, provider, status, output_path, created_at, metadata)
          VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)
          ON CONFLICT(id) DO UPDATE SET
@@ -269,7 +298,163 @@ pub fn upsert_history_job(
         AppError::new("history_write_failed", "Unable to record history job.")
             .with_detail(json!({"error": error.to_string()}))
     })?;
+    tx.commit().map_err(|error| {
+        AppError::new(
+            "history_write_failed",
+            "Unable to commit history job update.",
+        )
+        .with_detail(json!({"job_id": job_id, "error": error.to_string()}))
+    })?;
     Ok(())
+}
+
+fn preserve_remote_task_metadata(metadata: &mut Value, existing_metadata: &Value) {
+    let (Some(metadata), Some(existing_metadata)) =
+        (metadata.as_object_mut(), existing_metadata.as_object())
+    else {
+        return;
+    };
+    let mut copied_remote_task = false;
+    for key in ["remote_task", "remote_tasks"] {
+        if !metadata.contains_key(key)
+            && let Some(value) = existing_metadata.get(key)
+        {
+            metadata.insert(key.to_string(), value.clone());
+            copied_remote_task = true;
+        }
+    }
+    if copied_remote_task {
+        // A queue progress snapshot is built from the original queued metadata.
+        // Keep the recovery classification paired with task IDs that may have
+        // been merged concurrently after an async submission was accepted.
+        for key in ["stage", "recoverability"] {
+            if let Some(value) = existing_metadata.get(key) {
+                metadata.insert(key.to_string(), value.clone());
+            }
+        }
+    }
+}
+
+pub(crate) fn merge_history_remote_task(
+    job_id: &str,
+    batch_index: Option<usize>,
+    remote_task: &RemoteImageTask,
+    stage: Option<&str>,
+    recoverability: Option<&str>,
+) -> Result<bool, AppError> {
+    let mut conn = open_history_db()?;
+    let tx = conn
+        .transaction_with_behavior(TransactionBehavior::Immediate)
+        .map_err(|error| {
+            AppError::new(
+                "history_write_failed",
+                "Unable to begin remote task history update.",
+            )
+            .with_detail(json!({"job_id": job_id, "error": error.to_string()}))
+        })?;
+    let raw_metadata = tx
+        .query_row(
+            "SELECT metadata FROM jobs WHERE id = ?1",
+            params![job_id],
+            |row| row.get::<_, String>(0),
+        )
+        .optional()
+        .map_err(|error| {
+            AppError::new(
+                "history_write_failed",
+                "Unable to read remote task history metadata.",
+            )
+            .with_detail(json!({"job_id": job_id, "error": error.to_string()}))
+        })?;
+    let Some(raw_metadata) = raw_metadata else {
+        return Ok(false);
+    };
+    let mut metadata: Value = serde_json::from_str(&raw_metadata).map_err(|error| {
+        AppError::new(
+            "history_write_failed",
+            "Remote task history metadata is not valid JSON.",
+        )
+        .with_detail(json!({"job_id": job_id, "error": error.to_string()}))
+    })?;
+    if !metadata.is_object() {
+        metadata = json!({});
+    }
+    if let Value::Object(map) = &mut metadata {
+        if let Some(index) = batch_index {
+            let mut tasks = map
+                .get("remote_tasks")
+                .and_then(Value::as_array)
+                .cloned()
+                .unwrap_or_default();
+            if tasks.len() <= index {
+                tasks.resize(index + 1, Value::Null);
+            }
+            tasks[index] = json!(remote_task);
+            let statuses = tasks
+                .iter()
+                .filter_map(|task| task.get("status").and_then(Value::as_str))
+                .collect::<Vec<_>>();
+            let batch_recoverability = if statuses
+                .iter()
+                .any(|status| !matches!(*status, "completed" | "failed" | "cancelled" | "expired"))
+            {
+                Recoverability::RemoteInProgress
+            } else if statuses.contains(&"completed") {
+                Recoverability::LocalRecoveryUnavailable
+            } else {
+                Recoverability::ProviderRejected
+            };
+            map.insert("remote_tasks".to_string(), json!(tasks));
+            map.insert(
+                "recoverability".to_string(),
+                json!(batch_recoverability.as_str()),
+            );
+            map.insert(
+                "stage".to_string(),
+                json!(
+                    if matches!(batch_recoverability, Recoverability::RemoteInProgress) {
+                        "submitted"
+                    } else {
+                        "response_received"
+                    }
+                ),
+            );
+        } else {
+            map.insert("remote_task".to_string(), json!(remote_task));
+            if let Some(stage) = stage {
+                map.insert("stage".to_string(), json!(stage));
+            }
+            if let Some(recoverability) = recoverability {
+                map.insert("recoverability".to_string(), json!(recoverability));
+            }
+        }
+    }
+    let encoded = serde_json::to_string(&metadata).map_err(|error| {
+        AppError::new(
+            "history_write_failed",
+            "Unable to encode remote task history metadata.",
+        )
+        .with_detail(json!({"job_id": job_id, "error": error.to_string()}))
+    })?;
+    tx.execute(
+        "UPDATE jobs SET metadata = ?2 WHERE id = ?1",
+        params![job_id, encoded],
+    )
+    .map_err(|error| {
+        AppError::new(
+            "history_write_failed",
+            "Unable to merge remote task history metadata.",
+        )
+        .with_detail(json!({"job_id": job_id, "error": error.to_string()}))
+    })?;
+    tx.commit().map_err(|error| {
+        AppError::new(
+            "history_write_failed",
+            "Unable to commit remote task history metadata.",
+        )
+        .with_detail(json!({"job_id": job_id, "error": error.to_string()}))
+    })?;
+    Ok(true)
 }
 
 pub fn delete_history_job(job_id: &str) -> Result<usize, AppError> {

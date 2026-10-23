@@ -8,11 +8,20 @@ import {
 import { CORS_MESSAGE } from "./state";
 import { t } from "../../i18n";
 import type {
+  AsyncImageTask,
   OpenAiImageItem,
   OpenAiImagePayload,
   StoredJobInput,
   StoredUpload,
+  Sub2ApiTaskPayload,
 } from "./state";
+
+export type BrowserImageRequestResult = {
+  blobs: Blob[];
+  asyncTask?: AsyncImageTask;
+};
+
+export type AsyncTaskUpdate = (task: AsyncImageTask) => Promise<void> | void;
 
 export { configuredRelayBase, isLikelyCorsError, trimTrailingSlash };
 
@@ -171,6 +180,296 @@ export async function fetchMultipart(
   return (await response.json()) as OpenAiImagePayload;
 }
 
+function rawRetryAfterSeconds(response: Response, fallback: number) {
+  const parsed = Number(response.headers.get("Retry-After"));
+  return Number.isFinite(parsed) && parsed > 0
+    ? Math.min(60, parsed)
+    : fallback;
+}
+
+export function retryAfterSeconds(response: Response, fallback: number) {
+  return Math.max(fallback, rawRetryAfterSeconds(response, fallback));
+}
+
+async function readSub2ApiTaskResponse(
+  response: Response,
+  endpoint: string,
+): Promise<Sub2ApiTaskPayload> {
+  if (!response.ok) {
+    throw new Error(
+      `${response.status} ${await parseErrorResponse(response, endpoint)}`,
+    );
+  }
+  const payload = (await response.json()) as Sub2ApiTaskPayload;
+  if (!payload || typeof payload !== "object" || Array.isArray(payload)) {
+    throw new Error(t("sub2api 异步任务接口返回了无效 JSON。"));
+  }
+  return payload;
+}
+
+async function submitSub2ApiTask(
+  endpoint: string,
+  apiKey: string,
+  body: BodyInit,
+  contentType: string | undefined,
+  signal: AbortSignal,
+) {
+  const headers: Record<string, string> = {
+    Authorization: `Bearer ${apiKey}`,
+    Accept: "application/json",
+  };
+  if (contentType) headers["Content-Type"] = contentType;
+  const init: RequestInit = {
+    method: "POST",
+    headers,
+    body,
+    signal,
+  };
+  // A failed CORS read does not prove that the upstream rejected the POST.
+  // The v2 relay only permits synchronous Images operations. Async tasks
+  // require direct CORS access; never restore the old arbitrary-path relay.
+  let response: Response;
+  try {
+    response = await fetch(endpoint, {
+      ...init,
+      credentials: "omit",
+      redirect: "error",
+      referrerPolicy: "no-referrer",
+    });
+  } catch (error) {
+    throw new Error(
+      t(
+        "异步请求未收到响应，远端可能已创建任务。本次不会重试提交；请先到服务端确认结果。浏览器异步模式要求服务端开启 CORS。",
+      ),
+      { cause: error },
+    );
+  }
+  return {
+    payload: await readSub2ApiTaskResponse(response, endpoint),
+    retryAfter: rawRetryAfterSeconds(response, 3),
+  };
+}
+
+export function resolveSub2ApiPollUrl(
+  provider: ProviderConfig,
+  pollUrl: string | undefined,
+  taskId: string,
+) {
+  const baseText = provider.api_base?.trim().replace(/\/+$/, "");
+  if (!baseText) throw new Error(t("服务地址不能为空。"));
+  let base: URL;
+  let resolved: URL;
+  try {
+    base = new URL(`${baseText}/`);
+    resolved = pollUrl?.trim()
+      ? new URL(pollUrl, base)
+      : new URL(
+          `${base.pathname.replace(/\/+$/, "")}/images/tasks/${encodeURIComponent(taskId)}`,
+          base,
+        );
+  } catch {
+    throw new Error(t("sub2api 返回了无效的任务轮询地址。"));
+  }
+  if (base.origin !== resolved.origin) {
+    throw new Error(
+      t(
+        "sub2api 返回的任务轮询地址与 Base URL 不同源，已拒绝携带 API Key 请求。",
+      ),
+    );
+  }
+  return resolved.toString();
+}
+
+function isPendingTaskStatus(status: string) {
+  return ["pending", "queued", "processing", "in_progress", "running"].includes(
+    status,
+  );
+}
+
+function isFailedTaskStatus(status: string) {
+  return ["failed", "cancelled", "expired"].includes(status);
+}
+
+function waitForPoll(delaySeconds: number, signal: AbortSignal) {
+  return new Promise<void>((resolve, reject) => {
+    if (signal.aborted) {
+      reject(new DOMException("Aborted", "AbortError"));
+      return;
+    }
+    const cleanup = () => signal.removeEventListener("abort", abort);
+    const timer = window.setTimeout(() => {
+      cleanup();
+      resolve();
+    }, delaySeconds * 1_000);
+    const abort = () => {
+      window.clearTimeout(timer);
+      cleanup();
+      reject(new DOMException("Aborted", "AbortError"));
+    };
+    signal.addEventListener("abort", abort, { once: true });
+  });
+}
+
+function taskIdFromPayload(payload: Sub2ApiTaskPayload) {
+  const value = payload.task_id || payload.id;
+  if (!value?.trim()) {
+    throw new Error(t("sub2api 异步提交成功，但响应中没有 task_id。"));
+  }
+  return value;
+}
+
+function completedTaskPayload(payload: Sub2ApiTaskPayload): OpenAiImagePayload {
+  let result = payload.result;
+  if (typeof result === "string") {
+    try {
+      result = JSON.parse(result) as OpenAiImagePayload;
+    } catch {
+      throw new Error(t("sub2api 任务已完成，但 result 不是有效 JSON。"));
+    }
+  }
+  if (!result || typeof result !== "object" || Array.isArray(result)) {
+    throw new Error(t("sub2api 任务已完成，但没有返回 OpenAI Images 结果。"));
+  }
+  return result;
+}
+
+async function pollSub2ApiTask(
+  provider: ProviderConfig,
+  apiKey: string,
+  initial: Sub2ApiTaskPayload,
+  initialRetryAfter: number,
+  signal: AbortSignal,
+  onTaskUpdate?: AsyncTaskUpdate,
+) {
+  const taskId = taskIdFromPayload(initial);
+  const pollUrl = resolveSub2ApiPollUrl(provider, initial.poll_url, taskId);
+  const interval = Math.max(
+    1,
+    Math.min(60, Number(provider.poll_interval_seconds) || 3),
+  );
+  const timeout = Math.max(
+    30,
+    Math.min(3_600, Number(provider.poll_timeout_seconds) || 1_800),
+  );
+  let status = (initial.status || "processing").toLowerCase();
+  let pollAttempts = 0;
+  let transientRetries = 0;
+  let delay = Math.max(
+    interval,
+    Math.max(1, Math.min(60, initialRetryAfter || interval)),
+  );
+  const started = Date.now();
+  let task: AsyncImageTask = {
+    task_id: taskId,
+    poll_url: pollUrl,
+    status,
+    poll_attempts: pollAttempts,
+    transient_retries: transientRetries,
+  };
+  await onTaskUpdate?.(task);
+
+  if (status === "completed") {
+    return { payload: completedTaskPayload(initial), task };
+  }
+  if (isFailedTaskStatus(status)) {
+    throw new Error(
+      t("sub2api 图片任务 {p0} 已结束（{p1}）。", { p0: taskId, p1: status }),
+    );
+  }
+  if (!isPendingTaskStatus(status)) {
+    throw new Error(t("sub2api 返回了未知任务状态：{p0}", { p0: status }));
+  }
+
+  while (true) {
+    const remainingSeconds = (timeout * 1_000 - (Date.now() - started)) / 1_000;
+    if (remainingSeconds <= 0) break;
+    await waitForPoll(Math.min(delay, remainingSeconds), signal);
+    if (Date.now() - started >= timeout * 1_000) break;
+    pollAttempts += 1;
+    let response: Response;
+    try {
+      response = await fetch(pollUrl, {
+        headers: {
+          Authorization: `Bearer ${apiKey}`,
+          Accept: "application/json",
+        },
+        signal,
+        credentials: "omit",
+        redirect: "error",
+        referrerPolicy: "no-referrer",
+      });
+    } catch (error) {
+      if (signal.aborted) throw error;
+      transientRetries += 1;
+      task = {
+        ...task,
+        poll_attempts: pollAttempts,
+        transient_retries: transientRetries,
+      };
+      await onTaskUpdate?.(task);
+      delay = interval;
+      continue;
+    }
+    const nextDelay = retryAfterSeconds(response, interval);
+    if (!response.ok) {
+      if (response.status === 429 || response.status >= 500) {
+        transientRetries += 1;
+        task = {
+          ...task,
+          poll_attempts: pollAttempts,
+          transient_retries: transientRetries,
+        };
+        await onTaskUpdate?.(task);
+        delay = nextDelay;
+        continue;
+      }
+      throw new Error(
+        `${response.status} ${await parseErrorResponse(response, pollUrl)}`,
+      );
+    }
+    const payload = await readSub2ApiTaskResponse(response, pollUrl);
+    status = (payload.status || "processing").toLowerCase();
+    task = {
+      task_id: taskId,
+      poll_url: pollUrl,
+      status,
+      poll_attempts: pollAttempts,
+      transient_retries: transientRetries,
+    };
+    await onTaskUpdate?.(task);
+    if (status === "completed") {
+      return { payload: completedTaskPayload(payload), task };
+    }
+    if (isFailedTaskStatus(status)) {
+      const detail =
+        typeof payload.error === "string"
+          ? payload.error
+          : JSON.stringify(payload.error ?? "");
+      throw new Error(
+        t("sub2api 图片任务 {p0} 已失败：{p1}", {
+          p0: taskId,
+          p1: detail || status,
+        }),
+      );
+    }
+    if (!isPendingTaskStatus(status)) {
+      throw new Error(t("sub2api 返回了未知任务状态：{p0}", { p0: status }));
+    }
+    delay = nextDelay;
+  }
+  task = {
+    ...task,
+    remote_task_may_still_be_running: true,
+  };
+  await onTaskUpdate?.(task);
+  throw new Error(
+    t(
+      "等待 sub2api 图片任务超时（{p0} 秒）；远端任务可能仍在运行。任务 ID：{p1}",
+      { p0: timeout, p1: taskId },
+    ),
+  );
+}
+
 export async function blobFromImageItem(
   item: OpenAiImageItem,
   format: string | undefined,
@@ -230,15 +529,40 @@ export async function runGenerationRequest(
   apiKey: string,
   n: number | undefined,
   signal: AbortSignal,
-) {
+  onTaskUpdate?: AsyncTaskUpdate,
+): Promise<BrowserImageRequestResult> {
+  const body = generateBody(request, provider, n);
+  if (provider.image_transport === "sub2api-async") {
+    const endpoint = endpointFor(provider, "/images/generations/async");
+    const submitted = await submitSub2ApiTask(
+      endpoint,
+      apiKey,
+      JSON.stringify(body),
+      "application/json",
+      signal,
+    );
+    const completed = await pollSub2ApiTask(
+      provider,
+      apiKey,
+      submitted.payload,
+      submitted.retryAfter,
+      signal,
+      onTaskUpdate,
+    );
+    return {
+      blobs: await decodeImagePayload(
+        completed.payload,
+        request.format,
+        signal,
+      ),
+      asyncTask: completed.task,
+    };
+  }
   const endpoint = endpointFor(provider, "/images/generations");
-  const payload = await fetchJson(
-    endpoint,
-    apiKey,
-    generateBody(request, provider, n),
-    signal,
-  );
-  return decodeImagePayload(payload, request.format, signal);
+  const payload = await fetchJson(endpoint, apiKey, body, signal);
+  return {
+    blobs: await decodeImagePayload(payload, request.format, signal),
+  };
 }
 
 export function editBodyField(form: FormData, key: string, value: unknown) {
@@ -347,9 +671,42 @@ export async function runEditRequest(
   apiKey: string,
   n: number | undefined,
   signal: AbortSignal,
-) {
-  const endpoint = endpointFor(provider, "/images/edits");
+  onTaskUpdate?: AsyncTaskUpdate,
+): Promise<BrowserImageRequestResult> {
   const { form: editForm, meta } = buildEditForm(form, provider, n);
+  if (provider.image_transport === "sub2api-async") {
+    const endpoint = endpointFor(provider, "/images/edits/async");
+    const submitted = await submitSub2ApiTask(
+      endpoint,
+      apiKey,
+      editForm,
+      undefined,
+      signal,
+    );
+    const completed = await pollSub2ApiTask(
+      provider,
+      apiKey,
+      submitted.payload,
+      submitted.retryAfter,
+      signal,
+      onTaskUpdate,
+    );
+    return {
+      blobs: await decodeImagePayload(
+        completed.payload,
+        String(meta.format ?? "png"),
+        signal,
+      ),
+      asyncTask: completed.task,
+    };
+  }
+  const endpoint = endpointFor(provider, "/images/edits");
   const payload = await fetchMultipart(endpoint, apiKey, editForm, signal);
-  return decodeImagePayload(payload, String(meta.format ?? "png"), signal);
+  return {
+    blobs: await decodeImagePayload(
+      payload,
+      String(meta.format ?? "png"),
+      signal,
+    ),
+  };
 }

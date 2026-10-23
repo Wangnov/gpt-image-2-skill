@@ -1,5 +1,7 @@
 export type CredentialSource = "file" | "env" | "keychain";
 export type ProviderKind = "openai-compatible" | "openai" | "codex";
+export type ProviderPreset = "openai" | "new-api" | "sub2api" | "custom";
+export type ImageTransport = "openai-sync" | "sub2api-async";
 
 export interface CredentialRef {
   source: CredentialSource;
@@ -39,6 +41,14 @@ export interface ProviderConfig {
   model?: string;
   supports_n?: boolean;
   edit_region_mode?: "native-mask" | "reference-hint" | "none";
+  /**
+   * Service preset used for defaults and UI copy. Runtime behavior is
+   * controlled independently by `image_transport`.
+   */
+  preset?: ProviderPreset;
+  image_transport?: ImageTransport;
+  poll_interval_seconds?: number;
+  poll_timeout_seconds?: number;
   credentials: Record<string, CredentialRef>;
   /**
    * Per-provider proxy override. Absent/`undefined` inherits the global proxy;

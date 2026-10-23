@@ -1424,4 +1424,85 @@ export const english: Readonly<Record<string, string>> = {
   没有可显示的位置: "No location to reveal",
   打开文件夹失败: "Could not open folder",
   打开位置失败: "Could not open location",
+  停止等待: "Stop waiting",
+  请求模式: "Request mode",
+  "sub2api 异步任务": "sub2api async tasks",
+  " · {p0} 个": " · {p0} tasks",
+  "远端任务 ID": "Remote task ID",
+  远端状态: "Remote status",
+  继续获取结果: "Retrieve results",
+  "继续轮询已创建的 sub2api 任务，不重新提交生成请求":
+    "Keep polling the existing sub2api task without submitting another generation request",
+  正在获取远端任务结果: "Retrieving remote task results",
+  已取回远端结果: "Remote results retrieved",
+  "已从原远端任务取回结果，未重新提交图片生成请求。":
+    "Retrieved results from the original remote task without submitting another generation request.",
+  已取回部分远端结果: "Some remote results retrieved",
+  "任务 {p0} 已保存可取回的图片；失败槽位没有重新提交。":
+    "Saved available images for task {p0}; failed slots were not resubmitted.",
+  远端结果未取回: "Remote results unavailable",
+  "任务 {p0} 没有可保存的远端结果，也没有重新提交生成请求。":
+    "No remote results could be saved for task {p0}; no generation request was resubmitted.",
+  服务预设: "Provider preset",
+  "预设只填写推荐默认值；实际请求协议在下方单独选择":
+    "Presets fill recommended defaults. Choose the request protocol separately below.",
+  协议基线: "Protocol",
+  图片请求模式: "Image request mode",
+  异步任务适合绕过长请求超时: "Async tasks avoid long-running request timeouts",
+  "OpenAI 同步": "OpenAI synchronous",
+  "sub2api 异步": "sub2api asynchronous",
+  "App 会先提交任务，再用任务 ID 轮询结果。服务端必须启用":
+    "The app submits a task and polls its ID for results. The server must enable",
+  "；停止本地轮询不会取消远端任务。浏览器异步模式要求服务端开启 CORS，当前中转站仅支持同步 Images。":
+    "; stopping local polling does not cancel the remote task. Browser async mode requires CORS on the server; the current relay only supports synchronous Images.",
+  高级兼容选项: "Advanced compatibility",
+  "批量、局部编辑与轮询": "Batching, region edits and polling",
+  轮询间隔: "Polling interval",
+  "1–60 秒": "1–60 seconds",
+  最长等待: "Maximum wait",
+  "30–3600 秒": "30–3600 seconds",
+  图片请求: "Image requests",
+  任务轮询: "Task polling",
+  "每 {p0} 秒，最长等待 {p1} 秒":
+    "Every {p0} seconds, waiting up to {p1} seconds",
+  "sub2api 异步任务接口返回了无效 JSON。":
+    "The sub2api async task API returned invalid JSON.",
+  "异步请求未收到响应，远端可能已创建任务。本次不会重试提交；请先到服务端确认结果。浏览器异步模式要求服务端开启 CORS。":
+    "No response was received, but the remote task may already exist. This submission will not be retried; check the server first. Browser async mode requires CORS on the server.",
+  "sub2api 返回了无效的任务轮询地址。":
+    "sub2api returned an invalid task polling URL.",
+  "sub2api 返回的任务轮询地址与 Base URL 不同源，已拒绝携带 API Key 请求。":
+    "The polling URL has a different origin from the Base URL. The request with the API key was blocked.",
+  "sub2api 异步提交成功，但响应中没有 task_id。":
+    "sub2api accepted the async submission but returned no task_id.",
+  "sub2api 任务已完成，但 result 不是有效 JSON。":
+    "The sub2api task completed, but its result is invalid JSON.",
+  "sub2api 任务已完成，但没有返回 OpenAI Images 结果。":
+    "The sub2api task completed without an OpenAI Images result.",
+  "sub2api 图片任务 {p0} 已结束（{p1}）。":
+    "sub2api image task {p0} ended ({p1}).",
+  "sub2api 返回了未知任务状态：{p0}":
+    "sub2api returned an unknown task status: {p0}",
+  "sub2api 图片任务 {p0} 已失败：{p1}": "sub2api image task {p0} failed: {p1}",
+  "等待 sub2api 图片任务超时（{p0} 秒）；远端任务可能仍在运行。任务 ID：{p1}":
+    "Timed out after {p0} seconds waiting for the sub2api image task; it may still be running remotely. Task ID: {p1}",
+  "已停止本地轮询；远端任务可能仍在运行。任务 ID：{p0}":
+    "Local polling stopped; the remote task may still be running. Task ID: {p0}",
+  "页面刷新或关闭后，本地轮询已中断；远端任务可能仍在运行。任务 ID：{p0}":
+    "Local polling stopped after the page refreshed or closed; the remote task may still be running. Task ID: {p0}",
+  "不支持的服务预设。": "Unsupported provider preset.",
+  "不支持的图片请求模式。": "Unsupported image request mode.",
+  "轮询间隔必须在 1–60 秒之间。":
+    "Polling interval must be between 1 and 60 seconds.",
+  "最长等待必须在 30–3600 秒之间，且不能短于轮询间隔。":
+    "Maximum wait must be 30–3600 seconds and at least as long as the polling interval.",
+  "同步 Images": "Synchronous Images",
+  自定义服务: "Custom provider",
+  异步任务: "Async tasks",
+  "官方 OpenAI Images API": "Official OpenAI Images API",
+  "按 OpenAI Images 同步协议接入":
+    "Connect using the synchronous OpenAI Images protocol",
+  "可选同步 Images 或异步任务协议": "Choose synchronous Images or async tasks",
+  自定义兼容服务: "Custom compatible provider",
+  自行确认接口能力: "Verify the API capabilities yourself",
 };

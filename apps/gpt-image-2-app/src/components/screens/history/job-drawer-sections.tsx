@@ -16,6 +16,22 @@ export function JobDrawerMetadata({
   job: Job;
   meta: Record<string, unknown>;
 }) {
+  const asyncTaskCandidates = [
+    meta.async_task,
+    meta.remote_task,
+    ...(Array.isArray(meta.async_tasks) ? meta.async_tasks : []),
+    ...(Array.isArray(meta.remote_tasks) ? meta.remote_tasks : []),
+  ].filter((task): task is Record<string, unknown> =>
+    Boolean(task && typeof task === "object" && !Array.isArray(task)),
+  );
+  const asyncTasks = Array.from(
+    new Map(
+      asyncTaskCandidates.map((task, index) => [
+        String(task.task_id ?? `unknown-${index}`),
+        task,
+      ]),
+    ).values(),
+  );
   return (
     <div
       className="grid mb-4 gap-y-2"
@@ -23,6 +39,32 @@ export function JobDrawerMetadata({
     >
       <span className="t-tiny pt-0.5">{t("凭证")}</span>
       <span className="text-[12px]">{job.provider}</span>
+      {asyncTasks.length > 0 && (
+        <>
+          <span className="t-tiny pt-0.5">{t("请求模式")}</span>
+          <span className="text-[12px]">
+            {t("sub2api 异步任务")}
+            {asyncTasks.length > 1
+              ? t(" · {p0} 个", { p0: asyncTasks.length })
+              : ""}
+          </span>
+          <span className="t-tiny pt-0.5">{t("远端任务 ID")}</span>
+          <span
+            className="t-mono truncate text-[11px]"
+            title={asyncTasks
+              .map((task) => String(task.task_id ?? ""))
+              .join(", ")}
+          >
+            {asyncTasks.map((task) => String(task.task_id ?? "—")).join(", ")}
+          </span>
+          <span className="t-tiny pt-0.5">{t("远端状态")}</span>
+          <span className="text-[12px]">
+            {asyncTasks
+              .map((task) => String(task.status ?? "processing"))
+              .join(", ")}
+          </span>
+        </>
+      )}
       {typeof meta.size === "string" && (
         <>
           <span className="t-tiny pt-0.5">{t("尺寸")}</span>
@@ -176,7 +218,9 @@ function formatErrorDetail(detail: unknown): string {
 
 export function JobDrawerError({ job }: { job: Job }) {
   if (
-    (job.status !== "failed" && job.status !== "partial_failed") ||
+    (job.status !== "failed" &&
+      job.status !== "partial_failed" &&
+      job.status !== "cancelled") ||
     !job.error
   )
     return null;

@@ -7,7 +7,7 @@ Built-in providers and named providers share the same command surface. Pick a bu
 - `--provider openai` — force OpenAI HTTP API.
 - `--provider codex` — force Codex `image_generation` tool through `~/.codex/auth.json`.
 - `--provider auto` (default) — use `default_provider` from shared config, then legacy OpenAI/Codex auto-selection.
-- `--provider <name>` — resolve an `openai-compatible` or `codex` provider from `$CODEX_HOME/gpt-image-2-skill/config.json`.
+- `--provider <name>` — resolve an `openai-compatible`, `codex`, or `atlas` provider from `$CODEX_HOME/gpt-image-2-skill/config.json`.
 
 The resolved provider appears in `doctor` output as `provider_selection.resolved`.
 
@@ -62,6 +62,30 @@ OpenAI-only flags: `--n`, `--moderation`, `--mask`, `--input-fidelity`.
 
 OpenAI-compatible bases (e.g. `https://api.duckcoding.ai/v1`) work as long as they implement `/images/generations` and `/images/edits`.
 
+### Service presets vs. runtime transport
+
+`preset` identifies the service family for UI defaults and copy. `image_transport` independently controls the request protocol:
+
+| Preset | Transport | Runtime behavior |
+|---|---|---|
+| `openai` | `openai-sync` | Official synchronous OpenAI Images API |
+| `new-api` | `openai-sync` | Standard OpenAI-compatible synchronous Images API; no dedicated New API adapter |
+| `sub2api` | `openai-sync` | Standard OpenAI-compatible synchronous Images API |
+| `sub2api` | `sub2api-async` | Submit to `/images/generations/async` or `/images/edits/async`, then poll `/images/tasks/{task_id}` |
+| `custom` | `openai-sync` | User-confirmed OpenAI-compatible service |
+
+Missing fields preserve the historical `openai-sync` behavior. sub2api async mode requires server-side `image_storage`; stopping local polling does not cancel the remote task. Async submission is never automatically repeated after an uncertain response. `poll_interval_seconds` is a lower bound over `Retry-After`, and App/Docker recovery resumes the existing task ID rather than submitting a new generation.
+
+Example:
+
+```bash
+gpt-image-2-skill --json config add-provider \
+  --name my-sub2api --type openai-compatible --preset sub2api \
+  --image-transport sub2api-async --api-base https://example.com/v1 \
+  --api-key sk-... --poll-interval-seconds 3 \
+  --poll-timeout-seconds 1800
+```
+
 ## Codex provider
 
 | Item | Default |
@@ -75,6 +99,31 @@ OpenAI-compatible bases (e.g. `https://api.duckcoding.ai/v1`) work as long as th
 参见 [本地实测](codex-local-verification.md)。外层 `--model` 与绘图模型是两个字段；不要用图像模型替换外层模型，也不要把本地硬编码的 `delegated_image_model` 当作上游证据。
 
 Codex `401` triggers exactly one access-token refresh, then a single retry. Refresh failures surface as `refresh_failed` errors.
+
+## Atlas Cloud provider
+
+Atlas Cloud uses an asynchronous image API, so configure it as `type: "atlas"` rather than `openai-compatible`:
+
+```json
+{
+  "version": 1,
+  "providers": {
+    "atlas-cloud": {
+      "type": "atlas",
+      "model": "openai/gpt-image-2/text-to-image",
+      "supports_n": false,
+      "edit_region_mode": "none",
+      "credentials": {
+        "api_key": { "source": "env", "env": "ATLASCLOUD_API_KEY" }
+      }
+    }
+  }
+}
+```
+
+Run text-to-image generation with `--provider atlas-cloud`. The default API base is `https://api.atlascloud.ai`; `api_base` can override it for testing or a compatible deployment. Atlas generation POSTs are never retried. The client only retries bounded result polling GETs and downloads completed output URLs without forwarding the Atlas authorization header.
+
+The Atlas provider currently supports one generated image in `jpeg` or `png` format. Image editing, transparent source generation, non-auto backgrounds, WebP, and output compression fail before submission.
 
 ## Runtime discovery and update
 

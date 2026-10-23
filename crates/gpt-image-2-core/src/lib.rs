@@ -75,15 +75,16 @@ pub use config_io::{load_app_config, redact_app_config, save_app_config};
 pub(crate) use config_types::*;
 pub use config_types::{AppConfig, CredentialRef, ProxyConfig, ProxyMode};
 pub use constants::{
-    CLI_NAME, CONFIG_DIR_NAME, CONFIG_FILE_NAME, DEFAULT_BACKGROUND, DEFAULT_CODEX_ENDPOINT,
-    DEFAULT_CODEX_MODEL, DEFAULT_HISTORY_PAGE_LIMIT, DEFAULT_INSTRUCTIONS, DEFAULT_OPENAI_API_BASE,
-    DEFAULT_OPENAI_MODEL, DEFAULT_REFRESH_TIMEOUT, DEFAULT_REQUEST_TIMEOUT, DEFAULT_RETRY_COUNT,
-    DEFAULT_RETRY_DELAY_SECONDS, DELEGATED_IMAGE_MODEL, ENDPOINT_CHECK_TIMEOUT, EXPORTS_DIR_NAME,
-    HISTORY_FILE_NAME, IMAGE_SIZE_MAX_ASPECT_RATIO, IMAGE_SIZE_MAX_EDGE,
-    IMAGE_SIZE_MAX_TOTAL_PIXELS, IMAGE_SIZE_MIN_TOTAL_PIXELS, JOBS_DIR_NAME, KEYCHAIN_SERVICE,
-    MAX_HISTORY_PAGE_LIMIT, MAX_REFERENCE_IMAGES, OPENAI_API_KEY_ENV, OPENAI_EDITS_PATH,
-    OPENAI_GENERATIONS_PATH, PRODUCT_DIR_NAME, REFRESH_CLIENT_ID, REFRESH_ENDPOINT,
-    RESULTS_DIR_NAME, VERSION,
+    ATLAS_GENERATE_PATH, ATLAS_POLL_ATTEMPTS, ATLAS_POLL_DELAY_SECONDS, ATLAS_RESULT_PATH,
+    CLI_NAME, CONFIG_DIR_NAME, CONFIG_FILE_NAME, DEFAULT_ATLAS_API_BASE, DEFAULT_ATLAS_MODEL,
+    DEFAULT_BACKGROUND, DEFAULT_CODEX_ENDPOINT, DEFAULT_CODEX_MODEL, DEFAULT_HISTORY_PAGE_LIMIT,
+    DEFAULT_INSTRUCTIONS, DEFAULT_OPENAI_API_BASE, DEFAULT_OPENAI_MODEL, DEFAULT_REFRESH_TIMEOUT,
+    DEFAULT_REQUEST_TIMEOUT, DEFAULT_RETRY_COUNT, DEFAULT_RETRY_DELAY_SECONDS,
+    DELEGATED_IMAGE_MODEL, ENDPOINT_CHECK_TIMEOUT, EXPORTS_DIR_NAME, HISTORY_FILE_NAME,
+    IMAGE_SIZE_MAX_ASPECT_RATIO, IMAGE_SIZE_MAX_EDGE, IMAGE_SIZE_MAX_TOTAL_PIXELS,
+    IMAGE_SIZE_MIN_TOTAL_PIXELS, JOBS_DIR_NAME, KEYCHAIN_SERVICE, MAX_HISTORY_PAGE_LIMIT,
+    MAX_REFERENCE_IMAGES, OPENAI_API_KEY_ENV, OPENAI_EDITS_PATH, OPENAI_GENERATIONS_PATH,
+    PRODUCT_DIR_NAME, REFRESH_CLIENT_ID, REFRESH_ENDPOINT, RESULTS_DIR_NAME, VERSION,
 };
 pub(crate) use credentials::*;
 pub use credentials::{default_keychain_account, read_keychain_secret, write_keychain_secret};
@@ -101,6 +102,7 @@ pub use history_list::{
     list_history_jobs_page, show_history_job,
 };
 pub(crate) use image_commands::*;
+pub use image_requests::resume_sub2api_remote_task;
 pub(crate) use image_requests::*;
 pub use json_events::JsonEventLogger;
 pub(crate) use logging::*;
@@ -131,17 +133,27 @@ pub(crate) use paths::{
     resolve_path_ref,
 };
 pub(crate) use provider_selection::*;
-pub use provider_types::ProviderConfig;
+pub use provider_selection::{
+    effective_image_transport, effective_poll_interval_seconds, effective_poll_timeout_seconds,
+    effective_provider_preset, validate_provider_config,
+};
 pub(crate) use provider_types::*;
+pub use provider_types::{
+    DEFAULT_IMAGE_POLL_INTERVAL_SECONDS, DEFAULT_IMAGE_POLL_TIMEOUT_SECONDS,
+    IMAGE_TRANSPORT_OPENAI_SYNC, IMAGE_TRANSPORT_SUB2API_ASYNC, PROVIDER_PRESET_CUSTOM,
+    PROVIDER_PRESET_NEW_API, PROVIDER_PRESET_OPENAI, PROVIDER_PRESET_SUB2API, ProviderConfig,
+};
 pub(crate) use proxy::*;
 pub use proxy::{effective_proxy_for_provider, preserve_proxy_secrets, validate_proxy_config};
 pub use recovery::{
     Recoverability, RecoveryAttempt, RecoveryContext, RecoveryStage, RecoveryState,
-    annotate_recovery_job_dir, batch_recovery_job_dir, batch_recovery_job_id,
-    build_recovery_descriptor, generation_slots_from_batch_payload, generation_slots_from_outputs,
+    RemoteImageTask, annotate_recovery_job_dir, batch_recovery_job_dir, batch_recovery_job_id,
+    build_recovery_descriptor, classify_from_state_and_evidence,
+    generation_slots_from_batch_payload, generation_slots_from_outputs,
     mark_interrupted_jobs_on_startup, materialize_openai_raw_response, merge_recovery_metadata,
     missing_generation_slot_indices, raw_response_path, raw_response_sha256,
-    recovery_attempts_from_metadata, recovery_job_dir, test_fault, write_batch_recovery_summary,
+    recovery_attempts_from_metadata, recovery_job_dir, recovery_remote_task_entries, test_fault,
+    write_batch_recovery_summary,
 };
 pub(crate) use request_commands::*;
 pub use request_commands::{run, run_json};
