@@ -1,3 +1,4 @@
+import { t } from "@/lib/i18n";
 import { useState } from "react";
 import { cn } from "@/lib/cn";
 import { Badge } from "@/components/ui/badge";
@@ -44,12 +45,12 @@ export function ProviderRow({
           <span className="truncate text-[13.5px] font-semibold">{name}</span>
           {isDefault && (
             <Badge tone="accent" size="sm" icon="check">
-              默认
+              {t("默认")}
             </Badge>
           )}
           {prov.disabled && (
             <Badge tone="neutral" size="sm">
-              不可用
+              {t("不可用")}
             </Badge>
           )}
         </div>
@@ -58,7 +59,9 @@ export function ProviderRow({
           {prov.disabled && prov.disabled_reason && (
             <>
               <span>·</span>
-              <span className="truncate text-faint">{prov.disabled_reason}</span>
+              <span className="truncate text-faint">
+                {prov.disabled_reason}
+              </span>
             </>
           )}
           <span>·</span>
@@ -87,18 +90,18 @@ export function ProviderRow({
         </div>
         {testStatus === "ok" && (
           <Badge tone="ok" size="sm" icon="check">
-            就绪
+            {t("就绪")}
           </Badge>
         )}
         {testStatus === "err" && (
           <Badge tone="err" size="sm" icon="warn">
-            失败
+            {t("失败")}
           </Badge>
         )}
         {testStatus === "running" && (
           <span className="inline-flex items-center gap-1 text-[11px] text-status-running">
             <Spinner size={10} color="var(--status-running)" />
-            测试中
+            {t("测试中")}
           </span>
         )}
         {!prov.disabled && (
@@ -110,8 +113,8 @@ export function ProviderRow({
               e.stopPropagation();
               onEdit?.();
             }}
-            title="编辑凭证"
-            aria-label={`编辑凭证 ${name}`}
+            title={t("编辑凭证")}
+            aria-label={t("编辑凭证 {p0}", { p0: name })}
           />
         )}
       </div>

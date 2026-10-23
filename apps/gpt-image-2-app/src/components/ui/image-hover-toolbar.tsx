@@ -1,3 +1,4 @@
+import { t } from "@/lib/i18n";
 import { useState, type CSSProperties, type MouseEvent } from "react";
 import { AnimatePresence, motion } from "motion/react";
 import { Icon } from "@/components/icon";
@@ -90,9 +91,7 @@ export function ImageHoverToolbar({
                 type="button"
                 title={action.label(ctx)}
                 aria-label={action.label(ctx)}
-                disabled={
-                  action.isEnabled ? !action.isEnabled(ctx) : false
-                }
+                disabled={action.isEnabled ? !action.isEnabled(ctx) : false}
                 onClick={async (event) => {
                   event.stopPropagation();
                   event.preventDefault();
@@ -124,11 +123,7 @@ export function ImageHoverToolbar({
                 <AnimatePresence mode="wait" initial={false}>
                   <motion.span
                     key={isFlashing ? "check" : "icon"}
-                    initial={
-                      reducedMotion
-                        ? false
-                        : { scale: 0.7, opacity: 0 }
-                    }
+                    initial={reducedMotion ? false : { scale: 0.7, opacity: 0 }}
                     animate={{ scale: 1, opacity: 1 }}
                     exit={
                       reducedMotion
@@ -138,10 +133,7 @@ export function ImageHoverToolbar({
                     transition={{ duration: 0.18, ease: [0.22, 1, 0.36, 1] }}
                     className="inline-flex items-center justify-center"
                   >
-                    <Icon
-                      name={isFlashing ? "check" : action.icon}
-                      size={13}
-                    />
+                    <Icon name={isFlashing ? "check" : action.icon} size={13} />
                   </motion.span>
                 </AnimatePresence>
               </button>
@@ -149,8 +141,8 @@ export function ImageHoverToolbar({
           })}
           <button
             type="button"
-            title="更多"
-            aria-label="更多"
+            title={t("更多")}
+            aria-label={t("更多")}
             onClick={(event) => openContextMenuFromButton(event)}
             className="touch-target image-overlay flex h-8 w-8 items-center justify-center rounded-[4px] border-none"
           >

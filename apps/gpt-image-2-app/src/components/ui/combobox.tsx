@@ -1,3 +1,4 @@
+import { t } from "@/lib/i18n";
 import {
   useRef,
   useState,
@@ -87,9 +88,7 @@ export function GlassCombobox(props: GlassComboboxProps) {
   const isChip = props.variant === "chip";
   const chipLabel = isChip ? (props as ChipVariantProps).label : undefined;
   const trimmed = value.trim().toLowerCase();
-  const matchedOption = options.find(
-    (o) => o.value.toLowerCase() === trimmed,
-  );
+  const matchedOption = options.find((o) => o.value.toLowerCase() === trimmed);
 
   const handlePick = (next: string) => {
     onValueChange(next);
@@ -118,15 +117,12 @@ export function GlassCombobox(props: GlassComboboxProps) {
       <div
         onPointerDown={openFromSurface}
         className={cn(
-          "group relative inline-flex items-center gap-2 rounded-md border bg-[color:var(--w-04)] transition-colors",
-          "hover:bg-[color:var(--w-07)]",
-          "focus-within:border-[color:var(--accent-55)] focus-within:bg-[color:var(--accent-06)] focus-within:shadow-[0_0_0_3px_var(--accent-18)]",
-          open &&
-            "border-[color:var(--accent-55)] bg-[color:var(--accent-06)]",
+          "group relative inline-flex items-center gap-2 rounded-md border bg-(--w-04) transition-colors",
+          "hover:bg-(--w-07)",
+          "focus-within:border-(--accent-55) focus-within:bg-(--accent-06) focus-within:shadow-[0_0_0_3px_var(--accent-18)]",
+          open && "border-(--accent-55) bg-(--accent-06)",
           isChip ? "px-3" : "px-2.5",
-          invalid
-            ? "border-[color:var(--status-err)]"
-            : "border-border",
+          invalid ? "border-(--status-err)" : "border-border",
           disabled && "opacity-55 cursor-not-allowed",
           triggerHeights[size],
           className,
@@ -153,14 +149,14 @@ export function GlassCombobox(props: GlassComboboxProps) {
           aria-label={ariaLabel ?? chipLabel}
           disabled={disabled}
           className={cn(
-            "flex-1 min-w-0 bg-transparent border-none outline-none text-foreground placeholder:text-faint",
+            "flex-1 min-w-0 bg-transparent border-none outline-hidden text-foreground placeholder:text-faint",
             isChip ? "text-[12.5px]" : "text-[13px]",
           )}
         />
         <RadixPopover.Trigger asChild>
           <button
             type="button"
-            aria-label="展开选项"
+            aria-label={t("展开选项")}
             disabled={disabled}
             tabIndex={-1}
             className="shrink-0 inline-flex items-center justify-center text-muted hover:text-foreground transition-colors"
@@ -180,8 +176,8 @@ export function GlassCombobox(props: GlassComboboxProps) {
           onOpenAutoFocus={(e) => e.preventDefault()}
           onCloseAutoFocus={(e) => e.preventDefault()}
           className={cn(
-            "z-50 max-h-[280px] overflow-auto scrollbar-none rounded-xl border outline-none p-1",
-            "min-w-[var(--radix-popover-trigger-width)]",
+            "z-50 max-h-[280px] overflow-auto scrollbar-none rounded-xl border outline-hidden p-1",
+            "min-w-(--radix-popover-trigger-width)",
             "data-[state=open]:animate-in data-[state=closed]:animate-out",
             "data-[state=open]:fade-in-0 data-[state=closed]:fade-out-0",
             "data-[state=open]:zoom-in-95 data-[state=closed]:zoom-out-95",
@@ -208,14 +204,14 @@ export function GlassCombobox(props: GlassComboboxProps) {
                 <Check
                   size={13}
                   strokeWidth={2.4}
-                  className="text-[color:var(--accent)]"
+                  className="text-(--accent)"
                 />
                 <span className="text-foreground font-mono">{value}</span>
                 <span className="text-[11px] text-faint ml-auto">
-                  自定义
+                  {t("自定义")}
                 </span>
               </div>
-              <div className="my-1 mx-2 border-t border-[color:var(--w-06)]" />
+              <div className="my-1 mx-2 border-t border-(--w-06)" />
             </>
           )}
 
@@ -228,8 +224,8 @@ export function GlassCombobox(props: GlassComboboxProps) {
                 onClick={() => handlePick(opt.value)}
                 className={cn(
                   "relative flex w-full items-center gap-2 rounded-md px-2.5 py-2 pr-8 text-left text-[13px] text-foreground transition-colors",
-                  "hover:bg-[color:var(--accent-14)]",
-                  isSelected && "bg-[color:var(--accent-10)]",
+                  "hover:bg-(--accent-14)",
+                  isSelected && "bg-(--accent-10)",
                 )}
               >
                 <div className="flex flex-col gap-0.5 min-w-0 flex-1">
@@ -244,7 +240,7 @@ export function GlassCombobox(props: GlassComboboxProps) {
                   <Check
                     size={13}
                     strokeWidth={2.4}
-                    className="absolute right-2 top-1/2 -translate-y-1/2 text-[color:var(--accent)]"
+                    className="absolute right-2 top-1/2 -translate-y-1/2 text-(--accent)"
                   />
                 )}
               </button>

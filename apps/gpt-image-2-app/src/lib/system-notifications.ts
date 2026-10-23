@@ -1,3 +1,4 @@
+import { t } from "@/lib/i18n";
 import type { Job } from "@/lib/types";
 import { promptSummary } from "@/lib/prompt-display";
 
@@ -15,7 +16,7 @@ export type SystemNotificationResult = {
 };
 
 function commandLabel(job: Job) {
-  return job.command === "images edit" ? "编辑" : "生成";
+  return job.command === "images edit" ? t("编辑") : t("生成");
 }
 
 function outputCount(job: Job) {
@@ -24,10 +25,12 @@ function outputCount(job: Job) {
 }
 
 export function jobNotificationTitle(job: Job) {
-  if (job.status === "completed") return `${commandLabel(job)}完成`;
-  if (job.status === "partial_failed") return `${commandLabel(job)}部分完成`;
-  if (job.status === "failed") return `${commandLabel(job)}失败`;
-  return "任务已取消";
+  if (job.status === "completed")
+    return t("{p0}完成", { p0: commandLabel(job) });
+  if (job.status === "partial_failed")
+    return t("{p0}部分完成", { p0: commandLabel(job) });
+  if (job.status === "failed") return t("{p0}失败", { p0: commandLabel(job) });
+  return t("任务已取消");
 }
 
 export function jobNotificationBody(job: Job) {
@@ -36,7 +39,8 @@ export function jobNotificationBody(job: Job) {
     const size = job.metadata.size;
     if (typeof size === "string" && size) parts.push(size);
     const count = outputCount(job);
-    if (count > 0) parts.push(count > 1 ? `${count} 张图片` : "1 张图片");
+    if (count > 0)
+      parts.push(count > 1 ? t("{p0} 张图片", { p0: count }) : t("1 张图片"));
     if (job.status === "partial_failed") {
       const error = job.error as { message?: string } | null | undefined;
       if (error?.message) parts.push(promptSummary(error.message, 64, ""));
@@ -96,7 +100,7 @@ export async function ensureSystemNotificationPermission(): Promise<SystemNotifi
       ok: false,
       channel: "tauri",
       reason: "permission_denied",
-      message: "系统通知权限未开启。",
+      message: t("系统通知权限未开启。"),
     };
   }
 
@@ -107,14 +111,14 @@ export async function ensureSystemNotificationPermission(): Promise<SystemNotifi
       ok: false,
       channel: "browser",
       reason: "permission_denied",
-      message: "浏览器通知权限未开启。",
+      message: t("浏览器通知权限未开启。"),
     };
   }
 
   return {
     ok: false,
     reason: "unsupported",
-    message: "当前环境不支持系统通知。",
+    message: t("当前环境不支持系统通知。"),
   };
 }
 
@@ -130,7 +134,7 @@ export async function sendSystemNotification(
         ok: false,
         channel: "tauri",
         reason: "permission_denied",
-        message: "系统通知权限未开启。",
+        message: t("系统通知权限未开启。"),
       };
     }
     try {
@@ -156,13 +160,13 @@ export async function sendSystemNotification(
       ok: false,
       channel: "browser",
       reason: "permission_denied",
-      message: "浏览器通知权限未开启。",
+      message: t("浏览器通知权限未开启。"),
     };
   }
   return {
     ok: false,
     reason: "unsupported",
-    message: "当前环境不支持系统通知。",
+    message: t("当前环境不支持系统通知。"),
   };
 }
 

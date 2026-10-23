@@ -6,6 +6,7 @@ import {
   trimTrailingSlash,
 } from "./relay-client";
 import { CORS_MESSAGE } from "./state";
+import { t } from "../../i18n";
 import type {
   OpenAiImageItem,
   OpenAiImagePayload,
@@ -17,7 +18,7 @@ export { configuredRelayBase, isLikelyCorsError, trimTrailingSlash };
 
 export function endpointFor(provider: ProviderConfig, path: string) {
   const base = provider.api_base?.trim().replace(/\/+$/, "");
-  if (!base) throw new Error("服务地址不能为空。");
+  if (!base) throw new Error(t("服务地址不能为空。"));
   return `${base}${path}`;
 }
 
@@ -53,13 +54,13 @@ function endpointForMessage(endpoint: string) {
     const parsed = new URL(endpoint);
     return `${parsed.origin}${parsed.pathname}`;
   } catch {
-    return "服务地址已省略";
+    return t("服务地址已省略");
   }
 }
 
 export function networkError(error: unknown, endpoint: string) {
   if (isLikelyCorsError(error)) {
-    return new Error(`${CORS_MESSAGE}\n${endpointForMessage(endpoint)}`);
+    return new Error(`${t(CORS_MESSAGE)}\n${endpointForMessage(endpoint)}`);
   }
   return error instanceof Error ? error : new Error(String(error));
 }
@@ -77,12 +78,15 @@ export function explainOriginDnsError(endpoint?: string) {
   try {
     const host = endpoint ? new URL(endpoint).hostname : "";
     if (host) {
-      hostHint = ` 当前 Base URL 域名：${host}。`;
+      hostHint = t(" 当前 Base URL 域名：{p0}。", { p0: host });
     }
   } catch {
     /* ignore */
   }
-  return `上游服务域名无法解析或回源失败（Cloudflare 1016/530）。请检查 Base URL 是否写错，或换一个当前可公网访问的服务地址。${hostHint}`;
+  return t(
+    "上游服务域名无法解析或回源失败（Cloudflare 1016/530）。请检查 Base URL 是否写错，或换一个当前可公网访问的服务地址。{p0}",
+    { p0: hostHint },
+  );
 }
 
 export async function parseErrorResponse(
@@ -174,7 +178,7 @@ export async function blobFromImageItem(
 ) {
   if (item.b64_json) return base64ToBlob(item.b64_json, imageMime(format));
   if (!item.url) {
-    throw new Error("图片接口没有返回 b64_json 或 url。");
+    throw new Error(t("图片接口没有返回 b64_json 或 url。"));
   }
   try {
     const response = await fetchProvider(item.url, { signal });
@@ -194,7 +198,7 @@ export async function decodeImagePayload(
 ) {
   const items = payload.data ?? [];
   if (items.length === 0) {
-    throw new Error("接口响应里没有生成图片。");
+    throw new Error(t("接口响应里没有生成图片。"));
   }
   return Promise.all(
     items.map((item) => blobFromImageItem(item, format, signal)),

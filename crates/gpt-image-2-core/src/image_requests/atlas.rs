@@ -18,13 +18,23 @@ fn parse_atlas_response(response: Response, action: &str) -> Result<Value, AppEr
     if !status.is_success() {
         return Err(http_status_error(status, raw));
     }
-    serde_json::from_str::<Value>(&raw).map_err(|error| {
+    let payload = serde_json::from_str::<Value>(&raw).map_err(|error| {
         AppError::new(
             "invalid_json_response",
             format!("Atlas {action} returned invalid JSON."),
         )
         .with_detail(json!({"error": error.to_string()}))
-    })
+    })?;
+    // The Predictions API wraps tasks in `data`; model schemas also document
+    // the flat task object. Accept both without changing task processing.
+    match payload.get("data") {
+        Some(data) if data.is_object() => Ok(data.clone()),
+        Some(_) => Err(AppError::new(
+            "invalid_json_response",
+            "Atlas response data must contain a prediction object.",
+        )),
+        None => Ok(payload),
+    }
 }
 
 pub(crate) fn validate_atlas_image_args(shared: &SharedImageArgs) -> Result<(), AppError> {
@@ -151,6 +161,12 @@ pub(crate) fn request_atlas_prediction(
 
     if submitted.get("status").and_then(Value::as_str) == Some("completed") {
         return Ok((submitted, 0));
+    }
+    if submitted.get("status").and_then(Value::as_str) == Some("failed") {
+        return Err(
+            AppError::new("prediction_failed", "Atlas image generation failed.")
+                .with_detail(redact_event_payload(&submitted)),
+        );
     }
 
     let result_endpoint = atlas_endpoint(api_base, &format!("{ATLAS_RESULT_PATH}/{request_id}"));
@@ -344,11 +360,14 @@ mod tests {
         let captured = Arc::clone(&methods);
         let server = thread::spawn(move || {
             let responses = [
-                (200, r#"{"id":"req-1","status":"created","outputs":[]}"#),
+                (
+                    200,
+                    r#"{"data":{"id":"req-1","status":"created","outputs":[]}}"#,
+                ),
                 (500, r#"{"error":"temporary"}"#),
                 (
                     200,
-                    r#"{"id":"req-1","status":"completed","outputs":["https://cdn.example.com/image.png"]}"#,
+                    r#"{"data":{"id":"req-1","status":"completed","outputs":["https://cdn.example.com/image.png"]}}"#,
                 ),
             ];
             for (status, body) in responses {
@@ -403,6 +422,46 @@ mod tests {
         );
         assert_eq!(result["status"], "completed");
         assert_eq!(polls, 2);
+        assert_eq!(methods[0], "POST /api/v1/model/generateImage HTTP/1.1");
+        assert!(
+            methods[1..]
+                .iter()
+                .all(|line| line == "GET /api/v1/model/prediction/req-1 HTTP/1.1")
+        );
+    }
+
+    #[test]
+    fn atlas_flat_completed_submit_never_polls_again() {
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let address = listener.local_addr().unwrap();
+        let server = thread::spawn(move || {
+            let (mut stream, _) = listener.accept().unwrap();
+            let request = read_request(&mut stream);
+            assert!(request.starts_with("POST /api/v1/model/generateImage "));
+            let body = r#"{"id":"req-2","status":"completed","outputs":["https://cdn.example.com/image.png"]}"#;
+            write!(
+                stream,
+                "HTTP/1.1 200 OK\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
+                body.len()
+            )
+            .unwrap();
+        });
+        let (result, polls) = request_atlas_prediction(
+            &format!("http://{address}"),
+            "synthetic-key",
+            &json!({}),
+            &mut JsonEventLogger::new(false),
+            &ProxyConfig {
+                mode: ProxyMode::None,
+                ..Default::default()
+            },
+            1,
+            0,
+        )
+        .unwrap();
+        server.join().unwrap();
+        assert_eq!(result["id"], "req-2");
+        assert_eq!(polls, 0);
     }
 
     #[test]

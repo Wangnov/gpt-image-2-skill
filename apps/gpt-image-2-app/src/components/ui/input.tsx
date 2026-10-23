@@ -52,8 +52,8 @@ export const Input = forwardRef<HTMLInputElement, Props>(
       <div
         className={cn(
           "flex items-center gap-2 px-2.5 rounded-md transition-colors",
-          "bg-[color:var(--w-04)] border border-border",
-          "focus-within:border-[color:var(--accent-55)] focus-within:bg-[color:var(--accent-06)] focus-within:shadow-[0_0_0_3px_var(--accent-14)]",
+          "bg-(--w-04) border border-border",
+          "focus-within:border-(--accent-55) focus-within:bg-(--accent-06) focus-within:shadow-[0_0_0_3px_var(--accent-14)]",
           invalid &&
             "border-status-err focus-within:border-status-err focus-within:shadow-[0_0_0_3px_var(--status-err-18)]",
           heights[size],
@@ -75,7 +75,7 @@ export const Input = forwardRef<HTMLInputElement, Props>(
           aria-describedby={describedBy}
           aria-invalid={invalid}
           className={cn(
-            "flex-1 bg-transparent border-none outline-none text-[13px] min-w-0 placeholder:text-faint",
+            "flex-1 bg-transparent border-none outline-hidden text-[13px] min-w-0 placeholder:text-faint",
             monospace && "font-mono",
             className,
           )}

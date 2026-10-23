@@ -93,7 +93,12 @@ pub(crate) fn local_path_to_data_url(path: &Path) -> Result<String, AppError> {
 pub(crate) fn resolve_ref_image(value: &str) -> Result<String, AppError> {
     match Url::parse(value) {
         Ok(url) => match url.scheme() {
-            "http" | "https" | "data" => Ok(value.to_string()),
+            "http" => Err(AppError::new(
+                "image_url_insecure",
+                "Remote reference image URLs must use HTTPS.",
+            )
+            .with_detail(json!({ "scheme": "http", "url": redact_url_for_log(value) }))),
+            "https" | "data" => Ok(value.to_string()),
             "file" => {
                 let path = url
                     .to_file_path()
@@ -183,7 +188,7 @@ fn read_capped(
     Ok(buf)
 }
 
-/// Fetch an **untrusted, user-supplied** reference image over http(s). Always
+/// Fetch an **untrusted, user-supplied** reference image over HTTPS. Always
 /// direct-connect so the SSRF validation and address pinning actually hold — a
 /// remote-resolving proxy (http/socks5h, or a `no_proxy` miss) would resolve
 /// the host itself and defeat the pin. A URL only reachable through a proxy
@@ -192,7 +197,7 @@ pub(crate) fn download_reference_image_bytes(url: &str) -> Result<Vec<u8>, AppEr
     download_http_image_bytes(url, None)
 }
 
-/// Fetch a **trusted, provider-returned** result image URL (e.g. the `url` in
+/// Fetch a **trusted, provider-returned** HTTPS result image URL (e.g. the `url` in
 /// an OpenAI image response). The URL comes from the provider's authenticated
 /// TLS response, so we honor the proxy the user configured to reach that
 /// provider's CDN; pinning can't apply through a resolving proxy, which is
@@ -215,7 +220,18 @@ fn download_http_image_bytes(url: &str, proxy: Option<&ProxyConfig>) -> Result<V
     // Every body read is bounded.
     let mut current = url.to_string();
     for _ in 0..=MAX_REDIRECT_HOPS {
-        let (_, host_label, addrs) = validate_remote_http_target(&current, "Image download")?;
+        let current_url = Url::parse(&current).map_err(|error| {
+            AppError::new("image_url_invalid", "Image download URL is invalid.")
+                .with_detail(json!({ "error": error.to_string(), "url": redacted }))
+        })?;
+        if current_url.scheme() != "https" {
+            return Err(
+                AppError::new("image_url_insecure", "Remote image URLs must use HTTPS.")
+                    .with_detail(json!({ "scheme": current_url.scheme(), "url": redacted })),
+            );
+        }
+        let (_, host_label, addrs) =
+            validate_remote_http_target(current_url.as_str(), "Image download")?;
         let builder = reqwest::blocking::Client::builder()
             .timeout(Duration::from_secs(DEFAULT_REQUEST_TIMEOUT))
             .redirect(reqwest::redirect::Policy::none())
@@ -233,7 +249,7 @@ fn download_http_image_bytes(url: &str, proxy: Option<&ProxyConfig>) -> Result<V
             AppError::new("network_error", "Unable to build download client.")
                 .with_detail(json!({ "error": error.to_string() }))
         })?;
-        let response = client.get(&current).send().map_err(|error| {
+        let response = client.get(current_url.clone()).send().map_err(|error| {
             AppError::new("network_error", "Unable to download image bytes.")
                 .with_detail(json!({ "error": error.to_string(), "url": redacted }))
         })?;
@@ -249,12 +265,10 @@ fn download_http_image_bytes(url: &str, proxy: Option<&ProxyConfig>) -> Result<V
                 })?;
             // Resolve relative redirects against the current URL. The next loop
             // iteration validates and pins this target before connecting.
-            let next = Url::parse(&current)
-                .and_then(|base| base.join(location))
-                .map_err(|error| {
-                    AppError::new("network_error", "Invalid redirect target.")
-                        .with_detail(json!({ "error": error.to_string() }))
-                })?;
+            let next = current_url.join(location).map_err(|error| {
+                AppError::new("network_error", "Invalid redirect target.")
+                    .with_detail(json!({ "error": error.to_string() }))
+            })?;
             current = next.to_string();
             continue;
         }
@@ -353,9 +367,9 @@ mod download_ssrf_tests {
     #[test]
     fn rejects_loopback_and_link_local_targets() {
         for url in [
-            "http://127.0.0.1/x.png",
-            "http://[::1]/x.png",
-            "http://169.254.169.254/latest/meta-data/",
+            "https://127.0.0.1/x.png",
+            "https://[::1]/x.png",
+            "https://169.254.169.254/latest/meta-data/",
         ] {
             let err = download_reference_image_bytes(url).unwrap_err();
             assert_ne!(
@@ -363,5 +377,30 @@ mod download_ssrf_tests {
                 "{url} should be rejected by the SSRF guard, not attempted"
             );
         }
+    }
+
+    #[test]
+    fn rejects_plaintext_image_urls_before_network_access() {
+        let err = download_reference_image_bytes("http://images.example.com/x.png").unwrap_err();
+        assert_eq!(err.code, "image_url_insecure");
+
+        let err = download_result_image_bytes(
+            "http://cdn.example.com/result.png",
+            &ProxyConfig::default(),
+        )
+        .unwrap_err();
+        assert_eq!(err.code, "image_url_insecure");
+    }
+
+    #[test]
+    fn rejects_plaintext_reference_urls_before_provider_dispatch() {
+        let err = resolve_ref_image("http://images.example.com/ref.png").unwrap_err();
+        assert_eq!(err.code, "image_url_insecure");
+
+        let secure = "https://images.example.com/ref.png";
+        assert_eq!(resolve_ref_image(secure).unwrap(), secure);
+
+        let inline = "data:image/png;base64,iVBORw0KGgo=";
+        assert_eq!(resolve_ref_image(inline).unwrap(), inline);
     }
 }

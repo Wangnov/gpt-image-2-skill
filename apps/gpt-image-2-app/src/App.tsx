@@ -1,3 +1,4 @@
+import { t } from "@/lib/i18n";
 import {
   Component,
   type ErrorInfo,
@@ -45,6 +46,7 @@ import {
   shouldAutoCheckForUpdates,
 } from "@/lib/app-updater";
 import { OPEN_JOB_EVENT } from "@/lib/job-navigation";
+import { useLanguage } from "@/hooks/use-language";
 
 class ScreenErrorBoundary extends Component<
   { children: ReactNode; onReset: () => void },
@@ -68,9 +70,9 @@ class ScreenErrorBoundary extends Component<
         role="alert"
         className="flex h-full flex-col items-center justify-center gap-3 p-10 text-center"
       >
-        <div className="t-h2 text-foreground">这个屏幕崩了</div>
+        <div className="t-h2 text-foreground">{t("这个屏幕崩了")}</div>
         <div className="max-w-[420px] text-[13px] text-muted">
-          {this.state.error.message || "出现了一个未知错误。"}
+          {this.state.error.message || t("出现了一个未知错误。")}
         </div>
         <Button
           variant="primary"
@@ -81,7 +83,7 @@ class ScreenErrorBoundary extends Component<
             this.props.onReset();
           }}
         >
-          重新加载
+          {t("重新加载")}
         </Button>
       </div>
     );
@@ -103,6 +105,7 @@ function readInitialScreen(): ScreenId {
 }
 
 export default function App() {
+  useLanguage();
   const [screen, setScreenState] = useState<ScreenId>(readInitialScreen);
   const {
     data: config,
@@ -163,14 +166,14 @@ export default function App() {
     void checkForAppUpdate()
       .then((result) => {
         if (cancelled || result.status !== "available") return;
-        toast(`发现新版本 ${result.update.version}`, {
-          description: "可以现在安装，更新完成后 App 会自动重启。",
+        toast(t("发现新版本 {p0}", { p0: result.update.version }), {
+          description: t("可以现在安装，更新完成后 App 会自动重启。"),
           duration: 12_000,
           action: {
-            label: "更新",
+            label: t("更新"),
             onClick: () => {
-              const id = toast.loading("正在下载更新", {
-                description: "保持 App 打开，下载完成后会安装并重启。",
+              const id = toast.loading(t("正在下载更新"), {
+                description: t("保持 App 打开，下载完成后会安装并重启。"),
               });
               void installAppUpdate((progress) => {
                 if (
@@ -183,18 +186,18 @@ export default function App() {
                       (progress.downloadedBytes / progress.contentLength) * 100,
                     ),
                   );
-                  toast.loading("正在下载更新", {
+                  toast.loading(t("正在下载更新"), {
                     id,
                     description: `${pct}%`,
                   });
                 } else if (progress.phase === "installing") {
-                  toast.loading("正在安装更新", {
+                  toast.loading(t("正在安装更新"), {
                     id,
-                    description: "马上重启。",
+                    description: t("马上重启。"),
                   });
                 }
               }).catch((error) => {
-                toast.error("更新失败", {
+                toast.error(t("更新失败"), {
                   id,
                   description:
                     error instanceof Error ? error.message : String(error),
@@ -311,7 +314,9 @@ export default function App() {
               <div className="surface-panel flex max-w-[360px] flex-col items-center gap-3 p-4 text-center">
                 {configError ? (
                   <>
-                    <div className="t-h3 text-foreground">配置加载失败</div>
+                    <div className="t-h3 text-foreground">
+                      {t("配置加载失败")}
+                    </div>
                     <div className="t-small">
                       {configError instanceof Error
                         ? configError.message
@@ -323,7 +328,7 @@ export default function App() {
                       icon="reload"
                       onClick={() => refetchConfig()}
                     >
-                      重试
+                      {t("重试")}
                     </Button>
                   </>
                 ) : (
@@ -332,7 +337,7 @@ export default function App() {
                       aria-hidden="true"
                       className="inline-block h-3 w-3 rounded-full bg-accent animate-pulse-subtle"
                     />
-                    加载配置中…
+                    {t("加载配置中…")}
                   </div>
                 )}
               </div>

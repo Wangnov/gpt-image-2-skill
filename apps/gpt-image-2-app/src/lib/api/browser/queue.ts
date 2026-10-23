@@ -1,3 +1,4 @@
+import { t } from "@/lib/i18n";
 import type {
   GenerateRequest,
   Job,
@@ -49,7 +50,10 @@ function errorText(error: unknown) {
 function batchErrorMessage(errors: BrowserBatchError[]) {
   if (errors.length === 0) return "";
   if (errors.length === 1) return errors[0].message;
-  return `${errors.length} 个子任务失败：${errors[0].message}`;
+  return t("{p0} 个子任务失败：{p1}", {
+    p0: errors.length,
+    p1: errors[0].message,
+  });
 }
 
 export async function storagePressureWarning() {
@@ -60,7 +64,7 @@ export async function storagePressureWarning() {
   return {
     usage: estimate.usage,
     quota: estimate.quota,
-    message: "当前浏览器数据空间接近上限，请清理历史或导出图片。",
+    message: t("当前浏览器数据空间接近上限，请清理历史或导出图片。"),
   };
 }
 
@@ -170,7 +174,7 @@ export async function completePartialTask(
 export async function failTask(task: BrowserQueuedTask, error: unknown) {
   const aborted = task.cancelled || task.abort.signal.aborted;
   const message = aborted
-    ? "任务已取消。"
+    ? t("任务已取消。")
     : error instanceof Error
       ? error.message
       : String(error);
@@ -388,7 +392,7 @@ export async function markInterruptedJobs() {
       ...job,
       status: "failed",
       updated_at: nowIso(),
-      error: { message: "页面刷新或关闭，浏览器任务已中断。" },
+      error: { message: t("页面刷新或关闭，浏览器任务已中断。") },
     });
   }
 }

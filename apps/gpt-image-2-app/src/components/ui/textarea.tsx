@@ -45,9 +45,9 @@ export const Textarea = forwardRef<HTMLTextAreaElement, Props>(
         aria-invalid={invalid}
         style={{ minHeight, ...style }}
         className={cn(
-          "w-full px-3.5 py-3 rounded-md text-[13.5px] leading-[1.55] outline-none transition-colors resize-y",
-          "bg-[color:var(--w-04)] border border-border placeholder:text-faint",
-          "focus:border-[color:var(--accent-55)] focus:bg-[color:var(--accent-06)] focus:shadow-[0_0_0_3px_var(--accent-14)]",
+          "w-full px-3.5 py-3 rounded-md text-[13.5px] leading-[1.55] outline-hidden transition-colors resize-y",
+          "bg-(--w-04) border border-border placeholder:text-faint",
+          "focus:border-(--accent-55) focus:bg-(--accent-06) focus:shadow-[0_0_0_3px_var(--accent-14)]",
           invalid &&
             "border-status-err focus:border-status-err focus:shadow-[0_0_0_3px_var(--status-err-18)]",
           monospace && "font-mono",

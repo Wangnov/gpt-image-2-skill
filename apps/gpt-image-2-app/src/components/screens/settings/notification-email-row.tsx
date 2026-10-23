@@ -1,3 +1,4 @@
+import { t } from "@/lib/i18n";
 import { type ChangeEvent } from "react";
 import { Mail } from "lucide-react";
 import { Input } from "@/components/ui/input";
@@ -21,8 +22,8 @@ export function NotificationEmailRow({
 }) {
   return (
     <Row
-      title="邮件通知"
-      description="密码支持直接填写 / 环境变量 / 系统钥匙串。"
+      title={t("邮件通知")}
+      description={t("密码支持直接填写 / 环境变量 / 系统钥匙串。")}
       control={
         <div className="w-full space-y-2 sm:w-[600px]">
           <div className="flex items-center justify-between gap-3">
@@ -70,14 +71,14 @@ export function NotificationEmailRow({
               onChange={(event) => patchEmail({ from: event.target.value })}
               placeholder="GPT Image 2 <robot@example.com>"
               size="sm"
-              aria-label="邮件发件人"
+              aria-label={t("邮件发件人")}
             />
             <Input
               value={email.username ?? ""}
               onChange={(event) =>
                 patchEmail({ username: event.target.value || undefined })
               }
-              placeholder="SMTP 用户名"
+              placeholder={t("SMTP 用户名")}
               size="sm"
               aria-label="SMTP username"
             />
@@ -85,8 +86,8 @@ export function NotificationEmailRow({
           <CredentialEditor
             credential={email.password}
             onChange={(password) => patchEmail({ password })}
-            placeholder="SMTP 密码"
-            ariaLabel="SMTP 密码"
+            placeholder={t("SMTP 密码")}
+            ariaLabel={t("SMTP 密码")}
           />
           <Textarea
             value={recipientText}
@@ -95,7 +96,7 @@ export function NotificationEmailRow({
             }
             placeholder={"owner@example.com\nops@example.com"}
             minHeight={62}
-            aria-label="邮件收件人"
+            aria-label={t("邮件收件人")}
           />
         </div>
       }

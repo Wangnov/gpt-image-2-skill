@@ -1,3 +1,4 @@
+import { t, getLocale } from "@/lib/i18n";
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import {
@@ -9,10 +10,7 @@ import { Button } from "@/components/ui/button";
 import { Dialog } from "@/components/ui/dialog";
 import { Field } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
-import {
-  Segmented,
-  type SegmentedOption,
-} from "@/components/ui/segmented";
+import { Segmented, type SegmentedOption } from "@/components/ui/segmented";
 import { Textarea } from "@/components/ui/textarea";
 import { useUpsertProvider } from "@/hooks/use-config";
 import { api } from "@/lib/api";
@@ -84,17 +82,17 @@ export function AddProviderDialog({
   const browserRuntime = !api.canUseSystemCredentials;
   const keySourceOptions: readonly SegmentedOption<CredentialSource>[] =
     copy.kind === "browser"
-      ? [{ value: "file", label: "当前浏览器", icon: "filedot" }]
+      ? [{ value: "file", label: t("当前浏览器"), icon: "filedot" }]
       : copy.kind === "http"
         ? [
-            { value: "file", label: "服务端配置", icon: "filedot" },
-            { value: "env", label: "服务端环境变量", icon: "envkey" },
-            { value: "keychain", label: "服务端钥匙串", icon: "keychain" },
+            { value: "file", label: t("服务端配置"), icon: "filedot" },
+            { value: "env", label: t("服务端环境变量"), icon: "envkey" },
+            { value: "keychain", label: t("服务端钥匙串"), icon: "keychain" },
           ]
         : [
-            { value: "file", label: "配置文件", icon: "filedot" },
-            { value: "env", label: "环境变量", icon: "envkey" },
-            { value: "keychain", label: "钥匙串", icon: "keychain" },
+            { value: "file", label: t("配置文件"), icon: "filedot" },
+            { value: "env", label: t("环境变量"), icon: "envkey" },
+            { value: "keychain", label: t("钥匙串"), icon: "keychain" },
           ];
   const trimmedName = name.trim();
   const existingNamesForCheck = useMemo(
@@ -105,7 +103,7 @@ export function AddProviderDialog({
               existing.toLowerCase() !== providerName?.toLowerCase(),
           )
         : existingNames,
-    [editing, existingNames, providerName],
+    [editing, existingNames, providerName, getLocale()],
   );
   const nameTaken =
     !editing &&
@@ -154,7 +152,9 @@ export function AddProviderDialog({
     );
 
     const apiKeyCredential = provider.credentials.api_key;
-    setKeySource(browserRuntime ? "file" : (apiKeyCredential?.source ?? "file"));
+    setKeySource(
+      browserRuntime ? "file" : (apiKeyCredential?.source ?? "file"),
+    );
     setApiKey("");
     setEnvName(apiKeyCredential?.env ?? "OPENAI_API_KEY");
     setKeychainAccount(apiKeyCredential?.account ?? "");
@@ -189,8 +189,8 @@ export function AddProviderDialog({
   const submit = async () => {
     if (!trimmedName) return;
     if (nameTaken) {
-      toast.error("凭证已存在", {
-        description: "已配置的凭证不能被覆盖，请换一个名称。",
+      toast.error(t("凭证已存在"), {
+        description: t("已配置的凭证不能被覆盖，请换一个名称。"),
       });
       return;
     }
@@ -263,15 +263,15 @@ export function AddProviderDialog({
           allow_overwrite: editing,
         },
       });
-      toast.success(editing ? "凭证已更新" : "凭证已添加", {
+      toast.success(editing ? t("凭证已更新") : t("凭证已添加"), {
         description: editing
-          ? `${trimmedName} 的配置已保存。`
-          : `${trimmedName} 已设为默认凭证。`,
+          ? t("{p0} 的配置已保存。", { p0: trimmedName })
+          : t("{p0} 已设为默认凭证。", { p0: trimmedName }),
       });
       reset();
       onOpenChange(false);
     } catch (error) {
-      toast.error(editing ? "保存失败" : "添加失败", {
+      toast.error(editing ? t("保存失败") : t("添加失败"), {
         description: error instanceof Error ? error.message : String(error),
       });
     }
@@ -281,13 +281,13 @@ export function AddProviderDialog({
     <Dialog
       open={open}
       onOpenChange={onOpenChange}
-      title={editing ? "编辑凭证" : "添加凭证"}
+      title={editing ? t("编辑凭证") : t("添加凭证")}
       width={560}
       maxHeight={640}
       footer={
         <>
           <Button variant="ghost" onClick={() => onOpenChange(false)}>
-            取消
+            {t("取消")}
           </Button>
           <Button
             variant="primary"
@@ -296,32 +296,32 @@ export function AddProviderDialog({
             disabled={upsert.isPending || !trimmedName || nameTaken}
           >
             {upsert.isPending
-              ? "保存中…"
+              ? t("保存中…")
               : editing
-                ? "保存修改"
-                : "添加并设为默认"}
+                ? t("保存修改")
+                : t("添加并设为默认")}
           </Button>
         </>
       }
     >
       <div className="grid gap-3.5">
         <Field
-          label="名称"
+          label={t("名称")}
           hint={
             nameTaken
-              ? "这个名称已存在，已配置的凭证不能覆盖。"
-              : "会显示在凭证列表里"
+              ? t("这个名称已存在，已配置的凭证不能覆盖。")
+              : t("会显示在凭证列表里")
           }
         >
           <Input
             value={name}
             onChange={(e) => setName(e.target.value)}
-            placeholder="例如 my-image-api"
+            placeholder={t("例如 my-image-api")}
             autoFocus
             disabled={editing}
           />
         </Field>
-        <Field label="类型">
+        <Field label={t("类型")}>
           <Segmented
             value={kind}
             onChange={(next) => {
@@ -330,21 +330,21 @@ export function AddProviderDialog({
               setEditRegionMode(defaultEditRegionMode(next));
               if (browserRuntime) setKeySource("file");
             }}
-            ariaLabel="凭证类型"
+            ariaLabel={t("凭证类型")}
             className="w-full overflow-x-auto scrollbar-none"
             options={
               browserRuntime
-                ? [{ value: "openai-compatible", label: "OpenAI 兼容" }]
+                ? [{ value: "openai-compatible", label: t("OpenAI 兼容") }]
                 : [
-                    { value: "openai-compatible", label: "OpenAI 兼容" },
-                    { value: "openai", label: "OpenAI 官方" },
+                    { value: "openai-compatible", label: t("OpenAI 兼容") },
+                    { value: "openai", label: t("OpenAI 官方") },
                     { value: "codex", label: "Codex" },
                   ]
             }
           />
         </Field>
         {kind !== "codex" && (
-          <Field label="服务地址">
+          <Field label={t("服务地址")}>
             <Input
               value={apiBase}
               onChange={(e) => setApiBase(e.target.value)}
@@ -353,7 +353,7 @@ export function AddProviderDialog({
             />
           </Field>
         )}
-        <Field label="模型">
+        <Field label={t("模型")}>
           <Input
             value={model}
             onChange={(e) => setModel(e.target.value)}
@@ -362,53 +362,53 @@ export function AddProviderDialog({
           />
         </Field>
         <Field
-          label="批量策略"
+          label={t("批量策略")}
           hint={
             kind === "codex"
-              ? "Codex 会由 App 自动并行生成多张"
-              : "不确定时选「App 自动并行」最稳"
+              ? t("Codex 会由 App 自动并行生成多张")
+              : t("不确定时选「App 自动并行」最稳")
           }
         >
           {kind === "codex" ? (
             <div className="flex h-8 items-center justify-between rounded-md border border-border bg-sunken px-2.5 text-[12px]">
-              <span className="font-semibold">App 自动并行</span>
-              <span className="text-faint">适合批量生成</span>
+              <span className="font-semibold">{t("App 自动并行")}</span>
+              <span className="text-faint">{t("适合批量生成")}</span>
             </div>
           ) : (
             <Segmented
               value={supportsN ? "yes" : "no"}
               onChange={(value) => setSupportsN(value === "yes")}
-              ariaLabel="批量策略"
+              ariaLabel={t("批量策略")}
               options={[
-                { value: "no", label: "App 自动并行" },
-                { value: "yes", label: "接口一次返回多张" },
+                { value: "no", label: t("App 自动并行") },
+                { value: "yes", label: t("接口一次返回多张") },
               ]}
             />
           )}
         </Field>
         <Field
-          label="局部编辑"
+          label={t("局部编辑")}
           hint={
             kind === "openai"
-              ? "OpenAI 官方可使用精确遮罩"
-              : "不确定时选「软选区参考」最稳"
+              ? t("OpenAI 官方可使用精确遮罩")
+              : t("不确定时选「软选区参考」最稳")
           }
         >
           {kind === "codex" ? (
             <div className="flex h-8 items-center justify-between rounded-md border border-border bg-sunken px-2.5 text-[12px]">
-              <span className="font-semibold">软选区参考</span>
-              <span className="text-faint">适合当前 Codex 通道</span>
+              <span className="font-semibold">{t("软选区参考")}</span>
+              <span className="text-faint">{t("适合当前 Codex 通道")}</span>
             </div>
           ) : (
             <Segmented
               value={editRegionMode}
               onChange={setEditRegionMode}
-              ariaLabel="局部编辑模式"
+              ariaLabel={t("局部编辑模式")}
               className="w-full overflow-x-auto scrollbar-none"
               options={[
-                { value: "reference-hint", label: "软选区参考" },
-                { value: "native-mask", label: "精确遮罩" },
-                { value: "none", label: "不支持" },
+                { value: "reference-hint", label: t("软选区参考") },
+                { value: "native-mask", label: t("精确遮罩") },
+                { value: "none", label: t("不支持") },
               ]}
             />
           )}
@@ -417,23 +417,23 @@ export function AddProviderDialog({
       {kind === "codex" && (
         <div className="mt-1 grid gap-3.5">
           <Field
-            label="账号 ID"
-            hint={editing ? "留空会保留原值。" : undefined}
+            label={t("账号 ID")}
+            hint={editing ? t("留空会保留原值。") : undefined}
           >
             <Input
               value={codexAccountId}
               onChange={(e) => setCodexAccountId(e.target.value)}
               placeholder={
                 copy.kind === "http"
-                  ? "可留空，使用后端服务已登录账号"
-                  : "可留空，使用桌面 App 已登录账号"
+                  ? t("可留空，使用后端服务已登录账号")
+                  : t("可留空，使用桌面 App 已登录账号")
               }
               monospace
             />
           </Field>
           <Field
             label="Access Token"
-            hint={editing ? "留空会保留原值。" : undefined}
+            hint={editing ? t("留空会保留原值。") : undefined}
           >
             <Input
               value={codexAccessToken}
@@ -445,12 +445,12 @@ export function AddProviderDialog({
           </Field>
           <Field
             label="Refresh Token"
-            hint={editing ? "留空会保留原值。" : undefined}
+            hint={editing ? t("留空会保留原值。") : undefined}
           >
             <Input
               value={codexRefreshToken}
               onChange={(e) => setCodexRefreshToken(e.target.value)}
-              placeholder="可选"
+              placeholder={t("可选")}
               type="password"
               monospace
             />
@@ -459,11 +459,11 @@ export function AddProviderDialog({
       )}
       {kind !== "codex" && (
         <div className="mt-1 grid gap-3.5">
-          <Field label="密钥保存方式">
+          <Field label={t("密钥保存方式")}>
             <Segmented
               value={keySource}
               onChange={(v) => setKeySource(v as CredentialSource)}
-              ariaLabel="密钥保存方式"
+              ariaLabel={t("密钥保存方式")}
               className="w-full overflow-x-auto scrollbar-none"
               options={keySourceOptions}
             />
@@ -471,7 +471,7 @@ export function AddProviderDialog({
           {keySource === "file" && (
             <Field
               label="API Key"
-              hint={editing ? "留空会保留原密钥。" : undefined}
+              hint={editing ? t("留空会保留原密钥。") : undefined}
             >
               <Input
                 value={apiKey}
@@ -483,7 +483,7 @@ export function AddProviderDialog({
             </Field>
           )}
           {keySource === "env" && (
-            <Field label="环境变量名">
+            <Field label={t("环境变量名")}>
               <Input
                 value={envName}
                 onChange={(e) => setEnvName(e.target.value)}
@@ -494,7 +494,7 @@ export function AddProviderDialog({
           )}
           {keySource === "keychain" && (
             <>
-              <Field label="钥匙串条目">
+              <Field label={t("钥匙串条目")}>
                 <Input
                   value={keychainAccount}
                   onChange={(e) => setKeychainAccount(e.target.value)}
@@ -504,7 +504,7 @@ export function AddProviderDialog({
               </Field>
               <Field
                 label="API Key"
-                hint={editing ? "留空会保留钥匙串里的原密钥。" : undefined}
+                hint={editing ? t("留空会保留钥匙串里的原密钥。") : undefined}
               >
                 <Input
                   value={apiKey}
@@ -520,14 +520,11 @@ export function AddProviderDialog({
       )}
       {api.kind !== "browser" && (
         <div className="mt-1 grid gap-3.5 border-t border-border-faint pt-3.5">
-          <Field
-            label="网络代理"
-            hint="默认跟随全局设置"
-          >
+          <Field label={t("网络代理")} hint={t("默认跟随全局设置")}>
             <Segmented
               value={proxyMode}
               onChange={setProxyMode}
-              ariaLabel="该凭证的网络代理"
+              ariaLabel={t("该凭证的网络代理")}
               className="w-full overflow-x-auto scrollbar-none"
               options={PROVIDER_PROXY_MODE_OPTIONS}
             />
@@ -535,7 +532,7 @@ export function AddProviderDialog({
           {proxyMode === "custom" && (
             <>
               <Field
-                label="代理地址"
+                label={t("代理地址")}
                 hint="scheme://[user:pass@]host:port"
               >
                 <Input
@@ -546,8 +543,8 @@ export function AddProviderDialog({
                 />
               </Field>
               <Field
-                label="绕过代理的主机"
-                hint="可选，每行一个或逗号分隔"
+                label={t("绕过代理的主机")}
+                hint={t("可选，每行一个或逗号分隔")}
               >
                 <Textarea
                   value={proxyNoProxyText}
@@ -558,14 +555,17 @@ export function AddProviderDialog({
                 />
               </Field>
               <p className="text-[11px] text-faint">
-                支持 http / https / socks5 / socks5h；socks5h:// 由代理端做 DNS
-                解析。保存后地址只回显 scheme://host:port，重填完整地址才更新密码。
+                {t(
+                  "支持 http / https / socks5 / socks5h；socks5h:// 由代理端做 DNS 解析。保存后地址只回显 scheme://host:port，重填完整地址才更新密码。",
+                )}
               </p>
             </>
           )}
           {proxyMode === "inherit" && editing && provider?.proxy && (
             <p className="text-[11px] text-faint">
-              该供应商当前有单独的代理设置；保持「跟随全局」并保存即可清除它，恢复使用全局代理。
+              {t(
+                "该供应商当前有单独的代理设置；保持「跟随全局」并保存即可清除它，恢复使用全局代理。",
+              )}
             </p>
           )}
         </div>

@@ -1,3 +1,4 @@
+import { t } from "@/lib/i18n";
 import { useEffect, useRef } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
@@ -17,7 +18,7 @@ const terminalStatuses = new Set<JobStatus>([
 ]);
 
 function commandLabel(job: Job) {
-  return job.command === "images edit" ? "编辑" : "生成";
+  return job.command === "images edit" ? t("编辑") : t("生成");
 }
 
 function outputCount(job: Job) {
@@ -30,7 +31,8 @@ function successDescription(job: Job) {
   const size = job.metadata.size;
   if (typeof size === "string" && size) parts.push(size);
   const count = outputCount(job);
-  if (count > 0) parts.push(count > 1 ? `${count} 张图片` : "1 张图片");
+  if (count > 0)
+    parts.push(count > 1 ? t("{p0} 张图片", { p0: count }) : t("1 张图片"));
   return parts.join(" · ");
 }
 
@@ -73,7 +75,7 @@ function notifyTerminal(job: Job, onOpen: OpenJob) {
   const common = {
     id,
     duration: 8_000,
-    action: { label: "查看", onClick: open },
+    action: { label: t("查看"), onClick: open },
   } as const;
 
   if (job.status === "completed" || job.status === "partial_failed") {
@@ -83,8 +85,8 @@ function notifyTerminal(job: Job, onOpen: OpenJob) {
     const thumbUrl = firstPath ? api.fileUrl(firstPath) : null;
     const title =
       job.status === "partial_failed"
-        ? `${commandLabel(job)}部分完成`
-        : `${commandLabel(job)}完成`;
+        ? t("{p0}部分完成", { p0: commandLabel(job) })
+        : t("{p0}完成", { p0: commandLabel(job) });
     toast[job.status === "partial_failed" ? "warning" : "success"](title, {
       ...common,
       description: successDescription(job),
@@ -101,12 +103,12 @@ function notifyTerminal(job: Job, onOpen: OpenJob) {
       ) : undefined,
     });
   } else if (job.status === "failed") {
-    toast.error(`${commandLabel(job)}失败`, {
+    toast.error(t("{p0}失败", { p0: commandLabel(job) }), {
       ...common,
       description: failureDescription(job),
     });
   } else {
-    toast("任务已取消", {
+    toast(t("任务已取消"), {
       ...common,
       description: `${job.provider} · ${promptSummary(job.metadata.prompt, 48, commandLabel(job))}`,
     });

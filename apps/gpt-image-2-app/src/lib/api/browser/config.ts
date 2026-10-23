@@ -1,3 +1,4 @@
+import { t } from "@/lib/i18n";
 import type {
   CredentialRef,
   NotificationConfig,
@@ -312,8 +313,9 @@ export function browserConfigForUi(config: ServerConfig): ServerConfig {
     credentials: {},
     builtin: true,
     disabled: true,
-    disabled_reason:
+    disabled_reason: t(
       "静态 Web 不能读取 Codex 登录态，请使用桌面 App 或 Docker。",
+    ),
   };
   const defaultProvider =
     config.default_provider &&
@@ -361,7 +363,7 @@ export async function getStoredProvider(name: string) {
   if (!provider || provider.disabled) {
     throw new Error(
       name === "codex"
-        ? "静态 Web 不能使用 Codex 凭证，请改用桌面 App 或 Docker。"
+        ? t("静态 Web 不能使用 Codex 凭证，请改用桌面 App 或 Docker。")
         : `Unknown provider: ${name}`,
     );
   }
@@ -370,12 +372,13 @@ export async function getStoredProvider(name: string) {
 
 export function requireApiKey(name: string, provider: ProviderConfig) {
   const credential = provider.credentials.api_key;
-  if (!credential) throw new Error(`凭证「${name}」缺少 API Key。`);
+  if (!credential)
+    throw new Error(t("凭证「{p0}」缺少 API Key。", { p0: name }));
   if (credential.source !== "file") {
-    throw new Error("静态 Web 只支持保留在当前浏览器数据中的 API Key。");
+    throw new Error(t("静态 Web 只支持保留在当前浏览器数据中的 API Key。"));
   }
   if (typeof credential.value !== "string" || !credential.value.trim()) {
-    throw new Error(`凭证「${name}」的 API Key 为空。`);
+    throw new Error(t("凭证「{p0}」的 API Key 为空。", { p0: name }));
   }
   return credential.value.trim();
 }

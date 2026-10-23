@@ -21,10 +21,10 @@ export const ContextMenuSub = RadixContextMenu.Sub;
 export const ContextMenuRadioGroup = RadixContextMenu.RadioGroup;
 
 const surfaceClasses = cn(
-  // z-[70] keeps the menu above Drawer (z-50) and Quick Look overlay
+  // z-70 keeps the menu above Drawer (z-50) and Quick Look overlay
   // (z-[60-61]) so right-click on the zoomed image / inside drawers still
   // shows actions.
-  "z-[70] min-w-[200px] rounded-xl border outline-none p-1",
+  "z-70 min-w-[200px] rounded-xl border outline-hidden p-1",
   "data-[state=open]:animate-in data-[state=closed]:animate-out",
   "data-[state=open]:fade-in-0 data-[state=closed]:fade-out-0",
   "data-[state=open]:zoom-in-95 data-[state=closed]:zoom-out-95",
@@ -70,10 +70,10 @@ ContextMenuSubContent.displayName = "ContextMenuSubContent";
 
 const itemClasses = cn(
   "relative flex select-none items-center justify-between gap-3",
-  "rounded-md px-2.5 py-1.5 text-[13px] outline-none cursor-default",
-  "text-[color:var(--text)]",
-  "data-[highlighted]:bg-[color:var(--bg-hover)] data-[highlighted]:text-[color:var(--text)]",
-  "data-[disabled]:pointer-events-none data-[disabled]:opacity-50",
+  "rounded-md px-2.5 py-1.5 text-[13px] outline-hidden cursor-default",
+  "text-(--text)",
+  "data-highlighted:bg-(--bg-hover) data-highlighted:text-(--text)",
+  "data-disabled:pointer-events-none data-disabled:opacity-50",
 );
 
 export const ContextMenuItem = forwardRef<
@@ -87,7 +87,7 @@ export const ContextMenuItem = forwardRef<
     className={cn(
       itemClasses,
       destructive &&
-        "text-[color:var(--status-err)] data-[highlighted]:bg-[color:var(--status-err-bg)] data-[highlighted]:text-[color:var(--status-err)]",
+        "text-(--status-err) data-highlighted:bg-(--status-err-bg) data-highlighted:text-(--status-err)",
       className,
     )}
     {...rest}
@@ -127,7 +127,7 @@ export const ContextMenuShortcut = forwardRef<
   <span
     ref={ref}
     className={cn(
-      "ml-auto pl-4 text-[11px] tabular-nums text-[color:var(--text-faint)]",
+      "ml-auto pl-4 text-[11px] tabular-nums text-(--text-faint)",
       className,
     )}
     {...rest}

@@ -1,3 +1,4 @@
+import { t } from "@/lib/i18n";
 type RelayOperation = "models" | "generations" | "edits" | "asset";
 type ApiRelayOperation = Exclude<RelayOperation, "asset">;
 type TransportMode = "direct" | "relay";
@@ -38,7 +39,9 @@ let turnstileScriptPromise: Promise<TurnstileApi> | undefined;
 export class AmbiguousProviderRequestError extends Error {
   constructor() {
     super(
-      "请求可能已经到达服务商，但浏览器没有收到响应。为避免重复生成或重复扣费，本次不会自动切换中转站重试；请先到服务商后台确认结果，再决定是否手动重试。",
+      t(
+        "请求可能已经到达服务商，但浏览器没有收到响应。为避免重复生成或重复扣费，本次不会自动切换中转站重试；请先到服务商后台确认结果，再决定是否手动重试。",
+      ),
     );
     this.name = "AmbiguousProviderRequestError";
   }
@@ -113,10 +116,10 @@ function endpointInfo(endpoint: string, init: RequestInit): EndpointInfo {
   try {
     parsed = new URL(endpoint);
   } catch {
-    throw new Error("服务地址不是有效的 URL。");
+    throw new Error(t("服务地址不是有效的 URL。"));
   }
   if (parsed.search || parsed.hash) {
-    throw new Error("API 请求地址不能包含查询参数或片段。");
+    throw new Error(t("API 请求地址不能包含查询参数或片段。"));
   }
   const method = (init.method ?? "GET").toUpperCase();
   for (const [operation, suffix] of Object.entries(OPERATION_SUFFIXES) as [
@@ -129,7 +132,7 @@ function endpointInfo(endpoint: string, init: RequestInit): EndpointInfo {
     const prefix = parsed.pathname.slice(0, -suffix.length) || "/";
     return { operation, apiBase: `${parsed.origin}${prefix}` };
   }
-  throw new Error("中转站只支持模型检查、图片生成、图片编辑和图片下载。");
+  throw new Error(t("中转站只支持模型检查、图片生成、图片编辑和图片下载。"));
 }
 
 function relayUrl(relayBase: string, path: string): string {
@@ -165,7 +168,9 @@ async function relayConfig(relayBase: string): Promise<RelayConfig> {
         config.turnstile_site_key.length > 256
       ) {
         throw new Error(
-          "本站中转服务尚未准备好，请稍后再试或改用支持浏览器 CORS 的服务地址。",
+          t(
+            "本站中转服务尚未准备好，请稍后再试或改用支持浏览器 CORS 的服务地址。",
+          ),
         );
       }
       return config;
@@ -181,7 +186,7 @@ function loadTurnstile(): Promise<TurnstileApi> {
   if (window.turnstile) return Promise.resolve(window.turnstile);
   if (turnstileScriptPromise) return turnstileScriptPromise;
   if (typeof document === "undefined") {
-    return Promise.reject(new Error("当前浏览器无法加载安全验证组件。"));
+    return Promise.reject(new Error(t("当前浏览器无法加载安全验证组件。")));
   }
 
   turnstileScriptPromise = new Promise<TurnstileApi>((resolve, reject) => {
@@ -190,19 +195,19 @@ function loadTurnstile(): Promise<TurnstileApi> {
     ) as HTMLScriptElement | null;
     const script = existing ?? document.createElement("script");
     const timeout = window.setTimeout(() => {
-      reject(new Error("安全验证组件加载超时，请检查网络后重试。"));
+      reject(new Error(t("安全验证组件加载超时，请检查网络后重试。")));
     }, 20_000);
     const finish = () => {
       window.clearTimeout(timeout);
       if (window.turnstile) resolve(window.turnstile);
-      else reject(new Error("安全验证组件加载失败，请稍后重试。"));
+      else reject(new Error(t("安全验证组件加载失败，请稍后重试。")));
     };
     script.addEventListener("load", finish, { once: true });
     script.addEventListener(
       "error",
       () => {
         window.clearTimeout(timeout);
-        reject(new Error("安全验证组件加载失败，请检查网络后重试。"));
+        reject(new Error(t("安全验证组件加载失败，请检查网络后重试。")));
       },
       { once: true },
     );
@@ -223,12 +228,12 @@ function loadTurnstile(): Promise<TurnstileApi> {
 async function turnstileToken(siteKey: string): Promise<string> {
   const api = await loadTurnstile();
   if (typeof document === "undefined" || !document.body) {
-    throw new Error("当前浏览器无法显示安全验证组件。");
+    throw new Error(t("当前浏览器无法显示安全验证组件。"));
   }
   const host = document.createElement("div");
   host.dataset.gptImage2Turnstile = "true";
   host.setAttribute("role", "status");
-  host.setAttribute("aria-label", "正在进行中转站安全验证");
+  host.setAttribute("aria-label", t("正在进行中转站安全验证"));
   Object.assign(host.style, {
     position: "fixed",
     right: "20px",
@@ -252,10 +257,10 @@ async function turnstileToken(siteKey: string): Promise<string> {
       window.clearTimeout(timeout);
       window.setTimeout(cleanup, 0);
       if (token) resolve(token);
-      else reject(error ?? new Error("安全验证未完成，请重试。"));
+      else reject(error ?? new Error(t("安全验证未完成，请重试。")));
     };
     const timeout = window.setTimeout(
-      () => finish(undefined, new Error("安全验证超时，请重试。")),
+      () => finish(undefined, new Error(t("安全验证超时，请重试。"))),
       120_000,
     );
     try {
@@ -266,14 +271,14 @@ async function turnstileToken(siteKey: string): Promise<string> {
         theme: "auto",
         callback: (token) => finish(token),
         "error-callback": () =>
-          finish(undefined, new Error("安全验证失败，请稍后重试。")),
+          finish(undefined, new Error(t("安全验证失败，请稍后重试。"))),
         "expired-callback": () =>
-          finish(undefined, new Error("安全验证已过期，请重试。")),
+          finish(undefined, new Error(t("安全验证已过期，请重试。"))),
         "timeout-callback": () =>
-          finish(undefined, new Error("安全验证超时，请重试。")),
+          finish(undefined, new Error(t("安全验证超时，请重试。"))),
       });
     } catch {
-      finish(undefined, new Error("安全验证组件初始化失败，请稍后重试。"));
+      finish(undefined, new Error(t("安全验证组件初始化失败，请稍后重试。")));
     }
   });
 }
@@ -308,7 +313,7 @@ async function establishRelaySession(relayBase: string): Promise<void> {
   });
   const result = await responseJson<SessionStatus>(response);
   if (!response.ok || result?.active !== true) {
-    throw new Error("中转站安全会话建立失败，请稍后重试。");
+    throw new Error(t("中转站安全会话建立失败，请稍后重试。"));
   }
   relaySessionKnown = true;
 }
@@ -394,7 +399,7 @@ async function fetchViaRelay(
   }
   if (response.ok && response.headers.get("X-GPT-Image-2-Relay") !== "1") {
     response.body?.cancel("invalid relay response");
-    throw new Error("中转站返回了无法验证的响应，请稍后重试。");
+    throw new Error(t("中转站返回了无法验证的响应，请稍后重试。"));
   }
   return response;
 }
@@ -453,7 +458,7 @@ async function negotiateTransport(
         relayProbe,
       );
       throw new Error(
-        payload?.error?.message || "中转站连接检查失败，请稍后重试。",
+        payload?.error?.message || t("中转站连接检查失败，请稍后重试。"),
       );
     }
     await cancelProbeBody(relayProbe);

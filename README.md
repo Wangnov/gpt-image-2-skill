@@ -226,7 +226,7 @@ gpt-image-2-skill --json --json-events \
 
 支持的输入 / 输出参数:
 
-- `--format png|jpeg|webp`,`--quality high|medium|low|auto`,`--compression`,`--input-fidelity`(OpenAI only)
+- `--format png|jpeg|webp`,`--quality max|xhigh|high|medium|low|auto`,`--compression`,`--input-fidelity`(OpenAI only)
 - `--ref-image` 最多 16 张,`--mask`(OpenAI only)
 - `--size`:`2K` → `2048x2048`,`4K` → `3840x2160`,`4K` 竖版 → `2160x3840`,方图高分辨率上限 `2880x2880`,自定义 `WIDTHxHEIGHT` 须满足:边都是 16 的倍数、最大边长 `3840`、最大总像素 `8294400`、最大长宽比 `3:1`
 - 默认 retry 3 次,Codex `401` 自动 refresh 一次后重试;`--retries`、`--retry-delay-seconds`、`--request-timeout-seconds` 可调
@@ -378,6 +378,8 @@ gpt-image-2-skill --json \
 
 源码位于 [`apps/gpt-image-2-app`](apps/gpt-image-2-app),基于 Tauri + React,通过 sidecar 调用同版本 CLI 二进制。
 
+界面支持简体中文和 English,默认跟随系统语言:中文环境显示中文,其他环境显示英文。「设置 → 外观 → 界面语言」可即时切换并记住选择,不会修改提示词、凭证或任务数据。网页和 Docker Web 使用同一套语言设置。
+
 **安装**:
 
 ```bash
@@ -388,6 +390,8 @@ brew install --cask wangnov/tap/gpt-image-2
 
 - macOS Apple Silicon:`GPT.Image.2_*_aarch64.dmg`
 - macOS Intel:`GPT.Image.2_*_x64.dmg`
+
+桌面 App 从下一版本起要求 macOS 13.3 或更高版本；浏览器版要求 Safari 16.4+、Chrome 111+ 或 Firefox 128+。这是 Tailwind CSS 4 所需的现代 CSS 能力，旧系统请保留此前版本。旧版 Mac 客户端的更新通道将不再投递新包（手动检查可能提示未找到对应平台）；macOS 13.3+ 用户需手动安装一次新版，随后通过新通道自动更新。Windows / Linux 的旧版更新通道继续可用。
 - Windows:`GPT.Image.2_*_x64-setup.exe`
 - Linux:`GPT.Image.2_*_amd64.AppImage` / `*.deb` / `*.rpm`
 
@@ -546,7 +550,7 @@ just release-tauri v0.4.0  # 在已有 tag 上跑 Tauri App Release workflow
 
 1. **Release** — cargo-dist 构建 CLI 资产、shell installer、PowerShell installer、Windows MSI,推 Homebrew formula。
 2. **Publish npm Packages** — 从同一 GitHub Release 下载 CLI 资产,发布 npm 根包 + 平台子包,验证 cargo-binstall / npm / Homebrew formula 可达。
-3. **Tauri App Release** — 同 tag 构建并上传 macOS DMG / Windows NSIS / Linux AppImage·deb·rpm,以及 Tauri updater 签名资产 + `latest.json`。macOS 走 Developer ID 签名 + notarization + stapler 验证;正式版同步更新桌面 cask 并标 `auto_updates true`。
+3. **Tauri App Release** — 同 tag 构建并上传 macOS DMG / Windows NSIS / Linux AppImage·deb·rpm,以及 Tauri updater 签名资产 + `latest.json` / `latest-modern.json`。macOS 走 Developer ID 签名 + notarization + stapler 验证;正式版同步更新桌面 cask 并标 `auto_updates true`。
 4. **Post Release Verify** — 默认验 CLI 分发面;桌面 App 发布完成后会以 `verify_desktop_cask=true` 补验 Homebrew cask 安装路径。
 
 分发面汇总:
@@ -796,7 +800,7 @@ gpt-image-2-skill --json --json-events \
 
 Supported parameters:
 
-- `--format png|jpeg|webp`, `--quality high|medium|low|auto`, `--compression`, `--input-fidelity` (OpenAI only)
+- `--format png|jpeg|webp`, `--quality max|xhigh|high|medium|low|auto`, `--compression`, `--input-fidelity` (OpenAI only)
 - `--ref-image` up to 16, `--mask` (OpenAI only)
 - `--size`: `2K` → `2048x2048`, `4K` → `3840x2160`, portrait `4K` → `2160x3840`, square high-res ceiling `2880x2880`. Custom `WIDTHxHEIGHT` must satisfy: both edges multiples of 16, max edge `3840`, max total pixels `8294400`, max aspect ratio `3:1`.
 - Default 3 retries; Codex `401` triggers one OAuth refresh and a single retry. `--retries`, `--retry-delay-seconds`, `--request-timeout-seconds` are all configurable.
@@ -958,6 +962,8 @@ Or grab a build from [GitHub Releases](https://github.com/Wangnov/gpt-image-2-sk
 
 - macOS Apple Silicon: `GPT.Image.2_*_aarch64.dmg`
 - macOS Intel: `GPT.Image.2_*_x64.dmg`
+
+Starting with the next release, the desktop app requires macOS 13.3 or later. The web app requires Safari 16.4+, Chrome 111+, or Firefox 128+ for Tailwind CSS 4's CSS features. Keep an earlier release on older systems. The old Mac update channel will no longer offer new bundles (manual checks may report that the platform is unavailable). On macOS 13.3+, install the new release manually once to join the new update channel. Existing Windows and Linux clients keep receiving updates.
 - Windows: `GPT.Image.2_*_x64-setup.exe`
 - Linux: `GPT.Image.2_*_amd64.AppImage` / `*.deb` / `*.rpm`
 
@@ -1118,7 +1124,7 @@ Four chained GitHub Actions workflows:
 
 1. **Release** — cargo-dist builds CLI assets, shell installer, PowerShell installer, and Windows MSI; updates the Homebrew formula.
 2. **Publish npm Packages** — downloads CLI assets from the same GitHub Release, publishes the npm root package and platform subpackages, and verifies cargo-binstall, npm, and the Homebrew formula.
-3. **Tauri App Release** — on the same tag, builds and uploads macOS DMGs, Windows NSIS, Linux AppImage / deb / rpm, plus signed Tauri updater artifacts and `latest.json`. macOS jobs run Developer ID signing, notarization, and stapler validation; stable releases also update the desktop cask with `auto_updates true`.
+3. **Tauri App Release** — on the same tag, builds and uploads macOS DMGs, Windows NSIS, Linux AppImage / deb / rpm, plus signed Tauri updater artifacts and `latest.json` / `latest-modern.json`. macOS jobs run Developer ID signing, notarization, and stapler validation; stable releases also update the desktop cask with `auto_updates true`.
 4. **Post Release Verify** — verifies CLI distribution paths by default; after the desktop release completes it reruns with `verify_desktop_cask=true` to verify the Homebrew cask install path.
 
 Distribution surfaces:

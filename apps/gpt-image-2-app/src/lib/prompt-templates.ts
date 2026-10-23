@@ -1,42 +1,208 @@
+import { t } from "@/lib/i18n";
 export type PromptTemplateScope = "common" | "generate" | "edit" | "region";
 
 export const PROMPT_TEMPLATE_ICONS = [
-  { value: "sparkle", label: "灵感" },
-  { value: "wand", label: "魔法" },
-  { value: "image", label: "图像" },
-  { value: "camera", label: "摄影" },
-  { value: "portrait", label: "人像" },
-  { value: "landscape", label: "风景" },
-  { value: "palette", label: "配色" },
-  { value: "brush", label: "绘制" },
-  { value: "edit", label: "精修" },
-  { value: "mask", label: "选区" },
-  { value: "frame", label: "构图" },
-  { value: "cutout", label: "抠图" },
-  { value: "product", label: "产品" },
-  { value: "text", label: "文字" },
-  { value: "light", label: "光线" },
-  { value: "cinematic", label: "电影" },
-  { value: "sticker", label: "贴纸" },
-  { value: "layout", label: "版式" },
-  { value: "cube", label: "立体" },
-  { value: "pen", label: "文案" },
-  { value: "style", label: "风格" },
-  { value: "gallery", label: "图库" },
-  { value: "organize", label: "整理" },
-  { value: "generate", label: "生成" },
-  { value: "sun", label: "日光" },
-  { value: "circle", label: "通用" },
+  {
+    value: "sparkle",
+    get label() {
+      return t("灵感");
+    },
+  },
+  {
+    value: "wand",
+    get label() {
+      return t("魔法");
+    },
+  },
+  {
+    value: "image",
+    get label() {
+      return t("图像");
+    },
+  },
+  {
+    value: "camera",
+    get label() {
+      return t("摄影");
+    },
+  },
+  {
+    value: "portrait",
+    get label() {
+      return t("人像");
+    },
+  },
+  {
+    value: "landscape",
+    get label() {
+      return t("风景");
+    },
+  },
+  {
+    value: "palette",
+    get label() {
+      return t("配色");
+    },
+  },
+  {
+    value: "brush",
+    get label() {
+      return t("绘制");
+    },
+  },
+  {
+    value: "edit",
+    get label() {
+      return t("精修");
+    },
+  },
+  {
+    value: "mask",
+    get label() {
+      return t("选区");
+    },
+  },
+  {
+    value: "frame",
+    get label() {
+      return t("构图");
+    },
+  },
+  {
+    value: "cutout",
+    get label() {
+      return t("抠图");
+    },
+  },
+  {
+    value: "product",
+    get label() {
+      return t("产品");
+    },
+  },
+  {
+    value: "text",
+    get label() {
+      return t("文字");
+    },
+  },
+  {
+    value: "light",
+    get label() {
+      return t("光线");
+    },
+  },
+  {
+    value: "cinematic",
+    get label() {
+      return t("电影");
+    },
+  },
+  {
+    value: "sticker",
+    get label() {
+      return t("贴纸");
+    },
+  },
+  {
+    value: "layout",
+    get label() {
+      return t("版式");
+    },
+  },
+  {
+    value: "cube",
+    get label() {
+      return t("立体");
+    },
+  },
+  {
+    value: "pen",
+    get label() {
+      return t("文案");
+    },
+  },
+  {
+    value: "style",
+    get label() {
+      return t("风格");
+    },
+  },
+  {
+    value: "gallery",
+    get label() {
+      return t("图库");
+    },
+  },
+  {
+    value: "organize",
+    get label() {
+      return t("整理");
+    },
+  },
+  {
+    value: "generate",
+    get label() {
+      return t("生成");
+    },
+  },
+  {
+    value: "sun",
+    get label() {
+      return t("日光");
+    },
+  },
+  {
+    value: "circle",
+    get label() {
+      return t("通用");
+    },
+  },
 ] as const;
 
 export const PROMPT_TEMPLATE_COLORS = [
-  { value: "accent", label: "主题" },
-  { value: "cyan", label: "青" },
-  { value: "violet", label: "紫" },
-  { value: "emerald", label: "绿" },
-  { value: "amber", label: "橙" },
-  { value: "rose", label: "玫" },
-  { value: "slate", label: "灰" },
+  {
+    value: "accent",
+    get label() {
+      return t("主题");
+    },
+  },
+  {
+    value: "cyan",
+    get label() {
+      return t("青");
+    },
+  },
+  {
+    value: "violet",
+    get label() {
+      return t("紫");
+    },
+  },
+  {
+    value: "emerald",
+    get label() {
+      return t("绿");
+    },
+  },
+  {
+    value: "amber",
+    get label() {
+      return t("橙");
+    },
+  },
+  {
+    value: "rose",
+    get label() {
+      return t("玫");
+    },
+  },
+  {
+    value: "slate",
+    get label() {
+      return t("灰");
+    },
+  },
 ] as const;
 
 export type PromptTemplateIcon =
@@ -81,10 +247,18 @@ export const DEFAULT_PROMPT_TEMPLATE_ICON: PromptTemplateIcon = "sparkle";
 export const DEFAULT_PROMPT_TEMPLATE_COLOR: PromptTemplateColor = "accent";
 
 export const PROMPT_SCOPE_LABEL: Record<PromptTemplateScope, string> = {
-  common: "通用",
-  generate: "生成",
-  edit: "编辑",
-  region: "局部编辑",
+  get common() {
+    return t("通用");
+  },
+  get generate() {
+    return t("生成");
+  },
+  get edit() {
+    return t("编辑");
+  },
+  get region() {
+    return t("局部编辑");
+  },
 };
 
 const DEFAULT_GROUP_ID = "sample-group";
@@ -97,7 +271,9 @@ function uid(prefix: string) {
   return `${prefix}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
 }
 
-export function newPromptTemplateGroup(name = "新分组"): PromptTemplateGroup {
+export function newPromptTemplateGroup(
+  name = t("新分组"),
+): PromptTemplateGroup {
   const now = Date.now();
   return {
     id: uid("group"),
@@ -115,7 +291,7 @@ export function newPromptTemplate(
   return {
     id: uid("template"),
     groupId,
-    title: "新模板",
+    title: t("新模板"),
     prompt: "",
     scope,
     icon: DEFAULT_PROMPT_TEMPLATE_ICON,
@@ -131,7 +307,7 @@ export function defaultPromptTemplateState(): PromptTemplateState {
     groups: [
       {
         id: DEFAULT_GROUP_ID,
-        name: "默认",
+        name: t("默认"),
         createdAt: DEFAULT_NOW,
         updatedAt: DEFAULT_NOW,
       },
@@ -140,8 +316,10 @@ export function defaultPromptTemplateState(): PromptTemplateState {
       {
         id: "sample-product-photo",
         groupId: DEFAULT_GROUP_ID,
-        title: "产品摄影",
-        prompt: "产品摄影：主体清晰的产品，纯白背景，柔光，居中构图，高清细节",
+        title: t("产品摄影"),
+        prompt: t(
+          "产品摄影：主体清晰的产品，纯白背景，柔光，居中构图，高清细节",
+        ),
         scope: "generate",
         icon: "image",
         color: "cyan",
@@ -151,8 +329,10 @@ export function defaultPromptTemplateState(): PromptTemplateState {
       {
         id: "sample-edit-polish",
         groupId: DEFAULT_GROUP_ID,
-        title: "局部精修",
-        prompt: "保持整体风格不变，只优化选区细节，让材质更自然、边缘更干净。",
+        title: t("局部精修"),
+        prompt: t(
+          "保持整体风格不变，只优化选区细节，让材质更自然、边缘更干净。",
+        ),
         scope: "region",
         icon: "brush",
         color: "violet",
@@ -162,8 +342,8 @@ export function defaultPromptTemplateState(): PromptTemplateState {
       {
         id: "sample-style-note",
         groupId: DEFAULT_GROUP_ID,
-        title: "通用质感",
-        prompt: "电影级光线，真实材质，清晰层次，避免过度锐化。",
+        title: t("通用质感"),
+        prompt: t("电影级光线，真实材质，清晰层次，避免过度锐化。"),
         scope: "common",
         icon: "sparkle",
         color: "accent",
@@ -233,12 +413,12 @@ export function normalizePromptTemplateState(
           const id = readString(raw.id, `group-${index}`);
           const createdAt = readTime(raw.createdAt, now);
           const updatedAt = readTime(raw.updatedAt, now);
-          const name = readString(raw.name, "未命名分组");
+          const name = readString(raw.name, t("未命名分组"));
           const migratedName =
             id === DEFAULT_GROUP_ID &&
             createdAt === DEFAULT_NOW &&
             name === "示例"
-              ? "默认"
+              ? t("默认")
               : name;
           return {
             id,
@@ -257,7 +437,7 @@ export function normalizePromptTemplateState(
     Array.isArray(input.templates) && input.templates.length > 0;
   const fallbackGroup =
     dedupedGroups[0] ??
-    (hasInputTemplates ? newPromptTemplateGroup("默认") : null);
+    (hasInputTemplates ? newPromptTemplateGroup(t("默认")) : null);
   const groupIds = new Set(dedupedGroups.map((group) => group.id));
   if (dedupedGroups.length === 0 && fallbackGroup) {
     dedupedGroups.push(fallbackGroup);
@@ -281,7 +461,7 @@ export function normalizePromptTemplateState(
           return {
             id: readString(raw.id, `template-${index}`),
             groupId,
-            title: readString(raw.title, "未命名模板"),
+            title: readString(raw.title, t("未命名模板")),
             prompt: typeof raw.prompt === "string" ? raw.prompt : "",
             scope,
             icon,

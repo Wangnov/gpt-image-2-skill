@@ -1,3 +1,4 @@
+import { t } from "@/lib/i18n";
 import type { Tweaks } from "./types";
 
 /**
@@ -109,7 +110,7 @@ export interface ThemePreset {
   // / N)`. Pick lightness in OKLCH space first; chroma should drop
   // toward extremes (≥85% lightness or ≤25%) so the color does not
   // clip into garish.
-  accentOklch: string;   // "L% C H" — e.g. "67% 0.18 295"
+  accentOklch: string; // "L% C H" — e.g. "67% 0.18 295"
   accent2Oklch: string;
   accent3Oklch: string;
   // RGB triplets — kept as a fallback channel for the dynamic preset
@@ -142,8 +143,12 @@ export interface ThemePreset {
 export const THEME_PRESETS: Record<ThemePresetId, ThemePreset> = {
   "logo-grainient": {
     id: "logo-grainient",
-    displayName: "彩晶雾",
-    description: "Logo 晶面抽色,颗粒渐变流动",
+    get displayName() {
+      return t("彩晶雾");
+    },
+    get description() {
+      return t("Logo 晶面抽色,颗粒渐变流动");
+    },
     background: {
       kind: "grainient",
       color1: "#66f5ff",
@@ -190,8 +195,12 @@ export const THEME_PRESETS: Record<ThemePresetId, ThemePreset> = {
   },
   "liquid-violet": {
     id: "liquid-violet",
-    displayName: "液态紫",
-    description: "默认液态玻璃,紫青粉渐变",
+    get displayName() {
+      return t("液态紫");
+    },
+    get description() {
+      return t("默认液态玻璃,紫青粉渐变");
+    },
     background: {
       kind: "liquid",
       baseColor: [0.18, 0.16, 0.32],
@@ -221,8 +230,12 @@ export const THEME_PRESETS: Record<ThemePresetId, ThemePreset> = {
   },
   "plasma-sunset": {
     id: "plasma-sunset",
-    displayName: "等离子日落",
-    description: "粉橙等离子脉冲,海报感",
+    get displayName() {
+      return t("等离子日落");
+    },
+    get description() {
+      return t("粉橙等离子脉冲,海报感");
+    },
     background: {
       kind: "plasma",
       speed: 1.0,
@@ -249,8 +262,12 @@ export const THEME_PRESETS: Record<ThemePresetId, ThemePreset> = {
   },
   "beams-cyan": {
     id: "beams-cyan",
-    displayName: "光束青",
-    description: "Beams 光束扫过,科技工程感",
+    get displayName() {
+      return t("光束青");
+    },
+    get description() {
+      return t("Beams 光束扫过,科技工程感");
+    },
     background: {
       kind: "beams",
       beamWidth: 3,
@@ -283,8 +300,12 @@ export const THEME_PRESETS: Record<ThemePresetId, ThemePreset> = {
   },
   "mesh-mono": {
     id: "mesh-mono",
-    displayName: "网格灰",
-    description: "静态点阵,纸感面板,省 GPU",
+    get displayName() {
+      return t("网格灰");
+    },
+    get description() {
+      return t("静态点阵,纸感面板,省 GPU");
+    },
     background: {
       kind: "dotgrid",
       dotSize: 2,
@@ -312,8 +333,12 @@ export const THEME_PRESETS: Record<ThemePresetId, ThemePreset> = {
   },
   "letter-matrix": {
     id: "letter-matrix",
-    displayName: "字符矩阵",
-    description: "终端数字雨,隐藏彩蛋",
+    get displayName() {
+      return t("字符矩阵");
+    },
+    get description() {
+      return t("终端数字雨,隐藏彩蛋");
+    },
     hidden: true,
     background: {
       kind: "letterglitch",

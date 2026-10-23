@@ -1,3 +1,4 @@
+import { t, getLocale } from "@/lib/i18n";
 import {
   type DragEvent,
   useCallback,
@@ -54,9 +55,7 @@ import {
   providerSupportsMultipleOutputs,
   requestOutputCount,
 } from "@/lib/provider-capabilities";
-import {
-  providerNames as readProviderNames,
-} from "@/lib/providers";
+import { providerNames as readProviderNames } from "@/lib/providers";
 import type { ServerConfig } from "@/lib/types";
 import { ClassicEditCanvasPanel } from "./classic-edit-canvas-panel";
 import { ClassicEditDropLayout } from "./classic-edit-drop-layout";
@@ -66,7 +65,10 @@ import { useClassicEditOutputs } from "./use-classic-edit-outputs";
 import { useClassicProviderSelection } from "./use-classic-provider-selection";
 
 export function ClassicEditScreen({ config }: { config?: ServerConfig }) {
-  const providerNames = useMemo(() => readProviderNames(config), [config]);
+  const providerNames = useMemo(
+    () => readProviderNames(config),
+    [config, getLocale()],
+  );
   const fileInputRef = useRef<HTMLInputElement>(null);
   const refsRef = useRef<RefWithFile[]>([]);
   const dragDepthRef = useRef(0);
@@ -146,7 +148,7 @@ export function ClassicEditScreen({ config }: { config?: ServerConfig }) {
   const maxReferenceImages = MAX_INPUT_IMAGES - (usesSoftRegion ? 1 : 0);
   const referenceCountError =
     refs.length > maxReferenceImages
-      ? `最多上传 ${maxReferenceImages} 张参考图。`
+      ? t("最多上传 {p0} 张参考图。", { p0: maxReferenceImages })
       : undefined;
   const sizeValidation = validateImageSize(size);
   const outputCountValidation = validateOutputCount(n);
@@ -176,14 +178,14 @@ export function ClassicEditScreen({ config }: { config?: ServerConfig }) {
   const addRefFiles = useCallback(
     (imageFiles: File[], source: ImageFileSource, ignored = 0) => {
       if (ignored > 0) {
-        toast.warning("已忽略非图片文件", {
-          description: `跳过 ${ignored} 个不支持的文件。`,
+        toast.warning(t("已忽略非图片文件"), {
+          description: t("跳过 {p0} 个不支持的文件。", { p0: ignored }),
         });
       }
       if (imageFiles.length === 0) {
         if (ignored > 0) {
-          toast.error("没有可添加的图片", {
-            description: "请拖入、粘贴或选择图片文件。",
+          toast.error(t("没有可添加的图片"), {
+            description: t("请拖入、粘贴或选择图片文件。"),
           });
         }
         return;
@@ -199,8 +201,8 @@ export function ClassicEditScreen({ config }: { config?: ServerConfig }) {
         const available = Math.max(0, maxReferenceImages - prev.length);
         if (available === 0) {
           additions.forEach((ref) => URL.revokeObjectURL(ref.url));
-          toast.error("参考图已达上限", {
-            description: `最多上传 ${maxReferenceImages} 张。`,
+          toast.error(t("参考图已达上限"), {
+            description: t("最多上传 {p0} 张。", { p0: maxReferenceImages }),
           });
           return prev;
         }
@@ -209,18 +211,18 @@ export function ClassicEditScreen({ config }: { config?: ServerConfig }) {
           .slice(available)
           .forEach((ref) => URL.revokeObjectURL(ref.url));
         if (accepted.length < additions.length) {
-          toast.warning("已按上限添加参考图", {
-            description: `最多上传 ${maxReferenceImages} 张。`,
+          toast.warning(t("已按上限添加参考图"), {
+            description: t("最多上传 {p0} 张。", { p0: maxReferenceImages }),
           });
         }
         if (source === "drop") {
-          toast.success(`已添加 ${accepted.length} 张参考图`, {
-            description: "来自拖拽上传。",
+          toast.success(t("已添加 {p0} 张参考图", { p0: accepted.length }), {
+            description: t("来自拖拽上传。"),
           });
         }
         if (source === "paste") {
-          toast.success(`已添加 ${accepted.length} 张参考图`, {
-            description: "来自剪贴板。",
+          toast.success(t("已添加 {p0} 张参考图", { p0: accepted.length }), {
+            description: t("来自剪贴板。"),
           });
         }
         setSelectedRef((current) => current ?? accepted[0].id);
@@ -231,7 +233,10 @@ export function ClassicEditScreen({ config }: { config?: ServerConfig }) {
     [maxReferenceImages],
   );
 
-  const addRef = (files: FileList | null, source: ImageFileSource = "picker") => {
+  const addRef = (
+    files: FileList | null,
+    source: ImageFileSource = "picker",
+  ) => {
     const result = normalizeImageFiles(files, { source });
     addRefFiles(result.files, source, result.ignored);
   };
@@ -310,21 +315,23 @@ export function ClassicEditScreen({ config }: { config?: ServerConfig }) {
   const handleRun = () => {
     if (!provider || refs.length === 0 || isSubmitting) return;
     if (!prompt.trim()) {
-      toast.error("请输入编辑提示词");
+      toast.error(t("请输入编辑提示词"));
       return;
     }
     if (parameterError) {
-      toast.error("参数无效", { description: parameterError });
+      toast.error(t("参数无效"), { description: parameterError });
       return;
     }
     if (regionUnavailable) {
-      toast.error("当前凭证不支持局部编辑", {
-        description: "请切换到「多图参考」，或换一个支持局部编辑的凭证。",
+      toast.error(t("当前凭证不支持局部编辑"), {
+        description: t("请切换到「多图参考」，或换一个支持局部编辑的凭证。"),
       });
       return;
     }
     if (usesRegion && !targetRef) {
-      toast.error("请先选择目标图", { description: "遮罩会作用在目标图上。" });
+      toast.error(t("请先选择目标图"), {
+        description: t("遮罩会作用在目标图上。"),
+      });
       return;
     }
 
@@ -347,15 +354,15 @@ export function ClassicEditScreen({ config }: { config?: ServerConfig }) {
     if (usesRegion) {
       if (!maskPayload) {
         setExportKey(null);
-        setRunError("遮罩导出失败，请重新涂抹一次。");
-        toast.error("遮罩导出失败", { description: "请重新涂抹一次。" });
+        setRunError(t("遮罩导出失败，请重新涂抹一次。"));
+        toast.error(t("遮罩导出失败"), { description: t("请重新涂抹一次。") });
         return;
       }
       if (!maskPayload.hasSelection) {
         setExportKey(null);
-        setRunError("请先涂抹要修改的区域。");
-        toast.error("还没有选区", {
-          description: "请在目标图上涂抹要修改的区域。",
+        setRunError(t("请先涂抹要修改的区域。"));
+        toast.error(t("还没有选区"), {
+          description: t("请在目标图上涂抹要修改的区域。"),
         });
         return;
       }
@@ -386,28 +393,41 @@ export function ClassicEditScreen({ config }: { config?: ServerConfig }) {
       targetRef,
       usesRegion,
     });
-    const modeText = usesRegion ? regionModeLabel(editRegionMode) : "多图参考";
-    const toastId = toast.loading("正在提交任务", {
-      description: `${modeText} · ${refs.length} 张图片 · ${provider}`,
+    const modeText = usesRegion
+      ? regionModeLabel(editRegionMode)
+      : t("多图参考");
+    const toastId = toast.loading(t("正在提交任务"), {
+      description: t("{p0} · {p1} 张图片 · {p2}", {
+        p0: modeText,
+        p1: refs.length,
+        p2: provider,
+      }),
     });
     setPendingOutputCount(plannedN);
     try {
       const res = await mutate.mutateAsync(form);
       const queued =
-        res.queued ||
-        Boolean(res.job && isActiveJobStatus(res.job.status));
+        res.queued || Boolean(res.job && isActiveJobStatus(res.job.status));
       const count = queued ? plannedN : responseOutputCount(res);
       setOutputCount(Math.max(1, count));
       setJobId(res.job_id);
       setRunNotice(queued ? null : outputCountMismatchMessage(count, plannedN));
       if (queued) {
-        toast.success(plannedN > 1 ? `已开始编辑 ${plannedN} 张` : "已开始编辑", {
-          id: toastId,
-          description: `${modeText} · ${provider} · 完成后通知你`,
-          duration: 4_000,
-        });
+        toast.success(
+          plannedN > 1
+            ? t("已开始编辑 {p0} 张", { p0: plannedN })
+            : t("已开始编辑"),
+          {
+            id: toastId,
+            description: t("{p0} · {p1} · 完成后通知你", {
+              p0: modeText,
+              p1: provider,
+            }),
+            duration: 4_000,
+          },
+        );
       } else {
-        toast.success("编辑完成", {
+        toast.success(t("编辑完成"), {
           id: toastId,
           description: outputCountDescription(count, plannedN),
         });
@@ -415,7 +435,7 @@ export function ClassicEditScreen({ config }: { config?: ServerConfig }) {
     } catch (error) {
       const message = errorMessage(error);
       setRunError(message);
-      toast.error("编辑失败", { id: toastId, description: message });
+      toast.error(t("编辑失败"), { id: toastId, description: message });
     } finally {
       setPendingOutputCount(null);
       setExportKey(null);

@@ -85,15 +85,15 @@ export function ProviderLogo({
         isCodex &&
           "bg-transparent border-transparent shadow-none",
         isOpenAI &&
-          "bg-[color:var(--w-06)] border-[color:var(--w-10)] text-[#10A37F]",
+          "bg-(--w-06) border-(--w-10) text-[#10A37F]",
         !isCodex &&
           !isOpenAI &&
-          "bg-[color:var(--w-06)] border-[color:var(--w-10)] text-muted",
+          "bg-(--w-06) border-(--w-10) text-muted",
         className,
       )}
     >
       {isCodex ? (
-        <CodexColorMark className={cn(codexMarkSize[size], "drop-shadow-sm")} />
+        <CodexColorMark className={cn(codexMarkSize[size], "drop-shadow-xs")} />
       ) : (
         <ChatGptMark className={chatGptMarkSize[size]} />
       )}

@@ -1,3 +1,4 @@
+import { t } from "@/lib/i18n";
 import { api } from "@/lib/api";
 import { OUTPUT_COUNT_OPTIONS } from "@/lib/image-options";
 import type { SendToEditPayload } from "@/lib/job-navigation";
@@ -90,22 +91,30 @@ function transferSourceUrl(payload: SendToEditPayload) {
 
 export async function transferredImageFile(payload: SendToEditPayload) {
   let url = transferSourceUrl(payload);
-  if (!url) throw new Error("这张图没有可读取的文件路径或预览地址。");
+  if (!url) throw new Error(t("这张图没有可读取的文件路径或预览地址。"));
   let response = await fetch(url);
   if (!response.ok && payload.jobId && payload.outputIndex != null) {
-    const cached = await api.ensureJobOutputCached(payload.jobId, payload.outputIndex);
+    const cached = await api.ensureJobOutputCached(
+      payload.jobId,
+      payload.outputIndex,
+    );
     if (cached) {
       url = api.fileUrl(cached);
       response = await fetch(url);
     }
   }
   if (!response.ok) {
-    throw new Error(`读取图片失败：${response.status} ${response.statusText}`);
+    throw new Error(
+      t("读取图片失败：{p0} {p1}", {
+        p0: response.status,
+        p1: response.statusText,
+      }),
+    );
   }
   const blob = await response.blob();
-  if (blob.size <= 0) throw new Error("读取到的图片为空。");
+  if (blob.size <= 0) throw new Error(t("读取到的图片为空。"));
   if (blob.type && !blob.type.startsWith("image/")) {
-    throw new Error("读取到的文件不是图片。");
+    throw new Error(t("读取到的文件不是图片。"));
   }
   const name = transferFileName(payload, blob);
   const extension = imageExtensionForBlob(blob, name);
@@ -116,9 +125,9 @@ export async function transferredImageFile(payload: SendToEditPayload) {
 }
 
 export function regionModeLabel(mode: EditRegionMode) {
-  if (mode === "native-mask") return "精确遮罩";
-  if (mode === "reference-hint") return "软选区参考";
-  return "不支持局部编辑";
+  if (mode === "native-mask") return t("精确遮罩");
+  if (mode === "reference-hint") return t("软选区参考");
+  return t("不支持局部编辑");
 }
 
 export function clampZoom(value: number) {

@@ -1,3 +1,4 @@
+import { t } from "@/lib/i18n";
 import type {
   GenerateRequest,
   Job,
@@ -236,7 +237,7 @@ export const httpApi: ApiClient = {
     await this.deleteJob(id);
   },
   async restoreDeletedJob(_id: string) {
-    throw new Error("HTTP 模式不支持恢复，请重新生成。");
+    throw new Error(t("HTTP 模式不支持恢复，请重新生成。"));
   },
   async hardDeleteJob(id: string) {
     await this.deleteJob(id);
@@ -245,7 +246,7 @@ export const httpApi: ApiClient = {
     // HTTP runtime has no Rust bridge. The image-actions executor is expected
     // to use `navigator.clipboard.write` with a `ClipboardItem` instead of
     // calling this transport method.
-    throw new Error("HTTP 模式请使用浏览器内置剪贴板。");
+    throw new Error(t("HTTP 模式请使用浏览器内置剪贴板。"));
   },
   async cancelJob(id: string) {
     const result = await requestJson<TauriJobResponse>(
@@ -265,11 +266,11 @@ export const httpApi: ApiClient = {
   },
   async openPath(path: string) {
     const url = httpApi.fileUrl(path);
-    if (!url) throw new Error("没有可打开的文件。");
+    if (!url) throw new Error(t("没有可打开的文件。"));
     window.open(url, "_blank", "noopener,noreferrer");
   },
   async revealPath() {
-    throw new Error("Web 页面不能打开服务端文件夹，请在服务器环境中查看。");
+    throw new Error(t("Web 页面不能打开服务端文件夹，请在服务器环境中查看。"));
   },
   async exportFilesToDownloads(paths: string[]) {
     return httpApi.exportFilesToConfiguredFolder(paths);
@@ -280,7 +281,7 @@ export const httpApi: ApiClient = {
   async exportFilesToConfiguredFolder(paths: string[]) {
     for (const [index, path] of paths.entries()) {
       const url = httpApi.fileUrl(path);
-      if (!url) throw new Error("没有可下载的图片。");
+      if (!url) throw new Error(t("没有可下载的图片。"));
       downloadUrl(url, basename(path, `gpt-image-2-${index + 1}.png`));
     }
     return paths;

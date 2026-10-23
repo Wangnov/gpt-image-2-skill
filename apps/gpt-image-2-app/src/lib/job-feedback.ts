@@ -1,10 +1,11 @@
+import { t } from "@/lib/i18n";
 import type { TauriJobResponse } from "./api";
 import type { JobEvent } from "./types";
 
 export function errorMessage(error: unknown) {
   if (error instanceof Error && error.message) return error.message;
   if (typeof error === "string" && error) return error;
-  return "任务执行失败";
+  return t("任务执行失败");
 }
 
 export function responseOutputCount(response: TauriJobResponse) {
@@ -25,16 +26,21 @@ export function responseOutputPath(response: TauriJobResponse) {
 }
 
 export function outputCountDescription(actual: number, requested: number) {
-  if (actual < 1) return "未发现输出文件";
+  if (actual < 1) return t("未发现输出文件");
   if (requested > 1 && actual !== requested) {
-    return `计划生成 ${requested} 张，已收到 ${actual} 张`;
+    return t("计划生成 {p0} 张，已收到 {p1} 张", { p0: requested, p1: actual });
   }
-  return actual > 1 ? `已生成并保存 ${actual} 张图片` : "图片已生成并保存";
+  return actual > 1
+    ? t("已生成并保存 {p0} 张图片", { p0: actual })
+    : t("图片已生成并保存");
 }
 
 export function outputCountMismatchMessage(actual: number, requested: number) {
   if (requested <= 1 || actual === requested) return null;
-  return `这次计划生成 ${requested} 张，但只收到 ${actual} 张。`;
+  return t("这次计划生成 {p0} 张，但只收到 {p1} 张。", {
+    p0: requested,
+    p1: actual,
+  });
 }
 
 export function submittedEvent(message: string): JobEvent {
@@ -50,7 +56,9 @@ export function submittedEvent(message: string): JobEvent {
   };
 }
 
-export function terminalEventType(status: string | undefined): JobEvent["type"] {
+export function terminalEventType(
+  status: string | undefined,
+): JobEvent["type"] {
   if (status === "failed") return "job.failed";
   if (status === "cancelled" || status === "canceled") return "job.cancelled";
   if (status === "partial_failed") return "job.partial_failed";
@@ -67,7 +75,7 @@ export function completedEvent(response: TauriJobResponse): JobEvent {
       data: {
         status,
         output: { path: responseOutputPath(response) },
-        message: "图片已保存，可以继续查看。",
+        message: t("图片已保存，可以继续查看。"),
       },
     }
   );

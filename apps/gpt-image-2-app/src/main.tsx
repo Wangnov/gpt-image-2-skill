@@ -7,6 +7,7 @@ import { TweaksProvider } from "@/hooks/use-tweaks";
 import { ConfirmProvider } from "@/hooks/use-confirm";
 import { setActionsQueryClient } from "@/lib/image-actions/query-client";
 import "./index.css";
+import { initializeLanguage } from "@/lib/i18n";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -30,16 +31,30 @@ if (import.meta.env.DEV) {
   (window as unknown as { __qc?: QueryClient }).__qc = queryClient;
 }
 
-ReactDOM.createRoot(document.getElementById("root")!).render(
-  <React.StrictMode>
-    <QueryClientProvider client={queryClient}>
-      <TweaksProvider>
-        <ConfirmProvider>
-          <AuthGate>
-            <App />
-          </AuthGate>
-        </ConfirmProvider>
-      </TweaksProvider>
-    </QueryClientProvider>
-  </React.StrictMode>
-);
+async function bootstrap() {
+  let nativeLocale: string | null = null;
+  if (window.__TAURI_INTERNALS__ || window.__TAURI__) {
+    try {
+      const { invoke } = await import("@tauri-apps/api/core");
+      nativeLocale = await invoke<string | null>("system_locale");
+    } catch {
+      // A missing platform locale falls back to the WebView's language.
+    }
+  }
+  initializeLanguage(nativeLocale);
+  ReactDOM.createRoot(document.getElementById("root")!).render(
+    <React.StrictMode>
+      <QueryClientProvider client={queryClient}>
+        <TweaksProvider>
+          <ConfirmProvider>
+            <AuthGate>
+              <App />
+            </AuthGate>
+          </ConfirmProvider>
+        </TweaksProvider>
+      </QueryClientProvider>
+    </React.StrictMode>,
+  );
+}
+
+void bootstrap();

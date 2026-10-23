@@ -22,17 +22,17 @@ type Props = {
 
 const toneClass: Record<Tone, string> = {
   neutral:
-    "bg-[color:var(--w-05)] text-muted border-border",
+    "bg-(--w-05) text-muted border-border",
   accent:
-    "bg-[color:var(--accent-14)] text-[color:var(--accent)] border-[color:var(--accent-30)]",
-  ok: "bg-[color:var(--status-ok-bg)] text-[color:var(--status-ok)] border-[color:var(--status-ok-25)]",
+    "bg-(--accent-14) text-(--accent) border-(--accent-30)",
+  ok: "bg-(--status-ok-bg) text-(--status-ok) border-(--status-ok-25)",
   running:
-    "bg-[color:var(--status-running-bg)] text-[color:var(--status-running)] border-[color:var(--status-running-25)]",
-  err: "bg-[color:var(--status-err-bg)] text-[color:var(--status-err)] border-[color:var(--status-err-30)]",
+    "bg-(--status-running-bg) text-(--status-running) border-(--status-running-25)",
+  err: "bg-(--status-err-bg) text-(--status-err) border-(--status-err-30)",
   queued:
-    "bg-[color:var(--status-queued-bg)] text-[color:var(--status-queued)] border-[color:var(--status-queued-20)]",
+    "bg-(--status-queued-bg) text-(--status-queued) border-(--status-queued-20)",
   outline: "bg-transparent text-muted border-border",
-  dark: "bg-[color:var(--surface-inverted)] text-[color:var(--text-on-inverted)] border-[color:var(--surface-inverted)]",
+  dark: "bg-(--surface-inverted) text-(--text-on-inverted) border-(--surface-inverted)",
 };
 
 export function Badge({

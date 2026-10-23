@@ -16,7 +16,7 @@ pub const DEFAULT_ATLAS_MODEL: &str = "openai/gpt-image-2/text-to-image";
 
 pub const ATLAS_GENERATE_PATH: &str = "/api/v1/model/generateImage";
 
-pub const ATLAS_RESULT_PATH: &str = "/api/v1/model/result";
+pub const ATLAS_RESULT_PATH: &str = "/api/v1/model/prediction";
 
 pub const ATLAS_POLL_ATTEMPTS: usize = 60;
 

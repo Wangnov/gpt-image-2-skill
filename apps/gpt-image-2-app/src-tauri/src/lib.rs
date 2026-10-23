@@ -43,6 +43,7 @@ mod file_access;
 mod history_commands;
 mod job_commands;
 mod job_execution;
+mod locale;
 mod provider_config;
 mod queue_commands;
 mod queue_workers;
@@ -109,6 +110,7 @@ pub fn run() {
         })
         .manage(JobQueueState::default())
         .invoke_handler(tauri::generate_handler![
+            locale::system_locale,
             config_path,
             get_config,
             update_notifications,
