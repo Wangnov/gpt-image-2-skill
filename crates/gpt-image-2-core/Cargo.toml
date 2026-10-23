@@ -14,7 +14,7 @@ anyhow = "1.0.103"
 base64 = "0.22.1"
 clap = { version = "4.5.51", features = ["derive"] }
 dirs = "6.0.0"
-keyring = "3.6.3"
+keyring = "4.2.0"
 image = { version = "0.25.8", default-features = false, features = ["jpeg", "png", "webp"] }
 chrono = { version = "0.4.44", default-features = false, features = ["clock"] }
 hmac = "0.13.0"
@@ -32,3 +32,9 @@ url = "2.5.7"
 
 [features]
 recovery-fault-injection = []
+
+[target.'cfg(target_os = "macos")'.dev-dependencies]
+keyring-legacy = { package = "keyring", version = "3.6.3", features = ["apple-native"] }
+
+[target.'cfg(target_os = "windows")'.dev-dependencies]
+keyring-legacy = { package = "keyring", version = "3.6.3", features = ["windows-native"] }
