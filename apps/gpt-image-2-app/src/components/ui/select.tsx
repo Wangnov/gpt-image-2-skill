@@ -82,7 +82,7 @@ const SelectContent = forwardRef<
         position={position}
         sideOffset={sideOffset}
         className={cn(
-          "z-50 min-w-[var(--radix-select-trigger-width)] overflow-hidden rounded-xl border",
+          "z-50 min-w-(--radix-select-trigger-width) overflow-hidden rounded-xl border",
           "data-[state=open]:animate-in data-[state=closed]:animate-out",
           "data-[state=open]:fade-in-0 data-[state=closed]:fade-out-0",
           "data-[state=open]:zoom-in-95 data-[state=closed]:zoom-out-95",
@@ -120,10 +120,10 @@ const SelectItem = forwardRef<
   <RadixSelect.Item
     ref={ref}
     className={cn(
-      "relative flex cursor-pointer select-none items-center gap-2 rounded-md px-2.5 py-2 pr-8 text-[13px] text-foreground outline-none transition-colors",
-      "data-[highlighted]:bg-[color:var(--accent-14)] data-[highlighted]:text-foreground",
-      "data-[state=checked]:bg-[color:var(--accent-10)]",
-      "data-[disabled]:pointer-events-none data-[disabled]:opacity-50",
+      "relative flex cursor-pointer select-none items-center gap-2 rounded-md px-2.5 py-2 pr-8 text-[13px] text-foreground outline-hidden transition-colors",
+      "data-highlighted:bg-(--accent-14) data-highlighted:text-foreground",
+      "data-[state=checked]:bg-(--accent-10)",
+      "data-disabled:pointer-events-none data-disabled:opacity-50",
       className,
     )}
     {...rest}
@@ -136,7 +136,7 @@ const SelectItem = forwardRef<
         <span className="text-[11px] text-faint truncate">{description}</span>
       )}
     </div>
-    <RadixSelect.ItemIndicator className="absolute right-2 top-1/2 -translate-y-1/2 text-[color:var(--accent)]">
+    <RadixSelect.ItemIndicator className="absolute right-2 top-1/2 -translate-y-1/2 text-(--accent)">
       <Check size={13} strokeWidth={2.4} />
     </RadixSelect.ItemIndicator>
   </RadixSelect.Item>
@@ -170,12 +170,12 @@ function DefaultTrigger({
       aria-invalid={invalid || undefined}
       disabled={disabled}
       className={cn(
-        "group inline-flex w-full items-center justify-between gap-2 rounded-md border border-border bg-[color:var(--w-04)] pl-2.5 pr-2 text-[13px] text-foreground outline-none transition-colors",
-        "hover:bg-[color:var(--w-07)]",
-        "focus-visible:border-[color:var(--accent-55)] focus-visible:bg-[color:var(--accent-06)] focus-visible:shadow-[0_0_0_3px_var(--accent-18)]",
-        "data-[state=open]:border-[color:var(--accent-55)] data-[state=open]:bg-[color:var(--accent-06)]",
+        "group inline-flex w-full items-center justify-between gap-2 rounded-md border border-border bg-(--w-04) pl-2.5 pr-2 text-[13px] text-foreground outline-hidden transition-colors",
+        "hover:bg-(--w-07)",
+        "focus-visible:border-(--accent-55) focus-visible:bg-(--accent-06) focus-visible:shadow-[0_0_0_3px_var(--accent-18)]",
+        "data-[state=open]:border-(--accent-55) data-[state=open]:bg-(--accent-06)",
         "disabled:cursor-not-allowed disabled:opacity-55",
-        invalid && "border-[color:var(--status-err)]",
+        invalid && "border-(--status-err)",
         triggerHeights[size],
         className,
       )}
@@ -212,10 +212,10 @@ function ChipTrigger({
       aria-label={ariaLabel ?? label}
       disabled={disabled}
       className={cn(
-        "group inline-flex items-center gap-2 rounded-md border border-border bg-[color:var(--w-04)] px-3 text-[12.5px] text-foreground outline-none transition-colors",
-        "hover:bg-[color:var(--w-07)]",
-        "focus-visible:border-[color:var(--accent-55)] focus-visible:bg-[color:var(--accent-06)] focus-visible:shadow-[0_0_0_3px_var(--accent-18)]",
-        "data-[state=open]:border-[color:var(--accent-55)] data-[state=open]:bg-[color:var(--accent-06)]",
+        "group inline-flex items-center gap-2 rounded-md border border-border bg-(--w-04) px-3 text-[12.5px] text-foreground outline-hidden transition-colors",
+        "hover:bg-(--w-07)",
+        "focus-visible:border-(--accent-55) focus-visible:bg-(--accent-06) focus-visible:shadow-[0_0_0_3px_var(--accent-18)]",
+        "data-[state=open]:border-(--accent-55) data-[state=open]:bg-(--accent-06)",
         "disabled:cursor-not-allowed disabled:opacity-55",
         triggerHeights[size],
         className,

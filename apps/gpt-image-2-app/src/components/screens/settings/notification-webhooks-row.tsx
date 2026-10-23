@@ -48,7 +48,7 @@ export function NotificationWebhooksRow({
           {webhooks.map((webhook, index) => (
             <div
               key={webhook.id}
-              className="space-y-2 rounded-lg border border-border bg-[color:var(--w-03)] p-3"
+              className="space-y-2 rounded-lg border border-border bg-(--w-03) p-3"
             >
               <div className="flex flex-wrap items-center gap-2">
                 <span className="inline-flex items-center gap-2 text-[12px] text-muted">

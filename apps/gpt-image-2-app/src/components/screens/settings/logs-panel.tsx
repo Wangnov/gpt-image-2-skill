@@ -70,14 +70,14 @@ const LEVEL_LABEL: Record<LogLevel, string> = {
 function levelClasses(level: LogLevel): string {
   switch (level) {
     case "error":
-      return "text-status-err border-[color:var(--status-err-25)] bg-[color:var(--status-err-08)]";
+      return "text-status-err border-(--status-err-25) bg-(--status-err-08)";
     case "warn":
-      return "text-status-warn border-[color:var(--status-warn-25,var(--border))] bg-[color:var(--status-warn-08,var(--w-05))]";
+      return "text-status-warn border-(--status-warn-25,var(--border)) bg-(--status-warn-08,var(--w-05))";
     case "info":
-      return "text-foreground border-border bg-[color:var(--w-05)]";
+      return "text-foreground border-border bg-(--w-05)";
     case "debug":
     default:
-      return "text-muted border-border bg-[color:var(--w-03)]";
+      return "text-muted border-border bg-(--w-03)";
   }
 }
 
@@ -307,7 +307,7 @@ export function LogsPanel() {
                       </span>
                     </div>
                     {message && (
-                      <p className="break-words text-[12px] leading-snug text-muted">
+                      <p className="wrap-break-word text-[12px] leading-snug text-muted">
                         {message}
                       </p>
                     )}

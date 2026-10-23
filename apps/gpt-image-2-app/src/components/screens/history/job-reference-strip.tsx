@@ -84,7 +84,7 @@ export function JobReferenceStrip({
         <span className="t-caps">{t("输入参考图")}</span>
         <span className="font-mono">{count}</span>
         {region && (
-          <span className="rounded px-1 py-px text-[10px] text-[color:var(--accent)] bg-[color:var(--accent-10)]">
+          <span className="rounded px-1 py-px text-[10px] text-(--accent) bg-(--accent-10)">
             {t("局部编辑")}
           </span>
         )}
@@ -116,9 +116,9 @@ export function JobReferenceStrip({
                     : undefined
                 }
                 className={cn(
-                  "relative h-16 w-16 shrink-0 overflow-hidden rounded-md ring-1 ring-[color:var(--w-10)]",
+                  "relative h-16 w-16 shrink-0 overflow-hidden rounded-md ring-1 ring-(--w-10)",
                   onOpen
-                    ? "transition-transform hover:scale-[1.03] hover:ring-[color:var(--accent-45)]"
+                    ? "transition-transform hover:scale-[1.03] hover:ring-(--accent-45)"
                     : "cursor-default",
                 )}
                 title={t("参考图 {p0}", { p0: i + 1 })}
@@ -127,7 +127,7 @@ export function JobReferenceStrip({
                 <img
                   src={url}
                   alt={t("参考图 {p0}", { p0: i + 1 })}
-                  className="h-full w-full object-cover bg-[color:var(--k-18)]"
+                  className="h-full w-full object-cover bg-(--k-18)"
                   loading="lazy"
                 />
               </button>

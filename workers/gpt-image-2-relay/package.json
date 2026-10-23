@@ -4,9 +4,9 @@
   "private": true,
   "type": "module",
   "allowScripts": {
-    "esbuild@0.28.1": true,
+    "esbuild@0.28.2": true,
     "fsevents": false,
-    "workerd@1.20260930.2": true
+    "workerd@1.20261019.1": true
   },
   "scripts": {
     "deploy": "wrangler deploy",

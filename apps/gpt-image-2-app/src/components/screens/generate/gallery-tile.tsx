@@ -91,7 +91,7 @@ export function RecentWorkTile({
       }}
       whileTap={reducedMotion ? undefined : { scale: 0.985 }}
       transition={{ duration: 0.16, ease: [0.22, 1, 0.36, 1] }}
-      className="relative h-full w-full cursor-pointer rounded-md overflow-hidden ring-1 ring-[color:var(--w-10)] hover:ring-[color:var(--accent-45)] hover:scale-[1.025] transition-[box-shadow,transform] bg-[color:var(--bg-sunken)] focus-visible:outline-none focus-visible:ring-[color:var(--accent-55)]"
+      className="relative h-full w-full cursor-pointer rounded-md overflow-hidden ring-1 ring-(--w-10) hover:ring-(--accent-45) hover:scale-[1.025] transition-[box-shadow,transform] bg-(--bg-sunken) focus-visible:outline-hidden focus-visible:ring-(--accent-55)"
       title={promptText.slice(0, 80)}
       aria-label={t("打开作品 {p0}:{p1}", {
         p0: outputIndex + 1,
@@ -122,7 +122,7 @@ export function RecentWorkTile({
             event.stopPropagation();
             onSendToEdit?.();
           }}
-          className="absolute right-2 top-2 inline-flex h-8 w-8 items-center justify-center rounded-[5px] border border-[color:var(--surface-floating-border)] bg-[color:var(--surface-floating)] text-foreground shadow-[var(--shadow-floating)] backdrop-blur transition-colors hover:bg-[color:var(--surface-floating-strong)]"
+          className="absolute right-2 top-2 inline-flex h-8 w-8 items-center justify-center rounded-[5px] border border-(--surface-floating-border) bg-(--surface-floating) text-foreground shadow-(--shadow-floating) backdrop-blur-sm transition-colors hover:bg-(--surface-floating-strong)"
           title={t("发送到编辑")}
           aria-label={t("发送到编辑")}
         >
@@ -142,7 +142,7 @@ export function PendingWorkTile({
 }) {
   return (
     <div
-      className="relative h-full w-full overflow-hidden rounded-md border border-[color:var(--w-12)] bg-[color:var(--bg-sunken)] shadow-sm"
+      className="relative h-full w-full overflow-hidden rounded-md border border-(--w-12) bg-(--bg-sunken) shadow-sm"
       aria-label={t("生成中")}
     >
       <PlaceholderImage
@@ -159,11 +159,11 @@ export function PendingWorkTile({
           mixBlendMode: "screen",
         }}
       />
-      <div className="absolute inset-0 bg-[color:var(--k-18)]" />
-      <div className="absolute left-2 top-2 inline-flex items-center gap-1.5 rounded-full border border-[color:var(--w-12)] bg-[color:var(--k-35)] px-2 py-1 text-[10px] font-medium text-[color:var(--image-overlay-text)] backdrop-blur-md">
+      <div className="absolute inset-0 bg-(--k-18)" />
+      <div className="absolute left-2 top-2 inline-flex items-center gap-1.5 rounded-full border border-(--w-12) bg-(--k-35) px-2 py-1 text-[10px] font-medium text-(--image-overlay-text) backdrop-blur-md">
         <Loader2
           size={11}
-          className="animate-spin text-[color:var(--accent)]"
+          className="animate-spin text-(--accent)"
         />
         {t("生成中")}
       </div>

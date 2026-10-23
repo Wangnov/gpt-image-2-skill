@@ -141,7 +141,7 @@ export function AboutPanel() {
             onClick={handleTitleTap}
             className={cn(
               "t-h2 text-foreground tracking-tight",
-              "select-none focus-visible:outline-none",
+              "select-none focus-visible:outline-hidden",
               "transition-transform active:scale-[0.985]",
             )}
             aria-label="GPT Image 2"

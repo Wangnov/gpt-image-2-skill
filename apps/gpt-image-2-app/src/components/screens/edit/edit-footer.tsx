@@ -99,7 +99,7 @@ export function EditFooter({
   return (
     <footer className="relative shrink-0 px-4 pb-3 space-y-2">
       {runError && !isWorking && (
-        <div className="surface-panel flex items-center gap-2 px-3 py-2 border border-[color:var(--status-err)]/40 animate-fade-up">
+        <div className="surface-panel flex items-center gap-2 px-3 py-2 border border-(--status-err)/40 animate-fade-up">
           <Icon name="warn" size={13} style={{ color: "var(--status-err)" }} />
           <span
             className="text-[12px] flex-1"

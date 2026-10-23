@@ -43,10 +43,10 @@ function ThemePreviewCard({
       title={preset.description}
       className={cn(
         "group relative h-[88px] rounded-lg overflow-hidden text-left transition-all",
-        "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--accent)]",
+        "focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-(--accent)",
         isActive
-          ? "ring-2 ring-[color:var(--accent)] shadow-[0_0_24px_-6px_rgba(var(--accent-rgb),0.55)]"
-          : "ring-1 ring-[color:var(--w-10)] hover:ring-[color:var(--w-20)] hover:scale-[1.015]",
+          ? "ring-2 ring-(--accent) shadow-[0_0_24px_-6px_rgba(var(--accent-rgb),0.55)]"
+          : "ring-1 ring-(--w-10) hover:ring-(--w-20) hover:scale-[1.015]",
       )}
     >
       <div
@@ -97,7 +97,7 @@ function ThemePreviewCard({
           style={{ background: "var(--accent)" }}
           aria-label={t("当前主题")}
         >
-          <Check size={10} className="text-[color:var(--accent-on)]" />
+          <Check size={10} className="text-(--accent-on)" />
         </span>
       )}
     </button>

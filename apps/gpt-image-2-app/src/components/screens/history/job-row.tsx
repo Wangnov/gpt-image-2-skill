@@ -116,10 +116,10 @@ function JobAvatar({ job }: { job: Job }) {
         <span
           aria-hidden="true"
           className={cn(
-            "pointer-events-none absolute -bottom-1 -right-1 flex h-4 min-w-[16px] items-center justify-center rounded-[4px] border border-[color:var(--bg-raised)] px-1 text-[10px] font-semibold leading-none text-foreground",
+            "pointer-events-none absolute -bottom-1 -right-1 flex h-4 min-w-[16px] items-center justify-center rounded-[4px] border border-(--bg-raised) px-1 text-[10px] font-semibold leading-none text-foreground",
             isRunning
               ? "bg-status-running text-foreground"
-              : "bg-[color:var(--n-900)]",
+              : "bg-(--n-900)",
           )}
         >
           {badgeText}
@@ -174,7 +174,7 @@ function ExpandedOutputs({
               }}
               disabled={disabled}
               className={cn(
-                "h-11 w-11 shrink-0 overflow-hidden rounded-md border bg-raised transition-colors focus-visible:border-accent focus-visible:outline-none",
+                "h-11 w-11 shrink-0 overflow-hidden rounded-md border bg-raised transition-colors focus-visible:border-accent focus-visible:outline-hidden",
                 disabled
                   ? "cursor-default border-border-faint"
                   : "cursor-pointer border-border hover:border-border-strong",
@@ -283,7 +283,7 @@ export function JobRow({
           }
         }}
         className={cn(
-          "grid min-w-[560px] cursor-pointer items-center gap-3 px-3.5 py-2.5 focus-visible:bg-hover focus-visible:outline-none",
+          "grid min-w-[560px] cursor-pointer items-center gap-3 px-3.5 py-2.5 focus-visible:bg-hover focus-visible:outline-hidden",
           expanded ? "border-b-0" : "border-b border-border-faint",
           selected ? "bg-pressed" : hover ? "bg-hover" : "bg-transparent",
         )}

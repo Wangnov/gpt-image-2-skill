@@ -8,7 +8,7 @@ type Props = HTMLAttributes<HTMLDivElement> & {
 
 /**
  * Glass card surface — used widely across screens.
- * Picks up backdrop-blur from .surface-panel via the same token system.
+ * Picks up backdrop-blur-sm from .surface-panel via the same token system.
  */
 export function Card({
   elevated,

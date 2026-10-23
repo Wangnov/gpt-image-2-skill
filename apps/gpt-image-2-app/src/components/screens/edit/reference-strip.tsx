@@ -43,7 +43,7 @@ export function ReferenceStrip({
             className={cn(
               "font-mono text-[10.5px] leading-none",
               referenceCountError
-                ? "text-[color:var(--status-err)]"
+                ? "text-(--status-err)"
                 : "text-faint",
             )}
           >
@@ -78,7 +78,7 @@ export function ReferenceStrip({
                     className={cn(
                       "relative h-14 w-14 overflow-hidden rounded-md border transition-[border-color,box-shadow,transform,opacity]",
                       isSelected
-                        ? "border-[color:var(--accent)] shadow-[0_0_0_2px_var(--accent-faint)]"
+                        ? "border-(--accent) shadow-[0_0_0_2px_var(--accent-faint)]"
                         : "border-border opacity-75 hover:opacity-100",
                     )}
                     title={ref.name}
@@ -126,7 +126,7 @@ export function ReferenceStrip({
                       </span>
                     )}
                     {hasMask && (
-                      <span className="max-w-full truncate rounded bg-[color:var(--k-65)] px-1 py-px text-[8px] font-semibold leading-none text-foreground">
+                      <span className="max-w-full truncate rounded bg-(--k-65) px-1 py-px text-[8px] font-semibold leading-none text-foreground">
                         {t("遮罩")}
                       </span>
                     )}
@@ -137,7 +137,7 @@ export function ReferenceStrip({
                       event.stopPropagation();
                       removeRef(ref.id);
                     }}
-                    className="pointer-events-none absolute right-1 top-1 inline-flex h-5 w-5 translate-y-[-2px] items-center justify-center rounded-full border border-white/30 bg-black/70 text-white opacity-0 shadow-[0_2px_10px_rgba(0,0,0,0.42)] backdrop-blur transition-[opacity,transform,background-color] hover:bg-black/85 focus-visible:pointer-events-auto focus-visible:translate-y-0 focus-visible:opacity-100 group-hover:pointer-events-auto group-hover:translate-y-0 group-hover:opacity-100"
+                    className="pointer-events-none absolute right-1 top-1 inline-flex h-5 w-5 translate-y-[-2px] items-center justify-center rounded-full border border-white/30 bg-black/70 text-white opacity-0 shadow-[0_2px_10px_rgba(0,0,0,0.42)] backdrop-blur-sm transition-[opacity,transform,background-color] hover:bg-black/85 focus-visible:pointer-events-auto focus-visible:translate-y-0 focus-visible:opacity-100 group-hover:pointer-events-auto group-hover:translate-y-0 group-hover:opacity-100 group-focus-within:pointer-events-auto group-focus-within:translate-y-0 group-focus-within:opacity-100 [@media(hover:none)]:pointer-events-auto [@media(hover:none)]:translate-y-0 [@media(hover:none)]:opacity-100"
                     aria-label={t("删除第 {p0} 张参考图", { p0: index + 1 })}
                   >
                     <X size={11} />
@@ -149,7 +149,7 @@ export function ReferenceStrip({
                         setTargetRefId(ref.id);
                         setSelectedRef(ref.id);
                       }}
-                      className="pointer-events-none absolute inset-x-1 bottom-1 inline-flex h-5 translate-y-1 items-center justify-center rounded border border-white/35 bg-black/75 px-1 text-[8.5px] font-semibold leading-none text-white opacity-0 shadow-[0_2px_12px_rgba(0,0,0,0.45)] backdrop-blur transition-[opacity,transform,background-color] hover:bg-black/90 focus-visible:pointer-events-auto focus-visible:translate-y-0 focus-visible:opacity-100 group-hover:pointer-events-auto group-hover:translate-y-0 group-hover:opacity-100"
+                      className="pointer-events-none absolute inset-x-1 bottom-1 inline-flex h-5 translate-y-1 items-center justify-center rounded border border-white/35 bg-black/75 px-1 text-[8.5px] font-semibold leading-none text-white opacity-0 shadow-[0_2px_12px_rgba(0,0,0,0.45)] backdrop-blur-sm transition-[opacity,transform,background-color] hover:bg-black/90 focus-visible:pointer-events-auto focus-visible:translate-y-0 focus-visible:opacity-100 group-hover:pointer-events-auto group-hover:translate-y-0 group-hover:opacity-100 group-focus-within:pointer-events-auto group-focus-within:translate-y-0 group-focus-within:opacity-100 [@media(hover:none)]:pointer-events-auto [@media(hover:none)]:translate-y-0 [@media(hover:none)]:opacity-100"
                       aria-label={t("把第 {p0} 张设为目标图", {
                         p0: index + 1,
                       })}
@@ -165,7 +165,7 @@ export function ReferenceStrip({
             type="button"
             onClick={() => fileInputRef.current?.click()}
             disabled={refs.length >= maxReferenceImages}
-            className="flex h-14 w-14 shrink-0 items-center justify-center rounded-md border border-dashed border-border-strong bg-[color:var(--w-03)] text-muted transition-colors hover:text-foreground disabled:cursor-not-allowed disabled:opacity-45"
+            className="flex h-14 w-14 shrink-0 items-center justify-center rounded-md border border-dashed border-border-strong bg-(--w-03) text-muted transition-colors hover:text-foreground disabled:cursor-not-allowed disabled:opacity-45"
             aria-label={t("添加参考图")}
             title={t("添加参考图")}
           >

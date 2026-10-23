@@ -103,7 +103,7 @@ export function QuickLookHost() {
     <Radix.Root open onOpenChange={(o) => !o && setState(null)}>
       <Radix.Portal>
         <Radix.Overlay
-          className="fixed inset-0 z-[60] data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=closed]:animate-out data-[state=closed]:fade-out-0"
+          className="fixed inset-0 z-60 data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=closed]:animate-out data-[state=closed]:fade-out-0"
           style={{
             background: "var(--k-70)",
             backdropFilter: "blur(8px)",
@@ -112,7 +112,7 @@ export function QuickLookHost() {
         />
         <Radix.Content
           aria-describedby={undefined}
-          className="fixed left-1/2 top-1/2 z-[61] -translate-x-1/2 -translate-y-1/2 max-w-[92vw] max-h-[92vh] outline-none data-[state=open]:animate-in data-[state=open]:zoom-in-95 data-[state=closed]:animate-out data-[state=closed]:zoom-out-95"
+          className="fixed left-1/2 top-1/2 z-61 -translate-x-1/2 -translate-y-1/2 max-w-[92vw] max-h-[92vh] outline-hidden data-[state=open]:animate-in data-[state=open]:zoom-in-95 data-[state=closed]:animate-out data-[state=closed]:zoom-out-95"
         >
           <Radix.Title className="sr-only">{t("作品详情")}</Radix.Title>
           <ImageContextMenu asset={asset}>
@@ -121,7 +121,7 @@ export function QuickLookHost() {
               alt={t("作品详情")}
               decoding="async"
               duration={500}
-              className="block max-w-[92vw] max-h-[92vh] object-contain rounded-lg shadow-[var(--shadow-floating)]"
+              className="block max-w-[92vw] max-h-[92vh] object-contain rounded-lg shadow-(--shadow-floating)"
             />
           </ImageContextMenu>
           {peerCount > 1 ? (
@@ -130,7 +130,7 @@ export function QuickLookHost() {
                 type="button"
                 onClick={goPrev}
                 aria-label={t("上一张")}
-                className="absolute left-3 top-1/2 inline-flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full border border-[color:var(--surface-floating-border)] bg-[color:var(--surface-floating)] text-foreground backdrop-blur transition-colors hover:bg-[color:var(--surface-floating-strong)]"
+                className="absolute left-3 top-1/2 inline-flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full border border-(--surface-floating-border) bg-(--surface-floating) text-foreground backdrop-blur-sm transition-colors hover:bg-(--surface-floating-strong)"
                 style={{ boxShadow: "var(--shadow-floating)" }}
               >
                 <ChevronLeft size={20} />
@@ -139,12 +139,12 @@ export function QuickLookHost() {
                 type="button"
                 onClick={goNext}
                 aria-label={t("下一张")}
-                className="absolute right-3 top-1/2 inline-flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full border border-[color:var(--surface-floating-border)] bg-[color:var(--surface-floating)] text-foreground backdrop-blur transition-colors hover:bg-[color:var(--surface-floating-strong)]"
+                className="absolute right-3 top-1/2 inline-flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full border border-(--surface-floating-border) bg-(--surface-floating) text-foreground backdrop-blur-sm transition-colors hover:bg-(--surface-floating-strong)"
                 style={{ boxShadow: "var(--shadow-floating)" }}
               >
                 <ChevronRight size={20} />
               </button>
-              <div className="absolute bottom-3 left-1/2 flex max-w-[78vw] -translate-x-1/2 items-center gap-1.5 overflow-x-auto rounded-full border border-[color:var(--surface-floating-border)] bg-[color:var(--surface-floating)] p-1.5 backdrop-blur scrollbar-none">
+              <div className="absolute bottom-3 left-1/2 flex max-w-[78vw] -translate-x-1/2 items-center gap-1.5 overflow-x-auto rounded-full border border-(--surface-floating-border) bg-(--surface-floating) p-1.5 backdrop-blur-sm scrollbar-none">
                 {peers!.map((peer, i) => {
                   const isActive =
                     peer.jobId === asset.jobId &&
@@ -160,7 +160,7 @@ export function QuickLookHost() {
                       className={cn(
                         "h-10 w-10 shrink-0 overflow-hidden rounded-full border transition-all",
                         isActive
-                          ? "border-[color:var(--accent)] opacity-100"
+                          ? "border-(--accent) opacity-100"
                           : "border-transparent opacity-55 hover:opacity-90",
                       )}
                       aria-label={t("切换到第 {p0} 张", { p0: i + 1 })}
@@ -183,7 +183,7 @@ export function QuickLookHost() {
             <button
               type="button"
               aria-label={t("关闭")}
-              className="absolute -top-2 -right-2 h-9 w-9 rounded-full inline-flex items-center justify-center bg-[color:var(--surface-floating)] backdrop-blur border border-[color:var(--surface-floating-border)] text-foreground hover:bg-[color:var(--surface-floating-strong)] transition-colors"
+              className="absolute -top-2 -right-2 h-9 w-9 rounded-full inline-flex items-center justify-center bg-(--surface-floating) backdrop-blur-sm border border-(--surface-floating-border) text-foreground hover:bg-(--surface-floating-strong) transition-colors"
               style={{ boxShadow: "var(--shadow-floating)" }}
             >
               <X size={16} />

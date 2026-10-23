@@ -34,7 +34,7 @@ function MaskToolbarTip({
       {children}
       <span
         role="tooltip"
-        className="pointer-events-none absolute bottom-full left-1/2 z-50 mb-2 -translate-x-1/2 whitespace-nowrap rounded-md border border-border-faint bg-[color:var(--bg-popover)] px-2 py-1 text-[11px] font-medium text-foreground opacity-0 shadow-popover backdrop-blur transition-opacity group-focus-within/masktip:opacity-100 group-hover/masktip:opacity-100"
+        className="pointer-events-none absolute bottom-full left-1/2 z-50 mb-2 -translate-x-1/2 whitespace-nowrap rounded-md border border-border-faint bg-(--bg-popover) px-2 py-1 text-[11px] font-medium text-foreground opacity-0 shadow-popover backdrop-blur-sm transition-opacity group-focus-within/masktip:opacity-100 group-hover/masktip:opacity-100"
       >
         {label}
       </span>
@@ -86,7 +86,7 @@ export function MaskToolbar({
     >
       <div
         ref={toolbarRef}
-        className="pointer-events-auto flex w-max flex-nowrap items-center justify-start gap-1.5 rounded-2xl border border-[color:var(--accent-25)] px-2 py-1.5 backdrop-blur-xl"
+        className="pointer-events-auto flex w-max flex-nowrap items-center justify-start gap-1.5 rounded-2xl border border-(--accent-25) px-2 py-1.5 backdrop-blur-xl"
         style={{
           background:
             "linear-gradient(135deg, rgba(var(--accent-rgb), 0.22), rgba(var(--accent-2-rgb), 0.14)), var(--bg-raised)",
@@ -102,9 +102,9 @@ export function MaskToolbar({
               type="button"
               onClick={() => setMaskTool("brush")}
               className={cn(
-                "inline-flex h-8 w-8 items-center justify-center rounded-lg text-muted transition-colors hover:bg-[color:var(--w-08)] hover:text-foreground",
+                "inline-flex h-8 w-8 items-center justify-center rounded-lg text-muted transition-colors hover:bg-(--w-08) hover:text-foreground",
                 maskTool === "brush" &&
-                  "bg-[color:var(--accent-18)] text-foreground",
+                  "bg-(--accent-18) text-foreground",
               )}
               aria-label={t("画笔")}
               aria-pressed={maskTool === "brush"}
@@ -117,9 +117,9 @@ export function MaskToolbar({
               type="button"
               onClick={() => setMaskTool("erase")}
               className={cn(
-                "inline-flex h-8 w-8 items-center justify-center rounded-lg text-muted transition-colors hover:bg-[color:var(--w-08)] hover:text-foreground",
+                "inline-flex h-8 w-8 items-center justify-center rounded-lg text-muted transition-colors hover:bg-(--w-08) hover:text-foreground",
                 maskTool === "erase" &&
-                  "bg-[color:var(--accent-18)] text-foreground",
+                  "bg-(--accent-18) text-foreground",
               )}
               aria-label={t("橡皮")}
               aria-pressed={maskTool === "erase"}
@@ -132,9 +132,9 @@ export function MaskToolbar({
               type="button"
               onClick={() => setMaskTool("rect")}
               className={cn(
-                "inline-flex h-8 w-8 items-center justify-center rounded-lg text-muted transition-colors hover:bg-[color:var(--w-08)] hover:text-foreground",
+                "inline-flex h-8 w-8 items-center justify-center rounded-lg text-muted transition-colors hover:bg-(--w-08) hover:text-foreground",
                 maskTool === "rect" &&
-                  "bg-[color:var(--accent-18)] text-foreground",
+                  "bg-(--accent-18) text-foreground",
               )}
               aria-label={t("方形选区")}
               aria-pressed={maskTool === "rect"}
@@ -147,9 +147,9 @@ export function MaskToolbar({
               type="button"
               onClick={() => setMaskTool("ellipse")}
               className={cn(
-                "inline-flex h-8 w-8 items-center justify-center rounded-lg text-muted transition-colors hover:bg-[color:var(--w-08)] hover:text-foreground",
+                "inline-flex h-8 w-8 items-center justify-center rounded-lg text-muted transition-colors hover:bg-(--w-08) hover:text-foreground",
                 maskTool === "ellipse" &&
-                  "bg-[color:var(--accent-18)] text-foreground",
+                  "bg-(--accent-18) text-foreground",
               )}
               aria-label={t("圆形选区")}
               aria-pressed={maskTool === "ellipse"}
@@ -161,7 +161,7 @@ export function MaskToolbar({
             <button
               type="button"
               onClick={clearMask}
-              className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-muted transition-colors hover:bg-[color:var(--status-err-10)] hover:text-[color:var(--status-err)]"
+              className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-muted transition-colors hover:bg-(--status-err-10) hover:text-(--status-err)"
               aria-label={t("清空选区")}
             >
               <Trash2 size={15} />
@@ -175,7 +175,7 @@ export function MaskToolbar({
               type="button"
               onClick={triggerUndo}
               disabled={!maskHistory.canUndo}
-              className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-muted transition-colors hover:bg-[color:var(--w-08)] hover:text-foreground disabled:cursor-not-allowed disabled:opacity-35"
+              className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-muted transition-colors hover:bg-(--w-08) hover:text-foreground disabled:cursor-not-allowed disabled:opacity-35"
               aria-label={t("撤回")}
             >
               <Undo2 size={15} />
@@ -186,7 +186,7 @@ export function MaskToolbar({
               type="button"
               onClick={triggerRedo}
               disabled={!maskHistory.canRedo}
-              className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-muted transition-colors hover:bg-[color:var(--w-08)] hover:text-foreground disabled:cursor-not-allowed disabled:opacity-35"
+              className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-muted transition-colors hover:bg-(--w-08) hover:text-foreground disabled:cursor-not-allowed disabled:opacity-35"
               aria-label={t("重做")}
             >
               <Redo2 size={15} />
@@ -199,7 +199,7 @@ export function MaskToolbar({
             <PopoverTrigger asChild>
               <button
                 type="button"
-                className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-foreground transition-colors hover:bg-[color:var(--w-08)]"
+                className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-foreground transition-colors hover:bg-(--w-08)"
                 aria-label={t("调整粗细")}
               >
                 <SlidersHorizontal size={14} />
@@ -216,7 +216,7 @@ export function MaskToolbar({
             <div className="mt-3 flex items-center gap-3">
               <span
                 aria-hidden
-                className="shrink-0 rounded-full border border-[color:var(--accent-45)] bg-[color:var(--accent-18)]"
+                className="shrink-0 rounded-full border border-(--accent-45) bg-(--accent-18)"
                 style={{
                   width: Math.max(6, Math.min(28, brushSize / 2)),
                   height: Math.max(6, Math.min(28, brushSize / 2)),
@@ -229,7 +229,7 @@ export function MaskToolbar({
                 step={1}
                 value={brushSize}
                 onChange={(event) => setBrushSize(Number(event.target.value))}
-                className="h-5 flex-1 accent-[color:var(--accent)]"
+                className="h-5 flex-1 accent-(--accent)"
                 aria-label={t("选区工具粗细")}
               />
             </div>
@@ -239,7 +239,7 @@ export function MaskToolbar({
           <button
             type="button"
             onClick={fitCanvasToViewport}
-            className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-foreground hover:bg-[color:var(--w-08)]"
+            className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-foreground hover:bg-(--w-08)"
             aria-label={t("适应窗口")}
           >
             <Maximize2 size={13} />
@@ -249,7 +249,7 @@ export function MaskToolbar({
           <button
             type="button"
             onClick={zoomOut}
-            className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-foreground hover:bg-[color:var(--w-08)]"
+            className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-foreground hover:bg-(--w-08)"
             aria-label={t("缩小")}
           >
             <ZoomOut size={13} />
@@ -259,7 +259,7 @@ export function MaskToolbar({
           <button
             type="button"
             onClick={zoomIn}
-            className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-foreground hover:bg-[color:var(--w-08)]"
+            className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-foreground hover:bg-(--w-08)"
             aria-label={t("放大")}
           >
             <ZoomIn size={13} />
@@ -270,8 +270,8 @@ export function MaskToolbar({
             type="button"
             onClick={() => setPanPinned((current) => !current)}
             className={cn(
-              "inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-foreground hover:bg-[color:var(--w-08)]",
-              panPinned && "bg-[color:var(--accent-18)]",
+              "inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-foreground hover:bg-(--w-08)",
+              panPinned && "bg-(--accent-18)",
             )}
             aria-label={t("平移")}
             aria-pressed={panPinned}

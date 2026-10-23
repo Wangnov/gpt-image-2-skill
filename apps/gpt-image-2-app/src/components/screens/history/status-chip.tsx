@@ -11,7 +11,7 @@ export function StatusChip({
 }) {
   if (status === "completed") {
     return (
-      <span className="inline-flex items-center gap-1.5 text-[12px] text-[color:var(--status-ok)]">
+      <span className="inline-flex items-center gap-1.5 text-[12px] text-(--status-ok)">
         <CheckCircle2 size={13} />
         {label ?? t("已完成")}
       </span>
@@ -19,7 +19,7 @@ export function StatusChip({
   }
   if (status === "partial_failed") {
     return (
-      <span className="inline-flex items-center gap-1.5 text-[12px] text-[color:var(--status-warn,#f5c542)]">
+      <span className="inline-flex items-center gap-1.5 text-[12px] text-(--status-warn,#f5c542)">
         <AlertTriangle size={13} />
         {label ?? t("部分成功")}
       </span>
@@ -27,7 +27,7 @@ export function StatusChip({
   }
   if (status === "running" || status === "uploading") {
     return (
-      <span className="inline-flex items-center gap-1.5 text-[12px] text-[color:var(--status-running)]">
+      <span className="inline-flex items-center gap-1.5 text-[12px] text-(--status-running)">
         <Loader2 size={13} className="animate-spin" />
         {label ?? t("进行中")}
       </span>
@@ -35,7 +35,7 @@ export function StatusChip({
   }
   if (status === "failed") {
     return (
-      <span className="inline-flex items-center gap-1.5 text-[12px] text-[color:var(--status-err)]">
+      <span className="inline-flex items-center gap-1.5 text-[12px] text-(--status-err)">
         <X size={13} />
         {label ?? t("失败")}
       </span>
@@ -43,14 +43,14 @@ export function StatusChip({
   }
   if (status === "cancelled" || status === "canceled") {
     return (
-      <span className="inline-flex items-center gap-1.5 text-[12px] text-[color:var(--status-err)]">
+      <span className="inline-flex items-center gap-1.5 text-[12px] text-(--status-err)">
         <X size={13} />
         {label ?? t("已取消")}
       </span>
     );
   }
   return (
-    <span className="inline-flex items-center gap-1.5 text-[12px] text-[color:var(--status-queued)]">
+    <span className="inline-flex items-center gap-1.5 text-[12px] text-(--status-queued)">
       <Clock size={13} />
       {label ?? t("等待中")}
     </span>

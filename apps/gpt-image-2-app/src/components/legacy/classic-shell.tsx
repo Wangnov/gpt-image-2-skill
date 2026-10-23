@@ -103,8 +103,8 @@ function SidebarItem({
       className={cn(
         "group relative flex h-9 w-full items-center gap-2.5 rounded-md px-2.5 text-left text-[13px] transition-colors",
         active
-          ? "bg-[color:var(--w-08)] font-semibold text-foreground ring-1 ring-[color:var(--w-08)]"
-          : "text-muted hover:bg-[color:var(--w-04)] hover:text-foreground",
+          ? "bg-(--w-08) font-semibold text-foreground ring-1 ring-(--w-08)"
+          : "text-muted hover:bg-(--w-04) hover:text-foreground",
       )}
     >
       {active && (
@@ -121,7 +121,7 @@ function SidebarItem({
       />
       <span className="flex-1">{item.label}</span>
       {running ? (
-        <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-[color:var(--status-running-bg)] px-1 font-mono text-[10px] text-[color:var(--status-running)]">
+        <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-(--status-running-bg) px-1 font-mono text-[10px] text-(--status-running)">
           {running}
         </span>
       ) : null}
@@ -200,8 +200,8 @@ function ClassicSidebar({
 
       <div className="border-t border-border-faint p-3">
         <div className="t-caps mb-1.5">{t("默认凭证")}</div>
-        <div className="flex items-center gap-2 rounded-lg border border-border bg-[color:var(--w-04)] px-2.5 py-2">
-          <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md border border-[color:var(--accent-30)] bg-[color:var(--accent-10)]">
+        <div className="flex items-center gap-2 rounded-lg border border-border bg-(--w-04) px-2.5 py-2">
+          <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md border border-(--accent-30) bg-(--accent-10)">
             <Icon name="cpu" size={12} style={{ color: "var(--accent)" }} />
           </div>
           <div className="min-w-0 flex-1">

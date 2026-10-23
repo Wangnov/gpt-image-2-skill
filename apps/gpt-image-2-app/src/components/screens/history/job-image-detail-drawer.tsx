@@ -420,7 +420,7 @@ export function JobImageDetailDrawer({
                 <button
                   type="button"
                   onClick={openZoom}
-                  className="mx-auto block w-full max-w-[340px] cursor-zoom-in rounded-[15px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--accent-55)] focus-visible:ring-offset-2 focus-visible:ring-offset-[color:var(--bg)]"
+                  className="mx-auto block w-full max-w-[340px] cursor-zoom-in rounded-[15px] focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-(--accent-55) focus-visible:ring-offset-2 focus-visible:ring-offset-(--bg)"
                   aria-label={t("查看第 {p0} 张大图", { p0: letter })}
                 >
                   <TiltedCard
@@ -439,7 +439,7 @@ export function JobImageDetailDrawer({
                 </button>
               </ImageContextMenu>
             ) : (
-              <div className="h-[340px] w-full overflow-hidden rounded-lg border border-[color:var(--w-08)] bg-[color:var(--w-02)]">
+              <div className="h-[340px] w-full overflow-hidden rounded-lg border border-(--w-08) bg-(--w-02)">
                 <PlaceholderImage
                   seed={activeOutputIndex + 23}
                   variant={`detail-${job?.id ?? "empty"}`}
@@ -456,7 +456,7 @@ export function JobImageDetailDrawer({
                   type="button"
                   onClick={goPrev}
                   aria-label={t("上一张")}
-                  className="absolute left-2 top-1/2 -translate-y-1/2 h-9 w-9 rounded-full inline-flex items-center justify-center bg-[color:var(--k-45)] backdrop-blur border border-[color:var(--w-10)] text-foreground/85 hover:text-foreground hover:bg-[color:var(--k-65)] transition-colors"
+                  className="absolute left-2 top-1/2 -translate-y-1/2 h-9 w-9 rounded-full inline-flex items-center justify-center bg-(--k-45) backdrop-blur-sm border border-(--w-10) text-foreground/85 hover:text-foreground hover:bg-(--k-65) transition-colors"
                 >
                   <ChevronLeft size={16} />
                 </button>
@@ -464,7 +464,7 @@ export function JobImageDetailDrawer({
                   type="button"
                   onClick={goNext}
                   aria-label={t("下一张")}
-                  className="absolute right-2 top-1/2 -translate-y-1/2 h-9 w-9 rounded-full inline-flex items-center justify-center bg-[color:var(--k-45)] backdrop-blur border border-[color:var(--w-10)] text-foreground/85 hover:text-foreground hover:bg-[color:var(--k-65)] transition-colors"
+                  className="absolute right-2 top-1/2 -translate-y-1/2 h-9 w-9 rounded-full inline-flex items-center justify-center bg-(--k-45) backdrop-blur-sm border border-(--w-10) text-foreground/85 hover:text-foreground hover:bg-(--k-65) transition-colors"
                 >
                   <ChevronRight size={16} />
                 </button>
@@ -488,8 +488,8 @@ export function JobImageDetailDrawer({
                     className={cn(
                       "relative shrink-0 h-12 w-12 rounded overflow-hidden ring-1 transition-all",
                       isActive
-                        ? "ring-[color:var(--accent-55)] scale-[1.04]"
-                        : "ring-[color:var(--w-10)] opacity-65 hover:opacity-100",
+                        ? "ring-(--accent-55) scale-[1.04]"
+                        : "ring-(--w-10) opacity-65 hover:opacity-100",
                     )}
                     aria-label={t("第 {p0} 张", { p0: label })}
                     title={t("第 {p0} 张", { p0: label })}
@@ -548,7 +548,7 @@ export function JobImageDetailDrawer({
               </div>
             </div>
 
-            <div className="border-t border-[color:var(--w-06)]" />
+            <div className="border-t border-(--w-06)" />
 
             <div className="grid min-w-0 grid-cols-1 gap-3 sm:grid-cols-2">
               <Detail label={t("尺寸")} value={size} />
@@ -561,7 +561,7 @@ export function JobImageDetailDrawer({
               <Detail label={t("更新时间")} value={updated} />
             </div>
 
-            <div className="border-t border-[color:var(--w-06)]" />
+            <div className="border-t border-(--w-06)" />
 
             <div className="flex min-w-0 items-center justify-between gap-2">
               <div className="min-w-0 flex-1">
@@ -628,7 +628,7 @@ export function JobImageDetailDrawer({
                   {slots.map((slot) => (
                     <div
                       key={slot.index}
-                      className="rounded-md border border-[color:var(--w-08)] bg-[color:var(--w-03)] px-2.5 py-2"
+                      className="rounded-md border border-(--w-08) bg-(--w-03) px-2.5 py-2"
                     >
                       <div className="flex items-center justify-between gap-2">
                         <span className="font-mono text-[11px] text-faint">
@@ -638,8 +638,8 @@ export function JobImageDetailDrawer({
                           className={cn(
                             "text-[11px] font-medium",
                             slot.status === "completed"
-                              ? "text-[color:var(--status-ok-soft)]"
-                              : "text-[color:var(--status-err)]",
+                              ? "text-(--status-ok-soft)"
+                              : "text-(--status-err)",
                           )}
                         >
                           {slotStatusLabel(slot.status)}

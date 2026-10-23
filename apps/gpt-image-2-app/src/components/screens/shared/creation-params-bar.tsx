@@ -182,7 +182,7 @@ function MobileParamsSheet(props: Omit<CreationParamsBarProps, "action">) {
       <RadixDialog.Trigger asChild>
         <button
           type="button"
-          className="flex h-10 w-full items-center gap-2 rounded-md border border-border bg-[color:var(--w-04)] px-3 text-left text-[12.5px] text-foreground transition-colors hover:bg-[color:var(--w-07)]"
+          className="flex h-10 w-full items-center gap-2 rounded-md border border-border bg-(--w-04) px-3 text-left text-[12.5px] text-foreground transition-colors hover:bg-(--w-07)"
         >
           <SlidersHorizontal size={13} className="shrink-0 text-muted" />
           <span className="t-caps shrink-0">{t("参数")}</span>
@@ -194,14 +194,14 @@ function MobileParamsSheet(props: Omit<CreationParamsBarProps, "action">) {
       <RadixDialog.Portal>
         <RadixDialog.Overlay
           className={cn(
-            "fixed inset-0 z-50 bg-black/45 backdrop-blur-sm sm:hidden",
+            "fixed inset-0 z-50 bg-black/45 backdrop-blur-xs sm:hidden",
             "data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=open]:duration-200",
             "data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:duration-150",
           )}
         />
         <RadixDialog.Content
           className={cn(
-            "fixed inset-x-0 bottom-0 z-50 rounded-t-2xl border border-border-faint p-4 pb-[calc(1rem+env(safe-area-inset-bottom))] shadow-popover outline-none sm:hidden",
+            "fixed inset-x-0 bottom-0 z-50 rounded-t-2xl border border-border-faint p-4 pb-[calc(1rem+env(safe-area-inset-bottom))] shadow-popover outline-hidden sm:hidden",
             "ease-out-quint",
             "data-[state=open]:animate-in data-[state=open]:slide-in-from-bottom data-[state=open]:fade-in-0 data-[state=open]:duration-220",
             "data-[state=closed]:animate-out data-[state=closed]:slide-out-to-bottom data-[state=closed]:fade-out-0 data-[state=closed]:duration-180",
@@ -222,7 +222,7 @@ function MobileParamsSheet(props: Omit<CreationParamsBarProps, "action">) {
             <RadixDialog.Close asChild>
               <button
                 type="button"
-                className="inline-flex h-8 w-8 items-center justify-center rounded-md text-muted transition-colors hover:bg-[color:var(--w-06)] hover:text-foreground"
+                className="inline-flex h-8 w-8 items-center justify-center rounded-md text-muted transition-colors hover:bg-(--w-06) hover:text-foreground"
                 aria-label={t("关闭参数")}
               >
                 <X size={14} />

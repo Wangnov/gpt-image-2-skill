@@ -42,7 +42,7 @@ function HintButton({
       <button
         type="button"
         aria-label={ariaLabel}
-        className="inline-flex h-5 w-5 items-center justify-center rounded-full border border-border text-[11px] font-semibold text-muted transition-colors hover:border-[color:var(--accent-45)] hover:text-foreground"
+        className="inline-flex h-5 w-5 items-center justify-center rounded-full border border-border text-[11px] font-semibold text-muted transition-colors hover:border-(--accent-45) hover:text-foreground"
       >
         ?
       </button>
@@ -82,7 +82,7 @@ function StorageField({
           <span>{label}</span>
           {required && (
             <span
-              className="text-[color:var(--accent-70)]"
+              className="text-(--accent-70)"
               aria-label={t("必填")}
             >
               *
@@ -159,13 +159,13 @@ export function StorageTargetCard({
   const fieldError = (field: string) => issueForField(issues, field);
 
   return (
-    <div className="space-y-2 rounded-lg border border-border bg-[color:var(--w-03)] p-3">
+    <div className="space-y-2 rounded-lg border border-border bg-(--w-03) p-3">
       <div className="grid gap-2 sm:grid-cols-[minmax(180px,220px)_minmax(180px,1fr)_auto] sm:items-center">
         <input
           defaultValue={name}
           onBlur={(event) => onRename(name, event.target.value)}
           aria-label={t("上传位置名称")}
-          className="h-7 w-full rounded-md border border-border bg-[color:var(--w-04)] px-2.5 font-mono text-[13px] outline-none transition-colors placeholder:text-faint focus:border-[color:var(--accent-55)] focus:bg-[color:var(--accent-06)] focus:shadow-[0_0_0_3px_var(--accent-14)]"
+          className="h-7 w-full rounded-md border border-border bg-(--w-04) px-2.5 font-mono text-[13px] outline-hidden transition-colors placeholder:text-faint focus:border-(--accent-55) focus:bg-(--accent-06) focus:shadow-[0_0_0_3px_var(--accent-14)]"
         />
         <div className="flex min-w-0 items-center gap-2">
           <GlassSelect
@@ -679,7 +679,7 @@ export function StorageTargetCard({
             size="sm"
             aria-label={t("123 网盘父目录 ID")}
           />
-          <div className="flex items-center gap-2 rounded-md border border-border bg-[color:var(--w-04)] px-3 py-2 text-[12px] text-muted">
+          <div className="flex items-center gap-2 rounded-md border border-border bg-(--w-04) px-3 py-2 text-[12px] text-muted">
             <Toggle
               checked={pan123Target.use_direct_link}
               onChange={(use_direct_link) => onPatch(name, { use_direct_link })}

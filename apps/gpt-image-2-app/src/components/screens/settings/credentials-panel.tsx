@@ -98,8 +98,8 @@ function CredCard({
       className={cn(
         "flex flex-wrap items-start gap-3 rounded-xl border px-3.5 py-3 transition-colors",
         isDefault
-          ? "border-[color:var(--accent-30)] bg-[color:var(--accent-04)]"
-          : "border-border bg-[color:var(--w-04)] hover:bg-[color:var(--w-05)]",
+          ? "border-(--accent-30) bg-(--accent-04)"
+          : "border-border bg-(--w-04) hover:bg-(--w-05)",
       )}
     >
       <CredIcon kind={prov.type} />
@@ -146,7 +146,7 @@ function CredCard({
             {capabilityBadges.map((badge) => (
               <span
                 key={badge}
-                className="rounded-md border border-[color:var(--w-08)] bg-[color:var(--w-04)] px-1.5 py-0.5 text-[10.5px] text-muted"
+                className="rounded-md border border-(--w-08) bg-(--w-04) px-1.5 py-0.5 text-[10.5px] text-muted"
               >
                 {badge}
               </span>
@@ -175,7 +175,7 @@ function CredCard({
             // (see effect above) so the DOM node stays stable across
             // retries — `key`-based remount drops keyboard focus.
             animate={shakeControls}
-            className="relative h-8 w-8 inline-flex items-center justify-center rounded-md text-muted hover:text-foreground hover:bg-[color:var(--w-06)] transition-colors disabled:opacity-50"
+            className="relative h-8 w-8 inline-flex items-center justify-center rounded-md text-muted hover:text-foreground hover:bg-(--w-06) transition-colors disabled:opacity-50"
             aria-label={t("测试 {p0} 的连接", { p0: name })}
           >
             {/* Success ring pulse — radial accent fading from 0.7 -> 0
@@ -218,9 +218,9 @@ function CredCard({
                 {testStatus === "running" ? (
                   <Loader2 size={14} className="animate-spin" />
                 ) : testStatus === "ok" ? (
-                  <Check size={14} className="text-[color:var(--status-ok)]" />
+                  <Check size={14} className="text-(--status-ok)" />
                 ) : testStatus === "err" ? (
-                  <X size={14} className="text-[color:var(--status-err)]" />
+                  <X size={14} className="text-(--status-err)" />
                 ) : (
                   <Play size={13} />
                 )}
@@ -232,7 +232,7 @@ function CredCard({
           <button
             type="button"
             onClick={onEdit}
-            className="h-8 w-8 inline-flex items-center justify-center rounded-md text-muted hover:text-foreground hover:bg-[color:var(--w-06)] transition-colors"
+            className="h-8 w-8 inline-flex items-center justify-center rounded-md text-muted hover:text-foreground hover:bg-(--w-06) transition-colors"
             aria-label={t("编辑 {p0}", { p0: name })}
           >
             <Pencil size={13} />
@@ -257,7 +257,7 @@ function CredCard({
               });
               if (ok) onDelete();
             }}
-            className="h-8 w-8 inline-flex items-center justify-center rounded-md text-muted hover:text-[color:var(--status-err)] hover:bg-[color:var(--status-err-10)] transition-colors"
+            className="h-8 w-8 inline-flex items-center justify-center rounded-md text-muted hover:text-(--status-err) hover:bg-(--status-err-10) transition-colors"
             aria-label={t("删除 {p0}", { p0: name })}
           >
             <Trash2 size={13} />

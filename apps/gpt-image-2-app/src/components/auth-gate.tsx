@@ -66,7 +66,7 @@ export function AuthGate({ children }: { children: ReactNode }) {
     <div className="desktop flex h-full w-full items-center justify-center p-6">
       <form
         onSubmit={onSubmit}
-        className="w-full max-w-[360px] rounded-2xl border border-[color:var(--w-10)] bg-[color:var(--w-04)] p-6 shadow-xl"
+        className="w-full max-w-[360px] rounded-2xl border border-(--w-10) bg-(--w-04) p-6 shadow-xl"
       >
         <h1 className="t-h2 mb-1 text-foreground">{t("需要访问令牌")}</h1>
         <p className="mb-4 text-[13px] text-muted">
@@ -81,7 +81,7 @@ export function AuthGate({ children }: { children: ReactNode }) {
           onChange={(e) => setToken(e.target.value)}
           placeholder={t("访问令牌")}
           aria-label={t("访问令牌")}
-          className="mb-3 w-full rounded-lg border border-[color:var(--w-10)] bg-[color:var(--w-02)] px-3 py-2 text-[14px] text-foreground outline-none focus:border-[color:var(--accent-40)]"
+          className="mb-3 w-full rounded-lg border border-(--w-10) bg-(--w-02) px-3 py-2 text-[14px] text-foreground outline-hidden focus:border-(--accent-40)"
         />
         {error && <p className="mb-3 text-[12.5px] text-red-400">{error}</p>}
         <Button

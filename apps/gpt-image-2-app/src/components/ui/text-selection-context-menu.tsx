@@ -180,7 +180,7 @@ export function TextSelectionContextMenu() {
       ref={menuRef}
       role="menu"
       onMouseDown={(event) => event.stopPropagation()}
-      className="fixed z-[1000] min-w-[180px] overflow-hidden rounded-xl border p-1 outline-none"
+      className="fixed z-1000 min-w-[180px] overflow-hidden rounded-xl border p-1 outline-hidden"
       style={{
         top: position.top,
         left: position.left,
@@ -288,15 +288,15 @@ function MenuButton({ label, shortcut, disabled, onSelect }: MenuButtonProps) {
       onMouseDown={(event) => event.preventDefault()}
       onClick={onSelect}
       className={cn(
-        "flex w-full items-center justify-between gap-3 rounded-md px-2.5 py-1.5 text-[13px] outline-none",
-        "text-[color:var(--text)]",
-        "hover:bg-[color:var(--bg-hover)]",
+        "flex w-full items-center justify-between gap-3 rounded-md px-2.5 py-1.5 text-[13px] outline-hidden",
+        "text-(--text)",
+        "hover:bg-(--bg-hover)",
         "disabled:pointer-events-none disabled:opacity-40",
       )}
     >
       <span>{label}</span>
       {shortcut ? (
-        <span className="text-[11px] tabular-nums text-[color:var(--text-faint)]">
+        <span className="text-[11px] tabular-nums text-(--text-faint)">
           {shortcut}
         </span>
       ) : null}

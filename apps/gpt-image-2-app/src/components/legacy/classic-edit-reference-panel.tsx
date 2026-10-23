@@ -65,7 +65,7 @@ export function ClassicEditReferencePanel({
           <button
             type="button"
             onClick={() => fileInputRef.current?.click()}
-            className="flex min-h-[132px] w-full flex-col items-center justify-center gap-2 rounded-lg border border-dashed border-border-strong bg-[color:var(--w-02)] p-4 text-center text-muted hover:border-foreground/30 hover:text-foreground"
+            className="flex min-h-[132px] w-full flex-col items-center justify-center gap-2 rounded-lg border border-dashed border-border-strong bg-(--w-02) p-4 text-center text-muted hover:border-foreground/30 hover:text-foreground"
           >
             <Icon name="upload" size={22} />
             <span className="text-[13px] font-semibold">{t("添加参考图")}</span>

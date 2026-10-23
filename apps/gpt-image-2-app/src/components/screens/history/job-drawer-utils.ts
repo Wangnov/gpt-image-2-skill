@@ -42,9 +42,9 @@ export function storageStatusLabel(status?: string) {
 }
 
 export function uploadStatusTone(status?: string) {
-  if (status === "completed") return "text-[color:var(--status-ok)]";
+  if (status === "completed") return "text-(--status-ok)";
   if (status === "failed" || status === "unsupported") {
-    return "text-[color:var(--status-err)]";
+    return "text-(--status-err)";
   }
   return "text-muted";
 }

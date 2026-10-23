@@ -229,7 +229,7 @@ export function ClassicEditSettingsPanel({
               max={80}
               value={brushSize}
               onChange={(event) => setBrushSize(Number(event.target.value))}
-              className="min-w-0 flex-1 accent-[color:var(--accent)]"
+              className="min-w-0 flex-1 accent-(--accent)"
             />
             <span className="w-8 text-right font-mono">{brushSize}</span>
           </label>

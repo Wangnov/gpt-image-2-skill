@@ -45,7 +45,7 @@ export const PopoverContent = forwardRef<
           event.preventDefault();
         }}
         className={cn(
-          "z-50 rounded-xl border outline-none p-3",
+          "z-50 rounded-xl border outline-hidden p-3",
           "data-[state=open]:animate-in data-[state=closed]:animate-out",
           "data-[state=open]:fade-in-0 data-[state=closed]:fade-out-0",
           "data-[state=open]:zoom-in-95 data-[state=closed]:zoom-out-95",

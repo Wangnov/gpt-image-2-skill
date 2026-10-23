@@ -32,7 +32,7 @@ export function ImageSizeInput({
             className={[
               "touch-target min-h-8 rounded border px-2 text-[10.5px] transition-colors",
               value.trim().toLowerCase() === option.value
-                ? "border-accent bg-[color:var(--accent-faint)] text-foreground"
+                ? "border-accent bg-(--accent-faint) text-foreground"
                 : "border-border bg-sunken text-muted hover:text-foreground",
             ].join(" ")}
           >
@@ -80,7 +80,7 @@ export function OutputCountInput({
             className={[
               "touch-target min-h-8 min-w-8 rounded border px-2 text-[10.5px] font-medium transition-colors",
               value === option
-                ? "border-accent bg-[color:var(--accent-faint)] text-foreground"
+                ? "border-accent bg-(--accent-faint) text-foreground"
                 : "border-border bg-sunken text-muted hover:text-foreground",
             ].join(" ")}
           >

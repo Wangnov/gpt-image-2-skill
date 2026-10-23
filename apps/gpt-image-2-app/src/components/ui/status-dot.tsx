@@ -11,7 +11,7 @@ export function StatusDot({
   const colors: Record<string, string> = {
     running: "bg-status-running",
     completed: "bg-status-ok",
-    partial_failed: "bg-[color:var(--status-warn,#f5c542)]",
+    partial_failed: "bg-(--status-warn,#f5c542)",
     failed: "bg-status-err",
     cancelled: "bg-status-err",
     canceled: "bg-status-err",
