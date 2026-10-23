@@ -4,7 +4,7 @@ use super::*;
 use axum::extract::Request;
 use axum::middleware::Next;
 use base64::{Engine as _, engine::general_purpose::URL_SAFE_NO_PAD};
-use hmac::{Hmac, Mac};
+use hmac::{Hmac, KeyInit, Mac};
 use sha2::Sha256;
 use std::fmt;
 use std::time::{SystemTime, UNIX_EPOCH};
@@ -447,6 +447,11 @@ mod tests {
     fn signed_session_never_contains_the_shared_token() {
         let policy = token_policy(true);
         let session = policy.issue_session_at(1_000).expect("session");
+        // Pre-upgrade HMAC-SHA256 wire format: existing cookies stay valid.
+        assert_eq!(
+            session,
+            "v1.4600.ca5rtMu401DX3azyTx3AOAdCGBjEB0tPGQXlk8RmQFk"
+        );
         assert!(!session.contains("shared-secret"));
         assert!(policy.verify_session_at(&session, 1_001));
         assert!(policy.verify_session_at(&session, 4_600));

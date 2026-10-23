@@ -38,8 +38,8 @@ jobs:
             workers/gpt-image-2-relay/package-lock.json
       - name: Test skill bootstrap integrity
         run: node --test scripts/security/test-skill-wrapper.cjs
-      - name: Test updater compatibility channels
-        run: node --test scripts/release/test-tauri-updater-manifest.mjs
+      - name: Test release workflow and updater compatibility channels
+        run: node --test scripts/release/test-*.mjs
       - name: Audit npm dependencies
         run: |
           npm --prefix apps/gpt-image-2-app ci
