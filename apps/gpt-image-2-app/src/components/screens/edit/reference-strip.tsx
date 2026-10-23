@@ -76,7 +76,7 @@ export function ReferenceStrip({
                     type="button"
                     onClick={() => setSelectedRef(ref.id)}
                     className={cn(
-                      "relative h-14 w-14 overflow-hidden rounded-md border transition-[border-color,box-shadow,transform,opacity]",
+                      "relative h-14 w-14 [@media(pointer:coarse)]:h-24 [@media(pointer:coarse)]:w-24 overflow-hidden rounded-md border transition-[border-color,box-shadow,transform,opacity]",
                       isSelected
                         ? "border-(--accent) shadow-[0_0_0_2px_var(--accent-faint)]"
                         : "border-border opacity-75 hover:opacity-100",
@@ -165,7 +165,7 @@ export function ReferenceStrip({
             type="button"
             onClick={() => fileInputRef.current?.click()}
             disabled={refs.length >= maxReferenceImages}
-            className="flex h-14 w-14 shrink-0 items-center justify-center rounded-md border border-dashed border-border-strong bg-(--w-03) text-muted transition-colors hover:text-foreground disabled:cursor-not-allowed disabled:opacity-45"
+            className="flex h-14 w-14 [@media(pointer:coarse)]:h-24 [@media(pointer:coarse)]:w-24 shrink-0 items-center justify-center rounded-md border border-dashed border-border-strong bg-(--w-03) text-muted transition-colors hover:text-foreground disabled:cursor-not-allowed disabled:opacity-45"
             aria-label={t("添加参考图")}
             title={t("添加参考图")}
           >
