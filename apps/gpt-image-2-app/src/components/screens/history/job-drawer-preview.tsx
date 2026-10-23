@@ -106,7 +106,7 @@ export function JobDrawerPreview({
             onError={recoverVisibleOutput}
           />
         ) : selectedError ? (
-          <div className="flex h-full w-full flex-col items-center justify-center gap-2 bg-[color:var(--status-err-08)] px-5 text-center">
+          <div className="flex h-full w-full flex-col items-center justify-center gap-2 bg-(--status-err-08) px-5 text-center">
             <Icon
               name="warn"
               size={24}
@@ -117,7 +117,7 @@ export function JobDrawerPreview({
               {t("候选 ")}
               {selectedLabel} {t("失败")}
             </div>
-            <div className="line-clamp-5 whitespace-pre-wrap break-words text-[12px] leading-relaxed text-muted">
+            <div className="line-clamp-5 whitespace-pre-wrap wrap-break-word text-[12px] leading-relaxed text-muted">
               {selectedError.message}
             </div>
           </div>
@@ -187,11 +187,11 @@ export function JobDrawerPreview({
                         : t("候选 {p0} · 等待生成", { p0: label })
                 }
                 className={cn(
-                  "relative h-12 w-12 shrink-0 overflow-hidden rounded-md border bg-raised transition-colors focus-visible:outline-none",
+                  "relative h-12 w-12 shrink-0 overflow-hidden rounded-md border bg-raised transition-colors focus-visible:outline-hidden",
                   isSelected
-                    ? "border-accent ring-2 ring-[color:var(--accent-faint)]"
+                    ? "border-accent ring-2 ring-(--accent-faint)"
                     : slotError
-                      ? "cursor-pointer border-[color:var(--status-err-25)] hover:border-[color:var(--status-err)]"
+                      ? "cursor-pointer border-(--status-err-25) hover:border-(--status-err)"
                       : missing
                         ? "cursor-pointer border-border-faint text-faint hover:border-border"
                         : !selectable
@@ -207,7 +207,7 @@ export function JobDrawerPreview({
                     recover={() => recoverOutputUrl(index)}
                   />
                 ) : slotError ? (
-                  <div className="flex h-full w-full items-center justify-center bg-[color:var(--status-err-08)] text-status-err">
+                  <div className="flex h-full w-full items-center justify-center bg-(--status-err-08) text-status-err">
                     <Icon name="warn" size={15} aria-hidden="true" />
                   </div>
                 ) : missing ? (
@@ -221,7 +221,7 @@ export function JobDrawerPreview({
                     style={SHIMMER_STYLE}
                   />
                 )}
-                <span className="pointer-events-none absolute bottom-0 left-0 right-0 bg-[color:var(--n-900)]/70 px-1 py-0.5 text-center text-[9.5px] font-semibold text-foreground">
+                <span className="pointer-events-none absolute bottom-0 left-0 right-0 bg-(--n-900)/70 px-1 py-0.5 text-center text-[9.5px] font-semibold text-foreground">
                   {label}
                 </span>
               </button>

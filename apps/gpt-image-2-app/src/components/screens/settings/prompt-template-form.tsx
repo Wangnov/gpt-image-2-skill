@@ -64,7 +64,7 @@ export function PromptTemplateForm({
       )}
     >
       <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_180px]">
-        <div className="flex h-9 w-full items-center gap-1.5 rounded-md border border-border bg-[color:var(--w-04)] px-1.5 transition-colors focus-within:border-[color:var(--accent-55)] focus-within:bg-[color:var(--accent-06)]">
+        <div className="flex h-9 w-full items-center gap-1.5 rounded-md border border-border bg-(--w-04) px-1.5 transition-colors focus-within:border-(--accent-55) focus-within:bg-(--accent-06)">
           <TemplateIconPicker
             icon={templateIcon || DEFAULT_PROMPT_TEMPLATE_ICON}
             color={templateColor || DEFAULT_PROMPT_TEMPLATE_COLOR}
@@ -76,7 +76,7 @@ export function PromptTemplateForm({
             onChange={(event) => setTemplateTitle(event.target.value)}
             placeholder={t("模板名称")}
             aria-label={t("模板名称")}
-            className="min-w-0 flex-1 border-none bg-transparent px-1 text-[13px] text-foreground outline-none placeholder:text-faint"
+            className="min-w-0 flex-1 border-none bg-transparent px-1 text-[13px] text-foreground outline-hidden placeholder:text-faint"
           />
         </div>
         <GlassSelect

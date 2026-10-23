@@ -27,7 +27,7 @@ export function Toggle({
           "motion-safe:transition-[background-color,box-shadow,background-image] motion-safe:duration-200 motion-safe:ease-out-quint",
           checked
             ? "shadow-[var(--shadow-accent-glow-soft),inset_0_1px_0_var(--w-18)]"
-            : "bg-[color:var(--w-10)] shadow-[inset_0_1px_2px_var(--k-40)]",
+            : "bg-(--w-10) shadow-[inset_0_1px_2px_var(--k-40)]",
         )}
         style={
           checked
@@ -38,7 +38,7 @@ export function Toggle({
         }
       >
         <span
-          className="w-[14px] h-[14px] rounded-full bg-[color:var(--surface-inverted)] shadow-[0_1px_3px_var(--k-40)] motion-safe:transition-transform motion-safe:duration-200 motion-safe:ease-spring-soft"
+          className="w-[14px] h-[14px] rounded-full bg-(--surface-inverted) shadow-[0_1px_3px_var(--k-40)] motion-safe:transition-transform motion-safe:duration-200 motion-safe:ease-spring-soft"
           style={{ transform: checked ? "translateX(14px)" : "translateX(0)" }}
         />
       </span>

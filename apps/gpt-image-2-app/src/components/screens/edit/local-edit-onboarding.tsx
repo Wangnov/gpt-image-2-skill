@@ -59,7 +59,7 @@ export function LocalEditOnboarding({ active }: { active: boolean }) {
           )}
         </p>
         <div className="grid grid-cols-2 gap-3">
-          <div className="rounded-lg border border-[color:var(--accent-30)] bg-[color:var(--accent-08)] p-3.5">
+          <div className="rounded-lg border border-(--accent-30) bg-(--accent-08) p-3.5">
             <div className="flex items-center gap-2 mb-2">
               <Icon name="mask" size={14} style={{ color: "var(--accent)" }} />
               <span className="font-semibold">{t("目标图")}</span>
@@ -70,7 +70,7 @@ export function LocalEditOnboarding({ active }: { active: boolean }) {
               )}
             </p>
           </div>
-          <div className="rounded-lg border border-border bg-[color:var(--w-04)] p-3.5">
+          <div className="rounded-lg border border-border bg-(--w-04) p-3.5">
             <div className="flex items-center gap-2 mb-2">
               <Icon
                 name="image"

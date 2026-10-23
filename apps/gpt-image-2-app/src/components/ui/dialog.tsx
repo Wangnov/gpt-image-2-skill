@@ -61,7 +61,7 @@ export function Dialog({
             {children}
           </div>
           {footer && (
-            <div className="flex shrink-0 justify-end gap-2 border-t border-border-faint px-[18px] py-3 bg-[color:var(--w-02)]">
+            <div className="flex shrink-0 justify-end gap-2 border-t border-border-faint px-[18px] py-3 bg-(--w-02)">
               {footer}
             </div>
           )}

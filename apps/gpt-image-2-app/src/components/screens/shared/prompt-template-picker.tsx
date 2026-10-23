@@ -75,12 +75,12 @@ export function PromptTemplatePicker({
             value={query}
             onChange={(event) => setQuery(event.target.value)}
             placeholder={t("搜索模板")}
-            className="h-8 w-full rounded-md border border-border bg-[color:var(--w-04)] pl-8 pr-3 text-[12.5px] text-foreground outline-none placeholder:text-faint focus:border-[color:var(--accent-55)]"
+            className="h-8 w-full rounded-md border border-border bg-(--w-04) pl-8 pr-3 text-[12.5px] text-foreground outline-hidden placeholder:text-faint focus:border-(--accent-55)"
           />
         </div>
         <div className="max-h-[330px] space-y-2 overflow-auto pr-1 scrollbar-thin">
           {groups.length === 0 ? (
-            <div className="flex min-h-[120px] flex-col items-center justify-center gap-2 rounded-lg border border-dashed border-border-faint bg-[color:var(--w-02)] px-4 text-center">
+            <div className="flex min-h-[120px] flex-col items-center justify-center gap-2 rounded-lg border border-dashed border-border-faint bg-(--w-02) px-4 text-center">
               <FileText size={18} className="text-faint" />
               <div className="text-[12px] text-muted">
                 {t("没有匹配的模板，可在设置里添加。")}
@@ -99,8 +99,8 @@ export function PromptTemplatePicker({
                     type="button"
                     onClick={() => applyTemplate(template)}
                     className={cn(
-                      "group w-full rounded-lg border border-border-faint bg-[color:var(--w-03)] px-3 py-2 text-left transition-colors",
-                      "hover:border-[color:var(--accent-30)] hover:bg-[color:var(--accent-06)]",
+                      "group w-full rounded-lg border border-border-faint bg-(--w-03) px-3 py-2 text-left transition-colors",
+                      "hover:border-(--accent-30) hover:bg-(--accent-06)",
                     )}
                   >
                     <div className="flex items-center gap-2">

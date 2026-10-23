@@ -355,7 +355,7 @@ jobs:
         with:
           persist-credentials: false
 
-      - name: Generate latest.json for Tauri updater
+      - name: Generate compatibility channels for Tauri updater
         shell: bash
         run: |
           set -euo pipefail
@@ -375,15 +375,22 @@ jobs:
             published_at="$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
           fi
 
-          node scripts/release/generate-tauri-updater-manifest.mjs \
-            --version "$version" \
-            --tag "$RELEASE_TAG" \
-            --repo "$SOURCE_REPO" \
-            --sig-dir "$sig_dir" \
-            --pub-date "$published_at" \
-            --out "$RUNNER_TEMP/latest.json"
+          for channel in legacy modern; do
+            manifest="latest.json"
+            if [ "$channel" = modern ]; then
+              manifest="latest-modern.json"
+            fi
+            node scripts/release/generate-tauri-updater-manifest.mjs \
+              --version "$version" \
+              --tag "$RELEASE_TAG" \
+              --repo "$SOURCE_REPO" \
+              --sig-dir "$sig_dir" \
+              --pub-date "$published_at" \
+              --channel "$channel" \
+              --out "$RUNNER_TEMP/$manifest"
+          done
 
-          gh release upload "$RELEASE_TAG" "$RUNNER_TEMP/latest.json" --repo "$SOURCE_REPO" --clobber
+          gh release upload "$RELEASE_TAG" "$RUNNER_TEMP/latest.json" "$RUNNER_TEMP/latest-modern.json" --repo "$SOURCE_REPO" --clobber
 
   publish-homebrew-cask:
     needs: [build-app, publish-updater-manifest]
@@ -455,7 +462,7 @@ jobs:
             homepage "https://github.com/Wangnov/gpt-image-2-skill"
 
             auto_updates true
-            depends_on macos: :big_sur
+            depends_on macos: ">= 13.3"
 
             app "GPT Image 2.app"
 

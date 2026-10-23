@@ -136,7 +136,7 @@ export function GenerateForm({
       {runError && !isWorking && (
         <div
           role="alert"
-          className="mb-3 inline-flex items-center gap-2 rounded-md border border-[color:var(--status-err-30)] px-3 py-1.5 text-[12px]"
+          className="mb-3 inline-flex items-center gap-2 rounded-md border border-(--status-err-30) px-3 py-1.5 text-[12px]"
           style={{
             background: "var(--status-err-10)",
             color: "var(--status-err)",
@@ -161,7 +161,7 @@ export function GenerateForm({
           <button
             type="button"
             onClick={onOpenSettings}
-            className="group mb-3 inline-flex items-center gap-2 rounded-md border border-[color:var(--accent-30)] px-3 py-1.5 text-[12px] text-muted transition-colors hover:border-[color:var(--accent-55)] hover:text-foreground hover:bg-[color:var(--accent-14)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--accent-55)]"
+            className="group mb-3 inline-flex items-center gap-2 rounded-md border border-(--accent-30) px-3 py-1.5 text-[12px] text-muted transition-colors hover:border-(--accent-55) hover:text-foreground hover:bg-(--accent-14) focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-(--accent-55)"
             style={{ background: "var(--accent-08)" }}
           >
             <ImageIcon
@@ -177,7 +177,7 @@ export function GenerateForm({
         ) : (
           <div
             role="status"
-            className="mb-3 inline-flex items-center gap-2 rounded-md border border-[color:var(--accent-30)] px-3 py-1.5 text-[12px]"
+            className="mb-3 inline-flex items-center gap-2 rounded-md border border-(--accent-30) px-3 py-1.5 text-[12px]"
             style={{
               background: "var(--accent-08)",
               color: "var(--text-muted)",
@@ -203,7 +203,7 @@ export function GenerateForm({
           onKeyDown={(e) => {
             if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) handleRun();
           }}
-          className="w-full min-h-[110px] resize-none rounded-md px-3.5 py-3 text-[13.5px] leading-[1.55] outline-none transition-colors bg-[color:var(--w-04)] border border-border placeholder:text-faint focus:border-[color:var(--accent-55)] focus:bg-[color:var(--accent-06)] focus:shadow-[0_0_0_3px_var(--accent-14)]"
+          className="w-full min-h-[110px] resize-none rounded-md px-3.5 py-3 text-[13.5px] leading-[1.55] outline-hidden transition-colors bg-(--w-04) border border-border placeholder:text-faint focus:border-(--accent-55) focus:bg-(--accent-06) focus:shadow-[0_0_0_3px_var(--accent-14)]"
         />
         <div className="absolute right-3 bottom-2 text-[10.5px] font-mono text-faint pointer-events-none">
           {prompt.length} / 4000

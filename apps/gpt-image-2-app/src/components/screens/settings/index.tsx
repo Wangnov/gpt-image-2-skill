@@ -35,7 +35,7 @@ export function SettingsScreen({ config }: { config?: ServerConfig } = {}) {
     visibleTab === "storage" ? (
       <>
         {storageDirty && (
-          <span className="flex h-7 items-center text-[12px] leading-none text-[color:var(--accent-70)]">
+          <span className="flex h-7 items-center text-[12px] leading-none text-(--accent-70)">
             {t("有未保存的改动")}
           </span>
         )}
@@ -43,7 +43,7 @@ export function SettingsScreen({ config }: { config?: ServerConfig } = {}) {
           type="button"
           disabled={!storageDirty || storageSaving}
           onClick={() => storageSaveRef.current()}
-          className="flex h-7 items-center rounded-md bg-[color:var(--accent-55)] px-3 text-[12.5px] font-medium leading-none text-foreground transition-opacity disabled:cursor-not-allowed disabled:opacity-40"
+          className="flex h-7 items-center rounded-md bg-(--accent-55) px-3 text-[12.5px] font-medium leading-none text-foreground transition-opacity disabled:cursor-not-allowed disabled:opacity-40"
         >
           {t("保存")}
         </button>

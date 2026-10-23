@@ -165,7 +165,7 @@ export function SettingsNav({
       <div className="px-2 pt-1 pb-1 sm:pb-2">
         <div className="t-title text-foreground">{t("设置")}</div>
       </div>
-      <div className="surface-panel flex gap-1.5 overflow-x-auto p-1.5 scrollbar-none [mask-image:linear-gradient(to_right,black_calc(100%-32px),transparent_100%)] md:flex-col md:gap-0.5 md:overflow-visible md:[mask-image:none]">
+      <div className="surface-panel flex gap-1.5 overflow-x-auto p-1.5 scrollbar-none mask-[linear-gradient(to_right,black_calc(100%-32px),transparent_100%)] md:flex-col md:gap-0.5 md:overflow-visible md:mask-none">
         {visibleNav.map((n) => {
           const I = n.icon;
           const active = n.id === tab;
@@ -178,7 +178,7 @@ export function SettingsNav({
                 "relative flex h-9 shrink-0 items-center gap-2.5 rounded-md px-3 text-left text-[13px] transition-colors md:w-full",
                 active
                   ? "text-foreground"
-                  : "text-muted hover:text-foreground hover:bg-[color:var(--w-05)]",
+                  : "text-muted hover:text-foreground hover:bg-(--w-05)",
               )}
             >
               {/* Sliding active pill — same trick the top-nav uses.
@@ -188,7 +188,7 @@ export function SettingsNav({
                 <motion.span
                   layoutId="settings-nav-active-pill"
                   aria-hidden="true"
-                  className="absolute inset-0 z-0 rounded-md border border-[color:var(--w-10)]"
+                  className="absolute inset-0 z-0 rounded-md border border-(--w-10)"
                   style={{ background: "var(--w-10)" }}
                   transition={{
                     duration: reducedMotion ? 0 : 0.24,

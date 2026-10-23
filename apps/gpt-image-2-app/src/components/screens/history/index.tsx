@@ -207,7 +207,7 @@ export function HistoryScreen({
           type="button"
           onClick={handleClearFinished}
           disabled={!clearable}
-          className="inline-flex items-center gap-1.5 h-8 px-3 rounded-full text-[12px] text-muted hover:text-foreground hover:bg-[color:var(--w-06)] transition-colors disabled:opacity-45 disabled:cursor-not-allowed"
+          className="inline-flex items-center gap-1.5 h-8 px-3 rounded-full text-[12px] text-muted hover:text-foreground hover:bg-(--w-06) transition-colors disabled:opacity-45 disabled:cursor-not-allowed"
           style={{
             background: "var(--w-04)",
             border: "1px solid var(--w-08)",
@@ -233,7 +233,7 @@ export function HistoryScreen({
                   "relative shrink-0 whitespace-nowrap px-3.5 h-8 rounded-full text-[12.5px] font-medium transition-colors",
                   isActive
                     ? "text-foreground"
-                    : "text-muted hover:text-foreground hover:bg-[color:var(--w-04)]",
+                    : "text-muted hover:text-foreground hover:bg-(--w-04)",
                 )}
               >
                 {/* Shared accent pill that slides between filter chips. */}
@@ -241,7 +241,7 @@ export function HistoryScreen({
                   <motion.span
                     layoutId="history-filter-active-pill"
                     aria-hidden="true"
-                    className="absolute inset-0 z-0 rounded-full border border-[color:var(--accent-30)]"
+                    className="absolute inset-0 z-0 rounded-full border border-(--accent-30)"
                     style={{ background: "var(--accent-14)" }}
                     transition={{
                       duration: reducedMotion ? 0 : 0.24,
@@ -266,7 +266,7 @@ export function HistoryScreen({
             onChange={(event) => setSearchText(event.currentTarget.value)}
             placeholder={t("搜索提示词 / Job ID / Provider")}
             aria-label={t("搜索任务")}
-            className="h-9 w-full rounded-full border border-[color:var(--w-10)] bg-[color:var(--w-05)] pl-9 pr-9 text-[13px] text-foreground outline-none transition-colors placeholder:text-faint hover:bg-[color:var(--w-07)] focus:border-[color:var(--accent-45)] focus:bg-[color:var(--w-08)]"
+            className="h-9 w-full rounded-full border border-(--w-10) bg-(--w-05) pl-9 pr-9 text-[13px] text-foreground outline-hidden transition-colors placeholder:text-faint hover:bg-(--w-07) focus:border-(--accent-45) focus:bg-(--w-08)"
           />
           {searchText.trim() && (
             <button
@@ -275,7 +275,7 @@ export function HistoryScreen({
                 setSearchText("");
                 setSearchQuery("");
               }}
-              className="absolute right-1.5 top-1/2 inline-flex h-6 w-6 -translate-y-1/2 items-center justify-center rounded-full text-faint transition-colors hover:bg-[color:var(--w-08)] hover:text-foreground"
+              className="absolute right-1.5 top-1/2 inline-flex h-6 w-6 -translate-y-1/2 items-center justify-center rounded-full text-faint transition-colors hover:bg-(--w-08) hover:text-foreground"
               aria-label={t("清空搜索")}
               title={t("清空搜索")}
             >
@@ -290,7 +290,7 @@ export function HistoryScreen({
 
       {/* list */}
       <section className="surface-panel flex-1 min-h-0 flex flex-col overflow-hidden">
-        <div className="flex-1 overflow-auto divide-y divide-[color:var(--w-06)]">
+        <div className="flex-1 overflow-auto divide-y divide-(--w-06)">
           {isLoading ? (
             <div className="p-12 flex justify-center">
               <Empty

@@ -88,7 +88,7 @@ export function TopNav({
         >
           <img
             src={logoUrl}
-            className="h-5 w-5 object-contain [filter:drop-shadow(var(--logo-halo-sm))]"
+            className="h-5 w-5 object-contain filter-[drop-shadow(var(--logo-halo-sm))]"
             alt=""
             aria-hidden
           />
@@ -145,7 +145,7 @@ export function TopNav({
                   "relative isolate inline-flex items-center gap-1.5 h-8 min-h-8 px-4 rounded-full text-[12.5px] font-medium whitespace-nowrap transition-colors",
                   isActive
                     ? "text-foreground"
-                    : "text-muted hover:text-foreground hover:bg-[color:var(--w-05)]",
+                    : "text-muted hover:text-foreground hover:bg-(--w-05)",
                 )}
                 style={{ minHeight: 32 }}
               >

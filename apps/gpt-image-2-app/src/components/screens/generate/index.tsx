@@ -382,8 +382,8 @@ export function GenerateScreen({
               // Halo size follows logo size so the small split-mode logo
               // doesn't get crowned with the same 22px aura as the hero.
               hasSplit
-                ? "[filter:drop-shadow(var(--logo-halo-md))] mb-1 h-10 w-10 sm:mb-2 sm:h-12 sm:w-12 xl:mb-3 xl:h-14 xl:w-14"
-                : "[filter:drop-shadow(var(--logo-halo-lg))]",
+                ? "filter-[drop-shadow(var(--logo-halo-md))] mb-1 h-10 w-10 sm:mb-2 sm:h-12 sm:w-12 xl:mb-3 xl:h-14 xl:w-14"
+                : "filter-[drop-shadow(var(--logo-halo-lg))]",
             )}
           />
           <div
@@ -403,9 +403,9 @@ export function GenerateScreen({
               animationSpeed={8}
               yoyo={false}
               pauseOnHover
-              className="!mx-0 !rounded-none [filter:drop-shadow(0_0_18px_var(--accent-30))]"
+              className="mx-0! rounded-none! filter-[drop-shadow(0_0_18px_var(--accent-30))]"
             >
-              <span className="px-1 [letter-spacing:inherit]">Image</span>
+              <span className="px-1 tracking-[inherit]">Image</span>
             </GradientText>
             <span className="text-foreground">2</span>
           </div>

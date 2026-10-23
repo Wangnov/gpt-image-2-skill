@@ -17,7 +17,7 @@ export function NotificationLocalRow({
       description={t("右上角弹提示；系统通知首次会请求权限。")}
       control={
         <div className="grid w-full gap-2 sm:w-[600px] sm:grid-cols-2">
-          <label className="flex items-center justify-between gap-3 rounded-md border border-border bg-[color:var(--w-04)] px-3 py-2 text-[12px]">
+          <label className="flex items-center justify-between gap-3 rounded-md border border-border bg-(--w-04) px-3 py-2 text-[12px]">
             <span className="inline-flex items-center gap-2">
               <Bell size={13} />
               {t("应用内")}
@@ -29,7 +29,7 @@ export function NotificationLocalRow({
               }
             />
           </label>
-          <label className="flex items-center justify-between gap-3 rounded-md border border-border bg-[color:var(--w-04)] px-3 py-2 text-[12px]">
+          <label className="flex items-center justify-between gap-3 rounded-md border border-border bg-(--w-04) px-3 py-2 text-[12px]">
             <span className="inline-flex items-center gap-2">
               <Bell size={13} />
               {t("系统通知")}

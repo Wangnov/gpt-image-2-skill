@@ -132,7 +132,7 @@ export function ResultFoldersSection({
               readOnly={!canSave || !customExport}
               wrapperClassName={cn(
                 (!customExport || !canSave) &&
-                  "bg-[color:var(--w-02)] border-border text-muted",
+                  "bg-(--w-02) border-border text-muted",
               )}
               className={cn(
                 (!customExport || !canSave) && "text-muted cursor-default",

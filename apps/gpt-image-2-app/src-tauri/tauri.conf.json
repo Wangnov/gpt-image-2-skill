@@ -69,7 +69,7 @@
     "resources": ["bin/*"],
     "macOS": {
       "hardenedRuntime": true,
-      "minimumSystemVersion": "11.0",
+      "minimumSystemVersion": "13.3",
       "providerShortName": "3VT538F8B6",
       "dmg": {
         "appPosition": {
@@ -91,7 +91,7 @@
     "updater": {
       "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IEIyN0FEODE4QkFERDdCMTgKUldRWWU5MjZHTmg2c2h0UkdYQTU2MWRINTdGdVJhcEt6V1h1dllHZjNMcHRRT1orcEZ1clNwVzIK",
       "endpoints": [
-        "https://github.com/Wangnov/gpt-image-2-skill/releases/latest/download/latest.json"
+        "https://github.com/Wangnov/gpt-image-2-skill/releases/latest/download/latest-modern.json"
       ]
     }
   }

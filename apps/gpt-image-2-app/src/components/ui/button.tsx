@@ -12,19 +12,19 @@ const button = cva(
         // Hover lifts the glow, press fires a one-shot accent ring as a
         // tactile "click registered" cue (--shadow-accent-glow-press).
         primary:
-          "text-foreground border-[color:var(--accent-50)] shadow-[var(--shadow-accent-glow)] hover:border-[color:var(--accent-75)] hover:shadow-[var(--shadow-accent-glow-hover)] active:shadow-[var(--shadow-accent-glow-press)]",
+          "text-foreground border-(--accent-50) shadow-(--shadow-accent-glow) hover:border-(--accent-75) hover:shadow-(--shadow-accent-glow-hover) active:shadow-(--shadow-accent-glow-press)",
         // Glass secondary — soft surface, used everywhere as default
         secondary:
-          "bg-[color:var(--w-05)] text-foreground border-border hover:bg-[color:var(--w-10)] hover:border-border-strong",
+          "bg-(--w-05) text-foreground border-border hover:bg-(--w-10) hover:border-border-strong",
         // Ghost — completely transparent, just hover hint
         ghost:
-          "bg-transparent text-foreground border-transparent hover:bg-[color:var(--w-06)]",
+          "bg-transparent text-foreground border-transparent hover:bg-(--w-06)",
         // Danger — subtle red tint
         danger:
-          "bg-[color:var(--status-err-08)] text-status-err border-[color:var(--status-err-25)] hover:bg-[color:var(--status-err-bg)]",
+          "bg-(--status-err-08) text-status-err border-(--status-err-25) hover:bg-(--status-err-bg)",
         // Solid inverted — soft white CTA (used by "新建生成" toolbar action)
         solidDark:
-          "bg-[color:var(--surface-inverted)] text-[color:var(--text-on-inverted)] border-[color:var(--surface-inverted)] hover:bg-[color:var(--surface-inverted-hover)]",
+          "bg-(--surface-inverted) text-(--text-on-inverted) border-(--surface-inverted) hover:bg-(--surface-inverted-hover)",
       },
       size: {
         sm: "h-8 px-3.5 text-[12.5px]",
@@ -34,12 +34,12 @@ const button = cva(
         iconSm: "w-8 h-8 p-0 justify-center",
       },
       active: {
-        true: "bg-[color:var(--w-10)]",
+        true: "bg-(--w-10)",
         false: "",
       },
     },
     compoundVariants: [
-      { variant: "ghost", active: true, class: "bg-[color:var(--w-10)]" },
+      { variant: "ghost", active: true, class: "bg-(--w-10)" },
     ],
     defaultVariants: { variant: "secondary", size: "md", active: false },
   },

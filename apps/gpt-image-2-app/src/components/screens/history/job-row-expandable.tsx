@@ -130,7 +130,7 @@ function JobRowExpandableComponent({
     <div
       className={cn(
         "transition-colors",
-        expanded ? "bg-[color:var(--accent-06)]" : "",
+        expanded ? "bg-(--accent-06)" : "",
       )}
     >
       {/* COMPACT ROW (always visible) — div role=button so we can nest a real
@@ -149,10 +149,10 @@ function JobRowExpandableComponent({
         }}
         className={cn(
           "group relative grid w-full grid-cols-[80px_minmax(0,1fr)_auto] gap-x-3 gap-y-2 px-3 py-3 text-left transition-colors cursor-pointer sm:flex sm:items-center sm:gap-4 sm:px-4",
-          "focus-visible:outline-none focus-visible:bg-[color:var(--w-04)]",
+          "focus-visible:outline-hidden focus-visible:bg-(--w-04)",
           expanded
-            ? "bg-[color:var(--accent-08)]"
-            : "hover:bg-[color:var(--w-04)]",
+            ? "bg-(--accent-08)"
+            : "hover:bg-(--w-04)",
         )}
         aria-expanded={expanded}
       >
@@ -161,7 +161,7 @@ function JobRowExpandableComponent({
           aria-hidden
           className={cn(
             "pointer-events-none absolute left-0 top-1.5 bottom-1.5 rounded-r-sm",
-            "bg-[color:var(--accent)] transition-all duration-200 ease-out",
+            "bg-(--accent) transition-all duration-200 ease-out",
             expanded
               ? "w-[3px] opacity-100"
               : "w-0 opacity-0 group-hover:w-[2px] group-hover:opacity-70",
@@ -171,7 +171,7 @@ function JobRowExpandableComponent({
           {index}
         </span>
 
-        <div className="relative h-14 w-20 shrink-0 rounded-md overflow-hidden ring-1 ring-[color:var(--w-10)] transition-transform duration-200 ease-out group-hover:scale-[1.02]">
+        <div className="relative h-14 w-20 shrink-0 rounded-md overflow-hidden ring-1 ring-(--w-10) transition-transform duration-200 ease-out group-hover:scale-[1.02]">
           <JobPreviewImage
             url={thumbUrl}
             seed={index * 17 + outputCount}
@@ -179,7 +179,7 @@ function JobRowExpandableComponent({
             recover={() => recoverOutputUrl(primaryOutputIndex)}
           />
           {(isRunning || isQueueing) && (
-            <div className="absolute inset-0 backdrop-blur-[2px] bg-[color:var(--k-40)] flex items-center justify-center">
+            <div className="absolute inset-0 backdrop-blur-[2px] bg-(--k-40) flex items-center justify-center">
               {isRunning ? (
                 <Loader2
                   size={18}
@@ -263,7 +263,7 @@ function JobRowExpandableComponent({
                 e.stopPropagation();
                 onCancel();
               }}
-              className="h-7 w-7 inline-flex items-center justify-center rounded-md text-muted hover:text-foreground hover:bg-[color:var(--w-06)] transition-colors cursor-pointer"
+              className="h-7 w-7 inline-flex items-center justify-center rounded-md text-muted hover:text-foreground hover:bg-(--w-06) transition-colors cursor-pointer"
               aria-label={t("取消任务")}
               title={t("取消任务")}
             >
@@ -277,7 +277,7 @@ function JobRowExpandableComponent({
                 e.stopPropagation();
                 onRetry();
               }}
-              className="inline-flex h-7 items-center gap-1 rounded-md px-2 text-[11.5px] font-semibold text-foreground transition-colors hover:bg-[color:var(--accent-12)]"
+              className="inline-flex h-7 items-center gap-1 rounded-md px-2 text-[11.5px] font-semibold text-foreground transition-colors hover:bg-(--accent-12)"
               aria-label={recovery.label}
               title={recovery.title}
             >
@@ -312,10 +312,10 @@ function JobRowExpandableComponent({
             <div className="min-h-0 overflow-hidden">
               <div className="px-3 pb-4 pt-1 sm:px-4 sm:pl-[calc(16px+24px+16px+80px)]">
                 {/* full prompt */}
-                <div className="mb-3 rounded-md border border-[color:var(--w-06)] bg-[color:var(--k-10)] px-3 py-2">
+                <div className="mb-3 rounded-md border border-(--w-06) bg-(--k-10) px-3 py-2">
                   <div
                     className={cn(
-                      "text-[12.5px] leading-relaxed text-muted whitespace-pre-wrap break-words pr-1",
+                      "text-[12.5px] leading-relaxed text-muted whitespace-pre-wrap wrap-break-word pr-1",
                       !promptExpanded && "line-clamp-5",
                     )}
                   >
@@ -351,7 +351,7 @@ function JobRowExpandableComponent({
 
                 {(status === "failed" || status === "partial_failed") &&
                   errorMessage && (
-                    <div className="mb-3 rounded-md border border-[color:var(--status-err-25)] bg-[color:var(--status-err-08)] px-3 py-2">
+                    <div className="mb-3 rounded-md border border-(--status-err-25) bg-(--status-err-08) px-3 py-2">
                       <div className="flex items-start gap-2 text-[12.5px] text-status-err">
                         <AlertTriangle size={14} className="mt-0.5 shrink-0" />
                         <div className="min-w-0">
@@ -367,11 +367,11 @@ function JobRowExpandableComponent({
                               </span>
                             )}
                           </div>
-                          <div className="mt-1 whitespace-pre-wrap break-words text-[12px] text-muted">
+                          <div className="mt-1 whitespace-pre-wrap wrap-break-word text-[12px] text-muted">
                             {errorMessage}
                           </div>
                           {errorDetailOnly && (
-                            <pre className="mt-1.5 mb-0 max-h-40 overflow-auto whitespace-pre-wrap break-words rounded bg-status-err/5 p-2 font-mono text-[11px] leading-[1.45] text-muted">
+                            <pre className="mt-1.5 mb-0 max-h-40 overflow-auto whitespace-pre-wrap wrap-break-word rounded bg-status-err/5 p-2 font-mono text-[11px] leading-[1.45] text-muted">
                               {errorDetailOnly}
                             </pre>
                           )}
@@ -399,7 +399,7 @@ function JobRowExpandableComponent({
                       "grid gap-2",
                       slots.length === 1
                         ? "grid-cols-1"
-                        : "grid-cols-2 sm:[grid-template-columns:repeat(var(--history-output-cols),minmax(0,1fr))]",
+                        : "grid-cols-2 sm:grid-cols-[repeat(var(--history-output-cols),minmax(0,1fr))]",
                     )}
                     style={
                       {
@@ -416,14 +416,14 @@ function JobRowExpandableComponent({
                         return (
                           <div
                             key={`error-${outputIndex}`}
-                            className="min-h-[112px] rounded-lg border border-[color:var(--status-err-25)] bg-[color:var(--status-err-08)] p-3 text-left"
+                            className="min-h-[112px] rounded-lg border border-(--status-err-25) bg-(--status-err-08) p-3 text-left"
                           >
                             <div className="flex items-center gap-1.5 text-[12px] font-medium text-status-err">
                               <AlertTriangle size={14} />
                               {t("候选 ")}
                               {letter} {t("失败")}
                             </div>
-                            <div className="mt-2 line-clamp-4 whitespace-pre-wrap break-words text-[12px] leading-relaxed text-muted">
+                            <div className="mt-2 line-clamp-4 whitespace-pre-wrap wrap-break-word text-[12px] leading-relaxed text-muted">
                               {slotError.message}
                             </div>
                           </div>
@@ -447,7 +447,7 @@ function JobRowExpandableComponent({
                               onOpenDetail(outputIndex);
                             }}
                             className={cn(
-                              "group relative w-full rounded-lg overflow-hidden ring-1 ring-[color:var(--w-08)] hover:ring-[color:var(--accent-45)] transition-all hover:scale-[1.008]",
+                              "group relative w-full rounded-lg overflow-hidden ring-1 ring-(--w-08) hover:ring-(--accent-45) transition-all hover:scale-[1.008]",
                               slots.length === 1
                                 ? "h-[min(42vh,420px)] min-h-[220px]"
                                 : "h-[168px]",
@@ -457,14 +457,14 @@ function JobRowExpandableComponent({
                           >
                             <SpotlightCard
                               spotlightColor="rgba(var(--accent-rgb), 0.30)"
-                              className="!rounded-lg !p-0 !bg-transparent !border-0 !w-full !h-full absolute inset-0"
+                              className="rounded-lg! p-0! bg-transparent! border-0! w-full! h-full! absolute inset-0"
                             >
                               <JobPreviewImage
                                 url={url}
                                 seed={index * 37 + outputIndex + i}
                                 variant={`history-output-${job.id}-${outputIndex}`}
                                 recover={() => recoverOutputUrl(outputIndex)}
-                                imageClassName="absolute inset-0 h-full w-full object-contain bg-[color:var(--k-18)]"
+                                imageClassName="absolute inset-0 h-full w-full object-contain bg-(--k-18)"
                                 placeholderClassName="absolute inset-0"
                               />
                               <span

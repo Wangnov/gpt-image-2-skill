@@ -12,14 +12,20 @@ const version = arg("version");
 const tag = arg("tag", version ? `v${version}` : "");
 const repo = arg("repo", process.env.GITHUB_REPOSITORY ?? "");
 const sigDir = arg("sig-dir");
-const out = arg("out", "latest.json");
+const channel = arg("channel", "legacy");
+const out = arg("out", channel === "modern" ? "latest-modern.json" : "latest.json");
 const pubDate = arg("pub-date", new Date().toISOString());
 const notes = arg("notes", `GPT Image 2 ${tag}`);
 
 if (!version || !tag || !repo || !sigDir) {
   console.error(
-    "Usage: generate-tauri-updater-manifest.mjs --version <x.y.z> --tag <vX.Y.Z> --repo <owner/repo> --sig-dir <dir> [--out latest.json]",
+    "Usage: generate-tauri-updater-manifest.mjs --version <x.y.z> --tag <vX.Y.Z> --repo <owner/repo> --sig-dir <dir> [--channel legacy|modern] [--out <path>]",
   );
+  process.exit(1);
+}
+
+if (!["legacy", "modern"].includes(channel)) {
+  console.error(`Unknown updater channel: ${channel}`);
   process.exit(1);
 }
 
@@ -33,13 +39,22 @@ const assets = {
 
 const platforms = {};
 for (const [platform, asset] of Object.entries(assets)) {
+  // Existing macOS clients support 11+, and cannot check a new bundle's minimum
+  // OS version before replacing themselves. Only the new channel may offer the
+  // 13.3+ bundle. Windows and Linux retain their existing update formats.
+  if (channel === "legacy" && platform.startsWith("darwin-")) continue;
   const sigPath = path.join(sigDir, `${asset}.sig`);
   if (!existsSync(sigPath)) {
     console.error(`Missing updater signature for ${platform}: ${sigPath}`);
     process.exit(1);
   }
+  const signature = readFileSync(sigPath, "utf8").trim();
+  if (!signature) {
+    console.error(`Empty updater signature for ${platform}: ${sigPath}`);
+    process.exit(1);
+  }
   platforms[platform] = {
-    signature: readFileSync(sigPath, "utf8").trim(),
+    signature,
     url: `${baseUrl}/${encodeURIComponent(asset)}`,
   };
 }

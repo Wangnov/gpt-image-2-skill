@@ -153,7 +153,7 @@ export function ProxyPanel({ proxy }: { proxy?: ProxyConfig }) {
 
         <div className="flex items-center justify-end gap-3 px-4 py-3.5 sm:px-5">
           {isDirty && (
-            <span className="text-[12px] text-[color:var(--accent-70)]">
+            <span className="text-[12px] text-(--accent-70)">
               {t("有未保存的改动")}
             </span>
           )}

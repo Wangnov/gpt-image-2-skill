@@ -188,7 +188,7 @@ export default function ElasticSlider({
           aria-disabled={disabled || undefined}
           tabIndex={disabled ? -1 : 0}
           className={cn(
-            "relative h-8 min-w-[104px] touch-none select-none outline-none",
+            "relative h-8 min-w-[104px] touch-none select-none outline-hidden",
             disabled ? "cursor-not-allowed" : "cursor-ew-resize",
           )}
           onPointerDown={handlePointerDown}
@@ -200,7 +200,7 @@ export default function ElasticSlider({
         >
           <div className="absolute inset-x-0 top-1/2 h-1.5 -translate-y-1/2">
             <motion.div
-              className="relative h-full rounded-full bg-[color:var(--w-08)] shadow-inner ring-1 ring-[color:var(--w-10)]"
+              className="relative h-full rounded-full bg-(--w-08) shadow-inner ring-1 ring-(--w-10)"
               animate={{
                 x:
                   region === "left"
@@ -222,7 +222,7 @@ export default function ElasticSlider({
               transition={{ type: "spring", stiffness: 360, damping: 24 }}
             >
               <div
-                className="absolute inset-y-0 left-0 rounded-full bg-[image:var(--accent-gradient)] shadow-[var(--shadow-accent-glow)]"
+                className="absolute inset-y-0 left-0 rounded-full bg-(image:--accent-gradient) shadow-(--shadow-accent-glow)"
                 style={{ width: `${percent}%` }}
               />
             </motion.div>
@@ -238,7 +238,7 @@ export default function ElasticSlider({
             }}
             transition={{ type: "spring", stiffness: 520, damping: 26 }}
           >
-            <div className="size-4 -translate-x-1/2 -translate-y-1/2 rounded-full border border-[color:var(--w-40)] bg-[color:var(--n-0)] shadow-[0_8px_24px_var(--k-35),0_0_0_5px_var(--accent-14)]" />
+            <div className="size-4 -translate-x-1/2 -translate-y-1/2 rounded-full border border-(--w-40) bg-(--n-0) shadow-[0_8px_24px_var(--k-35),0_0_0_5px_var(--accent-14)]" />
           </motion.div>
         </div>
       </motion.div>
@@ -259,7 +259,7 @@ export default function ElasticSlider({
 
       <span
         className={cn(
-          "shrink-0 rounded-full border border-[color:var(--w-08)] bg-[color:var(--w-04)] px-2 py-0.5 text-right font-mono text-[11px] tabular-nums text-faint",
+          "shrink-0 rounded-full border border-(--w-08) bg-(--w-04) px-2 py-0.5 text-right font-mono text-[11px] tabular-nums text-faint",
           valueWidthClassName,
         )}
       >

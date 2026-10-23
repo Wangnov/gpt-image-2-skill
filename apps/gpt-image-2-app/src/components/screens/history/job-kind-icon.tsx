@@ -30,7 +30,7 @@ export function JobKindIcon({
         title={label}
         aria-label={label}
         className={cn(
-          "inline-flex shrink-0 text-[color:var(--accent)]",
+          "inline-flex shrink-0 text-(--accent)",
           className,
         )}
       >

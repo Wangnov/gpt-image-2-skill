@@ -38,7 +38,7 @@ export function ClassicEditReferenceTile({
         }
       }}
       className={cn(
-        "group relative aspect-square cursor-pointer overflow-hidden rounded-lg border-[1.5px] bg-sunken focus-visible:outline-none",
+        "group relative aspect-square cursor-pointer overflow-hidden rounded-lg border-[1.5px] bg-sunken focus-visible:outline-hidden",
         active
           ? "border-accent shadow-[0_0_0_3px_var(--accent-faint)]"
           : "border-border hover:border-border-strong",
@@ -89,7 +89,7 @@ export function ClassicEditReferenceTile({
             event.stopPropagation();
             onSetTarget();
           }}
-          className="image-overlay absolute bottom-1.5 left-1.5 rounded px-2 py-1 text-[11px] font-semibold opacity-0 transition-opacity group-hover:opacity-100"
+          className="image-overlay absolute bottom-1.5 left-1.5 rounded px-2 py-1 text-[11px] font-semibold opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100 [@media(hover:none)]:opacity-100"
         >
           {t("设为目标")}
         </button>
@@ -100,7 +100,7 @@ export function ClassicEditReferenceTile({
           event.stopPropagation();
           onRemove();
         }}
-        className="image-overlay absolute bottom-1.5 right-1.5 flex h-7 w-7 items-center justify-center rounded opacity-0 transition-opacity group-hover:opacity-100"
+        className="image-overlay absolute bottom-1.5 right-1.5 flex h-7 w-7 items-center justify-center rounded opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100 [@media(hover:none)]:opacity-100"
         aria-label={t("删除 {p0}", { p0: ref_.name })}
       >
         <Icon name="x" size={12} />

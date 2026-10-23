@@ -1,61 +1,211 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+@import 'tailwindcss' source(none);
+@source './';
+@source '../index.html';
+@plugin 'tailwindcss-animate';
 
-/* ──────────────────────────────────────────────────────────
+@custom-variant dark (&:is([data-theme="dark"] *));
+
+@theme {
+  --color-background: var(--bg);
+  --color-raised: var(--bg-raised);
+  --color-sunken: var(--bg-sunken);
+  --color-hover: var(--bg-hover);
+  --color-pressed: var(--bg-pressed);
+
+  --color-border: var(--border);
+  --color-border-strong: var(--border-strong);
+  --color-border-faint: var(--border-faint);
+
+  --color-foreground: var(--text);
+  --color-muted: var(--text-muted);
+  --color-faint: var(--text-faint);
+  --color-inverted: var(--text-inverted);
+
+  --color-accent: var(--accent);
+  --color-accent-hover: var(--accent-hover);
+  --color-accent-faint: var(--accent-faint);
+  --color-accent-on: var(--accent-on);
+
+  --color-status-ok: var(--status-ok);
+  --color-status-ok-bg: var(--status-ok-bg);
+  --color-status-running: var(--status-running);
+  --color-status-running-bg: var(--status-running-bg);
+  --color-status-err: var(--status-err);
+  --color-status-err-bg: var(--status-err-bg);
+  --color-status-queued: var(--status-queued);
+  --color-status-queued-bg: var(--status-queued-bg);
+
+  --color-neutral-0: var(--n-0);
+  --color-neutral-25: var(--n-25);
+  --color-neutral-50: var(--n-50);
+  --color-neutral-100: var(--n-100);
+  --color-neutral-150: var(--n-150);
+  --color-neutral-200: var(--n-200);
+  --color-neutral-300: var(--n-300);
+  --color-neutral-400: var(--n-400);
+  --color-neutral-500: var(--n-500);
+  --color-neutral-600: var(--n-600);
+  --color-neutral-700: var(--n-700);
+  --color-neutral-800: var(--n-800);
+  --color-neutral-900: var(--n-900);
+
+  --radius-sm: var(--r-sm);
+  --radius-md: var(--r-md);
+  --radius-lg: var(--r-lg);
+  --radius-xl: var(--r-xl);
+
+  --shadow-sm: var(--shadow-sm);
+  --shadow-md: var(--shadow-md);
+  --shadow-lg: var(--shadow-lg);
+  --shadow-popover: var(--shadow-popover);
+
+  --font-sans: var(--f-ui);
+  --font-mono: var(--f-mono);
+  --font-serif: var(--f-serif);
+
+  --spacing-d-row: var(--d-row);
+  --spacing-d-input: var(--d-input);
+  --spacing-d-pad: var(--d-pad);
+  --spacing-d-gap: var(--d-gap);
+
+  --transition-duration-180: 180ms;
+  --transition-duration-220: 220ms;
+
+  --ease-out-quint: cubic-bezier(0.22, 1, 0.36, 1);
+  --ease-spring-soft: cubic-bezier(0.34, 1.56, 0.64, 1);
+
+  --animate-fade-in: fade-in 0.24s ease both;
+  --animate-fade-up: fade-up 0.32s ease both;
+  --animate-pulse-subtle: pulse-subtle 1.6s ease-in-out infinite;
+  --animate-shimmer: shimmer 1.6s linear infinite;
+  --animate-accent-pulse-out: accent-pulse-out 600ms
+    cubic-bezier(0.16, 1, 0.3, 1) forwards;
+
+  @keyframes fade-in {
+    from {
+      opacity: 0;
+    }
+    to {
+      opacity: 1;
+    }
+  }
+  @keyframes fade-up {
+    from {
+      opacity: 0;
+      transform: translateY(4px);
+    }
+    to {
+      opacity: 1;
+      transform: none;
+    }
+  }
+  @keyframes pulse-subtle {
+    0%,
+    100% {
+      opacity: 1;
+    }
+    50% {
+      opacity: 0.55;
+    }
+  }
+  @keyframes shimmer {
+    0% {
+      background-position: -200% 0;
+    }
+    100% {
+      background-position: 200% 0;
+    }
+  }
+  @keyframes spin {
+    to {
+      transform: rotate(360deg);
+    }
+  }
+  @keyframes accent-pulse-out {
+    0% {
+      transform: scale(0.4);
+      opacity: 0.85;
+    }
+    100% {
+      transform: scale(2.2);
+      opacity: 0;
+    }
+  }
+}
+
+/*
+  The default border color has changed to `currentcolor` in Tailwind CSS v4,
+  so we've added these compatibility styles to make sure everything still
+  looks the same as it did with Tailwind CSS v3.
+
+  If we ever want to remove these styles, we need to add an explicit border
+  color utility to any element that depends on these defaults.
+*/
+@layer base {
+  *,
+  ::after,
+  ::before,
+  ::backdrop,
+  ::file-selector-button {
+    border-color: var(--color-gray-200, currentcolor);
+  }
+}
+
+@layer utilities {
+  /* ──────────────────────────────────────────────────────────
    Liquid token system — single dark theme.
    The original tokens (--bg, --text, --accent…) are kept by
    name so existing components keep compiling, but their
    VALUES now point at the liquid dark palette. light theme
    and per-accent overrides have been retired.
    ────────────────────────────────────────────────────────── */
-:root {
-  /* neutral ramp (liquid-tuned dark) */
-  --n-0: #fafafb;
-  --n-25: #f8f8fa;
-  --n-50: #e9e9ed;
-  --n-100: #c3c3ca;
-  --n-150: #9a9aa3;
-  --n-200: #74747e;
-  --n-300: #54545d;
-  --n-400: #3c3c44;
-  --n-500: #2a2a31;
-  --n-600: #1d1d23;
-  --n-700: #14141a;
-  --n-800: #0c0c12;
-  --n-900: #06060a;
+  :root {
+    /* neutral ramp (liquid-tuned dark) */
+    --n-0: #fafafb;
+    --n-25: #f8f8fa;
+    --n-50: #e9e9ed;
+    --n-100: #c3c3ca;
+    --n-150: #9a9aa3;
+    --n-200: #74747e;
+    --n-300: #54545d;
+    --n-400: #3c3c44;
+    --n-500: #2a2a31;
+    --n-600: #1d1d23;
+    --n-700: #14141a;
+    --n-800: #0c0c12;
+    --n-900: #06060a;
 
-  /* surfaces */
-  --bg: #06060a;
-  --bg-raised: rgba(20, 20, 28, 0.62);
-  --bg-sunken: rgba(8, 8, 12, 0.7);
-  --bg-hover: rgba(255, 255, 255, 0.05);
-  --bg-pressed: rgba(255, 255, 255, 0.09);
+    /* surfaces */
+    --bg: #06060a;
+    --bg-raised: rgba(20, 20, 28, 0.62);
+    --bg-sunken: rgba(8, 8, 12, 0.7);
+    --bg-hover: rgba(255, 255, 255, 0.05);
+    --bg-pressed: rgba(255, 255, 255, 0.09);
 
-  /* glass-specific extras (liquid namespace) — alpha follows --glass-alpha
+    /* glass-specific extras (liquid namespace) — alpha follows --glass-alpha
      so the user can crank panel opacity in Settings → 外观. The values
      here match the historical defaults (alpha = 0.42). */
-  --glass-alpha: 0.42;
-  --lq-glass: rgba(20, 20, 28, var(--glass-alpha));
-  --lq-glass-strong: rgba(24, 24, 34, calc(var(--glass-alpha) + 0.20));
-  --lq-glass-deep: rgba(10, 10, 14, calc(var(--glass-alpha) + 0.36));
-  --lq-glass-row: rgba(255, 255, 255, 0.04);
-  --lq-glass-row-hover: rgba(255, 255, 255, 0.07);
-  --lq-blur: 28px;
-  --lq-blur-soft: 16px;
+    --glass-alpha: 0.42;
+    --lq-glass: rgba(20, 20, 28, var(--glass-alpha));
+    --lq-glass-strong: rgba(24, 24, 34, calc(var(--glass-alpha) + 0.2));
+    --lq-glass-deep: rgba(10, 10, 14, calc(var(--glass-alpha) + 0.36));
+    --lq-glass-row: rgba(255, 255, 255, 0.04);
+    --lq-glass-row-hover: rgba(255, 255, 255, 0.07);
+    --lq-blur: 28px;
+    --lq-blur-soft: 16px;
 
-  /* lines / borders */
-  --border: rgba(255, 255, 255, 0.1);
-  --border-strong: rgba(255, 255, 255, 0.18);
-  --border-faint: rgba(255, 255, 255, 0.05);
+    /* lines / borders */
+    --border: rgba(255, 255, 255, 0.1);
+    --border-strong: rgba(255, 255, 255, 0.18);
+    --border-faint: rgba(255, 255, 255, 0.05);
 
-  /* text */
-  --text: #f5f5f7;
-  --text-muted: rgba(245, 245, 247, 0.7);
-  --text-faint: rgba(245, 245, 247, 0.45);
-  --text-inverted: #06060a;
+    /* text */
+    --text: #f5f5f7;
+    --text-muted: rgba(245, 245, 247, 0.7);
+    --text-faint: rgba(245, 245, 247, 0.45);
+    --text-inverted: #06060a;
 
-  /* accent — three layered representations so each call site picks
+    /* accent — three layered representations so each call site picks
      the cheapest path:
        1. OKLCH triplets (--accent-l / --accent-c / --accent-h):
           the source of truth. Drive every alpha ramp via
@@ -73,44 +223,46 @@
           gradient anchor stops written verbatim).
      Theme presets at runtime overwrite all of these atomically
      so a preset switch retints the entire surface in one frame. */
-  --accent-l: 67%;
-  --accent-c: 0.18;
-  --accent-h: 295;
-  --accent-2-l: 85%;
-  --accent-2-c: 0.13;
-  --accent-2-h: 207;
-  --accent-3-l: 80%;
-  --accent-3-c: 0.13;
-  --accent-3-h: 322;
-  --accent-rgb: 167, 139, 250;
-  --accent-2-rgb: 103, 232, 249;
-  --accent-3-rgb: 240, 171, 252;
-  --accent: oklch(var(--accent-l) var(--accent-c) var(--accent-h));
-  --accent-hover: oklch(
-    calc(var(--accent-l) + 8%) var(--accent-c) var(--accent-h)
-  );
-  --accent-faint: oklch(var(--accent-l) var(--accent-c) var(--accent-h) / 0.14);
-  --accent-on: #06060a;
-  --accent-2: oklch(var(--accent-2-l) var(--accent-2-c) var(--accent-2-h));
-  --accent-3: oklch(var(--accent-3-l) var(--accent-3-c) var(--accent-3-h));
-  --accent-gradient: linear-gradient(
-    135deg,
-    oklch(var(--accent-l) var(--accent-c) var(--accent-h)) 0%,
-    oklch(var(--accent-2-l) var(--accent-2-c) var(--accent-2-h)) 60%,
-    oklch(var(--accent-3-l) var(--accent-3-c) var(--accent-3-h)) 100%
-  );
+    --accent-l: 67%;
+    --accent-c: 0.18;
+    --accent-h: 295;
+    --accent-2-l: 85%;
+    --accent-2-c: 0.13;
+    --accent-2-h: 207;
+    --accent-3-l: 80%;
+    --accent-3-c: 0.13;
+    --accent-3-h: 322;
+    --accent-rgb: 167, 139, 250;
+    --accent-2-rgb: 103, 232, 249;
+    --accent-3-rgb: 240, 171, 252;
+    --accent: oklch(var(--accent-l) var(--accent-c) var(--accent-h));
+    --accent-hover: oklch(
+      calc(var(--accent-l) + 8%) var(--accent-c) var(--accent-h)
+    );
+    --accent-faint: oklch(
+      var(--accent-l) var(--accent-c) var(--accent-h) / 0.14
+    );
+    --accent-on: #06060a;
+    --accent-2: oklch(var(--accent-2-l) var(--accent-2-c) var(--accent-2-h));
+    --accent-3: oklch(var(--accent-3-l) var(--accent-3-c) var(--accent-3-h));
+    --accent-gradient: linear-gradient(
+      135deg,
+      oklch(var(--accent-l) var(--accent-c) var(--accent-h)) 0%,
+      oklch(var(--accent-2-l) var(--accent-2-c) var(--accent-2-h)) 60%,
+      oklch(var(--accent-3-l) var(--accent-3-c) var(--accent-3-h)) 100%
+    );
 
-  /* status (dark-tuned) */
-  --status-running: #fbbf24;
-  --status-running-bg: rgba(251, 191, 36, 0.14);
-  --status-ok: #34d399;
-  --status-ok-bg: rgba(52, 211, 153, 0.14);
-  --status-err: #f87171;
-  --status-err-bg: rgba(248, 113, 113, 0.16);
-  --status-queued: #94a3b8;
-  --status-queued-bg: rgba(148, 163, 184, 0.14);
+    /* status (dark-tuned) */
+    --status-running: #fbbf24;
+    --status-running-bg: rgba(251, 191, 36, 0.14);
+    --status-ok: #34d399;
+    --status-ok-bg: rgba(52, 211, 153, 0.14);
+    --status-err: #f87171;
+    --status-err-bg: rgba(248, 113, 113, 0.16);
+    --status-queued: #94a3b8;
+    --status-queued-bg: rgba(148, 163, 184, 0.14);
 
-  /* type — families
+    /* type — families
      UI sans is General Sans (Indian Type Foundry, free for commercial
      use). Loaded from Fontshare via index.html. Picked over Inter for
      its single-storey digits, opener counters, and the slight crafted
@@ -118,15 +270,15 @@
      monoculture neutrality. The fallback chain stays high-quality
      so the offline-first Tauri build lands on SF Pro / PingFang and
      not a generic system sans-serif. */
-  --f-sans:
-    "General Sans", -apple-system, BlinkMacSystemFont, "SF Pro Text",
-    "Helvetica Neue", sans-serif;
-  --f-mono:
-    "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-  --f-serif: "Source Serif 4", "Iowan Old Style", "Georgia", serif;
-  --f-ui: var(--f-sans);
+    --f-sans:
+      'General Sans', -apple-system, BlinkMacSystemFont, 'SF Pro Text',
+      'Helvetica Neue', sans-serif;
+    --f-mono:
+      'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    --f-serif: 'Source Serif 4', 'Iowan Old Style', 'Georgia', serif;
+    --f-ui: var(--f-sans);
 
-  /* type — modular scale, fixed rem (this is a desktop tool UI, fluid
+    /* type — modular scale, fixed rem (this is a desktop tool UI, fluid
      sizing would undermine the spatial predictability of dense panels).
      Hero/display sizes flex via clamp() in .t-display below.
      Use semantic tokens, not raw px, in components.
@@ -137,62 +289,60 @@
      contrast. The previous scale had h3 == body (both 13.5px) which
      collapsed two layers and forced every panel row to lean entirely
      on weight. */
-  --text-display: 3rem;        /* 48px — hero "GPT Image 2" */
-  --text-screen: 1.625rem;     /* 26px — screen-level h1 */
-  --text-title: 1.25rem;       /* 20px — section title */
-  --text-h2: 1rem;             /* 16px — section h2 */
-  --text-h3: 0.875rem;         /* 14px — h3 (carries weight 600) */
-  --text-body: 0.8125rem;      /* 13px — body default */
-  --text-md: 0.8125rem;        /* 13px — alias kept for clarity at call sites */
-  --text-sm: 0.75rem;          /* 12px */
-  --text-xs: 0.6875rem;        /* 11px — smallest legible mixed-case */
-  --text-2xs: 0.65625rem;      /* 10.5px — caps-only label (uppercase letters
+    --text-display: 3rem; /* 48px — hero "GPT Image 2" */
+    --text-screen: 1.625rem; /* 26px — screen-level h1 */
+    --text-title: 1.25rem; /* 20px — section title */
+    --text-h2: 1rem; /* 16px — section h2 */
+    --text-h3: 0.875rem; /* 14px — h3 (carries weight 600) */
+    --text-body: 0.8125rem; /* 13px — body default */
+    --text-md: 0.8125rem; /* 13px — alias kept for clarity at call sites */
+    --text-sm: 0.75rem; /* 12px */
+    --text-xs: 0.6875rem; /* 11px — smallest legible mixed-case */
+    --text-2xs: 0.65625rem; /* 10.5px — caps-only label (uppercase letters
                                   read taller than mixed case at the same px) */
 
-  /* line-heights — tighter for display, looser for body */
-  --leading-display: 1;
-  --leading-tight: 1.15;
-  --leading-snug: 1.3;
-  --leading-normal: 1.5;
-  --leading-relaxed: 1.65;
+    /* line-heights — tighter for display, looser for body */
+    --leading-display: 1;
+    --leading-tight: 1.15;
+    --leading-snug: 1.3;
+    --leading-normal: 1.5;
+    --leading-relaxed: 1.65;
 
-  /* letter-spacing — only at the extremes; default is 0 */
-  --track-display: -0.025em;   /* large headings */
-  --track-tight: -0.02em;
-  --track-snug: -0.01em;
-  --track-tiny: 0.02em;        /* very small UI labels read better with a hair of opening */
-  --track-caps: 0.08em;        /* uppercase caps labels */
+    /* letter-spacing — only at the extremes; default is 0 */
+    --track-display: -0.025em; /* large headings */
+    --track-tight: -0.02em;
+    --track-snug: -0.01em;
+    --track-tiny: 0.02em; /* very small UI labels read better with a hair of opening */
+    --track-caps: 0.08em; /* uppercase caps labels */
 
-  /* density */
-  --d-row: 44px;
-  --d-input: 36px;
-  --d-pad: 16px;
-  --d-gap: 16px;
+    /* density */
+    --d-row: 44px;
+    --d-input: 36px;
+    --d-pad: 16px;
+    --d-gap: 16px;
 
-  /* radii */
-  --r-sm: 6px;
-  --r-md: 10px;
-  --r-lg: 14px;
-  --r-xl: 18px;
+    /* radii */
+    --r-sm: 6px;
+    --r-md: 10px;
+    --r-lg: 14px;
+    --r-xl: 18px;
 
-  --grid-line: rgba(255, 255, 255, 0.035);
-  --grid-size: 32px;
-  --image-overlay: rgba(0, 0, 0, 0.62);
-  --image-overlay-soft: rgba(0, 0, 0, 0.45);
-  --image-overlay-text: #ffffff;
-  --mask-dim: rgba(0, 0, 0, 0.18);
-  --modal-overlay: rgba(0, 0, 0, 0.55);
+    --grid-line: rgba(255, 255, 255, 0.035);
+    --grid-size: 32px;
+    --image-overlay: rgba(0, 0, 0, 0.62);
+    --image-overlay-soft: rgba(0, 0, 0, 0.45);
+    --image-overlay-text: #ffffff;
+    --mask-dim: rgba(0, 0, 0, 0.18);
+    --modal-overlay: rgba(0, 0, 0, 0.55);
 
-  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.5);
-  --shadow-md:
-    0 4px 16px rgba(0, 0, 0, 0.5), 0 1px 3px rgba(0, 0, 0, 0.4);
-  --shadow-lg:
-    0 24px 64px -24px rgba(0, 0, 0, 0.7),
-    0 8px 24px -12px rgba(0, 0, 0, 0.5);
-  --shadow-popover:
-    0 18px 48px rgba(0, 0, 0, 0.55), 0 4px 12px rgba(0, 0, 0, 0.45);
+    --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.5);
+    --shadow-md: 0 4px 16px rgba(0, 0, 0, 0.5), 0 1px 3px rgba(0, 0, 0, 0.4);
+    --shadow-lg:
+      0 24px 64px -24px rgba(0, 0, 0, 0.7), 0 8px 24px -12px rgba(0, 0, 0, 0.5);
+    --shadow-popover:
+      0 18px 48px rgba(0, 0, 0, 0.55), 0 4px 12px rgba(0, 0, 0, 0.45);
 
-  /* ──────────────────────────────────────────────────────────
+    /* ──────────────────────────────────────────────────────────
      Liquid alpha ramps & semantic tokens.
 
      Two-layer system:
@@ -208,273 +358,288 @@
      literal in TSX.
      ────────────────────────────────────────────────────────── */
 
-  /* accent alpha ramp — driven by the OKLCH triplet so theme presets
+    /* accent alpha ramp — driven by the OKLCH triplet so theme presets
      only need to swap (l, c, h) to recolor every chip / hover / glow.
      Equal alpha steps stay perceptually equal because OKLCH is
      perceptually uniform; the previous rgba() ramp visibly collapsed
      contrast near the dark surfaces this UI sits on. */
-  --accent-04: oklch(var(--accent-l) var(--accent-c) var(--accent-h) / 0.04);
-  --accent-06: oklch(var(--accent-l) var(--accent-c) var(--accent-h) / 0.06);
-  --accent-08: oklch(var(--accent-l) var(--accent-c) var(--accent-h) / 0.08);
-  --accent-10: oklch(var(--accent-l) var(--accent-c) var(--accent-h) / 0.10);
-  --accent-14: oklch(var(--accent-l) var(--accent-c) var(--accent-h) / 0.14);
-  --accent-18: oklch(var(--accent-l) var(--accent-c) var(--accent-h) / 0.18);
-  --accent-25: oklch(var(--accent-l) var(--accent-c) var(--accent-h) / 0.25);
-  --accent-30: oklch(var(--accent-l) var(--accent-c) var(--accent-h) / 0.30);
-  --accent-35: oklch(var(--accent-l) var(--accent-c) var(--accent-h) / 0.35);
-  --accent-45: oklch(var(--accent-l) var(--accent-c) var(--accent-h) / 0.45);
-  --accent-50: oklch(var(--accent-l) var(--accent-c) var(--accent-h) / 0.50);
-  --accent-55: oklch(var(--accent-l) var(--accent-c) var(--accent-h) / 0.55);
-  --accent-60: oklch(var(--accent-l) var(--accent-c) var(--accent-h) / 0.60);
-  --accent-75: oklch(var(--accent-l) var(--accent-c) var(--accent-h) / 0.75);
+    --accent-04: oklch(var(--accent-l) var(--accent-c) var(--accent-h) / 0.04);
+    --accent-06: oklch(var(--accent-l) var(--accent-c) var(--accent-h) / 0.06);
+    --accent-08: oklch(var(--accent-l) var(--accent-c) var(--accent-h) / 0.08);
+    --accent-10: oklch(var(--accent-l) var(--accent-c) var(--accent-h) / 0.1);
+    --accent-14: oklch(var(--accent-l) var(--accent-c) var(--accent-h) / 0.14);
+    --accent-18: oklch(var(--accent-l) var(--accent-c) var(--accent-h) / 0.18);
+    --accent-25: oklch(var(--accent-l) var(--accent-c) var(--accent-h) / 0.25);
+    --accent-30: oklch(var(--accent-l) var(--accent-c) var(--accent-h) / 0.3);
+    --accent-35: oklch(var(--accent-l) var(--accent-c) var(--accent-h) / 0.35);
+    --accent-45: oklch(var(--accent-l) var(--accent-c) var(--accent-h) / 0.45);
+    --accent-50: oklch(var(--accent-l) var(--accent-c) var(--accent-h) / 0.5);
+    --accent-55: oklch(var(--accent-l) var(--accent-c) var(--accent-h) / 0.55);
+    --accent-60: oklch(var(--accent-l) var(--accent-c) var(--accent-h) / 0.6);
+    --accent-75: oklch(var(--accent-l) var(--accent-c) var(--accent-h) / 0.75);
 
-  /* accent-2 alpha ramp — used sparingly */
-  --accent-2-06: oklch(
-    var(--accent-2-l) var(--accent-2-c) var(--accent-2-h) / 0.06
-  );
-  --accent-2-14: oklch(
-    var(--accent-2-l) var(--accent-2-c) var(--accent-2-h) / 0.14
-  );
-  --accent-2-30: oklch(
-    var(--accent-2-l) var(--accent-2-c) var(--accent-2-h) / 0.30
-  );
+    /* accent-2 alpha ramp — used sparingly */
+    --accent-2-06: oklch(
+      var(--accent-2-l) var(--accent-2-c) var(--accent-2-h) / 0.06
+    );
+    --accent-2-14: oklch(
+      var(--accent-2-l) var(--accent-2-c) var(--accent-2-h) / 0.14
+    );
+    --accent-2-30: oklch(
+      var(--accent-2-l) var(--accent-2-c) var(--accent-2-h) / 0.3
+    );
 
-  /* white scrim alpha ramp (for hovers, soft fills, borders) */
-  --w-02: rgba(255, 255, 255, 0.02);
-  --w-04: rgba(255, 255, 255, 0.04);
-  --w-05: rgba(255, 255, 255, 0.05);
-  --w-06: rgba(255, 255, 255, 0.06);
-  --w-07: rgba(255, 255, 255, 0.07);
-  --w-08: rgba(255, 255, 255, 0.08);
-  --w-10: rgba(255, 255, 255, 0.10);
-  --w-12: rgba(255, 255, 255, 0.12);
-  --w-16: rgba(255, 255, 255, 0.16);
-  --w-18: rgba(255, 255, 255, 0.18);
-  --w-20: rgba(255, 255, 255, 0.20);
-  --w-40: rgba(255, 255, 255, 0.40);
+    /* white scrim alpha ramp (for hovers, soft fills, borders) */
+    --w-02: rgba(255, 255, 255, 0.02);
+    --w-04: rgba(255, 255, 255, 0.04);
+    --w-05: rgba(255, 255, 255, 0.05);
+    --w-06: rgba(255, 255, 255, 0.06);
+    --w-07: rgba(255, 255, 255, 0.07);
+    --w-08: rgba(255, 255, 255, 0.08);
+    --w-10: rgba(255, 255, 255, 0.1);
+    --w-12: rgba(255, 255, 255, 0.12);
+    --w-16: rgba(255, 255, 255, 0.16);
+    --w-18: rgba(255, 255, 255, 0.18);
+    --w-20: rgba(255, 255, 255, 0.2);
+    --w-40: rgba(255, 255, 255, 0.4);
 
-  /* black scrim alpha ramp (for image overlays, button glow, dialog veil) */
-  --k-30: rgba(0, 0, 0, 0.30);
-  --k-35: rgba(0, 0, 0, 0.35);
-  --k-40: rgba(0, 0, 0, 0.40);
-  --k-45: rgba(0, 0, 0, 0.45);
-  --k-55: rgba(0, 0, 0, 0.55);
-  --k-65: rgba(0, 0, 0, 0.65);
-  --k-70: rgba(0, 0, 0, 0.70);
+    /* black scrim alpha ramp (for image overlays, button glow, dialog veil) */
+    --k-30: rgba(0, 0, 0, 0.3);
+    --k-35: rgba(0, 0, 0, 0.35);
+    --k-40: rgba(0, 0, 0, 0.4);
+    --k-45: rgba(0, 0, 0, 0.45);
+    --k-55: rgba(0, 0, 0, 0.55);
+    --k-65: rgba(0, 0, 0, 0.65);
+    --k-70: rgba(0, 0, 0, 0.7);
 
-  /* deep-bg veil (color matches --bg, used to dim WebGL background) */
-  --bg-veil-soft: rgba(6, 6, 10, 0.18);
-  --bg-veil-strong: rgba(6, 6, 10, 0.62);
+    /* deep-bg veil (color matches --bg, used to dim WebGL background) */
+    --bg-veil-soft: rgba(6, 6, 10, 0.18);
+    --bg-veil-strong: rgba(6, 6, 10, 0.62);
 
-  /* page noise dot (paired with mix-blend-overlay over --bg) */
-  --w-noise: rgba(255, 255, 255, 0.025);
+    /* page noise dot (paired with mix-blend-overlay over --bg) */
+    --w-noise: rgba(255, 255, 255, 0.025);
 
-  /* status alpha ramps */
-  --status-err-08: rgba(248, 113, 113, 0.08);
-  --status-err-10: rgba(248, 113, 113, 0.10);
-  --status-err-18: rgba(248, 113, 113, 0.18);
-  --status-err-25: rgba(248, 113, 113, 0.25);
-  --status-err-30: rgba(248, 113, 113, 0.30);
-  --status-running-25: rgba(251, 191, 36, 0.25);
-  --status-running-60: rgba(251, 191, 36, 0.60);
-  --status-ok-25: rgba(52, 211, 153, 0.25);
-  --status-ok-soft: #86efac;
-  --status-queued-20: rgba(148, 163, 184, 0.20);
+    /* status alpha ramps */
+    --status-err-08: rgba(248, 113, 113, 0.08);
+    --status-err-10: rgba(248, 113, 113, 0.1);
+    --status-err-18: rgba(248, 113, 113, 0.18);
+    --status-err-25: rgba(248, 113, 113, 0.25);
+    --status-err-30: rgba(248, 113, 113, 0.3);
+    --status-running-25: rgba(251, 191, 36, 0.25);
+    --status-running-60: rgba(251, 191, 36, 0.6);
+    --status-ok-25: rgba(52, 211, 153, 0.25);
+    --status-ok-soft: #86efac;
+    --status-queued-20: rgba(148, 163, 184, 0.2);
 
-  /* brand gradient variants — use these, never the raw linear-gradient() */
-  --accent-gradient-fill: linear-gradient(
-    135deg,
-    rgba(var(--accent-rgb), 0.95) 0%,
-    rgba(var(--accent-2-rgb), 0.92) 100%
-  );
-  --accent-gradient-soft: linear-gradient(
-    135deg,
-    var(--accent-18),
-    var(--accent-2-14)
-  );
-  --accent-gradient-glow: linear-gradient(
-    135deg,
-    var(--accent-45),
-    var(--accent-2-30)
-  );
-  --accent-gradient-line: linear-gradient(135deg, #a78bfa 0%, #67e8f9 100%);
+    /* brand gradient variants — use these, never the raw linear-gradient() */
+    --accent-gradient-fill: linear-gradient(
+      135deg,
+      rgba(var(--accent-rgb), 0.95) 0%,
+      rgba(var(--accent-2-rgb), 0.92) 100%
+    );
+    --accent-gradient-soft: linear-gradient(
+      135deg,
+      var(--accent-18),
+      var(--accent-2-14)
+    );
+    --accent-gradient-glow: linear-gradient(
+      135deg,
+      var(--accent-45),
+      var(--accent-2-30)
+    );
+    --accent-gradient-line: linear-gradient(135deg, #a78bfa 0%, #67e8f9 100%);
 
-  /* floating surfaces (popover / dialog / drawer / tooltip / combobox menu) */
-  --surface-floating: rgba(14, 14, 20, 0.82);
-  --surface-floating-strong: rgba(14, 14, 20, 0.92);
-  --surface-floating-soft: rgba(14, 14, 20, 0.78);
-  --surface-floating-border: var(--w-12);
+    /* floating surfaces (popover / dialog / drawer / tooltip / combobox menu) */
+    --surface-floating: rgba(14, 14, 20, 0.82);
+    --surface-floating-strong: rgba(14, 14, 20, 0.92);
+    --surface-floating-soft: rgba(14, 14, 20, 0.78);
+    --surface-floating-border: var(--w-12);
 
-  /* top-nav surfaces — sit lower than floating layers; intentionally
+    /* top-nav surfaces — sit lower than floating layers; intentionally
      more transparent so they recede behind hero content */
-  --surface-nav: rgba(10, 10, 14, 0.55);
-  --surface-nav-strong: rgba(8, 8, 12, 0.60);
-  --shadow-floating:
-    0 24px 64px -24px var(--k-70),
-    0 8px 24px -12px var(--k-55),
-    inset 0 1px 0 var(--w-05);
-  --shadow-floating-side:
-    -32px 0 80px -32px var(--k-70),
-    -12px 0 32px -16px var(--k-55),
-    inset 1px 0 0 var(--w-05);
+    --surface-nav: rgba(10, 10, 14, 0.55);
+    --surface-nav-strong: rgba(8, 8, 12, 0.6);
+    --shadow-floating:
+      0 24px 64px -24px var(--k-70), 0 8px 24px -12px var(--k-55),
+      inset 0 1px 0 var(--w-05);
+    --shadow-floating-side:
+      -32px 0 80px -32px var(--k-70), -12px 0 32px -16px var(--k-55),
+      inset 1px 0 0 var(--w-05);
 
-  /* logo halo — sized in tiers so a 5×5 nav chip and a 64px hero share
+    /* logo halo — sized in tiers so a 5×5 nav chip and a 64px hero share
      one accent-driven palette but don't share blur radius. Plug into
      `filter: drop-shadow(var(--logo-halo-*))` so theme presets retint
      every halo when --accent-rgb shifts. */
-  --logo-halo-sm: 0 0 8px var(--accent-30);
-  --logo-halo-md: 0 0 14px var(--accent-25);
-  --logo-halo-lg: 0 0 22px var(--accent-30);
+    --logo-halo-sm: 0 0 8px var(--accent-30);
+    --logo-halo-md: 0 0 14px var(--accent-25);
+    --logo-halo-lg: 0 0 22px var(--accent-30);
 
-  /* primary CTA glow (used by button.primary + inline run buttons) */
-  --shadow-accent-glow:
-    0 8px 24px -8px var(--accent-55),
-    inset 0 1px 0 var(--w-18);
-  --shadow-accent-glow-soft: 0 0 12px var(--accent-45);
-  --shadow-accent-glow-hover:
-    0 12px 32px -8px var(--accent-60),
-    inset 0 1px 0 var(--w-18);
-  /* press burst — adds a thin accent ring around the button at the moment
+    /* primary CTA glow (used by button.primary + inline run buttons) */
+    --shadow-accent-glow:
+      0 8px 24px -8px var(--accent-55), inset 0 1px 0 var(--w-18);
+    --shadow-accent-glow-soft: 0 0 12px var(--accent-45);
+    --shadow-accent-glow-hover:
+      0 12px 32px -8px var(--accent-60), inset 0 1px 0 var(--w-18);
+    /* press burst — adds a thin accent ring around the button at the moment
      of click. CSS `active:` is brief, so the ring works as a "pulse" cue
      rather than a sustained state. */
-  --shadow-accent-glow-press:
-    0 0 0 4px var(--accent-30),
-    0 8px 24px -8px var(--accent-55),
-    inset 0 1px 0 var(--w-18);
+    --shadow-accent-glow-press:
+      0 0 0 4px var(--accent-30), 0 8px 24px -8px var(--accent-55),
+      inset 0 1px 0 var(--w-18);
 
-  /* shimmer / skeleton gradients (use these, not raw linear-gradient) */
-  --skeleton-gradient: linear-gradient(
-    110deg,
-    var(--bg-sunken) 0%,
-    var(--bg-hover) 40%,
-    var(--bg-sunken) 80%
-  );
-  --skeleton-gradient-soft: linear-gradient(
-    90deg,
-    var(--w-04) 0%,
-    var(--w-10) 40%,
-    var(--w-04) 80%
-  );
+    /* shimmer / skeleton gradients (use these, not raw linear-gradient) */
+    --skeleton-gradient: linear-gradient(
+      110deg,
+      var(--bg-sunken) 0%,
+      var(--bg-hover) 40%,
+      var(--bg-sunken) 80%
+    );
+    --skeleton-gradient-soft: linear-gradient(
+      90deg,
+      var(--w-04) 0%,
+      var(--w-10) 40%,
+      var(--w-04) 80%
+    );
 
-  /* image placeholder when no thumbnail exists yet — token-bound, not
+    /* image placeholder when no thumbnail exists yet — token-bound, not
      a one-off navy. Two violet/cyan light blooms over the sunken
      surface, so it stays inside the brand light language. */
-  --image-placeholder-bg:
-    radial-gradient(120% 80% at 30% 30%, var(--accent-50), transparent 60%),
-    radial-gradient(120% 80% at 70% 70%, var(--accent-2-30), transparent 60%),
-    var(--bg-sunken);
+    --image-placeholder-bg:
+      radial-gradient(120% 80% at 30% 30%, var(--accent-50), transparent 60%),
+      radial-gradient(120% 80% at 70% 70%, var(--accent-2-30), transparent 60%),
+      var(--bg-sunken);
 
-  /* surface "inverted" — soft white used by solid CTAs and toggle thumb,
+    /* surface "inverted" — soft white used by solid CTAs and toggle thumb,
      instead of pure #fff. Reads warmer against deep backgrounds. */
-  --surface-inverted: var(--n-25);
-  --surface-inverted-hover: var(--n-50);
-  --text-on-inverted: var(--n-900);
+    --surface-inverted: var(--n-25);
+    --surface-inverted-hover: var(--n-50);
+    --text-on-inverted: var(--n-900);
 
-  /* row hover/pressed semantics (alias to existing bg-* tokens for
+    /* row hover/pressed semantics (alias to existing bg-* tokens for
      readability where the meaning is "list row state") */
-  --row-hover: var(--w-04);
-  --row-hover-strong: var(--w-06);
-  --row-pressed: var(--w-09, var(--bg-pressed));
-}
+    --row-hover: var(--w-04);
+    --row-hover-strong: var(--w-06);
+    --row-pressed: var(--w-09, var(--bg-pressed));
+  }
 
-/* keep [data-theme] inert — single dark theme. We leave the
+  /* keep [data-theme] inert — single dark theme. We leave the
    selector here so any cached useTweaks state does not crash;
    the values just resolve to the same as :root. */
-[data-theme="dark"],
-[data-theme="light"] {
-}
+  [data-theme='dark'],
+  [data-theme='light'] {
+  }
 
-[data-interface-mode="legacy"] {
-  --legacy-window-bg:
-    radial-gradient(70% 55% at 8% 0%, rgba(88, 166, 255, 0.14) 0%, transparent 58%),
-    radial-gradient(60% 65% at 100% 18%, rgba(139, 92, 246, 0.12) 0%, transparent 58%),
-    linear-gradient(135deg, rgba(11, 13, 18, 0.98) 0%, rgba(13, 17, 25, 0.98) 50%, rgba(8, 10, 15, 0.98) 100%);
-  --legacy-noise: rgba(255, 255, 255, 0.2);
-}
+  [data-interface-mode='legacy'] {
+    --legacy-window-bg:
+      radial-gradient(
+        70% 55% at 8% 0%,
+        rgba(88, 166, 255, 0.14) 0%,
+        transparent 58%
+      ),
+      radial-gradient(
+        60% 65% at 100% 18%,
+        rgba(139, 92, 246, 0.12) 0%,
+        transparent 58%
+      ),
+      linear-gradient(
+        135deg,
+        rgba(11, 13, 18, 0.98) 0%,
+        rgba(13, 17, 25, 0.98) 50%,
+        rgba(8, 10, 15, 0.98) 100%
+      );
+    --legacy-noise: rgba(255, 255, 255, 0.2);
+  }
 
-[data-interface-mode="legacy"][data-theme="light"] {
-  --bg: #edf1f7;
-  --bg-raised: rgba(255, 255, 255, 0.86);
-  --bg-sunken: rgba(241, 245, 249, 0.92);
-  --bg-hover: rgba(15, 23, 42, 0.055);
-  --bg-pressed: rgba(15, 23, 42, 0.09);
-  --border: rgba(15, 23, 42, 0.12);
-  --border-strong: rgba(15, 23, 42, 0.20);
-  --border-faint: rgba(15, 23, 42, 0.07);
-  --text: #111827;
-  --text-muted: rgba(17, 24, 39, 0.68);
-  --text-faint: rgba(17, 24, 39, 0.44);
-  --w-02: rgba(15, 23, 42, 0.02);
-  --w-04: rgba(15, 23, 42, 0.04);
-  --w-05: rgba(15, 23, 42, 0.05);
-  --w-06: rgba(15, 23, 42, 0.06);
-  --w-07: rgba(15, 23, 42, 0.07);
-  --w-08: rgba(15, 23, 42, 0.08);
-  --w-10: rgba(15, 23, 42, 0.10);
-  --w-12: rgba(15, 23, 42, 0.12);
-  --w-16: rgba(15, 23, 42, 0.16);
-  --w-18: rgba(15, 23, 42, 0.18);
-  --w-20: rgba(15, 23, 42, 0.20);
-  --w-40: rgba(15, 23, 42, 0.40);
-  --k-30: rgba(15, 23, 42, 0.30);
-  --k-35: rgba(15, 23, 42, 0.35);
-  --k-40: rgba(15, 23, 42, 0.40);
-  --k-45: rgba(15, 23, 42, 0.45);
-  --k-55: rgba(15, 23, 42, 0.55);
-  --k-65: rgba(15, 23, 42, 0.65);
-  --k-70: rgba(15, 23, 42, 0.70);
-  --grid-line: rgba(15, 23, 42, 0.045);
-  --surface-floating: rgba(255, 255, 255, 0.96);
-  --surface-floating-strong: rgba(255, 255, 255, 0.98);
-  --surface-floating-soft: rgba(255, 255, 255, 0.92);
-  --surface-floating-border: rgba(15, 23, 42, 0.12);
-  --surface-inverted: #111827;
-  --surface-inverted-hover: #1f2937;
-  --text-on-inverted: #ffffff;
-  --image-overlay: rgba(15, 23, 42, 0.66);
-  --image-overlay-soft: rgba(15, 23, 42, 0.46);
-  --modal-overlay: rgba(15, 23, 42, 0.32);
-  --shadow-sm: 0 1px 2px rgba(15, 23, 42, 0.12);
-  --shadow-md:
-    0 8px 28px rgba(15, 23, 42, 0.12),
-    0 1px 3px rgba(15, 23, 42, 0.10);
-  --shadow-lg:
-    0 24px 64px -24px rgba(15, 23, 42, 0.28),
-    0 8px 24px -12px rgba(15, 23, 42, 0.18);
-  --shadow-popover:
-    0 18px 48px rgba(15, 23, 42, 0.20),
-    0 4px 12px rgba(15, 23, 42, 0.12);
-  --legacy-window-bg:
-    radial-gradient(65% 58% at 2% 0%, rgba(79, 70, 229, 0.10) 0%, transparent 62%),
-    radial-gradient(70% 70% at 100% 6%, rgba(14, 165, 233, 0.12) 0%, transparent 60%),
-    linear-gradient(135deg, #f8fafc 0%, #eef2f7 48%, #e7edf6 100%);
-  --legacy-noise: rgba(15, 23, 42, 0.09);
-}
+  [data-interface-mode='legacy'][data-theme='light'] {
+    --bg: #edf1f7;
+    --bg-raised: rgba(255, 255, 255, 0.86);
+    --bg-sunken: rgba(241, 245, 249, 0.92);
+    --bg-hover: rgba(15, 23, 42, 0.055);
+    --bg-pressed: rgba(15, 23, 42, 0.09);
+    --border: rgba(15, 23, 42, 0.12);
+    --border-strong: rgba(15, 23, 42, 0.2);
+    --border-faint: rgba(15, 23, 42, 0.07);
+    --text: #111827;
+    --text-muted: rgba(17, 24, 39, 0.68);
+    --text-faint: rgba(17, 24, 39, 0.44);
+    --w-02: rgba(15, 23, 42, 0.02);
+    --w-04: rgba(15, 23, 42, 0.04);
+    --w-05: rgba(15, 23, 42, 0.05);
+    --w-06: rgba(15, 23, 42, 0.06);
+    --w-07: rgba(15, 23, 42, 0.07);
+    --w-08: rgba(15, 23, 42, 0.08);
+    --w-10: rgba(15, 23, 42, 0.1);
+    --w-12: rgba(15, 23, 42, 0.12);
+    --w-16: rgba(15, 23, 42, 0.16);
+    --w-18: rgba(15, 23, 42, 0.18);
+    --w-20: rgba(15, 23, 42, 0.2);
+    --w-40: rgba(15, 23, 42, 0.4);
+    --k-30: rgba(15, 23, 42, 0.3);
+    --k-35: rgba(15, 23, 42, 0.35);
+    --k-40: rgba(15, 23, 42, 0.4);
+    --k-45: rgba(15, 23, 42, 0.45);
+    --k-55: rgba(15, 23, 42, 0.55);
+    --k-65: rgba(15, 23, 42, 0.65);
+    --k-70: rgba(15, 23, 42, 0.7);
+    --grid-line: rgba(15, 23, 42, 0.045);
+    --surface-floating: rgba(255, 255, 255, 0.96);
+    --surface-floating-strong: rgba(255, 255, 255, 0.98);
+    --surface-floating-soft: rgba(255, 255, 255, 0.92);
+    --surface-floating-border: rgba(15, 23, 42, 0.12);
+    --surface-inverted: #111827;
+    --surface-inverted-hover: #1f2937;
+    --text-on-inverted: #ffffff;
+    --image-overlay: rgba(15, 23, 42, 0.66);
+    --image-overlay-soft: rgba(15, 23, 42, 0.46);
+    --modal-overlay: rgba(15, 23, 42, 0.32);
+    --shadow-sm: 0 1px 2px rgba(15, 23, 42, 0.12);
+    --shadow-md:
+      0 8px 28px rgba(15, 23, 42, 0.12), 0 1px 3px rgba(15, 23, 42, 0.1);
+    --shadow-lg:
+      0 24px 64px -24px rgba(15, 23, 42, 0.28),
+      0 8px 24px -12px rgba(15, 23, 42, 0.18);
+    --shadow-popover:
+      0 18px 48px rgba(15, 23, 42, 0.2), 0 4px 12px rgba(15, 23, 42, 0.12);
+    --legacy-window-bg:
+      radial-gradient(
+        65% 58% at 2% 0%,
+        rgba(79, 70, 229, 0.1) 0%,
+        transparent 62%
+      ),
+      radial-gradient(
+        70% 70% at 100% 6%,
+        rgba(14, 165, 233, 0.12) 0%,
+        transparent 60%
+      ),
+      linear-gradient(135deg, #f8fafc 0%, #eef2f7 48%, #e7edf6 100%);
+    --legacy-noise: rgba(15, 23, 42, 0.09);
+  }
 
-/* font + density still respected */
-[data-font="system"] {
-  --f-ui: var(--f-sans);
-}
-[data-font="mono"] {
-  --f-ui: var(--f-mono);
-}
-[data-font="serif"] {
-  --f-ui: var(--f-serif);
-}
-[data-density="compact"] {
-  --d-row: 36px;
-  --d-input: 30px;
-  --d-pad: 12px;
-  --d-gap: 12px;
-}
-[data-density="comfortable"] {
-  --d-row: 44px;
-  --d-input: 36px;
-  --d-pad: 16px;
-  --d-gap: 16px;
-}
+  /* font + density still respected */
+  [data-font='system'] {
+    --f-ui: var(--f-sans);
+  }
+  [data-font='mono'] {
+    --f-ui: var(--f-mono);
+  }
+  [data-font='serif'] {
+    --f-ui: var(--f-serif);
+  }
+  [data-density='compact'] {
+    --d-row: 36px;
+    --d-input: 30px;
+    --d-pad: 12px;
+    --d-gap: 12px;
+  }
+  [data-density='comfortable'] {
+    --d-row: 44px;
+    --d-input: 36px;
+    --d-pad: 16px;
+    --d-gap: 16px;
+  }
 
-/* Base */
+  /* Base */
+}
 @layer base {
   html,
   body,

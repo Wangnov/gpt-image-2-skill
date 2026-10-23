@@ -47,7 +47,7 @@ export function ClassicEditCanvasPanel({
   return (
     <section className="edit-canvas surface-panel relative flex min-h-0 flex-col overflow-hidden">
       {isDraggingImages && (
-        <div className="pointer-events-none absolute inset-3 z-20 flex items-center justify-center rounded-lg border border-dashed border-[color:var(--accent)] bg-[color:var(--accent-10)] text-[13px] font-semibold text-foreground">
+        <div className="pointer-events-none absolute inset-3 z-20 flex items-center justify-center rounded-lg border border-dashed border-(--accent) bg-(--accent-10) text-[13px] font-semibold text-foreground">
           {t("松开即可添加参考图")}
         </div>
       )}

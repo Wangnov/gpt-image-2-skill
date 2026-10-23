@@ -81,8 +81,8 @@ function TargetToggle({
       className={cn(
         "h-9 rounded-md border px-3 text-[12.5px] transition-colors",
         checked
-          ? "border-[color:var(--accent-45)] bg-[color:var(--accent-10)] text-foreground"
-          : "border-border bg-[color:var(--w-04)] text-muted hover:bg-[color:var(--w-07)] hover:text-foreground",
+          ? "border-(--accent-45) bg-(--accent-10) text-foreground"
+          : "border-border bg-(--w-04) text-muted hover:bg-(--w-07) hover:text-foreground",
       )}
     />
   );
@@ -420,7 +420,7 @@ export function StoragePanel({
             description={policyMessage}
             control={
               <ControlRail>
-                <div className="rounded-md border border-[color:var(--accent-25)] bg-[color:var(--accent-08)] px-3 py-2 text-[12px] leading-snug text-muted">
+                <div className="rounded-md border border-(--accent-25) bg-(--accent-08) px-3 py-2 text-[12px] leading-snug text-muted">
                   {policy.allow_user_overrides
                     ? t("管理员提供了默认策略，你仍可按当前工作流调整。")
                     : t("管理员策略会在保存和任务执行时保持生效。")}
@@ -458,8 +458,8 @@ export function StoragePanel({
                       className={cn(
                         "flex h-full items-start gap-2 rounded-md border px-3 py-2 text-left transition-colors",
                         active
-                          ? "border-[color:var(--accent-45)] bg-[color:var(--accent-10)] text-foreground"
-                          : "border-border bg-[color:var(--w-04)] text-muted hover:bg-[color:var(--w-07)] hover:text-foreground",
+                          ? "border-(--accent-45) bg-(--accent-10) text-foreground"
+                          : "border-border bg-(--w-04) text-muted hover:bg-(--w-07) hover:text-foreground",
                         disabled && "opacity-50 cursor-not-allowed",
                       )}
                     >

@@ -41,7 +41,7 @@ export function PromptTemplateList({
             {templates.map((template) => (
               <article
                 key={template.id}
-                className="rounded-lg border border-border-faint bg-[color:var(--w-03)] p-3"
+                className="rounded-lg border border-border-faint bg-(--w-03) p-3"
               >
                 <div className="flex flex-wrap items-center gap-2">
                   <PromptTemplateMark
@@ -59,7 +59,7 @@ export function PromptTemplateList({
                   <button
                     type="button"
                     onClick={() => editTemplate(template)}
-                    className="inline-flex h-8 w-8 items-center justify-center rounded-md text-muted transition-colors hover:bg-[color:var(--w-06)] hover:text-foreground"
+                    className="inline-flex h-8 w-8 items-center justify-center rounded-md text-muted transition-colors hover:bg-(--w-06) hover:text-foreground"
                     title={t("编辑")}
                     aria-label={t("编辑模板")}
                   >
@@ -68,7 +68,7 @@ export function PromptTemplateList({
                   <button
                     type="button"
                     onClick={() => duplicateTemplate(template)}
-                    className="inline-flex h-8 w-8 items-center justify-center rounded-md text-muted transition-colors hover:bg-[color:var(--w-06)] hover:text-foreground"
+                    className="inline-flex h-8 w-8 items-center justify-center rounded-md text-muted transition-colors hover:bg-(--w-06) hover:text-foreground"
                     title={t("复制")}
                     aria-label={t("复制模板")}
                   >
@@ -77,7 +77,7 @@ export function PromptTemplateList({
                   <button
                     type="button"
                     onClick={() => removeTemplate(template)}
-                    className="inline-flex h-8 w-8 items-center justify-center rounded-md text-muted transition-colors hover:bg-[color:var(--status-err-10)] hover:text-[color:var(--status-err)]"
+                    className="inline-flex h-8 w-8 items-center justify-center rounded-md text-muted transition-colors hover:bg-(--status-err-10) hover:text-(--status-err)"
                     title={t("删除")}
                     aria-label={t("删除模板")}
                   >

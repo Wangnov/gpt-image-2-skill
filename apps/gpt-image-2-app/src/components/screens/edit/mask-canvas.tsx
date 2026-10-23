@@ -475,7 +475,7 @@ export function MaskCanvas({
           endGesture();
         }}
         onPointerCancel={endGesture}
-        className="absolute inset-0 w-full h-full focus-visible:outline focus-visible:outline-2 focus-visible:outline-[color:var(--accent)]"
+        className="absolute inset-0 w-full h-full focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-(--accent)"
         style={{
           cursor: panning
             ? "grabbing"

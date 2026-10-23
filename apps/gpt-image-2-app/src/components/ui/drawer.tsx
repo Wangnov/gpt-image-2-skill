@@ -64,14 +64,14 @@ export function Drawer({
           className={cn(
             "fixed right-0 top-0 z-50 h-full grid min-w-0 overflow-hidden",
             "grid-rows-[auto_minmax(0,1fr)_auto]",
-            "border-l border-[color:var(--w-10)]",
+            "border-l border-(--w-10)",
             "data-[state=open]:animate-in data-[state=open]:slide-in-from-right",
             "data-[state=closed]:animate-out data-[state=closed]:slide-out-to-right",
             "data-[state=open]:duration-200 data-[state=closed]:duration-150",
           )}
         >
           {(title || headerActions) && (
-            <div className="flex shrink-0 items-center gap-2 px-5 py-3.5 border-b border-[color:var(--w-06)]">
+            <div className="flex shrink-0 items-center gap-2 px-5 py-3.5 border-b border-(--w-06)">
               <div className="flex-1 min-w-0">
                 {title && (
                   <Radix.Title className="t-h2 truncate">{title}</Radix.Title>
@@ -87,7 +87,7 @@ export function Drawer({
                 <button
                   type="button"
                   aria-label={t("关闭")}
-                  className="inline-flex items-center justify-center h-8 w-8 rounded-md text-muted hover:text-foreground hover:bg-[color:var(--w-06)] transition-colors"
+                  className="inline-flex items-center justify-center h-8 w-8 rounded-md text-muted hover:text-foreground hover:bg-(--w-06) transition-colors"
                 >
                   <X size={15} />
                 </button>
@@ -98,7 +98,7 @@ export function Drawer({
             {children}
           </div>
           {footer && (
-            <div className="flex min-w-0 shrink-0 items-center gap-2 overflow-hidden px-5 py-3 border-t border-[color:var(--w-06)] bg-[color:var(--w-02)]">
+            <div className="flex min-w-0 shrink-0 items-center gap-2 overflow-hidden px-5 py-3 border-t border-(--w-06) bg-(--w-02)">
               {footer}
             </div>
           )}

@@ -16,21 +16,21 @@ export function NotificationStatusRow({
       description={t("哪些结果会通知。")}
       control={
         <div className="grid w-full gap-2 sm:w-[600px] sm:grid-cols-3">
-          <label className="flex items-center justify-between gap-3 rounded-md border border-border bg-[color:var(--w-04)] px-3 py-2 text-[12px]">
+          <label className="flex items-center justify-between gap-3 rounded-md border border-border bg-(--w-04) px-3 py-2 text-[12px]">
             <span>{t("完成")}</span>
             <Toggle
               checked={draft.on_completed}
               onChange={(on_completed) => patch({ on_completed })}
             />
           </label>
-          <label className="flex items-center justify-between gap-3 rounded-md border border-border bg-[color:var(--w-04)] px-3 py-2 text-[12px]">
+          <label className="flex items-center justify-between gap-3 rounded-md border border-border bg-(--w-04) px-3 py-2 text-[12px]">
             <span>{t("失败")}</span>
             <Toggle
               checked={draft.on_failed}
               onChange={(on_failed) => patch({ on_failed })}
             />
           </label>
-          <label className="flex items-center justify-between gap-3 rounded-md border border-border bg-[color:var(--w-04)] px-3 py-2 text-[12px]">
+          <label className="flex items-center justify-between gap-3 rounded-md border border-border bg-(--w-04) px-3 py-2 text-[12px]">
             <span>{t("取消")}</span>
             <Toggle
               checked={draft.on_cancelled}

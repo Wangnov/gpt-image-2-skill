@@ -68,7 +68,7 @@ export function ReferenceImageCard({
       className={cn(
         "relative aspect-square rounded-lg overflow-hidden cursor-pointer transition-all bg-sunken",
         "border-[1.5px]",
-        "focus-visible:outline-none focus-visible:border-accent focus-visible:shadow-[0_0_0_3px_var(--accent-faint)]",
+        "focus-visible:outline-hidden focus-visible:border-accent focus-visible:shadow-[0_0_0_3px_var(--accent-faint)]",
         active
           ? "border-accent shadow-[0_0_0_3px_var(--accent-faint)]"
           : "border-border",
@@ -118,7 +118,7 @@ export function ReferenceImageCard({
             onSetTarget();
           }}
           aria-label={t("把「{p0}」设为目标图", { p0: ref_.name })}
-          className="touch-target image-overlay absolute bottom-1.5 left-1.5 min-h-8 rounded border-none px-2 text-[11px] font-semibold focus-visible:outline focus-visible:outline-2 focus-visible:outline-[color:var(--accent)]"
+          className="touch-target image-overlay absolute bottom-1.5 left-1.5 min-h-8 rounded border-none px-2 text-[11px] font-semibold focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-(--accent)"
         >
           {t("设为目标")}
         </button>
@@ -130,7 +130,7 @@ export function ReferenceImageCard({
           onRemove?.();
         }}
         aria-label={t("删除「{p0}」", { p0: ref_.name })}
-        className="touch-target image-overlay absolute bottom-1.5 right-1.5 flex h-8 w-8 items-center justify-center rounded border-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-[color:var(--accent)]"
+        className="touch-target image-overlay absolute bottom-1.5 right-1.5 flex h-8 w-8 items-center justify-center rounded border-none focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-(--accent)"
       >
         <Icon name="x" size={12} aria-hidden="true" />
       </button>

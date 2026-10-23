@@ -59,8 +59,8 @@ export function PromptTemplateGroups({
                 className={cn(
                   "flex items-center gap-2 rounded-lg border px-2.5 py-2",
                   isSelected
-                    ? "border-[color:var(--accent-30)] bg-[color:var(--accent-06)]"
-                    : "border-border-faint bg-[color:var(--w-03)]",
+                    ? "border-(--accent-30) bg-(--accent-06)"
+                    : "border-border-faint bg-(--w-03)",
                 )}
               >
                 <button
@@ -72,8 +72,8 @@ export function PromptTemplateGroups({
                   className={cn(
                     "inline-flex h-7 shrink-0 items-center gap-1.5 rounded-md px-2 text-[12px] transition-colors",
                     isSelected
-                      ? "bg-[color:var(--accent-14)] text-foreground"
-                      : "text-muted hover:bg-[color:var(--w-06)] hover:text-foreground",
+                      ? "bg-(--accent-14) text-foreground"
+                      : "text-muted hover:bg-(--w-06) hover:text-foreground",
                   )}
                 >
                   <FileText size={12} />
@@ -87,7 +87,7 @@ export function PromptTemplateGroups({
                 <button
                   type="button"
                   onClick={() => removeGroup(group.id)}
-                  className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-muted transition-colors hover:bg-[color:var(--status-err-10)] hover:text-[color:var(--status-err)]"
+                  className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-muted transition-colors hover:bg-(--status-err-10) hover:text-(--status-err)"
                   title={t("删除分组")}
                   aria-label={t("删除分组")}
                 >

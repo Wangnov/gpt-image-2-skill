@@ -173,7 +173,7 @@ export function WindowChrome({ children }: { children: ReactNode }) {
           radials so the static dark bg still has some color depth. */}
       <div
         aria-hidden
-        className="pointer-events-none absolute inset-0 z-[1]"
+        className="pointer-events-none absolute inset-0 z-1"
         style={
           animated
             ? {
@@ -190,7 +190,7 @@ export function WindowChrome({ children }: { children: ReactNode }) {
       {!animated && (
         <div
           aria-hidden
-          className="pointer-events-none absolute inset-0 z-[1] opacity-[0.5] mix-blend-overlay"
+          className="pointer-events-none absolute inset-0 z-1 opacity-[0.5] mix-blend-overlay"
           style={{
             backgroundImage:
               "radial-gradient(var(--w-noise) 1px, transparent 1px)",
@@ -199,7 +199,7 @@ export function WindowChrome({ children }: { children: ReactNode }) {
         />
       )}
 
-      <div className="relative z-[2] h-full w-full">{children}</div>
+      <div className="relative z-2 h-full w-full">{children}</div>
     </div>
   );
 }
@@ -217,14 +217,14 @@ function LegacyWindowChrome({ children }: { children: ReactNode }) {
       />
       <div
         aria-hidden
-        className="pointer-events-none absolute inset-0 z-[1] opacity-[0.22]"
+        className="pointer-events-none absolute inset-0 z-1 opacity-[0.22]"
         style={{
           backgroundImage:
             "radial-gradient(var(--legacy-noise, rgba(255, 255, 255, 0.2)) 0.7px, transparent 0.7px)",
           backgroundSize: "4px 4px",
         }}
       />
-      <div className="relative z-[2] h-full w-full">{children}</div>
+      <div className="relative z-2 h-full w-full">{children}</div>
     </div>
   );
 }

@@ -78,7 +78,7 @@ export function Segmented<T extends string>({
       id={groupId}
       className={cn(
         "inline-flex shrink-0 p-0.5 rounded-md gap-px",
-        "bg-[color:var(--k-30)] border border-border",
+        "bg-(--k-30) border border-border",
         className,
       )}
     >
@@ -104,8 +104,8 @@ export function Segmented<T extends string>({
               h,
               selected
                 ? "text-foreground"
-                : "text-muted hover:text-foreground hover:bg-[color:var(--w-04)]",
-              "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--accent-55)]",
+                : "text-muted hover:text-foreground hover:bg-(--w-04)",
+              "focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-(--accent-55)",
             )}
           >
             {/* Shared sliding pill — same trick the top-nav uses; the
