@@ -4,8 +4,8 @@ use std::net::SocketAddr;
 use std::path::PathBuf;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
-use hmac::{Hmac, Mac};
-use md5::Md5;
+use hmac::{Hmac, KeyInit, Mac};
+use md5::{Digest as _, Md5};
 use reqwest::StatusCode;
 use reqwest::blocking::{Client, Response};
 use reqwest::header::{HeaderMap, HeaderName, HeaderValue};
@@ -620,4 +620,23 @@ pub(super) fn netdisk_http_client() -> Result<Client, AppError> {
             )
             .with_detail(json!({"error": error.to_string()}))
         })
+}
+
+#[cfg(test)]
+mod digest_compatibility_tests {
+    use super::*;
+
+    #[test]
+    fn stored_digest_formats_remain_compatible() {
+        assert_eq!(md5_hex(b"abc"), "900150983cd24fb0d6963f7d28e17f72");
+        assert_eq!(
+            sha256_hex(b"abc"),
+            "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad"
+        );
+        // RFC 4231 case 1, independent of our S3 signer.
+        assert_eq!(
+            hex_lower(&hmac_sha256(&[0x0b; 20], "Hi There").unwrap()),
+            "b0344c61d8db38535ca8afceaf0bf12b881dc200c9833da726e9376c2e32cff7"
+        );
+    }
 }

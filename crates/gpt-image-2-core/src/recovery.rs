@@ -581,7 +581,7 @@ pub fn raw_response_sha256(job_dir: &Path) -> Result<String, AppError> {
         .with_detail(json!({"path": path.display().to_string(), "error": error.to_string()}))
     })?;
     let digest = sha2::Sha256::digest(&bytes);
-    Ok(format!("{digest:x}"))
+    Ok(digest.iter().map(|byte| format!("{byte:02x}")).collect())
 }
 
 pub fn batch_recovery_job_id(parent_job_id: &str, index: u8) -> String {
