@@ -21,7 +21,11 @@ const announceSectionMarker = "  announce:\n";
 const actionPins = new Map([
   [
     "actions/checkout@v6",
-    "actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6",
+    "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1",
+  ],
+  [
+    "actions/checkout@v7",
+    "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1",
   ],
   [
     "actions/upload-artifact@v6",
@@ -32,11 +36,10 @@ const actionPins = new Map([
     "actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2",
   ],
 ]);
-const announceCheckoutMarker = `      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
-        with:
-          persist-credentials: false
-          submodules: recursive
-`;
+// Dependabot 可以独立更新 checkout 的固定版本。
+// 按已审核的步骤结构定位，避免插入分发步骤时依赖某个旧 SHA。
+const announceCheckoutPattern =
+  /      - uses: actions\/checkout@[a-f0-9]{40}(?: #[^\n]*)?\n        with:\n          persist-credentials: false\n          submodules: recursive\n/;
 const dispatchStepName = "      - name: Dispatch npm publish workflow";
 const dispatchStepPattern =
   /      - name: Dispatch npm publish workflow\n        run: gh workflow run "Publish npm Packages" --repo "\$\{\{ github\.repository \}\}" -f tag="\$\{\{ needs\.plan\.outputs\.tag \}\}"\n(?:      - name: Dispatch static Pages deploy workflow\n        run: gh workflow run "Deploy Static Page" --repo "\$\{\{ github\.repository \}\}" -f tag="\$\{\{ needs\.plan\.outputs\.tag \}\}"\n)?(?:      - name: Dispatch GHCR image publish workflow\n        run: gh workflow run "Publish GHCR Image" --repo "\$\{\{ github\.repository \}\}" -f ref="\$\{\{ needs\.plan\.outputs\.tag \}\}"\n)?/g;
@@ -214,13 +217,13 @@ if (announceStart === -1) {
 }
 
 const announceSection = source.slice(announceStart);
-const announceCheckoutOffset = announceSection.indexOf(announceCheckoutMarker);
-if (announceCheckoutOffset === -1) {
+const announceCheckoutMatch = announceCheckoutPattern.exec(announceSection);
+if (!announceCheckoutMatch) {
   throw new Error(`announce checkout block changed: ${workflowPath}`);
 }
 
 const announceInsertIndex =
-  announceStart + announceCheckoutOffset + announceCheckoutMarker.length;
+  announceStart + announceCheckoutMatch.index + announceCheckoutMatch[0].length;
 const normalizedAnnounceSection = source.slice(announceStart);
 
 if (!normalizedAnnounceSection.includes(dispatchStepName)) {

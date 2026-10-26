@@ -8,6 +8,10 @@ updates:
       time: "09:00"
       timezone: Asia/Shanghai
     open-pull-requests-limit: 5
+    groups:
+      codeql:
+        patterns:
+          - "github/codeql-action/*"
 
   - package-ecosystem: cargo
     directory: /
@@ -20,6 +24,10 @@ updates:
 
   - package-ecosystem: npm
     directory: /apps/gpt-image-2-app
+    # plugin-react 6 要求 Vite 8；迁移打包器前保留兼容版本更新。
+    ignore:
+      - dependency-name: "@vitejs/plugin-react"
+        versions: [">=6"]
     schedule:
       interval: weekly
       day: monday
