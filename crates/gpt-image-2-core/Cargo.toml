@@ -22,7 +22,7 @@ lettre = { version = "0.11.23", default-features = false, features = ["builder",
 md-5 = "0.11.0"
 mime_guess = "2.0.5"
 reqwest = { version = "0.12.24", default-features = false, features = ["blocking", "charset", "http2", "json", "multipart", "rustls-tls", "socks"] }
-rusqlite = { version = "0.37.0", features = ["bundled"] }
+rusqlite = { version = "0.40.2", features = ["bundled"] }
 serde = { version = "1.0.228", features = ["derive"] }
 serde_json = "1.0.145"
 sha2 = "0.11.1"
