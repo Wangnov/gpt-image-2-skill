@@ -2,7 +2,6 @@ use std::collections::BTreeMap;
 use std::net::{IpAddr, Ipv4Addr};
 use std::time::Duration;
 
-use reqwest::blocking::Client;
 use reqwest::header::{HeaderMap, HeaderName, HeaderValue};
 use serde_json::json;
 
@@ -191,7 +190,7 @@ pub(crate) fn send_webhook_notification(
 
 fn execute_webhook_request(request: &WebhookRequest) -> Result<String, AppError> {
     validate_webhook_target(&request.url)?;
-    let client = Client::builder()
+    let client = crate::auth::http_client_builder()
         .timeout(Duration::from_secs(request.timeout_seconds.max(1)))
         .build()
         .map_err(|error| {

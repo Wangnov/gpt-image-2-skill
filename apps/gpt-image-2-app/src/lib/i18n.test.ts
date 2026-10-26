@@ -2,7 +2,13 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { readFileSync, readdirSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { join } from "node:path";
-import ts from "typescript";
+import { parse } from "@babel/parser";
+import {
+  isCallExpression,
+  isIdentifier,
+  isStringLiteral,
+  traverseFast,
+} from "@babel/types";
 import { english } from "./messages/en";
 
 let language: typeof import("./i18n");
@@ -184,27 +190,26 @@ describe("English message coverage", () => {
         const path = join(directory, entry.name);
         if (entry.isDirectory()) inspect(path);
         else if (/\.tsx?$/.test(entry.name) && !/\.test\./.test(entry.name)) {
-          const source = ts.createSourceFile(
-            path,
-            readFileSync(path, "utf8"),
-            ts.ScriptTarget.Latest,
-            true,
-          );
-          function visit(node: ts.Node) {
+          const source = parse(readFileSync(path, "utf8"), {
+            sourceFilename: path,
+            sourceType: "module",
+            plugins: entry.name.endsWith(".tsx")
+              ? ["typescript", "jsx"]
+              : ["typescript"],
+          });
+          traverseFast(source, (node) => {
             if (
-              ts.isCallExpression(node) &&
-              ts.isIdentifier(node.expression) &&
-              node.expression.text === "t"
+              isCallExpression(node) &&
+              isIdentifier(node.callee) &&
+              node.callee.name === "t"
             ) {
               const first = node.arguments[0];
-              if (first && ts.isStringLiteral(first)) {
+              if (first && isStringLiteral(first)) {
                 checked++;
-                if (!(first.text in english)) missing.add(first.text);
+                if (!(first.value in english)) missing.add(first.value);
               }
             }
-            ts.forEachChild(node, visit);
-          }
-          visit(source);
+          });
         }
       }
     }

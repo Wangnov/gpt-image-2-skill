@@ -8,7 +8,7 @@ import { readFileSync } from "node:fs";
 // code (which would pull the whole manifest into the bundle) and
 // avoids hardcoding a version that drifts from package.json on bumps.
 const pkg = JSON.parse(
-  readFileSync(path.resolve(__dirname, "./package.json"), "utf-8"),
+  readFileSync(path.resolve(import.meta.dirname, "./package.json"), "utf-8"),
 ) as { version: string };
 
 export default defineConfig({
@@ -18,7 +18,7 @@ export default defineConfig({
   },
   resolve: {
     alias: {
-      "@": path.resolve(__dirname, "./src"),
+      "@": path.resolve(import.meta.dirname, "./src"),
     },
   },
   server: {
@@ -32,43 +32,62 @@ export default defineConfig({
     chunkSizeWarningLimit: 800,
     outDir: "dist",
     sourcemap: true,
-    rollupOptions: {
+    // 保留升级前的 JavaScript 浏览器语法基线。
+    target: ["chrome87", "edge88", "firefox78", "safari14"],
+    rolldownOptions: {
       output: {
-        manualChunks(id) {
-          const moduleId = id.replaceAll("\\", "/");
-          if (!moduleId.includes("node_modules")) return undefined;
-          if (moduleId.includes("/ogl/")) return "vendor-webgl";
-          if (moduleId.includes("/@react-three/")) return "vendor-react-three";
-          if (moduleId.includes("/three/")) {
-            return "vendor-three";
-          }
-          if (moduleId.includes("/lucide-react/")) return "vendor-icons";
-          if (
-            moduleId.includes("/@tauri-apps/") ||
-            moduleId.includes("/class-variance-authority/") ||
-            moduleId.includes("/clsx/") ||
-            moduleId.includes("/tailwind-merge/")
-          ) {
-            return "vendor";
-          }
-          if (
-            moduleId.includes("/react/") ||
-            moduleId.includes("/react-dom/") ||
-            moduleId.includes("/scheduler/") ||
-            moduleId.includes("/use-sync-external-store/")
-          ) {
-            return "vendor-ui";
-          }
-          if (moduleId.includes("/@radix-ui/")) return "vendor-radix";
-          if (
-            moduleId.includes("/motion/") ||
-            moduleId.includes("/framer-motion/")
-          ) {
-            return "vendor-motion";
-          }
-          if (moduleId.includes("/@tanstack/")) return "vendor-query";
-          if (moduleId.includes("/sonner/")) return "vendor-toast";
-          return "vendor-ui";
+        // 手工分组仍按源码顺序初始化，避免 React 与插件的循环依赖提前执行。
+        strictExecutionOrder: true,
+        codeSplitting: {
+          includeDependenciesRecursively: false,
+          groups: [
+            {
+              name: "vendor-webgl",
+              test: /node_modules[\\/]ogl[\\/]/,
+              priority: 100,
+            },
+            {
+              name: "vendor-react-three",
+              test: /node_modules[\\/]@react-three[\\/]/,
+              priority: 100,
+            },
+            {
+              name: "vendor-three",
+              test: /node_modules[\\/]three[\\/]/,
+              priority: 100,
+            },
+            {
+              name: "vendor-icons",
+              test: /node_modules[\\/]lucide-react[\\/]/,
+              priority: 100,
+            },
+            {
+              name: "vendor",
+              test: /node_modules[\\/](?:@tauri-apps|class-variance-authority|clsx|tailwind-merge)[\\/]/,
+              priority: 100,
+            },
+            {
+              name: "vendor-radix",
+              test: /node_modules[\\/]@radix-ui[\\/]/,
+              priority: 100,
+            },
+            {
+              name: "vendor-motion",
+              test: /node_modules[\\/](?:motion|framer-motion)[\\/]/,
+              priority: 100,
+            },
+            {
+              name: "vendor-query",
+              test: /node_modules[\\/]@tanstack[\\/]/,
+              priority: 100,
+            },
+            {
+              name: "vendor-toast",
+              test: /node_modules[\\/]sonner[\\/]/,
+              priority: 100,
+            },
+            { name: "vendor-ui", test: /node_modules/, priority: 0 },
+          ],
         },
       },
     },

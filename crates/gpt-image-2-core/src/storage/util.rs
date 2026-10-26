@@ -316,7 +316,7 @@ pub(super) fn pinned_http_client(
     error_code: &'static str,
     error_message: &'static str,
 ) -> Result<Client, AppError> {
-    Client::builder()
+    crate::auth::http_client_builder()
         .timeout(timeout)
         .redirect(reqwest::redirect::Policy::none())
         .resolve_to_addrs(host_label, addrs)
@@ -608,7 +608,7 @@ pub(super) fn credential_resolves_non_empty(credential: &CredentialRef) -> bool 
 }
 
 pub(super) fn netdisk_http_client() -> Result<Client, AppError> {
-    Client::builder()
+    crate::auth::http_client_builder()
         .timeout(Duration::from_secs(DEFAULT_REQUEST_TIMEOUT.min(120)))
         .redirect(reqwest::redirect::Policy::none())
         .user_agent(build_user_agent())
