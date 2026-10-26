@@ -53,7 +53,7 @@
     "@types/react": "^19.3.0",
     "@types/react-dom": "^19.3.0",
     "@types/three": "^0.182.0",
-    "@vitejs/plugin-react": "^4.3.0",
+    "@vitejs/plugin-react": "^6.1.2",
     "fake-indexeddb": "^6.2.5",
     "postcss": "^8.5.3",
     "prettier": "^3.5.2",
