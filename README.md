@@ -541,6 +541,8 @@ gpt-image-2-skill/
 
 ## 本地开发
 
+前端工具链需要 Node.js 22.18 或更新版本；CI 使用 Node.js 26.6.0。
+
 通过 `just --list` 查看所有任务。常用命令:
 
 ```bash

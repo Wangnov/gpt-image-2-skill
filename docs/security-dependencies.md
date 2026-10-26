@@ -4,8 +4,10 @@
 
 - Vite 8.3.5 / React 插件 6.1.2 / TypeScript 7.0.2 一起迁移，移除插件 6 的临时忽略规则，并为 Vite 与 React 插件配置 Dependabot 分组。
 - 分包配置改用 Rolldown 的 `codeSplitting`，保留现有 vendor 分组及 JavaScript 浏览器语法目标，启用源码执行顺序保护。配置路径改用原生 ESM 的 `import.meta.dirname`。
-- TypeScript 7 默认入口不再提供旧编译器 AST API；翻译覆盖测试改用明确声明的 Babel parser/types 开发依赖，仍解析全部 TS/TSX 源码并检查一千余处翻译调用及插值参数。
-- dirs 7、rusqlite 0.40.2、tower-http 0.7.1，以及 ssh2 0.9.6、serde_json 1.0.154 同步更新。新增旧版 SQLite 表结构的历史记录重开、读写与完整性回归检查。
+- TypeScript 7 默认入口不再提供旧编译器 AST API；翻译覆盖测试改用明确声明的 Babel 8 parser/types 开发依赖，仍解析全部 TS/TSX 源码并检查一千余处翻译调用及插值参数。
+- dirs 7、rusqlite 0.41.0、tower-http 0.7.1，以及 ssh2 0.9.6、serde_json 1.0.154 同步更新。新增旧版 SQLite 表结构的历史记录重开、读写与完整性回归检查。
+- 收拢其余直接依赖更新：Motion 14.6、Three 0.186、Node 类型 26.6，以及其余 Radix、React Query、Sonner 和 Workers 类型。Babel 8 要求前端构建使用 Node.js 22.18 或更新版本，包清单与 README 均已明确。
+- reqwest 更新到 0.13.5，启用拆分后的 form/query 功能；TLS 证书校验使用 reqwest 0.13 的平台验证器；统一客户端构建入口显式初始化 ring，并尊重宿主已配置的加密实现，使 CLI 依赖图继续使用 ring。base64 同步到 0.23.1。远程参考图的 HTTPS、逐跳重定向检查、DNS 绑定和代理控制仍由原入口执行。
 - 同步 login-action 4.7.0、cargo-binstall Action 1.26.0、rust-cache 2.9.3、upload-artifact 7.0.2 的完整 SHA，并更新发布工作流生成器的固定版本。
 - 同步 Toggle Group 1.2.1、fake-indexeddb 6.2.6 和 Prettier 3.9.10；Vite 8 已移除旧 esbuild 安装脚本，仅删除对应精确版本的脚本授权。
 

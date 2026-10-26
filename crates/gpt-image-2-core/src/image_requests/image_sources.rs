@@ -232,7 +232,7 @@ fn download_http_image_bytes(url: &str, proxy: Option<&ProxyConfig>) -> Result<V
         }
         let (_, host_label, addrs) =
             validate_remote_http_target(current_url.as_str(), "Image download")?;
-        let builder = reqwest::blocking::Client::builder()
+        let builder = crate::auth::http_client_builder()
             .timeout(Duration::from_secs(DEFAULT_REQUEST_TIMEOUT))
             .redirect(reqwest::redirect::Policy::none())
             .resolve_to_addrs(&host_label, &addrs)

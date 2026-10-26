@@ -14,7 +14,7 @@ dist = false
 
 [dependencies]
 axum = "0.8.7"
-base64 = "0.22.1"
+base64 = "0.23.1"
 gpt-image-2-core = { path = "../gpt-image-2-core", version = "0.7.6" }
 gpt-image-2-runtime = { path = "../gpt-image-2-runtime", version = "0.7.6" }
 hmac = "0.13.0"
