@@ -1,5 +1,15 @@
 # Dependency advisory remediation — 2026-09-13
 
+## 2026-10-27 更新
+
+- Wrangler 升级到 4.153.0，使用上游 miniflare 5.20261023.0-beta / undici 7.30.1，修复 GHSA-4qv8-2p9j-2685、GHSA-f72v-6w45-q472 和 GHSA-xjj6-f33q-929c。未降级 Wrangler，也未绕过 npm audit。
+- 已检查 workerd 1.20261023.1 的安装脚本：按平台选择二进制，备用下载限定同一精确 npm 版本，并验证版本输出；仅更新该精确版本的 allowScripts 条目。
+- Tauri 的 notification 2.7、process 2.4 同步更新 Rust crate 和前端包，避免桌面构建因两端 minor 版本不同而失败。
+- CodeQL init/analyze 同步到 4.39.1，并配置 Dependabot 分组更新。checkout 更新到 7.0.1 后，发布工作流补丁按完整 SHA 和步骤结构定位，不再绑定旧 SHA；新增回归测试覆盖后续 pin 更新。
+- Vite 保留 6；React 插件采用兼容的 5.2.0。插件 6 需要 Vite 8，因此暂缓这项跨打包器迁移，并在 Dependabot 中保留该版本边界。
+
+漏洞来源：[EventSource 内存耗尽](https://github.com/advisories/GHSA-4qv8-2p9j-2685)、[SRI 校验绕过](https://github.com/advisories/GHSA-f72v-6w45-q472)、[content-encodings 拒绝服务](https://github.com/advisories/GHSA-xjj6-f33q-929c)。
+
 ## 2026-10-01 更新
 
 - rustls 升级到 0.23.45，修复 RUSTSEC-2026-0285；rustls-webpki 同步到 0.103.15。

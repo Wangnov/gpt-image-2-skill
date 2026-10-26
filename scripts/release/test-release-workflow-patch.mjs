@@ -80,3 +80,54 @@ test("regeneration preserves trusted installers, tag handling, and dispatches", 
     fs.rmSync(dir, { recursive: true, force: true });
   }
 });
+
+for (const checkout of [
+  "v7",
+  "3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1",
+  "0123456789abcdef0123456789abcdef01234567 # 后续审核的固定版本",
+]) {
+  test(`checkout 更新后仍保留发布分发步骤: ${checkout}`, () => {
+    const dir = fs.mkdtempSync(
+      path.join(os.tmpdir(), "release-checkout-update-"),
+    );
+    try {
+      const file = path.join(dir, "release.yml");
+      fs.writeFileSync(
+        file,
+        generated.replace(
+          "actions/checkout@v6",
+          `actions/checkout@${checkout}`,
+        ),
+      );
+      const run = () =>
+        execFileSync(process.execPath, [patcher.pathname, file]);
+      run();
+      const actual = fs.readFileSync(file, "utf8");
+      assert.match(actual, /uses: actions\/checkout@[a-f0-9]{40} #/);
+      if (checkout !== "v7") {
+        assert.ok(
+          actual.includes(`actions/checkout@${checkout}`),
+          "保留已审核的固定版本",
+        );
+      }
+      for (const workflow of [
+        "npm publish",
+        "static Pages deploy",
+        "GHCR image publish",
+      ]) {
+        assert.equal(
+          actual.split(`Dispatch ${workflow} workflow`).length - 1,
+          1,
+        );
+      }
+      run();
+      assert.equal(
+        fs.readFileSync(file, "utf8"),
+        actual,
+        "重复打补丁必须保持幂等",
+      );
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+  });
+}
