@@ -1,5 +1,13 @@
 # Dependency advisory remediation — 2026-09-13
 
+## 2026-10-27 大版本迁移
+
+- Vite 8.3.5 / React 插件 6.1.2 / TypeScript 7.0.2 一起迁移，移除插件 6 的临时忽略规则，并为 Vite 与 React 插件配置 Dependabot 分组。
+- 分包配置改用 Rolldown 的 `codeSplitting`，保留现有 vendor 分组及 JavaScript 浏览器语法目标，启用源码执行顺序保护。配置路径改用原生 ESM 的 `import.meta.dirname`。
+- TypeScript 7 默认入口不再提供旧编译器 AST API；翻译覆盖测试改用明确声明的 Babel parser/types 开发依赖，仍解析全部 TS/TSX 源码并检查一千余处翻译调用及插值参数。
+- dirs 7、rusqlite 0.40.2、tower-http 0.7.1，以及 ssh2 0.9.6、serde_json 1.0.154 同步更新。新增旧版 SQLite 表结构的历史记录重开、读写与完整性回归检查。
+- 同步 Toggle Group 1.2.1、fake-indexeddb 6.2.6 和 Prettier 3.9.10；Vite 8 已移除旧 esbuild 安装脚本，仅删除对应精确版本的脚本授权。
+
 ## 2026-10-27 更新
 
 - Wrangler 升级到 4.153.0，使用上游 miniflare 5.20261023.0-beta / undici 7.30.1，修复 GHSA-4qv8-2p9j-2685、GHSA-f72v-6w45-q472 和 GHSA-xjj6-f33q-929c。未降级 Wrangler，也未绕过 npm audit。

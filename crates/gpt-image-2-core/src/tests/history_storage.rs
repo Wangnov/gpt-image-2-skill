@@ -1,6 +1,63 @@
 use super::*;
 
 #[test]
+fn legacy_sqlite_history_survives_schema_initialization_and_reopen() {
+    let _guard = CODEX_HOME_TEST_LOCK.lock().unwrap();
+    let temp_dir = tempfile::tempdir().unwrap();
+    let _home = TestCodexHome::set(temp_dir.path());
+    let path = crate::paths::history_db_path();
+    fs::create_dir_all(path.parent().unwrap()).unwrap();
+    let legacy = rusqlite::Connection::open(&path).unwrap();
+    legacy
+        .execute_batch(
+            "CREATE TABLE jobs (
+                id TEXT PRIMARY KEY, command TEXT NOT NULL, provider TEXT NOT NULL,
+                status TEXT NOT NULL, output_path TEXT, created_at TEXT NOT NULL,
+                metadata TEXT NOT NULL
+            );",
+        )
+        .unwrap();
+    let metadata = json!({
+        "prompt": "保留已有历史记录 🐷",
+        "output": {"files": [{"index": 0, "path": "/tmp/旧图.png", "bytes": 99}]}
+    });
+    legacy
+        .execute(
+            "INSERT INTO jobs VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
+            rusqlite::params![
+                "legacy-sqlite-job",
+                "images generate",
+                "openai",
+                "completed",
+                "/tmp/旧图.png",
+                "2026-05-08T11:00:00Z",
+                metadata.to_string()
+            ],
+        )
+        .unwrap();
+    drop(legacy);
+
+    let old_job = show_history_job("legacy-sqlite-job").unwrap();
+    assert_eq!(old_job["metadata"], metadata);
+    upsert_history_job(
+        "new-sqlite-job",
+        "images generate",
+        "openai",
+        "completed",
+        None,
+        Some("2026-10-27T00:00:00Z"),
+        json!({}),
+    )
+    .unwrap();
+    assert_eq!(show_history_job("legacy-sqlite-job").unwrap(), old_job);
+    let reopened = crate::history_db::open_history_db().unwrap();
+    let integrity: String = reopened
+        .query_row("PRAGMA integrity_check", [], |row| row.get(0))
+        .unwrap();
+    assert_eq!(integrity, "ok");
+}
+
+#[test]
 fn history_upload_records_enrich_history_job_outputs() {
     let _guard = CODEX_HOME_TEST_LOCK.lock().unwrap();
     let temp_dir = tempfile::tempdir().unwrap();
