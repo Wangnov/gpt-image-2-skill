@@ -6,6 +6,7 @@
 - 分包配置改用 Rolldown 的 `codeSplitting`，保留现有 vendor 分组及 JavaScript 浏览器语法目标，启用源码执行顺序保护。配置路径改用原生 ESM 的 `import.meta.dirname`。
 - TypeScript 7 默认入口不再提供旧编译器 AST API；翻译覆盖测试改用明确声明的 Babel parser/types 开发依赖，仍解析全部 TS/TSX 源码并检查一千余处翻译调用及插值参数。
 - dirs 7、rusqlite 0.40.2、tower-http 0.7.1，以及 ssh2 0.9.6、serde_json 1.0.154 同步更新。新增旧版 SQLite 表结构的历史记录重开、读写与完整性回归检查。
+- 同步 login-action 4.7.0、cargo-binstall Action 1.26.0、rust-cache 2.9.3、upload-artifact 7.0.2 的完整 SHA，并更新发布工作流生成器的固定版本。
 - 同步 Toggle Group 1.2.1、fake-indexeddb 6.2.6 和 Prettier 3.9.10；Vite 8 已移除旧 esbuild 安装脚本，仅删除对应精确版本的脚本授权。
 
 ## 2026-10-27 更新
