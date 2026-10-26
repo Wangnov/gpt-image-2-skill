@@ -23,6 +23,12 @@ pub(crate) fn default_static_dir() -> PathBuf {
     }
 }
 
+pub(crate) fn static_file_service(
+    static_dir: &FsPath,
+) -> ServeDir<tower_http::set_status::SetStatus<ServeFile>> {
+    ServeDir::new(static_dir).not_found_service(ServeFile::new(static_dir.join("index.html")))
+}
+
 pub(crate) fn parse_settings() -> Result<Settings, String> {
     let mut host = env::var("GPT_IMAGE_2_WEB_HOST").unwrap_or_else(|_| "127.0.0.1".to_string());
     let mut port = env::var("GPT_IMAGE_2_WEB_PORT")
@@ -149,4 +155,92 @@ pub(crate) fn test_router() -> Router<JobQueueState> {
 #[cfg(not(feature = "recovery-fault-injection"))]
 pub(crate) fn test_router() -> Router<JobQueueState> {
     Router::new()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use axum::http::Request;
+    use tower::ServiceExt;
+
+    #[tokio::test]
+    async fn static_assets_keep_content_type_and_byte_range_support() {
+        let dir = tempfile::tempdir().unwrap();
+        fs::create_dir(dir.path().join("assets")).unwrap();
+        fs::write(dir.path().join("index.html"), "<main>入口</main>").unwrap();
+        fs::write(dir.path().join("assets/app.js"), "console.log(42);").unwrap();
+        let app = Router::new().fallback_service(static_file_service(dir.path()));
+        let response = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .uri("/assets/app.js")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+        assert!(
+            response.headers()[header::CONTENT_TYPE]
+                .to_str()
+                .unwrap()
+                .contains("javascript")
+        );
+        assert_eq!(
+            axum::body::to_bytes(response.into_body(), 1024)
+                .await
+                .unwrap(),
+            "console.log(42);"
+        );
+
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .uri("/assets/app.js")
+                    .header(header::RANGE, "bytes=0-6")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::PARTIAL_CONTENT);
+        assert_eq!(response.headers()[header::CONTENT_RANGE], "bytes 0-6/16");
+        assert_eq!(
+            axum::body::to_bytes(response.into_body(), 1024)
+                .await
+                .unwrap(),
+            "console"
+        );
+    }
+
+    #[tokio::test]
+    async fn missing_static_routes_keep_the_frontend_entry_fallback() {
+        let dir = tempfile::tempdir().unwrap();
+        let index = "<main>已有前端入口</main>";
+        fs::write(dir.path().join("index.html"), index).unwrap();
+        let app = Router::new().fallback_service(static_file_service(dir.path()));
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .uri("/history/legacy-job")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::NOT_FOUND);
+        assert!(
+            response.headers()[header::CONTENT_TYPE]
+                .to_str()
+                .unwrap()
+                .starts_with("text/html")
+        );
+        assert_eq!(
+            axum::body::to_bytes(response.into_body(), 1024)
+                .await
+                .unwrap(),
+            index
+        );
+    }
 }

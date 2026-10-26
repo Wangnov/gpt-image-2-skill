@@ -95,8 +95,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         println!("gpt-image-2-web: no access token set; only loopback Host headers are served.");
     }
     let _ = mark_interrupted_jobs_on_startup();
-    let static_files = ServeDir::new(&settings.static_dir)
-        .not_found_service(ServeFile::new(settings.static_dir.join("index.html")));
+    let static_files = static_file_service(&settings.static_dir);
     let app = Router::new()
         .nest("/api", api_router(JobQueueState::with_auth(auth_policy)))
         .fallback_service(static_files);
