@@ -28,7 +28,7 @@ pub(crate) fn generate_openai_source_image(
         .model
         .clone()
         .unwrap_or_else(|| selection.default_model.clone());
-    let body = build_openai_image_body(
+    let mut body = build_openai_image_body(
         "generate",
         &shared.prompt,
         &resolved_model,
@@ -43,6 +43,7 @@ pub(crate) fn generate_openai_source_image(
         shared.n,
         shared.moderation,
     );
+    apply_openai_image_options(&mut body, shared);
     let mut logger = JsonEventLogger::new(cli.json_events);
     let request_outcome = request_openai_with_transport(
         selection,

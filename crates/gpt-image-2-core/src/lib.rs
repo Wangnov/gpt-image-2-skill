@@ -38,6 +38,7 @@ mod history_commands;
 mod history_db;
 mod history_list;
 mod image_commands;
+mod image_options;
 mod image_requests;
 mod json_events;
 mod logging;
@@ -61,13 +62,13 @@ pub(crate) use auth::*;
 pub use auth::{inspect_codex_auth_file, inspect_openai_auth};
 pub use auth_types::{CodexAuthPersistence, CodexAuthState, OpenAiAuthState};
 pub use cli_types::{
-    AddProviderArgs, AuthCommand, AuthSubcommand, Background, Cli, Commands, ConfigCommand,
-    ConfigSubcommand, EditImageArgs, GenerateImageArgs, HistoryCommand, HistoryShowArgs,
-    HistorySubcommand, ImagesCommand, ImagesSubcommand, InputFidelity, ModelsCommand,
-    ModelsSubcommand, Moderation, OutputFormat, Quality, RemoveProviderArgs, RequestCommand,
-    RequestCreateArgs, RequestOperation, RequestSubcommand, SecretCommand, SecretDeleteArgs,
-    SecretGetArgs, SecretSetArgs, SecretSubcommand, SetDefaultArgs, SharedImageArgs,
-    TestProviderArgs,
+    AddProviderArgs, AuthCommand, AuthSubcommand, Background, Cli, Commands, Complexity,
+    ConfigCommand, ConfigSubcommand, EditImageArgs, GenerateImageArgs, HistoryCommand,
+    HistoryShowArgs, HistorySubcommand, ImagesCommand, ImagesSubcommand, InputFidelity,
+    ModelsCommand, ModelsSubcommand, Moderation, OutputFormat, Quality, RemoveProviderArgs,
+    RequestCommand, RequestCreateArgs, RequestOperation, RequestSubcommand, SecretCommand,
+    SecretDeleteArgs, SecretGetArgs, SecretSetArgs, SecretSubcommand, SetDefaultArgs,
+    SharedImageArgs, SvgReasoningEffort, TestProviderArgs,
 };
 pub(crate) use config_commands::*;
 pub(crate) use config_io::*;
@@ -102,6 +103,7 @@ pub use history_list::{
     list_history_jobs_page, show_history_job,
 };
 pub(crate) use image_commands::*;
+pub(crate) use image_options::*;
 pub use image_requests::resume_sub2api_remote_task;
 pub(crate) use image_requests::*;
 pub use json_events::JsonEventLogger;

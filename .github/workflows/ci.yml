@@ -37,7 +37,7 @@ jobs:
             apps/gpt-image-2-app/package-lock.json
             workers/gpt-image-2-relay/package-lock.json
       - name: Test skill bootstrap integrity
-        run: node --test scripts/security/test-skill-wrapper.cjs
+        run: node --test scripts/security/test-skill-wrapper.cjs scripts/test-skill-image-capabilities.cjs
       - name: Test release workflow and updater compatibility channels
         run: node --test scripts/release/test-*.mjs
       - name: Audit npm dependencies

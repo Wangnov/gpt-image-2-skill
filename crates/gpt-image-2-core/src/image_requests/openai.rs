@@ -168,6 +168,10 @@ pub(crate) fn build_openai_edit_form(body: &Value) -> Result<Form, AppError> {
         "n",
         "moderation",
         "input_fidelity",
+        "complexity",
+        "frame_count",
+        "frame_duration_ms",
+        "safety_identifier",
     ] {
         if let Some(value) = object.get(key)
             && let Some(scalar) = coerce_multipart_scalar(value)
@@ -182,9 +186,23 @@ pub(crate) fn build_openai_edit_form(body: &Value) -> Result<Form, AppError> {
             "OpenAI edit requests require at least one input image.",
         ));
     }
+    let markup = extract_openai_markup_source(body)?
+        .map(|source| load_image_source_bytes(&source, "markup"))
+        .transpose()?;
     for (index, source) in images.iter().enumerate() {
         let (mime_type, bytes, file_name) =
             load_image_source_bytes(source, &format!("image-{}", index + 1))?;
+        if mime_type == "image/svg+xml" {
+            return Err(AppError::new(
+                "ref_image_invalid",
+                "SVG is not a supported raster input for image edits.",
+            ));
+        }
+        if index == 0
+            && let Some((mime, markup_bytes, _)) = &markup
+        {
+            validate_markup_images(&bytes, markup_bytes, mime)?;
+        }
         let part = Part::bytes(bytes)
             .file_name(file_name)
             .mime_str(&mime_type)
@@ -196,6 +214,16 @@ pub(crate) fn build_openai_edit_form(body: &Value) -> Result<Form, AppError> {
                 .with_detail(json!({ "error": error.to_string() }))
             })?;
         form = form.part("image[]", part);
+    }
+    if let Some((_, bytes, file_name)) = markup {
+        let part = Part::bytes(bytes)
+            .file_name(file_name)
+            .mime_str("image/png")
+            .map_err(|error| {
+                AppError::new("ref_image_invalid", "Invalid markup MIME type.")
+                    .with_detail(json!({ "error": error.to_string() }))
+            })?;
+        form = form.part("markup", part);
     }
     if let Some(mask_source) = extract_openai_mask_source(body)? {
         let (mime_type, bytes, file_name) = load_image_source_bytes(&mask_source, "mask")?;
@@ -212,6 +240,83 @@ pub(crate) fn build_openai_edit_form(body: &Value) -> Result<Form, AppError> {
         form = form.part("mask", part);
     }
     Ok(form)
+}
+
+pub(crate) fn openai_edit_requires_json(body: &Value) -> bool {
+    let has_file_id = |value: &Value| value.get("file_id").is_some();
+    body.get("images")
+        .and_then(Value::as_array)
+        .is_some_and(|images| images.iter().any(has_file_id))
+        || body.get("mask").is_some_and(has_file_id)
+        || body.get("markup").is_some_and(has_file_id)
+}
+
+pub(crate) fn extract_openai_markup_source(body: &Value) -> Result<Option<String>, AppError> {
+    let Some(markup) = body.get("markup").filter(|value| !value.is_null()) else {
+        return Ok(None);
+    };
+    let source = markup
+        .as_str()
+        .or_else(|| markup.get("image_url").and_then(Value::as_str));
+    source
+        .map(|source| Some(source.to_string()))
+        .ok_or_else(|| {
+            AppError::new(
+                "ref_image_invalid",
+                "Markup must contain an image_url or use a JSON file_id input.",
+            )
+        })
+}
+
+pub(crate) fn validate_markup_images(
+    first: &[u8],
+    markup: &[u8],
+    mime: &str,
+) -> Result<(), AppError> {
+    use image::ImageDecoder;
+    let invalid = |message| AppError::new("markup_invalid", message);
+    if mime != "image/png" || !markup.starts_with(b"\x89PNG\r\n\x1a\n") {
+        return Err(invalid(
+            "Markup must be a transparent PNG annotation layer.",
+        ));
+    }
+    if markup.len() > 50 * 1024 * 1024 {
+        return Err(invalid("Markup PNG must not exceed 50 MB."));
+    }
+    let decode = |bytes: &[u8]| -> Result<image::DynamicImage, AppError> {
+        let reader = image::ImageReader::new(std::io::Cursor::new(bytes))
+            .with_guessed_format()
+            .map_err(|_| invalid("Unable to identify markup or first input image."))?;
+        let mut decoder = reader
+            .into_decoder()
+            .map_err(|_| invalid("Unable to decode markup or first input image."))?;
+        let (width, height) = decoder.dimensions();
+        if u64::from(width) * u64::from(height) > 16_777_216 {
+            return Err(invalid(
+                "Markup and first input image must each contain at most 16,777,216 pixels.",
+            ));
+        }
+        let orientation = decoder
+            .orientation()
+            .map_err(|_| invalid("Unable to read image orientation."))?;
+        let mut image = image::DynamicImage::from_decoder(decoder)
+            .map_err(|_| invalid("Unable to decode markup or first input image."))?;
+        image.apply_orientation(orientation);
+        Ok(image)
+    };
+    let first = decode(first)?;
+    let markup = decode(markup)?;
+    if first.width() != markup.width() || first.height() != markup.height() {
+        return Err(invalid(
+            "Markup dimensions must match the first input image after orientation.",
+        ));
+    }
+    if !markup.to_rgba8().pixels().any(|pixel| pixel[3] < 255) {
+        return Err(invalid(
+            "Markup must contain transparent pixels; do not flatten it onto the original image.",
+        ));
+    }
+    Ok(())
 }
 
 pub(crate) fn extract_openai_edit_image_sources(body: &Value) -> Result<Vec<String>, AppError> {

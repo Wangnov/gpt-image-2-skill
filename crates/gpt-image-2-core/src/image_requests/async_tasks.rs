@@ -34,6 +34,7 @@ pub(crate) fn request_openai_with_transport(
     mut recovery: Option<&mut RecoveryContext>,
     proxy: &ProxyConfig,
 ) -> Result<OpenAiRequestResult, AppError> {
+    validate_openai_body_options(body, operation)?;
     if selection.image_transport == IMAGE_TRANSPORT_SUB2API_ASYNC {
         return request_sub2api_async(
             selection, operation, auth_state, body, logger, recovery, proxy,
@@ -43,7 +44,7 @@ pub(crate) fn request_openai_with_transport(
     let endpoint = build_openai_operation_endpoint(&selection.api_base, operation)?;
     let (payload, retry_count) =
         execute_openai_with_retry(logger, &selection.resolved, |logger| {
-            if operation == "edit" {
+            if operation == "edit" && !openai_edit_requires_json(body) {
                 request_openai_edit_once(
                     &endpoint,
                     auth_state,
@@ -438,7 +439,7 @@ fn submit_sub2api_async_once(
         None
     };
     let client = make_client(DEFAULT_REQUEST_TIMEOUT, proxy)?;
-    let mut request = if target.operation == "edit" {
+    let mut request = if target.operation == "edit" && !openai_edit_requires_json(body) {
         client
             .post(target.endpoint)
             .header(AUTHORIZATION, format!("Bearer {}", auth_state.api_key))

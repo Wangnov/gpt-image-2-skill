@@ -43,6 +43,9 @@ pub(crate) fn detect_mime_type(path: &Path, bytes: &[u8]) -> Result<String, AppE
     if bytes.starts_with(b"BM") {
         return Ok("image/bmp".to_string());
     }
+    if is_svg_document(bytes) {
+        return Ok("image/svg+xml".to_string());
+    }
     Err(AppError::new(
         "ref_image_invalid",
         format!(
@@ -59,6 +62,7 @@ pub(crate) fn filename_extension_for_mime_type(mime_type: &str) -> &'static str 
         "image/webp" => ".webp",
         "image/gif" => ".gif",
         "image/bmp" => ".bmp",
+        "image/svg+xml" => ".svg",
         _ => ".bin",
     }
 }
@@ -70,8 +74,30 @@ pub(crate) fn detect_extension(bytes: &[u8]) -> &'static str {
         Ok("image/webp") => ".webp",
         Ok("image/gif") => ".gif",
         Ok("image/bmp") => ".bmp",
+        Ok("image/svg+xml") => ".svg",
         _ => ".bin",
     }
+}
+
+fn is_svg_document(bytes: &[u8]) -> bool {
+    let Ok(text) = std::str::from_utf8(bytes) else {
+        return false;
+    };
+    let mut text = text.trim_start_matches('\u{feff}').trim_start();
+    if text.starts_with("<?xml") {
+        let Some((_, rest)) = text.split_once("?>") else {
+            return false;
+        };
+        text = rest.trim_start();
+    }
+    while text.starts_with("<!--") {
+        let Some((_, rest)) = text.split_once("-->") else {
+            return false;
+        };
+        text = rest.trim_start();
+    }
+    text.strip_prefix("<svg")
+        .is_some_and(|rest| rest.starts_with(|c: char| c.is_ascii_whitespace() || c == '>'))
 }
 
 pub(crate) fn local_path_to_data_url(path: &Path) -> Result<String, AppError> {

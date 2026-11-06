@@ -53,7 +53,7 @@ graph TB
 
     subgraph Providers["三种 provider"]
         direction LR
-        OAI["OpenAI<br/>gpt-image-2"]
+        OAI["OpenAI<br/>gpt-image-2.6-sunburst"]
         OAC["OpenAI-compatible<br/>--openai-api-base"]
         CDX["Codex<br/>~/.codex/auth.json"]
     end
@@ -106,6 +106,30 @@ OPENAI_API_KEY=sk-... gpt-image-2-skill --json --json-events \
 ```
 
 `--json` 打印结构化结果到 stdout,`--json-events` 把进度事件以 JSONL 形式打到 stderr。两者独立,可单独使用。
+
+### GPT Image 2.6（CLI / skill）
+
+OpenAI API 默认使用 `gpt-image-2.6-sunburst`，快速迭代可选 `--model gpt-image-2.6-flare`；显式模型配置优先。新增 `--complexity low|medium|high`、`images edit --markup`、SVG 和动态 GIF。GUI 新控件后续适配，当前通过 CLI / skill 使用。
+
+```bash
+# 独立控制渲染质量与绘制规划
+gpt-image-2-skill --json --provider openai images generate \
+  --model gpt-image-2.6-flare --quality low --complexity low \
+  --prompt "一枚蓝色月亮图标" --out ./moon.png
+
+# SVG 仅生成且 n=1；作者模型选择取决于账户权限
+gpt-image-2-skill --json --provider openai images generate \
+  --format svg --n 1 --quality low --complexity low \
+  --prompt "蓝色月亮图标，简单可编辑矢量路径，无文字" --out ./moon.svg
+
+# GIF 支持生成和参考图编辑；帧尺寸受合图预算约束
+gpt-image-2-skill --json --provider openai images generate \
+  --model gpt-image-2.6-flare --format gif --size 640x640 \
+  --frame-count 2 --frame-duration-ms 200 --quality low --complexity low \
+  --prompt "蓝色圆点轻轻跳动，无缝循环" --out ./dot.gif
+```
+
+SVG/GIF 不支持压缩、stream 或 partial images；GIF 不支持 mask；markup 与 mask 互斥且须与首张原图尺寸一致。SVG 作者费用通过 `response.svg_usage` 单独返回。详见 [2.6 参数与验收](skills/gpt-image-2-skill/references/image-2.6.md)。安装版 CLI 与源码可能不同步，skill 会按 `models list` 的能力信息识别旧运行时。
 
 ### 我是桌面用户 — Homebrew Cask
 
@@ -183,8 +207,8 @@ docker run --rm -p 8787:8787 \
 
 | Provider | 默认模型 | 端点 | 凭据来源 | 支持 edit | 支持 mask | 备注 |
 |---|---|---|---|---|---|---|
-| `openai` | `gpt-image-2` | `https://api.openai.com/v1` | `OPENAI_API_KEY` env / `--api-key` | ✓ | ✓ | OpenAI-only flags: `--n` / `--moderation` / `--mask` / `--input-fidelity` |
-| `openai`(自定义 base) | `gpt-image-2`(可改) | `--openai-api-base https://...` 或 config | 同上 | ✓ | ✓ | OpenAI-compatible,需要实现 `/images/generations` 与 `/images/edits` |
+| `openai` | `gpt-image-2.6-sunburst` | `https://api.openai.com/v1` | `OPENAI_API_KEY` env / `--api-key` | ✓ | ✓ | OpenAI-only flags: `--n` / `--moderation` / `--mask` / `--input-fidelity` |
+| `openai`(自定义 base) | `gpt-image-2.6-sunburst`(可改) | `--openai-api-base https://...` 或 config | 同上 | ✓ | ✓ | OpenAI-compatible,需要实现 `/images/generations` 与 `/images/edits` |
 | `codex` | `gpt-5.4` | `https://chatgpt.com/backend-api/codex/responses` | `~/.codex/auth.json` 或 `$CODEX_HOME/auth.json` | ✗ | ✗ | 通过 `image_generation` 工具委派给 `gpt-image-2`;`401` 自动 OAuth refresh 一次再重试 |
 | 命名 provider | 由配置决定 | 由配置决定 | 由配置决定(file / env / keychain) | 视类型 | 视类型 | 在 `config.json` 中以任意名称注册 `openai-compatible` 或 `codex` 类型 |
 
@@ -243,7 +267,7 @@ gpt-image-2-skill --json --json-events \
 
 支持的输入 / 输出参数:
 
-- `--format png|jpeg|webp`,`--quality max|xhigh|high|medium|low|auto`,`--compression`,`--input-fidelity`(OpenAI only)
+- `--format png|jpeg|webp|gif|svg`,`--quality max|xhigh|high|medium|low|auto`,`--compression`,`--input-fidelity`(OpenAI only)
 - `--ref-image` 最多 16 张,`--mask`(OpenAI only)
 - `--size`:`2K` → `2048x2048`,`4K` → `3840x2160`,`4K` 竖版 → `2160x3840`,方图高分辨率上限 `2880x2880`,自定义 `WIDTHxHEIGHT` 须满足:边都是 16 的倍数、最大边长 `3840`、最大总像素 `8294400`、最大长宽比 `3:1`
 - 默认 retry 3 次,Codex `401` 自动 refresh 一次后重试;`--retries`、`--retry-delay-seconds`、`--request-timeout-seconds` 可调
@@ -655,7 +679,7 @@ graph TB
 
     subgraph Providers["Three providers"]
         direction LR
-        OAI["OpenAI<br/>gpt-image-2"]
+        OAI["OpenAI<br/>gpt-image-2.6-sunburst"]
         OAC["OpenAI-compatible<br/>--openai-api-base"]
         CDX["Codex<br/>~/.codex/auth.json"]
     end
@@ -785,8 +809,8 @@ Per-output and per-target concurrency are controlled by `upload_concurrency` and
 
 | Provider | Default model | Endpoint | Credentials | Edit | Mask | Notes |
 |---|---|---|---|---|---|---|
-| `openai` | `gpt-image-2` | `https://api.openai.com/v1` | `OPENAI_API_KEY` env / `--api-key` | ✓ | ✓ | OpenAI-only flags: `--n` / `--moderation` / `--mask` / `--input-fidelity` |
-| `openai` (custom base) | `gpt-image-2` (overridable) | `--openai-api-base https://...` or config | Same as above | ✓ | ✓ | OpenAI-compatible; must implement `/images/generations` and `/images/edits` |
+| `openai` | `gpt-image-2.6-sunburst` | `https://api.openai.com/v1` | `OPENAI_API_KEY` env / `--api-key` | ✓ | ✓ | OpenAI-only flags: `--n` / `--moderation` / `--mask` / `--input-fidelity` |
+| `openai` (custom base) | `gpt-image-2.6-sunburst` (overridable) | `--openai-api-base https://...` or config | Same as above | ✓ | ✓ | OpenAI-compatible; must implement `/images/generations` and `/images/edits` |
 | `codex` | `gpt-5.4` | `https://chatgpt.com/backend-api/codex/responses` | `~/.codex/auth.json` or `$CODEX_HOME/auth.json` | ✗ | ✗ | Delegates to `gpt-image-2` server-side via the `image_generation` tool; `401` triggers one OAuth refresh and a single retry |
 | Named provider | From config | From config | From config (file / env / keychain) | Depends on type | Depends on type | Register an `openai-compatible` or `codex` type under any name in `config.json` |
 
@@ -845,7 +869,7 @@ gpt-image-2-skill --json --json-events \
 
 Supported parameters:
 
-- `--format png|jpeg|webp`, `--quality max|xhigh|high|medium|low|auto`, `--compression`, `--input-fidelity` (OpenAI only)
+- `--format png|jpeg|webp|gif|svg`, `--quality max|xhigh|high|medium|low|auto`, `--compression`, `--input-fidelity` (OpenAI only)
 - `--ref-image` up to 16, `--mask` (OpenAI only)
 - `--size`: `2K` → `2048x2048`, `4K` → `3840x2160`, portrait `4K` → `2160x3840`, square high-res ceiling `2880x2880`. Custom `WIDTHxHEIGHT` must satisfy: both edges multiples of 16, max edge `3840`, max total pixels `8294400`, max aspect ratio `3:1`.
 - Default 3 retries; Codex `401` triggers one OAuth refresh and a single retry. `--retries`, `--retry-delay-seconds`, `--request-timeout-seconds` are all configurable.

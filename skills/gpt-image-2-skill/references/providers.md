@@ -52,7 +52,7 @@ Credential sources:
 
 | Item | Default |
 |---|---|
-| Model | `gpt-image-2` (override with `-m/--model`) |
+| Model | `gpt-image-2.6-sunburst`（可用 `-m/--model` 覆盖，已有 provider.model 配置优先） |
 | API base | `https://api.openai.com/v1` (override with `--openai-api-base`) |
 | Generate path | `/images/generations` |
 | Edit path | `/images/edits` (multipart upload) |

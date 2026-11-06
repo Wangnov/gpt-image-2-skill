@@ -1,7 +1,7 @@
 interface:
   display_name: "GPT Image 2 Skill"
-  short_description: "Generate images with OpenAI or Codex auth through the Rust CLI runtime"
-  default_prompt: "Use $gpt-image-2-skill to inspect provider auth, choose openai or codex, generate or edit images, and consume progress events from the Skill runtime wrapper."
+  short_description: "通过 Rust CLI 生成或编辑图片，支持 GPT Image 2.6、SVG 与动态 GIF"
+  default_prompt: "使用 $gpt-image-2-skill 检查 provider 与运行时能力，按指定模型生成或编辑图片，并核对 JSON 结果与实际文件。"
 
 policy:
   allow_implicit_invocation: true

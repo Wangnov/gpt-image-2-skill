@@ -14,6 +14,8 @@ pub fn output_extension(format: Option<&str>) -> &str {
     match format {
         Some("jpeg") => "jpg",
         Some("webp") => "webp",
+        Some("gif") => "gif",
+        Some("svg") => "svg",
         _ => "png",
     }
 }

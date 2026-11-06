@@ -2,6 +2,8 @@
 
 运行时参数见 `crates/gpt-image-2-core/src/cli_types.rs`。2.5 公共 API 新增 `xhigh/max`，当前 CLI 和桌面界面已提供这两个档位；请显式选择支持它们的 2.5 模型。 Override with the matching `--size`, `--format`, `--quality`, `--compression`, or `--background` flag.
 
+2.6 的 complexity、markup、SVG 作者与 GIF 帧参数见 [image-2.6.md](image-2.6.md)。CLI 默认 OpenAI 模型为 `gpt-image-2.6-sunburst`，也可选择 `gpt-image-2.6-flare`；原有显式模型配置优先。
+
 ## Size aliases
 
 | Input | Resolves to |
@@ -18,9 +20,12 @@ Custom `WIDTHxHEIGHT` must satisfy ALL of:
 
 - both edges are multiples of `16`
 - max single edge: `3840`
+- min total pixels: `655_360`
 - max total pixels: `8_294_400`
 - max aspect ratio: `3:1` (longest / shortest ≤ 3.0)
 - square high-resolution ceiling in practice: `2880x2880`
+
+上述像素和比例限制用于静态图和 SVG 的参考渲染图。GIF 仅在 CLI 检查正整数及 16 的倍数，具体帧尺寸与合图预算由 API 校验；小于静态图最低像素的帧可以通过 CLI，但仍可能因合图预算被 API 拒绝。
 
 Violations return `code: "invalid_command"` (clap layer, e.g. non-multiple-of-16 caught at parse time) or `code: "invalid_argument"` (runtime layer, e.g. total-pixel cap caught after parsing) with the failing constraint in `error.message`.
 
@@ -28,8 +33,9 @@ Violations return `code: "invalid_command"` (clap layer, e.g. non-multiple-of-16
 
 | Flag | Values | Notes |
 |---|---|---|
-| `--format` | `png`, `jpeg`, `webp` | output container |
+| `--format` | `png`, `jpeg`, `webp`, `gif`, `svg` | GIF/SVG 仅限支持它们的 Images API 模型；SVG 仅生成且 n=1 |
 | `--quality` | `low`, `medium`, `high`, `xhigh`, `max`, `auto` | provider-side rendering quality |
+| `--complexity` | `low`, `medium`, `high` | 2.6 绘制规划；独立于 quality，省略时上游默认 high |
 | `--compression` | `0`–`100` | JPEG/WebP compression level |
 | `--background` | `auto` (default), `transparent`, `opaque` | OpenAI 的支持情况取决于模型；2.5 支持原生透明。Codex 会发送该字段，本次透明请求被拒绝，不透明请求成功。 |
 
@@ -58,9 +64,11 @@ Violations return `code: "invalid_command"` (clap layer, e.g. non-multiple-of-16
 `images edit` and `request create --request-operation edit` accept:
 
 - `--ref-image <path>` (repeatable on `images edit`)
-- HTTP(S) URLs (downloaded server-side by OpenAI; pass through unchanged)
+- HTTPS URLs（multipart 路径先由 CLI 安全下载；HTTP 被拒绝）
 - data URLs (`data:image/png;base64,...`)
 
 OpenAI edit requests are sent as `multipart/form-data`. Codex edits embed the reference inside the `image_generation` tool input.
+
+`--markup` 为独立透明 PNG 标注层，与 `--mask` 互斥。raw edit 的 `images`、`mask` 或 `markup` 使用 file_id 时改走 JSON，避免文件 ID 在 multipart 转换中丢失。SVG 不能作为编辑参考图。
 
 For style-lock references, prefer a flat RGB image. Transparent PNG references can carry premultiplied edges, invisible RGB, or alpha artifacts into the edit. Flatten the reference first unless the alpha itself is the intended visual signal.

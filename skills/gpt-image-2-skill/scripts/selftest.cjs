@@ -27,6 +27,12 @@ function main() {
   const config = runJson(["--json", "config", "inspect"]);
   const doctor = runJson(["--json", "doctor"]);
   const auth = runJson(["--json", "auth", "inspect"]);
+  const models = runJson(["--json", "models", "list"]);
+  const supported = models.providers?.openai?.supports || [];
+  const image26Ready = ["complexity", "markup", "frame_count", "svg"].every((feature) => supported.includes(feature));
+  if (!image26Ready) {
+    throw new Error("当前 CLI 缺少 GPT Image 2.6 能力，请构建或安装新版运行时。");
+  }
   const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "gpt-image-2-skill-selftest-"));
   const transparentPng = path.join(tempDir, "transparent.png");
   fs.writeFileSync(
@@ -50,6 +56,8 @@ function main() {
       {
         ok: true,
         doctor_ok: doctor.ok === true,
+        image_26_ready: image26Ready,
+        default_image_model: models.providers?.openai?.default_model ?? null,
         transparent_verify_passed: transparent.passed === true,
         config_file: config.config_file ?? null,
         default_provider: config.config?.default_provider ?? null,

@@ -1,9 +1,11 @@
 ---
 name: gpt-image-2-skill
-description: This skill should be used when the user asks to "generate an image", "create a logo", "draw an icon", "edit this photo", "change background to transparent", "remove background", "use GPT image", "use Codex to draw", "用 GPT image 生成图片", "用 Codex 画图", "帮我生成一张图", "改成透明背景", "把这张图编辑一下", or any prompt-to-image or reference-image-edit task that benefits from a structured CLI returning JSON results and JSONL progress events. Supports OpenAI GPT Image models (via `OPENAI_API_KEY` or OpenAI-compatible base URL) and Codex `image_generation` (via `~/.codex/auth.json`, with an explicit supported orchestration model) under one command surface, with masks, custom sizes up to 4K, transparent backgrounds, and a raw request escape hatch.
+description: 使用 GPT Image CLI 生成或编辑图片、透明素材、SVG 和动态 GIF，返回 JSON 结果与 JSONL 进度。适用于文生图、参考图编辑、mask 或 markup 局部修改；支持 OpenAI GPT Image 2.6 Sunburst/Flare、兼容服务和 Codex 登录，各通道能力分别校验。
 ---
 
 Run image generation and editing through one CLI surface that hides provider differences. The Node wrapper at `scripts/gpt_image_2_skill.cjs` resolves an underlying Rust binary (env override → bundled Skill binary → installed binary → Tauri App bundled CLI → repo `cargo run` → cached release → bootstrap download) and forwards every flag. On glibc Linux, release bootstrap tries the GNU archive first and then the static musl archive as the sandbox fallback.
+
+使用新参数、2.6 模型或新的默认绘图行为时，wrapper 会先读取运行时的 `models list`，跳过缺少所需能力的旧 CLI；显式 `GPT_IMAGE_2_SKILL_BIN` 指向旧版时返回 `runtime_outdated`，不会替换用户指定的二进制文件。显式旧模型和普通 Codex 命令保留兼容性。未发版源码请先构建 CLI，再通过该变量指向本地二进制文件。
 
 ## When to use this skill
 
@@ -82,6 +84,29 @@ node scripts/gpt_image_2_skill.cjs --json --json-events --provider codex \
 - 参数并非全无效：output_format确实决定PNG/JPEG；background=opaque压过透明提示词，生成了RGB棋盘格假透明。透明候选应使用auto，并检查真实alpha；quality不能靠提示词保证。
 - 关于显式 2.5 请求、服务端返回模型和透明背景限制，见 `references/codex-local-verification.md`。
 
+## GPT Image 2.6
+
+OpenAI Images API 的默认模型为 `gpt-image-2.6-sunburst`，适合细致绘图与编辑；快速迭代可显式选择 `gpt-image-2.6-flare`。`--model` 和共享配置中已固定的模型优先，不自动降级或切换 provider。项目名称和命令名仍为 `gpt-image-2-skill`。
+
+- `--complexity low|medium|high` 控制绘制前的规划，独立于 `--quality`；省略时上游默认 `high`。草稿可用 `--quality low --complexity low`。
+- `images edit --markup <透明PNG>` 传独立标注层，不能同时使用 `--mask`。CLI 会检查透明像素及与首张原图在方向校正后的尺寸一致性。
+- `--format svg` 仅用于 `images generate`，且 `--n 1`。默认不发送 SVG 作者配置；只有账户支持作者模型选择且用户需要时，才加 `--svg-model` 和可选的 `--svg-reasoning-effort`。SVG 作者 token 单独计费，见 `response.svg_usage`。
+- `--format gif` 用于生成或编辑，配合 `--frame-count 2..16`、`--frame-duration-ms`。帧尺寸支持 `256x256` 等较小尺寸，不能套用静态图的最低像素限制。
+- SVG/GIF 不支持压缩参数、流式输出或 partial images；GIF 不支持 mask。Codex 和 Atlas 普通命令不支持这些新增能力，CLI 会明确报错。
+
+```bash
+node scripts/gpt_image_2_skill.cjs --json --provider openai images generate \
+  --model gpt-image-2.6-flare --prompt "一枚蓝色纸雕月亮图标" \
+  --quality low --complexity low --format png --out /tmp/moon.png
+
+node scripts/gpt_image_2_skill.cjs --json --provider openai images generate \
+  --model gpt-image-2.6-sunburst --prompt "小灯笼轻轻摇摆，无缝循环" \
+  --format gif --size 640x640 --frame-count 2 --frame-duration-ms 200 \
+  --quality low --complexity low --out /tmp/lantern.gif
+```
+
+完整格式限制、SVG 作者配置和 markup 工作流见 [references/image-2.6.md](references/image-2.6.md)。官方依据：[2.6 Sunburst](https://developers.openai.com/api/docs/models/gpt-image-2.6-sunburst)、[2.6 Flare](https://developers.openai.com/api/docs/models/gpt-image-2.6-flare)、[图像生成指南](https://developers.openai.com/api/docs/guides/image-generation)。
+
 ## Image 2.5 与运行时能力边界
 
 OpenAI 官方已列出 `gpt-image-2.5-flare` 和 `gpt-image-2.5-sunburst`，可在 OpenAI Image API 中使用 `--model` 显式选择；这不代表 Codex 订阅后端已支持相同模型选择。保留用户指定的模型和共享配置。
@@ -92,7 +117,7 @@ OpenAI 官方已列出 `gpt-image-2.5-flare` 和 `gpt-image-2.5-sunburst`，可�
 
 ## 防止静默降级与中文质量验收
 
-- 用户要求Image 2或2.5时，不得为了透明、速度或失败重试自行改用1.5，也不得切换provider掩盖失败。
+- 用户要求 Image 2、2.5 或 2.6 时，不得为了透明、速度或失败重试自行改用其他模型，也不得切换 provider 掩盖失败。
 - 区分请求模型、服务端报告模型、实际权重版本。Codex只返回别名或没有版本字段时，将实际版本标为unknown；不能保证未发生后端回退，也不能仅凭中文表现或透明alpha推断版本。
 - 复杂中文须核对原文：常规长句、金额、近形字、生僻字和标点分别检查。2026-09-09新增4张对照中，两条路径均能生成清晰常规中文和真实透明，但均未正确保持“戊戌戍”等辨字及全部生僻字，不能宣称全文准确。
 - 最新官方提示词指南已将Image 2透明列为preview，2.5两款均支持透明；“真透明意味着1.5”已不是有效判据。公开API支持不代表Codex订阅路径相同参数必然成功。
@@ -107,6 +132,8 @@ Start by checking the latest upstream CLI version:
 ```bash
 npm view gpt-image-2-skill version
 ```
+
+版本号检查后还须运行 `node scripts/gpt_image_2_skill.cjs --json models list`，确认 `providers.openai.supports` 含 `complexity`、`markup`、`frame_count` 和 `svg`。源码与已发布的相同版本号可能具有不同能力；不能仅凭版本号认定 2.6 已就绪。出现 `runtime_outdated` 时构建或安装支持这些能力的 CLI，不要改用旧参数掩盖失败。
 
 Then look for the Tauri App bundled CLI first. Treat the app bundle as user-managed software: if it exists but is older than upstream, ask the user before updating or replacing the app.
 
@@ -159,11 +186,14 @@ Credential sources supported by CLI, App, and Skill: `file`, `env`, and `keychai
 |---|---|
 | Output background (transparent / opaque / auto) | `--background auto\|transparent\|opaque` |
 | Output dimensions | `--size 2K`, `--size 4K`, or `--size WIDTHxHEIGHT` |
-| Output container | `--format png\|jpeg\|webp` |
+| Output container | `--format png\|jpeg\|webp\|gif\|svg`（GIF/SVG 为 Images API） |
 | Compression level | `--compression 0..100` |
-| Render quality | `--quality low\|medium\|high\|auto` |
+| Render quality | `--quality low\|medium\|high\|xhigh\|max\|auto` |
+| 绘制规划 | `--complexity low\|medium\|high`（2.6 Images API） |
 | Number of images | `--n <count>` (OpenAI only) |
 | Edit mask region | `--mask <png>` (OpenAI only) |
+| 标注层编辑 | `--markup <透明PNG>`（Images API，与 mask 互斥） |
+| 动画帧 | `--frame-count 2..16 --frame-duration-ms <毫秒>`（GIF） |
 
 提示词用于内容与视觉意图；`--background opaque` 只表达不透明，不指定白色。白背景还需在提示词中明确。对于 Codex，透明提示词配合 `background=auto` 可能得到真实 alpha，而显式透明参数当前可能报错；以实测和文件检查为准。
 
@@ -243,7 +273,7 @@ Always inspect the JSON verification fields before delivery: `passed`, `alpha_mi
 
 ## Notes
 
-- 当前运行时默认值仍是 OpenAI `gpt-image-2` / Codex `gpt-5.4`；Codex 使用上面的显式模型示例，不能依赖旧默认值。
+- 当前运行时默认值为 OpenAI `gpt-image-2.6-sunburst` / Codex `gpt-5.4`；Codex 使用上面的显式模型示例。公共 API 的 2.6 支持不证明 Codex 订阅后端支持同样能力。
 - 共同接受的 CLI 参数：`--size`、`--quality`、`--format`、`--compression`；Codex 服务端可能归一化这些参数，应核对返回值和实际文件。
 - OpenAI-only options: `--n`, `--moderation`, `--mask`, `--input-fidelity`; Codex background behavior requires separate verification.
 - Retries: up to 3 with exponential backoff (1s → 2s → 4s). Codex `401` triggers one token refresh + one retry.
@@ -254,6 +284,7 @@ Always inspect the JSON verification fields before delivery: `passed`, `alpha_mi
 Load on demand for deeper detail:
 
 - `references/codex-native-imagegen.md` — App 原生工具、独立 Images 端点与旧 CLI 调用路径的区别。
+- `references/image-2.6.md` — 2.6 模型、complexity、markup、SVG/GIF 参数与费用边界。
 - `references/codex-local-verification.md` — 本地 Codex 生图命令、实测结果与模型识别边界。
 - `references/providers.md` — OpenAI / OpenAI-compatible / Codex selection, auth sources, runtime discovery, update policy, and resolution order.
 - `references/sizes-and-formats.md` — size aliases, custom constraints, format/quality/compression/background, shared vs OpenAI-only flags.

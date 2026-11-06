@@ -48,13 +48,20 @@ pub(crate) fn run_transparent_generate(
         background: Background::Opaque,
         size: args.size.clone(),
         quality: args.quality,
+        complexity: args.complexity,
         output_format: Some(OutputFormat::Png),
+        frame_count: None,
+        frame_duration_ms: None,
+        svg_model: None,
+        svg_reasoning_effort: None,
+        safety_identifier: args.safety_identifier.clone(),
         output_compression: args.output_compression,
         n: None,
         moderation: args.moderation,
         recovery_job_id: None,
         recovery_job_dir: None,
     };
+    validate_image_options(&selection, &shared, "generate", None, None)?;
     validate_provider_specific_image_args(&selection, &shared, None, None)?;
     let source_generation = generate_source_image(cli, &selection, &shared)?;
     let generated_source_path = output_files_from_payload(&source_generation)
