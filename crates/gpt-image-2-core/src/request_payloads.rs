@@ -246,14 +246,27 @@ pub(crate) fn build_known_model_payloads() -> Value {
             "model_presets": [{
                 "id": DEFAULT_OPENAI_MODEL,
                 "default": true,
-                "source": "official_default",
-                "notes": "Official API-key image generation model."
+                "source": "local_default",
+                "notes": "GPT Image 2.6 Sunburst: detailed visual work and editing."
+            }, {
+                "id": "gpt-image-2.6-flare", "default": false, "source": "official_model",
+                "notes": "GPT Image 2.6 Flare: fast iteration."
+            }, {
+                "id": "gpt-image-2.5-sunburst", "default": false, "source": "official_model"
+            }, {
+                "id": "gpt-image-2.5-flare", "default": false, "source": "official_model"
+            }, {
+                "id": "gpt-image-2", "default": false, "source": "official_model"
             }],
             "operations": [
                 {"id": "generate", "command": "images generate", "requires_ref_image": false},
                 {"id": "edit", "command": "images edit", "requires_ref_image": true}
             ],
-            "supports": ["background", "size", "quality", "format", "compression", "n", "moderation", "mask", "input_fidelity"]
+            "supports": ["background", "size", "quality", "format", "compression", "n", "moderation", "mask", "input_fidelity", "complexity", "markup", "frame_count", "frame_duration_ms", "svg", "safety_identifier"],
+            "capabilities_by_model": {
+                "gpt-image-2.6-sunburst": { "formats": ["png", "jpeg", "webp", "svg", "gif"], "complexity": ["low", "medium", "high"], "default_complexity": "high", "markup": true, "svg_generate_only": true },
+                "gpt-image-2.6-flare": { "formats": ["png", "jpeg", "webp", "svg", "gif"], "complexity": ["low", "medium", "high"], "default_complexity": "high", "markup": true, "svg_generate_only": true }
+            }
         },
         "codex": {
             "default_model": DEFAULT_CODEX_MODEL,

@@ -78,5 +78,21 @@
   {
     "query": "explain how diffusion models work, especially the difference between DDPM and DDIM scheduling",
     "should_trigger": false
+  },
+  {
+    "query": "用 GPT Image 2.6 Flare 生成一个可编辑 SVG 月亮图标",
+    "should_trigger": true
+  },
+  {
+    "query": "用 GPT Image 2.6 Sunburst 生成蓝色圆点跳动的动态 GIF，2 帧",
+    "should_trigger": true
+  },
+  {
+    "query": "根据透明标注 PNG 中的红圈，用 GPT Image 2.6 编辑花瓶颜色",
+    "should_trigger": true
+  },
+  {
+    "query": "把现有 GIF 的帧率改成 10 fps，不重新生成画面",
+    "should_trigger": false
   }
 ]

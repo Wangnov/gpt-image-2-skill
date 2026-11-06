@@ -179,6 +179,10 @@ pub struct TransparentGenerateArgs {
     pub size: Option<String>,
     #[arg(long, value_enum)]
     pub quality: Option<Quality>,
+    #[arg(long, value_enum)]
+    pub complexity: Option<Complexity>,
+    #[arg(long)]
+    pub safety_identifier: Option<String>,
     #[arg(long = "compression", value_parser = clap::value_parser!(u8).range(0..=100))]
     pub output_compression: Option<u8>,
     #[arg(long, value_enum)]

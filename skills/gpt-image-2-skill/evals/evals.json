@@ -62,7 +62,9 @@
         "if --json-events was passed and resolved provider is openai then stderr contains a line with '\"type\":\"multipart_prepared\"'",
         "if payload.ok === true then /tmp/edit-out.png exists and is > 1024 bytes"
       ],
-      "files": ["/tmp/source-logo.png (caller-provided fixture)"]
+      "files": [
+        "/tmp/source-logo.png (caller-provided fixture)"
+      ]
     },
     {
       "id": 5,
@@ -92,7 +94,74 @@
         "if --provider codex was used then this case is skipped (Codex ignores --background)",
         "if payload.ok === true and resolved provider is openai then /tmp/edit-white.png exists, is > 1024 bytes, and is visually opaque (alpha channel uniformly 255 in a non-edge sample)"
       ],
-      "files": ["/tmp/source-logo.png (caller-provided fixture, transparent PNG)"]
+      "files": [
+        "/tmp/source-logo.png (caller-provided fixture, transparent PNG)"
+      ]
+    },
+    {
+      "id": 7,
+      "name": "image-26-complexity",
+      "prompt": "用官方 OpenAI 的 GPT Image 2.6 Flare 画一枚蓝色月亮图标，渲染质量 low，规划复杂度 medium，输出 /tmp/moon-26.png，返回 JSON。",
+      "expected_output": "显式选择 openai 和 gpt-image-2.6-flare，独立传入 quality low、complexity medium；核对最终 JSON 和真实文件。",
+      "assertions": [
+        "command line includes --provider openai",
+        "command line includes --model gpt-image-2.6-flare",
+        "command line includes --quality low",
+        "command line includes --complexity medium",
+        "payload.request.complexity === 'medium'",
+        "不切换模型或 provider 掩盖错误"
+      ],
+      "files": []
+    },
+    {
+      "id": 8,
+      "name": "image-26-gif",
+      "prompt": "用官方 OpenAI GPT Image 2.6 Sunburst 生成一个蓝色圆点跳动的 GIF，640x640、2 帧，每帧 200 ms，低质量，保存到 /tmp/dot-26.gif。",
+      "expected_output": "使用 Images API，format gif、frame-count 2、frame-duration-ms 200；成功后读取真实 GIF 的格式、帧数与时长，不添加压缩参数。",
+      "assertions": [
+        "command line includes --provider openai",
+        "command line includes --model gpt-image-2.6-sunburst",
+        "command line includes --format gif",
+        "command line includes --frame-count 2",
+        "command line includes --frame-duration-ms 200",
+        "不传 --compression",
+        "检查 GIF 文件而非仅引用请求参数"
+      ],
+      "files": []
+    },
+    {
+      "id": 9,
+      "name": "image-26-markup",
+      "prompt": "用 GPT Image 2.6 Flare 把 /tmp/original.png 中 /tmp/annotation.png 红圈内的花瓶改成蓝色，其他部分保留，去掉红圈。annotation 是单独的透明 PNG，尺寸与原图一致，保存 /tmp/marked-edit.png。",
+      "expected_output": "使用 images edit 的独立 markup 字段，不把标注层当作额外参考图、不合并原图、不同时传 mask。",
+      "assertions": [
+        "command line includes 'images edit'",
+        "command line includes --ref-image /tmp/original.png",
+        "command line includes --markup /tmp/annotation.png",
+        "不传 --mask",
+        "不将 annotation 作为第二张 --ref-image",
+        "成功时 payload.request.markup_present === true"
+      ],
+      "files": [
+        "/tmp/original.png（调用方提供）",
+        "/tmp/annotation.png（调用方提供，透明 PNG）"
+      ]
+    },
+    {
+      "id": 10,
+      "name": "image-26-svg",
+      "prompt": "用官方 OpenAI GPT Image 2.6 Flare 生成一枚简单蓝色月亮 SVG 图标，低质量。我的账户启用了 SVG 作者选择，作者用 gpt-6.1-terra，推理 low，输出 /tmp/moon-26.svg。",
+      "expected_output": "使用 images generate、format svg、n=1、指定 svg-model 与 svg-reasoning-effort；读取 SVG XML，并区分 response.usage 和 response.svg_usage。",
+      "assertions": [
+        "command line includes 'images generate'",
+        "command line includes --format svg",
+        "command line includes --svg-model gpt-6.1-terra",
+        "command line includes --svg-reasoning-effort low",
+        "不传压缩、stream 或 partial images",
+        "检查 SVG 为 XML 而非重命名 PNG",
+        "费用评估包括独立 SVG 作者 usage"
+      ],
+      "files": []
     }
   ]
 }

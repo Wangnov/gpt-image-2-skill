@@ -32,6 +32,7 @@ impl Drop for TestCodexHome {
 mod auth_refresh;
 mod config_provider;
 mod history_storage;
+mod image_26;
 mod image_requests;
 mod network_safety;
 mod notification_delivery;

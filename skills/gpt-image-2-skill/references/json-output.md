@@ -22,8 +22,10 @@ Common `code` values:
 | Code | Layer | Meaning |
 |---|---|---|
 | `runtime_unavailable` | wrapper | Node wrapper could not resolve a Rust binary |
+| `runtime_outdated` | wrapper | CLI 缺少当前 skill 要求的 2.6 能力；构建或安装新 CLI |
 | `invalid_command` | clap | unknown flag, missing required arg, or `--size` value rejected by clap-level parsing (e.g. `5000x5000` is not a multiple of 16) |
 | `invalid_argument` | runtime | business-layer validation failure after clap accepted the input |
+| `markup_invalid` | runtime | 标注层格式、透明像素、尺寸或像素预算校验失败 |
 | `unsupported_option` | runtime | flag passed to a provider that does not accept it (e.g. `--mask` with `--provider codex`) |
 | `auth_missing` | runtime | provider auth not present |
 | `auth_parse_failed` | runtime | `auth.json` exists but cannot be parsed |
@@ -77,9 +79,10 @@ Common `code` values:
 {
   "ok": true,
   "provider_selection": { "resolved": "openai" },
-  "request": { "model": "gpt-image-2", "size": "2048x2048", "...": "..." },
+  "request": { "model": "gpt-image-2.6-sunburst", "size": "2048x2048", "complexity": "low" },
   "retry": { "count": 0, "max_retries": 3 },
-  "data": { "...": "image metadata + saved file path" }
+  "response": { "usage": {}, "svg_usage": null, "image_count": 1 },
+  "output": { "path": "/tmp/out.png", "bytes": 1234, "files": [{"index": 0, "path": "/tmp/out.png", "bytes": 1234}] }
 }
 ```
 
@@ -87,18 +90,22 @@ Common `code` values:
 
 Same envelope as `images generate`. The `request` object includes `operation: "edit"` and `ref_image_count: <N>` instead of size hints. Multipart transport is reported in **stderr** as the `multipart_prepared` progress event (`type: "multipart_prepared"`), not on stdout. Token usage in `response.usage` splits into `input_tokens_details.image_tokens` and `text_tokens` for edits.
 
+markup 编辑含 `request.markup_present: true`。SVG 作者 token 在独立的 `response.svg_usage` 中，不能与渲染图的 `response.usage` 混淆。GIF 的请求参数在 `request.frame_count` / `frame_duration_ms`，上游报告值在 `response`，缺失时为 null；实际帧数/时长仍需读取 GIF 文件。`safety_identifier` 仅在请求摘要中显示 `safety_identifier_present`，不会回显标识内容。
+
 ### `request create`
 
-Returns the raw upstream JSON wrapped in the standard envelope:
+返回请求摘要、响应元数据和可选的图片输出；base64 内容不会回显到 stdout：
 
 ```json
 {
   "ok": true,
-  "data": { "...": "raw OpenAI or Codex response body" }
+  "request": { "operation": "generate", "model": "gpt-image-2.6-flare" },
+  "response": { "usage": {}, "svg_usage": null },
+  "image_output": { "path": "/tmp/out.svg", "bytes": 1234, "files": [] }
 }
 ```
 
-When `--expect-image` is set, the runtime decodes the first image payload into `--out-image` and adds `image_path` to `data`.
+提供 `--out-image` 时将结果原样写入文件；`--expect-image` 要求响应中确实有图片。未提供输出路径时，`image_output` 包含 available、count 和 suggested_extension。
 
 ### `transparent generate`
 

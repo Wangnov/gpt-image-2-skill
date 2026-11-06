@@ -12,6 +12,20 @@ use crate::constants::{
 use crate::storage_config::{ExportDirMode, PathMode, PathRef};
 
 pub fn parse_image_size(value: &str) -> Result<String, String> {
+    let normalized = parse_image_dimensions(value)?;
+    if normalized == "auto" {
+        return Ok(normalized);
+    }
+    let (width_text, height_text) = normalized.split_once('x').unwrap();
+    let width: u32 = width_text.parse().unwrap();
+    let height: u32 = height_text.parse().unwrap();
+    validate_raster_dimensions(width, height)?;
+    Ok(normalized)
+}
+
+// GIF frame dimensions have a different pixel budget from still images. Parse
+// their common syntax here and apply format-specific limits after CLI parsing.
+pub(crate) fn parse_image_dimensions(value: &str) -> Result<String, String> {
     let normalized = value.trim().to_ascii_lowercase();
     if normalized.is_empty() {
         return Err("Image size must be auto, 2K, 4K, or WIDTHxHEIGHT.".to_string());
@@ -42,6 +56,10 @@ pub fn parse_image_size(value: &str) -> Result<String, String> {
             "Image size must use width and height values that are multiples of 16.".to_string(),
         );
     }
+    Ok(format!("{width}x{height}"))
+}
+
+fn validate_raster_dimensions(width: u32, height: u32) -> Result<(), String> {
     if width.max(height) > IMAGE_SIZE_MAX_EDGE {
         return Err(format!(
             "Image size supports a maximum edge of {}px.",
@@ -68,7 +86,7 @@ pub fn parse_image_size(value: &str) -> Result<String, String> {
             IMAGE_SIZE_MAX_ASPECT_RATIO
         ));
     }
-    Ok(format!("{width}x{height}"))
+    Ok(())
 }
 
 pub fn default_auth_path() -> PathBuf {

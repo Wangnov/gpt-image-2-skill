@@ -2,15 +2,27 @@
 
 use super::*;
 
+#[derive(Clone, Copy, Default)]
+pub(crate) struct ImageEditInputs<'a> {
+    pub ref_images: &'a [String],
+    pub mask: Option<&'a str>,
+    pub markup: Option<&'a str>,
+    pub input_fidelity: Option<InputFidelity>,
+}
+
 pub(crate) fn run_openai_image_command(
     cli: &Cli,
     selection: &ProviderSelection,
     shared: &SharedImageArgs,
     operation: &str,
-    ref_images: &[String],
-    mask: Option<&str>,
-    input_fidelity: Option<InputFidelity>,
+    inputs: ImageEditInputs<'_>,
 ) -> Result<CommandOutcome, AppError> {
+    let ImageEditInputs {
+        ref_images,
+        mask,
+        markup,
+        input_fidelity,
+    } = inputs;
     let output_path = PathBuf::from(&shared.out);
     let auth_state = load_openai_auth_state_for(cli, selection)?;
     let proxy = effective_proxy_for(cli, &selection.resolved)?;
@@ -23,7 +35,7 @@ pub(crate) fn run_openai_image_command(
         .model
         .clone()
         .unwrap_or_else(|| selection.default_model.clone());
-    let body = build_openai_image_body(
+    let mut body = build_openai_image_body(
         operation,
         &shared.prompt,
         &resolved_model,
@@ -38,13 +50,29 @@ pub(crate) fn run_openai_image_command(
         shared.n,
         shared.moderation,
     );
+    apply_openai_image_options(&mut body, shared);
+    if let Some(markup) = markup {
+        body["markup"] = json!({ "image_url": resolve_ref_image(markup)? });
+    }
+    let mut request_summary = summarize_image_request_options(
+        "openai",
+        operation,
+        &resolved_model,
+        shared,
+        resolved_ref_images.len(),
+        resolved_mask.is_some(),
+        input_fidelity,
+    );
+    if markup.is_some() {
+        request_summary["markup_present"] = json!(true);
+    }
     let mut recovery = match (&shared.recovery_job_id, &shared.recovery_job_dir) {
         (Some(job_id), Some(job_dir)) => {
             let ctx = RecoveryContext::new(job_id.clone(), PathBuf::from(job_dir))?;
             ctx.write_request_meta(&json!({
                 "operation": operation,
                 "provider": selection.resolved,
-                "request": summarize_image_request_options("openai", operation, &resolved_model, shared, resolved_ref_images.len(), resolved_mask.is_some(), input_fidelity),
+                "request": request_summary,
             }))?;
             Some(ctx)
         }
@@ -146,7 +174,7 @@ pub(crate) fn run_openai_image_command(
                 "env_var": OPENAI_API_KEY_ENV,
                 "refreshed": false,
             },
-            "request": summarize_image_request_options("openai", operation, &resolved_model, shared, resolved_ref_images.len(), resolved_mask.is_some(), input_fidelity),
+            "request": request_summary,
             "response": {
                 "created": payload.get("created"),
                 "background": payload.get("background"),
@@ -154,6 +182,10 @@ pub(crate) fn run_openai_image_command(
                 "quality": payload.get("quality"),
                 "size": payload.get("size"),
                 "usage": payload.get("usage").map(redact_event_payload).unwrap_or(Value::Null),
+                "svg_usage": payload.get("svg_usage").map(redact_event_payload).unwrap_or(Value::Null),
+                "complexity": payload.get("complexity"),
+                "frame_count": payload.get("frame_count"),
+                "frame_duration_ms": payload.get("frame_duration_ms"),
                 "image_count": image_bytes_list.len(),
                 "revised_prompts": revised_prompts.into_iter().flatten().collect::<Vec<_>>(),
             },
@@ -354,9 +386,7 @@ pub(crate) fn run_batched_image_command(
     selection: &ProviderSelection,
     shared: &SharedImageArgs,
     operation: &str,
-    ref_images: &[String],
-    mask: Option<&str>,
-    input_fidelity: Option<InputFidelity>,
+    inputs: ImageEditInputs<'_>,
 ) -> Result<CommandOutcome, AppError> {
     let count = shared.n.unwrap_or(1);
     let output_path = PathBuf::from(&shared.out);
@@ -373,17 +403,11 @@ pub(crate) fn run_batched_image_command(
             .into_iter()
             .map(|next| {
                 scope.spawn(move || match selection.kind {
-                    ProviderKind::OpenAi => run_openai_image_command(
-                        cli,
-                        selection,
-                        &next,
-                        operation,
-                        ref_images,
-                        mask,
-                        input_fidelity,
-                    ),
+                    ProviderKind::OpenAi => {
+                        run_openai_image_command(cli, selection, &next, operation, inputs)
+                    }
                     ProviderKind::Codex => {
-                        run_codex_image_command(cli, selection, &next, operation, ref_images)
+                        run_codex_image_command(cli, selection, &next, operation, inputs.ref_images)
                     }
                     ProviderKind::Atlas => run_atlas_image_command(cli, selection, &next),
                 })
@@ -456,6 +480,7 @@ pub(crate) fn run_images_command(
     let selection = select_image_provider(cli)?;
     match subcommand {
         ImagesSubcommand::Generate(args) => {
+            validate_image_options(&selection, &args.shared, "generate", None, None)?;
             if matches!(selection.kind, ProviderKind::Atlas) {
                 validate_provider_specific_image_args(&selection, &args.shared, None, None)?;
                 return run_atlas_image_command(cli, &selection, &args.shared);
@@ -472,18 +497,35 @@ pub(crate) fn run_images_command(
                     &selection,
                     &args.shared,
                     "generate",
-                    &[],
-                    None,
-                    None,
+                    ImageEditInputs::default(),
                 );
             }
             if matches!(selection.kind, ProviderKind::OpenAi) {
-                run_openai_image_command(cli, &selection, &args.shared, "generate", &[], None, None)
+                run_openai_image_command(
+                    cli,
+                    &selection,
+                    &args.shared,
+                    "generate",
+                    ImageEditInputs::default(),
+                )
             } else {
                 run_codex_image_command(cli, &selection, &args.shared, "generate", &[])
             }
         }
         ImagesSubcommand::Edit(args) => {
+            let inputs = ImageEditInputs {
+                ref_images: &args.ref_image,
+                mask: args.mask.as_deref(),
+                markup: args.markup.as_deref(),
+                input_fidelity: args.input_fidelity,
+            };
+            validate_image_options(
+                &selection,
+                &args.shared,
+                "edit",
+                args.mask.as_deref(),
+                args.markup.as_deref(),
+            )?;
             if matches!(selection.kind, ProviderKind::Atlas) {
                 return Err(AppError::new(
                     "unsupported_operation",
@@ -503,26 +545,10 @@ pub(crate) fn run_images_command(
                 args.input_fidelity,
             )?;
             if use_batch {
-                return run_batched_image_command(
-                    cli,
-                    &selection,
-                    &args.shared,
-                    "edit",
-                    &args.ref_image,
-                    args.mask.as_deref(),
-                    args.input_fidelity,
-                );
+                return run_batched_image_command(cli, &selection, &args.shared, "edit", inputs);
             }
             if matches!(selection.kind, ProviderKind::OpenAi) {
-                run_openai_image_command(
-                    cli,
-                    &selection,
-                    &args.shared,
-                    "edit",
-                    &args.ref_image,
-                    args.mask.as_deref(),
-                    args.input_fidelity,
-                )
+                run_openai_image_command(cli, &selection, &args.shared, "edit", inputs)
             } else {
                 run_codex_image_command(cli, &selection, &args.shared, "edit", &args.ref_image)
             }

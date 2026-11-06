@@ -28,7 +28,7 @@ pub const OPENAI_EDITS_PATH: &str = "/images/edits";
 
 pub const DEFAULT_CODEX_MODEL: &str = "gpt-5.4";
 
-pub const DEFAULT_OPENAI_MODEL: &str = "gpt-image-2";
+pub const DEFAULT_OPENAI_MODEL: &str = "gpt-image-2.6-sunburst";
 
 pub const DEFAULT_INSTRUCTIONS: &str = "You are a concise assistant.";
 

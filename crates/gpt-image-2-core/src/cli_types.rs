@@ -43,10 +43,54 @@ impl Quality {
 }
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq, ValueEnum)]
+pub enum Complexity {
+    Low,
+    Medium,
+    High,
+}
+
+impl Complexity {
+    pub(crate) fn as_str(self) -> &'static str {
+        match self {
+            Self::Low => "low",
+            Self::Medium => "medium",
+            Self::High => "high",
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, Eq, PartialEq, ValueEnum)]
+pub enum SvgReasoningEffort {
+    None,
+    Minimal,
+    Low,
+    Medium,
+    High,
+    Xhigh,
+    Max,
+}
+
+impl SvgReasoningEffort {
+    pub(crate) fn as_str(self) -> &'static str {
+        match self {
+            Self::None => "none",
+            Self::Minimal => "minimal",
+            Self::Low => "low",
+            Self::Medium => "medium",
+            Self::High => "high",
+            Self::Xhigh => "xhigh",
+            Self::Max => "max",
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, Eq, PartialEq, ValueEnum)]
 pub enum OutputFormat {
     Png,
     Jpeg,
     Webp,
+    Gif,
+    Svg,
 }
 
 impl OutputFormat {
@@ -55,6 +99,8 @@ impl OutputFormat {
             Self::Png => "png",
             Self::Jpeg => "jpeg",
             Self::Webp => "webp",
+            Self::Gif => "gif",
+            Self::Svg => "svg",
         }
     }
 }
@@ -308,12 +354,30 @@ pub struct SharedImageArgs {
     pub instructions: String,
     #[arg(long, value_enum, default_value = DEFAULT_BACKGROUND)]
     pub background: Background,
-    #[arg(long, value_parser = parse_image_size)]
+    #[arg(long, value_parser = crate::paths::parse_image_dimensions)]
     pub size: Option<String>,
     #[arg(long, value_enum)]
     pub quality: Option<Quality>,
+    /// Image planning effort, independent of rendering quality (Image 2.6).
+    #[arg(long, value_enum)]
+    pub complexity: Option<Complexity>,
     #[arg(long = "format", value_enum)]
     pub output_format: Option<OutputFormat>,
+    /// Frames per animation; requires --format gif.
+    #[arg(long, value_parser = clap::value_parser!(u8).range(2..=16))]
+    pub frame_count: Option<u8>,
+    /// Delay per GIF frame in milliseconds (rounded to 10 ms by the API).
+    #[arg(long, value_parser = clap::value_parser!(u32).range(20..))]
+    pub frame_duration_ms: Option<u32>,
+    /// Optional SVG author model; requires SVG model-selection access.
+    #[arg(long)]
+    pub svg_model: Option<String>,
+    /// Reasoning effort of the SVG author, independent of image complexity.
+    #[arg(long, value_enum, requires = "svg_model")]
+    pub svg_reasoning_effort: Option<SvgReasoningEffort>,
+    /// Stable, privacy-preserving end-user identifier (at most 128 characters).
+    #[arg(long)]
+    pub safety_identifier: Option<String>,
     #[arg(long = "compression", value_parser = clap::value_parser!(u8).range(0..=100))]
     pub output_compression: Option<u8>,
     #[arg(long, value_parser = clap::value_parser!(u8).range(1..=10))]
@@ -353,6 +417,9 @@ pub struct EditImageArgs {
     pub ref_image: Vec<String>,
     #[arg(long)]
     pub mask: Option<String>,
+    /// Transparent PNG annotation layer matching the first reference image.
+    #[arg(long, conflicts_with = "mask")]
+    pub markup: Option<String>,
     #[arg(long, value_enum)]
     pub input_fidelity: Option<InputFidelity>,
 }

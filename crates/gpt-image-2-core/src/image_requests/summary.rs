@@ -24,6 +24,24 @@ pub(crate) fn summarize_image_request_options(
     if let Some(quality) = shared.quality {
         summary["quality"] = json!(quality.as_str());
     }
+    if let Some(complexity) = shared.complexity {
+        summary["complexity"] = json!(complexity.as_str());
+    }
+    if let Some(count) = shared.frame_count {
+        summary["frame_count"] = json!(count);
+    }
+    if let Some(duration) = shared.frame_duration_ms {
+        summary["frame_duration_ms"] = json!(duration);
+    }
+    if let Some(model) = &shared.svg_model {
+        summary["svg"] = json!({ "model": model });
+        if let Some(effort) = shared.svg_reasoning_effort {
+            summary["svg"]["reasoning"] = json!({ "effort": effort.as_str() });
+        }
+    }
+    if shared.safety_identifier.is_some() {
+        summary["safety_identifier_present"] = json!(true);
+    }
     if let Some(output_format) = shared.output_format {
         summary["format"] = json!(output_format.as_str());
     }

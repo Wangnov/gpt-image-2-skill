@@ -7,7 +7,7 @@ const childProcess = require("node:child_process");
 const crypto = require("node:crypto");
 
 const CLI_NAME = "gpt-image-2-skill";
-const VERSION = "0.7.6";
+const VERSION = "0.8.0";
 const REPOSITORY = "Wangnov/gpt-image-2-skill";
 const RELEASE_BASE_URL = `https://github.com/${REPOSITORY}/releases/download/v${VERSION}`;
 const REPO_ROOT = path.resolve(__dirname, "..", "..", "..");
@@ -469,16 +469,74 @@ function runtimeSupportsSharedConfig(runtime) {
   }
 }
 
-async function resolveRuntime() {
+function requiredImageFeatures(argv) {
+  const imageCommand = argv.some((arg, index) =>
+    (arg === "images" && ["generate", "edit"].includes(argv[index + 1])) ||
+    (arg === "transparent" && argv[index + 1] === "generate")
+  );
+  if (!imageCommand) return [];
+  const valueOf = (flag) => {
+    const index = argv.indexOf(flag);
+    if (index >= 0) return argv[index + 1];
+    return argv.find((arg) => arg.startsWith(`${flag}=`))?.slice(flag.length + 1);
+  };
+  const features = new Set();
+  for (const [flag, feature] of [
+    ["--complexity", "complexity"], ["--markup", "markup"],
+    ["--frame-count", "frame_count"], ["--frame-duration-ms", "frame_duration_ms"],
+    ["--svg-model", "svg"], ["--svg-reasoning-effort", "svg"],
+    ["--safety-identifier", "safety_identifier"],
+  ]) {
+    if (valueOf(flag) !== undefined) features.add(feature);
+  }
+  const format = valueOf("--format");
+  if (format === "svg") features.add("svg");
+  if (format === "gif") features.add("frame_count");
+  const provider = valueOf("--provider");
+  const model = valueOf("--model") || valueOf("-m");
+  if (model?.startsWith("gpt-image-2.6-") || (!model && !["codex", "atlas"].includes(provider))) {
+    features.add("complexity");
+  }
+  return [...features];
+}
+
+function runtimeSupportsImageFeatures(runtime, features) {
+  if (features.length === 0) return true;
+  const [command, ...prefixArgs] = runtime.argvPrefix;
+  const result = childProcess.spawnSync(command, [...prefixArgs, "--json", "models", "list"], {
+    cwd: runtime.cwd || undefined,
+    encoding: "utf8",
+    stdio: ["ignore", "pipe", "pipe"],
+  });
+  if (result.error || result.status !== 0) return false;
+  try {
+    const payload = JSON.parse(result.stdout);
+    const supported = payload?.providers?.openai?.supports || [];
+    return payload.ok === true && features.every((feature) => supported.includes(feature));
+  } catch {
+    return false;
+  }
+}
+
+function outdatedRuntimeError() {
+  const error = new Error("当前 CLI 缺少 GPT Image 2.6 能力。请构建或安装支持 2.6 的 CLI，并用 GPT_IMAGE_2_SKILL_BIN 指向该二进制文件。");
+  error.code = "runtime_outdated";
+  return error;
+}
+
+async function resolveRuntime(argv = []) {
+  const features = requiredImageFeatures(argv);
   for (const resolver of [resolveFromEnvBinary, resolveFromBundledBinary, resolveFromPath, resolveFromAppBundle, resolveFromRepo, resolveFromCache]) {
     const runtime = resolver();
     if (runtime && runtimeSupportsSharedConfig(runtime)) {
-      return runtime;
+      if (runtimeSupportsImageFeatures(runtime, features)) return runtime;
+      if (runtime.source === "env") throw outdatedRuntimeError();
     }
   }
   const runtime = await bootstrapReleaseBinary();
   if (runtime && runtimeSupportsSharedConfig(runtime)) {
-    return runtime;
+    if (runtimeSupportsImageFeatures(runtime, features)) return runtime;
+    throw outdatedRuntimeError();
   }
   throw new Error(
     "gpt-image-2-skill runtime is unavailable. Install the binary, point GPT_IMAGE_2_SKILL_BIN at it, or publish release assets for this version."
@@ -487,7 +545,7 @@ async function resolveRuntime() {
 
 async function main(argv = process.argv.slice(2)) {
   try {
-    const runtime = await resolveRuntime();
+    const runtime = await resolveRuntime(argv);
     const [command, ...prefixArgs] = runtime.argvPrefix;
     const result = childProcess.spawnSync(command, [...prefixArgs, ...argv], {
       cwd: runtime.cwd || undefined,
@@ -498,7 +556,7 @@ async function main(argv = process.argv.slice(2)) {
     }
     return result.status ?? 1;
   } catch (error) {
-    return emitFailure(argv, error instanceof Error ? error.message : String(error));
+    return emitFailure(argv, error instanceof Error ? error.message : String(error), error.code || "runtime_unavailable");
   }
 }
 
@@ -515,5 +573,7 @@ module.exports = {
     downloadReleaseAsset,
     expectedArchiveSha256,
     extractArchive,
+    requiredImageFeatures,
+    runtimeSupportsImageFeatures,
   },
 };
