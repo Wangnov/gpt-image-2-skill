@@ -29,7 +29,7 @@ tauri = { version = "2.0.0", features = ["protocol-asset", "image-png"] }
 image = { version = "0.25", default-features = false, features = ["png", "jpeg", "webp", "gif"] }
 tauri-plugin-clipboard-manager = "2.5.0"
 tauri-plugin-drag = "2"
-tauri-plugin-notification = "2.7.0"
+tauri-plugin-notification = "2.8.1"
 tauri-plugin-process = "2.4.0"
 tauri-plugin-single-instance = "2.4.1"
 # Current Windows updater manifests contain signed NSIS executables, not ZIP

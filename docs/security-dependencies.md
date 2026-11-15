@@ -1,5 +1,11 @@
 # Dependency advisory remediation — 2026-09-13
 
+## 2026-11-15 更新
+
+- Wrangler 升级到 4.162.0（覆盖原 Dependabot #150 的 4.158.0），并核对 `workerd@1.20261113.1` 的 `install.js`：仍按平台解析 `@cloudflare/workerd-*` 二进制，备用下载限定同一精确 npm 版本并验证 `workerd 2026-11-13` 版本输出；仅更新该精确版本的 `allowScripts` 条目。
+- Tauri 的 `tauri-plugin-notification` 与 `@tauri-apps/plugin-notification` 同步更新至 2.8.1，`tauri-plugin-updater` 与 `@tauri-apps/plugin-updater` 同步至 2.14.1，解决 #132 因两端 minor 版本不一致导致的 AppImage 构建失败。
+- 同步收拢其余 Cargo（`rusqlite` 0.41.1、`ssh2` 0.9.7、`tauri-plugin-single-instance` 2.5.5）、frontend/relay npm 及 GitHub Actions（`codeql-action` 4.39.3、`docker/login-action` 4.8.0、`cargo-binstall` 1.26.2）更新，并为 `.github/dependabot.yml` 的 `cargo`、`/apps/gpt-image-2-app`、`/workers/gpt-image-2-relay` 增加 `minor-and-patch` 分组。
+
 ## 2026-10-27 大版本迁移
 
 - Vite 8.3.5 / React 插件 6.1.2 / TypeScript 7.0.2 一起迁移，移除插件 6 的临时忽略规则，并为 Vite 与 React 插件配置 Dependabot 分组。

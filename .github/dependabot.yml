@@ -21,6 +21,11 @@ updates:
       time: "09:10"
       timezone: Asia/Shanghai
     open-pull-requests-limit: 5
+    groups:
+      minor-and-patch:
+        update-types:
+          - "minor"
+          - "patch"
 
   - package-ecosystem: npm
     directory: /apps/gpt-image-2-app
@@ -29,6 +34,10 @@ updates:
         patterns:
           - "vite"
           - "@vitejs/plugin-react"
+      minor-and-patch:
+        update-types:
+          - "minor"
+          - "patch"
     schedule:
       interval: weekly
       day: monday
@@ -44,3 +53,8 @@ updates:
       time: "09:30"
       timezone: Asia/Shanghai
     open-pull-requests-limit: 5
+    groups:
+      minor-and-patch:
+        update-types:
+          - "minor"
+          - "patch"
