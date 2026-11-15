@@ -43,7 +43,7 @@
     "tailwind-merge": "^3.7.0",
     "three": "^0.186.1",
     "typescript": "^7.0.2",
-    "vite": "^8.3.5"
+    "vite": "^8.3.8"
   },
   "devDependencies": {
     "@babel/parser": "^8.0.8",
@@ -54,7 +54,7 @@
     "@types/react": "^19.3.0",
     "@types/react-dom": "^19.3.0",
     "@types/three": "^0.186.0",
-    "@vitejs/plugin-react": "^6.1.2",
+    "@vitejs/plugin-react": "^6.3.0",
     "fake-indexeddb": "^6.2.6",
     "postcss": "^8.5.32",
     "prettier": "^3.9.10",
